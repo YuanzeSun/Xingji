@@ -1,0 +1,115 @@
+import {calendarDate} from './journey-date.js';
+import { resolvePlace } from './places.js';
+import { identifyAircraft, normalizeAircraft, aircraftSeries } from './aircraft.js';
+import { dateInterval } from './search.js';
+import { CONTINENT_AIRPORT_CODES } from './data/airport-geography.js';
+import { isJourneyRecord } from './record-kind.js';
+import { normalizeRailBureau, normalizeRailModel, normalizeRailPowerSupply } from './rail-details.js';
+import { railJourneyMatches, railText, isEmuModel } from './rail-journey.js';
+
+export const CONTINENTS = Object.freeze({ AF: '非洲', AN: '南极洲', AS: '亚洲', EU: '欧洲', NA: '北美洲', OC: '大洋洲', SA: '南美洲' });
+const airportContinents = new Map(Object.entries(CONTINENT_AIRPORT_CODES).flatMap(([continent, codes]) => codes.split(' ').filter(Boolean).map(code => [code, continent])));
+// Foreign stations in the bundled 12306 catalogue; see docs/statistics.md for sources.
+const laoStations = new Set(['YTM', 'VBM', 'VJM', 'VFM', 'VCM', 'VOM']);
+const regionNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' });
+const compare = new Intl.Collator('zh-CN', { numeric: true }).compare;
+function railModelsForRecord(record, options) {
+  const saved = railJourneyMatches(record) ? record.railJourney.trainsets.map(stock => stock.model) : [];
+  const values = railText(record.railModel) ? [record.railModel] : saved;
+  const models=values.flatMap(value => railText(value).split(/[/、,，;；+]/)).map(value => normalizeRailModel(value)).filter(Boolean);
+  const supply=normalizeRailPowerSupply(record.railPowerSupply || '');
+  return new Set(models.map(model=>options.railPowerSupplies && !isEmuModel(model) ? model+' · '+(supply || '供电制式未知') : model));
+}
+export const countryName = code => code === 'CN' ? '中国' : regionNames.of(code) || code;
+export function todayDate(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+export function statisticsOptions(input = {}, today = todayDate()) {
+  return { dateFrom: input.dateFrom ?? '', dateTo: input.dateTo ?? today, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railPowerSupplies:input.railPowerSupplies === true, aircraftSubtypes:input.aircraftSubtypes !== false };
+}
+
+export function statisticsRange(records, input = {}) {
+  const options = statisticsOptions(input), from = dateInterval(options.dateFrom), to = dateInterval(options.dateTo);
+  if ((options.dateFrom && !from) || (options.dateTo && !to)) return { records: [], omittedDates: 0, error: '请选择有效的起止日期' };
+  if (from && to && from.start > to.end) return { records: [], omittedDates: 0, error: '起始日期不能晚于截止日期' };
+  let omittedDates = 0;
+  const included = records.filter(record => {
+    if (!isJourneyRecord(record)) return false;
+    const interval = dateInterval(record.departureDate);
+    if (!interval) { omittedDates++; return false; }
+    if ((from && interval.end < from.start) || (to && interval.start > to.end)) return false;
+    // Do not guess which side of the chosen boundary an imprecise date falls on.
+    if ((from && interval.start < from.start) || (to && interval.end > to.end)) { omittedDates++; return false; }
+    return true;
+  });
+  return { records: included, omittedDates, error: '' };
+}
+
+function placeGeography(record, side) {
+  const place = resolvePlace(record, side);
+  if (place.status !== 'matched') return null;
+  if (record.type === 'rail') return { ...place, country: laoStations.has(place.code) ? 'LA' : 'CN', continent: 'AS' };
+  return { ...place, country: ['HK', 'MO', 'TW'].includes(place.country) ? 'CN' : place.country, continent: airportContinents.get(place.code) || '' };
+}
+
+export function journeyStatistics(records, input = {}) {
+  const options=statisticsOptions(input), range = statisticsRange(records, options), rows = range.records;
+  const airports = new Map(), stations = new Map(), countries = new Map(), continents = new Set(), routes = new Map(), aircraft = new Map();
+  const railModels = new Map(), railBureaus = new Map();
+  let unknownAircraft = 0, unknownPlaces = 0, unknownRoutes = 0;
+  for (const record of rows) {
+    if (record.type === 'rail') {
+      for (const model of railModelsForRecord(record,options)) railModels.set(model, (railModels.get(model) || 0) + 1);
+      let bureau = normalizeRailBureau(record.railBureau);
+      if (options.railUnits) {
+        const owner = String(record.railCarOwner || '').trim();
+        bureau = owner ? [bureau, owner].filter(Boolean).join(' · ') : bureau ? bureau + ' · 单位未收录' : '';
+      }
+      if (bureau) railBureaus.set(bureau, (railBureaus.get(bureau) || 0) + 1);
+    }
+    const endpoints = ['origin', 'destination'].map(side => placeGeography(record, side));
+    for (const place of endpoints) {
+      if (!place) { unknownPlaces++; continue; }
+      const collection = record.type === 'flight' ? airports : stations;
+      collection.set(place.id, { id: place.id, name: place.name, code: place.code, country: place.country });
+      if (place.country) countries.set(place.country, { code: place.country, name: countryName(place.country) });
+      if (place.continent) continents.add(place.continent);
+    }
+    if (record.type !== 'flight') continue;
+    const precise=identifyAircraft(record.aircraft) || normalizeAircraft(record.aircraft).normalize('NFKC').toUpperCase().replace(/\s+/g,'').replace(/[–—]/g,'-');
+    const model=options.aircraftSubtypes ? precise : aircraftSeries(precise);
+    if (model) aircraft.set(model, (aircraft.get(model) || 0) + 1); else unknownAircraft++;
+    if (endpoints.some(place => !place)) { unknownRoutes++; continue; }
+    const pair = options.mergeDirections ? [...endpoints].sort((a,b)=>a.code.localeCompare(b.code)) : endpoints, id=pair.map(place=>place.code).join('-');
+    if (!routes.has(id)) routes.set(id, { id, from: pair[0], to: pair[1], count: 0 });
+    routes.get(id).count++;
+  }
+  const byName = values => [...values].sort((a, b) => compare(a.name, b.name));
+  const years = [...new Set(rows.map(record => calendarDate(record.departureDate).slice(0, 4)))].sort();
+  const mileageTrips = rows.filter(record => record.type === 'rail' && record.railMileage);
+  const ranked = collection => [...collection].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || compare(a.name, b.name));
+  return { ...range, rail: rows.filter(record => record.type === 'rail').length, flight: rows.filter(record => record.type === 'flight').length,
+    years, airports: byName(airports.values()), stations: byName(stations.values()), countries: byName(countries.values()),
+    continents: [...continents].sort().map(code => ({ code, name: CONTINENTS[code] })),
+    aircraft: ranked(aircraft),
+    railMileage:Math.round(mileageTrips.reduce((sum,row)=>sum+Number(row.railMileage),0)*1000)/1000,
+    railMileageTrips:mileageTrips.length,
+    railModels: ranked(railModels), railBureaus: ranked(railBureaus),
+    routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)), unknownAircraft, unknownPlaces, unknownRoutes };
+}
+
+export function tripSeries(records, { period = 'year' } = {}) {
+  const dated = records.filter(record => isJourneyRecord(record) && dateInterval(record.departureDate));
+  const years = dated.map(record => Number(calendarDate(record.departureDate).slice(0, 4)));
+  const first = Math.min(...years), last = Math.max(...years);
+  const keys = !years.length ? [] : period === 'month'
+    ? Array.from({ length: (last - first + 1) * 12 }, (_, i) => `${first + Math.floor(i / 12)}-${String(i % 12 + 1).padStart(2, '0')}`)
+    : Array.from({ length: last - first + 1 }, (_, i) => String(first + i));
+  const buckets = new Map(keys.map(key => [key, { key, label: period === 'month' ? `${key.slice(0, 4)}年${Number(key.slice(5))}月` : key + '年', rail: 0, flight: 0 }]));
+  for (const record of dated) {
+    if (period === 'month' && calendarDate(record.departureDate).length < 7) continue;
+    const bucket = buckets.get(calendarDate(record.departureDate).slice(0, period === 'month' ? 7 : 4));
+    if (bucket) bucket[record.type]++;
+  }
+  return [...buckets.values()];
+}

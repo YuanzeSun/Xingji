@@ -1,0 +1,1014 @@
+import {BOARDING_METADATA_LABELS,BOARDING_METADATA_FIELDS} from './boarding-metadata.js';
+import {boardingJourneyMarkup} from './boarding-details.js';
+import {calendarDate,daysInYear,JOURNEY_DATE_FIELDS} from './journey-date.js';
+import {barcodeFieldLocked,refreshBarcodeFieldLocks} from './barcode-fields.js';
+import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
+import {boardingGeneratorMarkup,refreshBoardingPassenger} from './boarding-code-generator.js';
+import {fieldSourceBadge,markFieldSources,refreshFieldSources} from './field-sources.js';
+import {readBoardingCode} from './bcbp.js';
+import {flightPassengerName} from './flight-passenger.js';
+import {markManualFields,applyLookupValues,lookupContext,clearLookupValues} from './lookup-values.js';
+import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } from './arithmetic-confirm.js';
+import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
+import { upgradeCodeRecords } from './code-upgrade.js';
+import { renderCodeData } from './barcode-data.js';
+import { createRecord, validateRecord, mergeThreeWay, TEMPLATES, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, readArchive, archive, applyImport, csv, formatDate } from './model.js';
+import * as db from './db.js';
+import { readSyncState, readResetState, bindRepository, stageRecords, stageSettings, acknowledgeSync, replaceWithRemote } from './sync-state.js';
+import { sharedSettings, maskedKey } from './shared-settings.js';
+import { watchAppUpdates } from './app-update.js';
+import { supportsDesktopMcp } from './device.js';
+import { archiveResetMarkup } from './archive-reset.js';
+import { GitHubStore, synchronize } from './github.js';
+import { parseText, decodeMail, mapFlightResult, extractPDF, parseCSV } from './importers.js';
+import { ticketSVG, exportSVG, exportPNG } from './tickets.js';
+import { ticketDetails } from './ticket-details.js';
+import { escape as e } from './html.js';
+import { demoRecords } from './demo.js';
+import { MARK_SHAPES, describeMarks } from './ticket-marks.js';
+import { ticketCodeEditor, bindTicketCodeEditor } from './code-editor.js';
+import {ticketViewOptions,ticketViewControls,ticketCollection,bindTicketViewControls} from './ticket-view.js';
+import {mountTicketSpace} from './ticket-space.js';
+import { requiredTicketFields, ticketFieldLabel, validateTicketForm, ticketFormFeedback } from './ticket-form.js';
+import { seatClassField, bindSeatClassFields } from './seat-class-field.js';
+import { seatField, bindSeatFields } from './seat-field.js';
+import { bindDatePickers,ticketDateField,bindTicketDates,readTicketDate,writeTicketDate,barcodeDateDay } from './date-field.js';
+import { flightLookupMarkup, bindFlightLookup } from './flight-lookup.js';
+import { railLookupMarkup, bindRailLookup, railTrainsetField } from './rail-lookup.js';
+import { railJourneyMarkup, bindRailJourney } from './rail-journey-ui.js';
+import { railJourneyMatches } from './rail-journey.js';
+import { scannerMarkup, mountScanner } from './scanner.js';
+import { parseScanText } from './scan-engine.js';
+import { normalizePlaces, resolvePlace } from './places.js';
+import { bindReferenceFields } from './reference-suggestions.js';
+import { bindAirportPicker } from './airport-picker.js';
+import { bindStationPicker } from './station-picker.js';
+import { FLIGHT_STATUSES, normalizeFlightStatus } from './flight-status.js';
+import { isRefundReceipt, isJourneyRecord } from './record-kind.js';
+import { bindUppercaseNames } from './name-case.js';
+import { personalProfile, applyProfileDefaults } from './personal-profile.js';
+import { personalProfilePanel, collectPersonalProfile, bindPersonalProfileForm, personalProfileSummary } from './personal-profile-form.js';
+import { cityOverview } from './locations.js';
+import { DEFAULT_SEARCH, searchOptions, searchTickets, clearSearchField } from './search.js';
+import { searchPanel, searchChips, resultSummary, cityContextHTML } from './search-panel.js';
+
+const sameField = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+const icons = {
+  ticket: '<path d="M4 5h16v5a2 2 0 0 0 0 4v5H4v-5a2 2 0 0 0 0-4z"/><path d="M15 5v2m0 3v2m0 3v2m0 1v1"/>',
+  train: '<rect x="5" y="3" width="14" height="16" rx="4"/><path d="M5 11h14M12 3v8M8 22l2-3m6 3-2-3M8 15h1m6 0h1"/>',
+  plane: '<path d="m22 2-7 20-4-9-9-4zM22 2 11 13"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  upload: '<path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5"/>',
+  cloud: '<path d="M6 17a4 4 0 1 1 1-8 6 6 0 0 1 11-2 5 5 0 0 1 0 10M9 17l3-3 3 3m-3-3v8"/>',
+  database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+  arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
+  chevron: '<path d="m9 5 7 7-7 7"/>',
+  close: '<path d="m6 6 12 12M6 18 18 6"/>',
+  download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
+  edit: '<path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14z"/>',
+  camera: '<path d="M8 5 10 2h4l2 3h5v16H3V5z"/><circle cx="12" cy="13" r="4"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1"/><path d="m3 17 5-5 4 4 4-7 5 7"/>',
+  check: '<path d="m5 12 4 4L19 6"/>',
+  lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4m-4 4v3"/>',
+  refresh: '<path d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 2M5 16a8 8 0 0 0 13 2"/>',
+  trash: '<path d="M3 6h18M8 6V3h8v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-11v1"/>',
+  map: '<path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2zM9 3v16m6-14v16"/>',
+  chart: '<path d="M4 3v17h17M7 14l4-5 4 3 5-7"/>'
+};
+const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.ticket}</svg>`;
+const labels = { ...BOARDING_METADATA_LABELS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '二维码', boardingCode: '机票条码' };
+const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, routesOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, busy: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, candidates: [], selected: new Set(), resolutions: {}, flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null, flightChecking: false };
+const samples = demoRecords();
+const ticketView=ticketViewOptions();
+const archiveIsSpace=()=>ticketView.mode==='space';
+let ticketSpaceCleanup=null;
+let mapCleanup = null, mapEpoch = 0;
+let statisticsCleanup = null;
+let flightLookupCleanup = null, railLookupCleanup = null;
+const statisticsView = {};
+let railRouteCleanup = null, railJourneyCleanup = null;
+let codeCleanup = null, scannerCleanup = null, exportCleanup = null, searchTimer, renderedRecords = '', renderedSettings = '', renderedWritable, composing = false, deferredRender = false;
+let editor = null, syncTimer, syncPromise, syncAbort, authEpoch = 0, syncFailures = 0, localFileURL = null, installPrompt, modalFocus;
+const root = document.querySelector('#app');
+const modalRoot = document.querySelector('#modal-root');
+const live = () => (state.showDemo ? samples : state.records).filter(r => !r.deleted);
+async function setDemoMode(enabled) { archiveSelected.clear(); await db.set('showDemo', enabled); state.showDemo = enabled; }
+const token = () => sessionStorage.getItem('xingji-github-token') || '';
+const flightKey = () => state.settings.flightMcpKey;
+function toast(message, error = false) {
+  const el = document.createElement('div'); el.className = `toast ${error ? 'error' : ''}`; el.setAttribute('role', error ? 'alert' : 'status'); el.innerHTML = icon(error ? 'info' : 'check') + `<span>${e(message)}</span>`;
+  document.querySelector('#toast-root').append(el); setTimeout(() => el.remove(), error ? 8000 : 4200);
+}
+function fail(error) { console.error(error?.message || error); toast(error?.message || '操作未完成，请重试', true); }
+function download(data, name, type = 'application/json;charset=utf-8') {
+  const blob = data instanceof Blob ? data : new Blob([data], { type });
+  const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+function fileName(r) { return `${calendarDate(r.departureDate) || '未定日期'}_${r.service || '票据'}_${r.origin}-${r.destination}`.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_'); }
+const channel = window.BroadcastChannel ? new window.BroadcastChannel('xingji-cloud-state') : null;
+const canWrite = () => !!(state.config?.id && state.syncMeta.verified && !state.syncMeta.pending && token() && navigator.onLine && state.connectionStatus === 'online');
+function useSnapshot(snapshot) {
+  state.records = snapshot.records; state.base = snapshot.base; state.settings = snapshot.settings; state.settingsBase = snapshot.settingsBase; state.config = snapshot.config; state.syncMeta = snapshot.meta; state.lastSync = snapshot.lastSync;
+}
+const announce = () => channel?.postMessage({ revision: state.syncMeta.revision });
+function freezeForm(form, pendingLabel) {
+  const button = form.querySelector('[type="submit"]'), originalLabel = button?.innerHTML;
+  if (pendingLabel) {
+    form.dataset.pending = 'true'; form.setAttribute('aria-busy', 'true');
+    if (button) button.innerHTML = icon('refresh', 'spin') + pendingLabel;
+  }
+  const controls = [...form.querySelectorAll('input,select,textarea,button')].map(input => [input, input.disabled]);
+  controls.forEach(([input]) => { input.disabled = true; });
+  return () => {
+    controls.forEach(([input, disabled]) => {
+      input.disabled = disabled;
+      if (input.hasAttribute('data-readonly-disabled')) input.dataset.readonlyDisabled = String(disabled);
+    });
+    if (pendingLabel) {
+      delete form.dataset.pending; form.removeAttribute('aria-busy');
+      if (button) button.innerHTML = originalLabel;
+    }
+  };
+}
+
+async function persist(records) {
+  if (!canWrite() || state.saving) throw new Error('当前不能修改票据，请先完成云端核对');
+  const expected = clone(state.records); state.saving = true;
+  try {
+    if (!await doSync() || !canWrite()) throw new Error('云端尚未核对成功，修改未提交，请保留当前输入');
+    useSnapshot(await stageRecords(expected, records, state.config)); announce();
+    await doSync();
+  } finally { state.saving = false; render(); }
+}
+function savedMessage(message = '票据已同步') { return state.syncMeta.pending ? '已保存本机，等待云端确认' : message; }
+function queueSync(delay = 1800) { if (state.resetting) return; clearTimeout(syncTimer); if (state.config && token() && document.visibilityState !== 'hidden') { syncTimer = setTimeout(() => doSync(), delay); syncTimer.unref?.(); } }
+function syncLabel() {
+  if (!state.config?.id) return '需要连接 GitHub';
+  if (state.syncing) return '正在核对云端…';
+  if (state.connectionStatus === 'conflict') return '有冲突待处理 · 只读';
+  if (!canWrite()) return state.syncMeta.pending ? '缓存只读 · 有待确认修改' : '缓存只读';
+  return state.syncMeta.pending ? '等待云端确认' : '已同步';
+}
+function connectionForm() {
+  const draft = state.connectionDraft, config = state.config || draft || {}, bound = !!state.config?.id;
+  return `<form id="github-form"><div class="form-grid"><label class="field"><span>GitHub用户名</span><input name="owner" value="${e(config.owner)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>私有仓库名</span><input name="repo" value="${e(config.repo)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label></div><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token ?? token())}" autocomplete="off" required /></label><label class="checkbox-row"><input type="checkbox" name="remember" ${(draft?.remember ?? state.rememberToken) ? 'checked' : ''} />在此设备记住凭证</label><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${bound ? '更新授权并同步' : '连接并同步'}</button>${bound ? '<button class="text-button" type="button" data-action="disconnect">退出授权</button>' : ''}</div></form><details class="setup-help"><summary>连接方式</summary><p>创建一个用于保存私人行程的 GitHub 私有仓库，勾选“Add a README file”（添加 README）完成初始化。</p><p>创建细粒度访问凭证，仅选择这个私有仓库，将 Contents 权限设为 Read and write。填入上方信息后连接；其他设备使用同一仓库。</p><p><a href="https://github.com/new" target="_blank" rel="noopener noreferrer">创建私有仓库 ↗</a><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">创建访问凭证 ↗</a></p></details>`;
+}
+function captureConnectionDraft(form) {
+  state.connectionDraft = { owner: form.elements.owner.value, repo: form.elements.repo.value, token: form.elements.token.value, remember: form.elements.remember.checked };
+}
+function authorCredit(className) {
+  return `<span class="author-credit ${className}"><a href="https://github.com/YuanzeSun" target="_blank" rel="noopener noreferrer">by @YuanzeSun</a></span>`;
+}
+function pageFooter(lead = '<span>行迹</span>') {
+  return `<footer class="page-footer">${lead}${authorCredit('footer-credit')}</footer>`;
+}
+function demoToggle() {
+  return `<label class="demo-toggle"><input type="checkbox" role="switch" id="demo-toggle" ${state.showDemo ? 'checked' : ''} />示例模式</label>`;
+}
+function guestDemoNotice() {
+  if(!state.showDemo || (state.config?.id && state.syncMeta.verified))return '';
+  return `<section class="guest-demo-notice" aria-label="示例模式提示"><div>${icon('info')}<p>正在体验<strong>示例模式</strong>，登录后即可开始记录自己的旅程。</p></div><button type="button" class="button primary" data-action="exit-demo">退出示例并登录${icon('arrow')}</button></section>`;
+}
+function connectionPage() {
+  return `<main class="cloud-setup"><div class="cloud-setup-brand">${icon('ticket')} 行迹</div><section class="guest-demo-entry" aria-labelledby="guest-demo-title"><div class="guest-demo-heading">${icon('ticket')}<strong id="guest-demo-title">体验示例模式</strong></div><p>无需连接 GitHub，浏览示例票据与行程。</p><button type="button" class="button primary" data-action="enter-demo">进入示例模式${icon('arrow')}</button></section><section class="panel"><h1>连接 GitHub</h1><p class="cloud-setup-description">连接私有仓库后使用票据存档。暂时断联时，可查看已同步的本地缓存。</p>${connectionForm()}<p class="form-error" role="alert">${e(state.syncMessage)}</p>${state.config?.id ? '<button class="button danger" data-action="reset-repository">重置仓库</button>' : ''}${state.resetRequest ? '<button class="button danger" data-action="reset-archive">重置票库</button>' : ''}${state.records.some(r => !r.deleted) ? '<button class="text-button" data-action="backup">导出本机票据</button>' : ''}</section>${pageFooter()}</main>`;
+}
+function connectionNotice() {
+  if (state.showDemo || canWrite() && !state.syncMeta.pending) return '';
+  const label = state.connectionStatus === 'conflict' ? '云端与本机有修改需要选择' : state.syncMeta.pending ? '本机修改等待云端确认，当前仅可查看缓存' : state.syncing ? '正在核对云端，当前仅可查看缓存' : '当前仅可查看本地缓存';
+  const time = state.lastSync ? '上次同步：' + new Date(state.lastSync).toLocaleString('zh-CN', { hour12: false }) : '';
+  return `<div class="connection-notice" role="status"><div><strong>${label}</strong>${time ? `<span>${e(time)}</span>` : ''}${state.syncMessage ? `<span>${e(state.syncMessage)}</span>` : ''}</div>${state.resetRequest ? '<button class="button danger small" data-action="reset-archive">重置票库</button>' : ''}<button class="button secondary small" data-action="${state.connectionStatus === 'conflict' ? 'review-conflicts' : 'sync'}">${state.connectionStatus === 'conflict' ? '处理冲突' : '重新连接'}</button></div>`;
+}
+function applyAccessPolicy() {
+  for (const button of document.querySelectorAll('[data-action="new"],[data-action="edit"],[data-action="delete"],[data-action="scan-ticket"]')) button.disabled = !canWrite() || state.saving || state.showDemo;
+  const batchDelete = document.querySelector('[data-action="delete-selected"]'); if (batchDelete) batchDelete.disabled = !canWrite() || state.saving || state.showDemo;
+  for (const input of document.querySelectorAll('[data-setting-control]')) input.disabled = !canWrite() || state.saving;
+  const refresh = document.querySelector('[data-action="flight-refresh"]'); if (refresh) refresh.disabled = !flightKey() || state.flightChecking || !navigator.onLine || (state.flightKeyDraft !== null && state.flightKeyDraft.trim() !== flightKey());
+  const flightYear = document.querySelector('#flight-year'); if (flightYear) flightYear.disabled = state.flightChecking;
+  if (!canWrite() && scannerCleanup) closeModal(true);
+  const form = document.querySelector('#editor-form');
+  if (form) for (const input of form.querySelectorAll('input,select,textarea,button:not([data-action="close-modal"])')) {
+    if (!canWrite()) { if (!input.hasAttribute('data-readonly-disabled')) input.dataset.readonlyDisabled = String(input.disabled); input.disabled = true; }
+    else if (input.hasAttribute('data-readonly-disabled')) { input.disabled = input.dataset.readonlyDisabled === 'true'; delete input.dataset.readonlyDisabled; }
+  }
+}
+function nav() {
+  const items = [['archive', 'ticket', '我的票据'], ['map', 'map', '行程地图'], ['statistics', 'chart', '数据统计'], ['import', 'upload', '录入票据'], ['data', 'database', '数据与同步']].filter(([id])=>!state.showDemo || !['import','data'].includes(id));
+  const count=live().length;
+  return `<aside class="sidebar"><a class="brand" href="#archive" aria-label="行迹首页"><span class="brand-symbol">${icon('ticket')}</span><span class="brand-name">行迹<small>TICKET ARCHIVE</small></span></a><div class="nav-label">票据存档</div><nav aria-label="主要导航">${items.map(([id, i, text]) => `<button aria-label="${text}${id === 'archive' ? ' ' + count : ''}" data-action="navigate" data-page="${id}" class="nav-item ${state.page === id ? 'active' : ''}" ${state.page === id ? 'aria-current="page"' : ''}>${icon(i)}<span class="nav-desktop-text">${text}</span><span class="nav-mobile-text" aria-hidden="true">${({archive:'票夹',map:'地图',statistics:'统计',import:'录入',data:'同步'})[id]}</span>${id === 'archive' ? `<span class="nav-count">${count}</span>` : ''}</button>`).join('')}</nav><div class="sidebar-bottom"><div class="private-note">${state.showDemo ? '' : icon('lock')+'<span>GitHub 云同步</span>'}</div>${authorCredit('sidebar-credit')}</div></aside>`;
+}
+function header(title, subtitle, actions = '') {
+  const syncButton=className=>state.showDemo ? '' : `<button class="sync-button ${className}" data-action="sync" title="${e(syncLabel())}">${icon(state.syncing ? 'refresh' : 'cloud', state.syncing ? 'spin' : '')}<span>${e(syncLabel())}</span></button>`;
+  return `<div class="mobile-brand"><a href="#archive">${icon('ticket')} 行迹</a>${syncButton('')}</div><header class="page-header"><div><h1>${title}</h1>${subtitle ? '<p class="subtitle">' + subtitle + '</p>' : ''}</div><div class="header-actions">${syncButton('desktop-sync')}${demoToggle()}${actions}</div></header>`;
+}
+const archiveSelected = new Set();
+function selectedArchiveRecords() {
+  const result = searchTickets(live(), state.filters);
+  return reconcileSelection(archiveSelected, result.error ? [] : result.records);
+}
+function refreshArchiveSelection(result = searchTickets(live(), state.filters)) {
+  const container = document.querySelector('#archive-selection');
+  if (!container) return;
+  if(archiveIsSpace()){container.replaceChildren();return;}
+  container.innerHTML = archiveSelectionMarkup(result, archiveSelected, { canDelete:canWrite() && !state.showDemo && !state.saving });
+  const all = container.querySelector('[data-archive-select-all]');
+  all.indeterminate = archiveSelected.size > 0 && archiveSelected.size < result.records.length;
+  for (const input of document.querySelectorAll('[data-archive-select]')) {
+    input.checked = archiveSelected.has(input.dataset.archiveSelect);
+    input.closest('.ticket-card,.timeline-ticket').classList.toggle('is-selected', input.checked);
+  }
+}
+async function exportArchiveSelection(format) {
+  const records = clone(selectedArchiveRecords());
+  if (!records.length) return;
+  const { exportDialog, bindExportDialog } = await import('./export-dialog.js');
+  openModal(modalHead(format === 'pdf' ? '导出纪念册' : '逐个导出', '已选择 ' + records.length + ' 张票据') + exportDialog(records, { format }));
+  exportCleanup = bindExportDialog(modalRoot.querySelector('dialog'), records, { download });
+}
+function archivePage() {
+  const rs = live(), cities = cityOverview(rs).cities;
+  const years = [...new Set(rs.map(r => calendarDate(r.departureDate).slice(0, 4)).filter(Boolean))].sort().reverse();
+  const result = searchTickets(rs, state.filters);
+  reconcileSelection(archiveSelected,result.error ? [] : result.records);
+  const railCount = rs.filter(r => isJourneyRecord(r) && r.type === 'rail').length, flightCount = rs.filter(r => isJourneyRecord(r) && r.type === 'flight').length;
+  const intro = header('我的票据', '', state.showDemo ? '' : `<button class="button secondary" data-action="scan-ticket">${icon('image')}扫描票据</button><button class="button primary" data-action="new">${icon('plus')}手动录入</button>`);
+  const demo = guestDemoNotice() || (state.showDemo ? `<div class="demo-banner">${icon('info')}<span><strong>示例数据</strong> · 虚构记录</span><button data-action="exit-demo">${state.config?.id && state.syncMeta.verified ? '返回我的票据' : '退出示例模式'} ${icon('arrow')}</button></div>` : '');
+  const stats = `<section class="stats" aria-label="票夹概览"><div><span class="stat-label">${icon('ticket')}票据总数</span><strong>${rs.length}<small>张${state.showDemo ? '示例' : ''}</small></strong></div><div><span class="stat-label">${icon('train')}火车票</span><strong>${railCount}<small>程</small></strong></div><div><span class="stat-label">${icon('plane')}机票</span><strong>${flightCount}<small>程</small></strong></div><div><span class="stat-label">${icon('map')}涉及城市</span><strong>${cities.length}<small>城</small></strong></div></section>`;
+  return intro + demo + stats + searchPanel(rs, state.filters, result, { open: state.filterOpen, routesOpen: state.routesOpen, demo: state.showDemo }) + ticketViewControls(ticketView) + '<div id="archive-selection">' + (archiveIsSpace() ? '' : archiveSelectionMarkup(result, archiveSelected, { canDelete:canWrite() && !state.showDemo && !state.saving })) + '</div><section id="search-results" aria-label="票据总数">' + searchResults(rs, result) + '</section>' + pageFooter('<span id="archive-match-count">' + (state.showDemo ? '示例' : '私人') + '票夹 · ' + result.records.length + ' 张票据</span>');
+}
+function searchResults(rs, result) {
+  const visible = result.records;
+  if (result.error) return '<div class="empty-state"><h2>请调整筛选条件</h2><p>检查上方日期或票价范围后，结果会自动更新。</p><button class="button secondary" data-action="reset-filters">清除筛选</button></div>';
+  const view=ticketView,rows=archiveIsSpace() ? visible : visible.slice(0,state.limit);
+  const collection=ticketCollection(rows,view,{icon,selected:archiveSelected,sort:state.filters.sort});
+  return visible.length ? collection + (!archiveIsSpace() && visible.length>state.limit ? `<div class="load-more"><button class="button secondary" data-action="load-more">继续翻看 · 已显示 ${state.limit} / ${visible.length} 张</button></div>` : '') : `<div class="empty-state">${icon('ticket')}<h2>${rs.length ? '还没有匹配的票据' : '暂无票据'}</h2><p>${rs.length ? '试试减少条件，或查找其他路线、旅客与日期。' : '填写信息或扫描纸质票据。'}</p><button class="button primary" data-action="${rs.length ? 'reset-filters' : 'new'}">${icon(rs.length ? 'search' : 'plus')}${rs.length ? '清除筛选' : '录入票据'}</button></div>`;
+}
+function refreshSearch() {
+  if (state.page !== 'archive') return;
+  ticketSpaceCleanup?.();ticketSpaceCleanup=null;
+  const rs = live(), result = searchTickets(rs, state.filters);
+  reconcileSelection(archiveSelected, result.error ? [] : result.records);
+  document.querySelector('#search-results').innerHTML = searchResults(rs, result);
+  document.querySelector('#search-chips').innerHTML = searchChips(state.filters);
+  const cityContext = document.querySelector('#city-context'); if (cityContext) cityContext.innerHTML = cityContextHTML(rs, state.filters);
+  document.querySelector('#search-result-count').textContent = resultSummary(result, rs.length);
+  const error = document.querySelector('#search-error'); error.textContent = result.error; error.hidden = !result.error;
+  refreshArchiveSelection(result);
+  document.querySelector('#archive-match-count').textContent = (state.showDemo ? '示例' : '私人') + '票夹 · ' + result.records.length + ' 张票据';
+  mountCollectionSpace();
+}
+function updateSearch(key, value, immediate = false) {
+  if (!Object.hasOwn(DEFAULT_SEARCH, key)) return;
+  state.filters = searchOptions({ ...state.filters, [key]: value }); state.limit = 48;
+  const hasRoute = ['originCity', 'destinationCity', 'origin', 'destination'].some(key => state.filters[key]);
+  if (!hasRoute) state.filters.bothDirections = false;
+  const reverse = document.querySelector('#search-bothDirections'); if (reverse) { reverse.disabled = !hasRoute; reverse.checked = state.filters.bothDirections; }
+  for (const field of ['minPrice', 'maxPrice', 'sort']) {
+    if (field === key) continue;
+    const control = document.querySelector('#search-' + field); if (control) control.value = state.filters[field];
+  }
+  clearTimeout(searchTimer); if (immediate) refreshSearch(); else searchTimer = setTimeout(refreshSearch, 140);
+}
+
+function importPage() {
+  if (state.showDemo) return header('录入票据', '') + '<div class="empty-state"><h2>示例模式</h2><p>关闭示例模式后可录入自己的票据。</p></div>';
+  if (!canWrite()) return header('录入票据', '') + '<div class="empty-state"><h2>当前仅可查看缓存</h2><button class="button secondary" data-action="sync">恢复连接</button></div>';
+  const pending = state.candidates.length;
+  return header('录入票据', '填写信息、识别票面或行程截图。') + '<div class="entry-layout">' + '<section class="panel manual-panel"><h2>手动录入</h2><p>填写旅程信息，同时查看票面效果。</p><button class="button primary" data-action="new">'+icon('plus')+'添加票据</button></section>' + '<aside class="entry-aside"><section class="scan-launch-panel"><div class="scan-launch-heading"><span class="scan-entry-symbol">' + icon('camera') + '</span><h2>扫描票据</h2></div><p>支持纸质车票、登机牌、12306购票详情及航旅纵横行程截图。</p><button class="button scan-launch-button" data-action="scan-ticket">打开相机扫描</button><label class="button scan-album-button">选择照片或行程截图<input id="camera-file" type="file" accept="image/*" hidden /></label></section>' + (pending ? '<button class="button secondary full" data-action="review">继续校对 ' + pending + ' 张票据</button>' : '') + '<details class="panel file-entry"><summary>图片与文件</summary><label class="dropzone" id="dropzone" tabindex="0"><input id="import-files" type="file" multiple accept="image/*,.pdf,.eml,.txt,.json,.csv" hidden /><span class="drop-icon">' + icon('upload') + '</span><strong>选择或拖入文件</strong><span>票面照片、12306截图、邮件、PDF或备份</span></label><div id="import-status" class="import-status" role="status">' + (state.busy ? '正在识别资料…' : '') + '</div></details><details class="panel paste-entry"><summary>粘贴行程文字</summary><label class="field"><span>短信、订单或邮件正文</span><textarea id="import-text" rows="6" placeholder="日期：2026-11-15 车次：G103&#10;出发：北京南 到达：上海虹桥&#10;时间：08:00 姓名：…"></textarea></label><button class="button secondary full" data-action="parse-text" ' + (state.busy ? 'disabled' : '') + '>识别并填写</button></details></aside></div>';
+}
+function newPersonalRecord(type = 'rail') {
+  const values=applyProfileDefaults({type,template:type === 'flight' ? 'air-boarding-pass' : DEFAULT_RAIL_TEMPLATE},state.settings.profile);
+  markFieldSources(values,['type','template'],'default');
+  return createRecord(values);
+}
+function scanTicket() {
+  if (state.showDemo) return;
+  openModal(scannerMarkup('rail'), true);
+  modalRoot.querySelector('dialog').classList.add('scanner-modal');
+  scannerCleanup = mountScanner(modalRoot.querySelector('#live-scanner'), { type: 'rail', onResult(record, blob) {
+    closeModal(true); localFileURL = URL.createObjectURL(blob);
+    state.candidates = record.boardingCandidates || [record];state.selected=new Set(state.candidates.map((_,index)=>index));if(state.candidates.length===1)editRecord(record,0);else reviewCandidates();
+  } });
+}
+
+function journeyMapPage() {
+  return header('行程地图', '') + (guestDemoNotice() || (state.showDemo ? '<div class="demo-banner">' + icon('info') + '<span><strong>示例数据</strong> · 虚构记录</span></div>' : '')) + '<div id="journey-map-root"><div class="map-loading" role="status">正在加载地图…</div></div>';
+}
+function statisticsPage() {
+  return header('数据统计', '从票据中回看走过的旅程') + (guestDemoNotice() || (state.showDemo ? '<div class="demo-banner">' + icon('info') + '<span><strong>示例数据</strong> · 虚构记录</span></div>' : '')) + '<div id="statistics-root"><div class="map-loading" role="status">正在整理统计…</div></div>';
+}
+function flightSettingsPanel() {
+  if (!supportsDesktopMcp()) return '';
+  return `<section class="panel desktop-flight-settings"><div class="panel-heading"><span class="panel-icon">${icon('plane')}</span><div><h2>飞常准历史行程</h2><p>电脑端 · 按年手动查询</p></div></div><label class="field"><span>历史行程年份</span><input id="flight-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" step="1" value="${e(state.flightYear)}" /></label><form id="flight-form"><label class="field"><span>个人MCP Key</span><input type="password" name="key" value="${e(state.flightKeyDraft ?? flightKey())}" autocomplete="off" data-setting-control /></label><p class="form-error" role="alert">${e(state.settingsError)}</p><div class="button-row flight-actions"><button class="button secondary" type="submit" data-setting-control>保存并同步</button><button class="button secondary" type="button" data-action="flight-refresh">${icon('refresh', state.flightChecking ? 'spin' : '')}${state.flightChecking ? '正在查询…' : '查询历史行程'}</button></div></form><p class="body-copy">电脑 Chrome 或 Edge 安装连接扩展后，可按年份查询历史行程。</p><a class="button secondary" href="./downloads/xingji-variflight-extension.zip" download="行迹-飞常准连接.zip">下载电脑连接扩展</a>${state.flightResult ? '<button class="text-button" data-action="flight-result">查看本次接口返回</button>' : ''}<a class="small-link" href="https://cmcp.variflight.com/tools/" target="_blank" rel="noopener noreferrer">平台文档与授权说明 ↗</a></section>`;
+}
+function dataPage() {
+  const count = state.records.filter(r => !r.deleted).length;
+  return header('数据与同步', '管理个人资料、同步与外部连接。') + `<div class="data-layout">${personalProfilePanel(state.profileDraft || state.settings.profile,state.profileError)}
+    <section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h2>GitHub私有同步</h2><p data-cloud-label>${e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<button class="button danger" data-action="reset-repository">重置仓库</button>${state.resetRequest ? '<button class="button danger" data-action="reset-archive">重置票库</button>' : ''}</section>
+    <aside class="data-column">${flightSettingsPanel()}
+    <section class="panel quiet-panel"><h3>${icon('ticket')}随身票夹</h3><p>在手机浏览器中选择“添加到主屏幕”，即可像应用一样打开。已有票据可离线查看。</p>${installPrompt ? '<button class="button secondary" data-action="install">安装行迹</button>' : ''}</section></aside>
+    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>完整JSON备份</strong><small>完整票据与票面信息</small>${icon('download')}</button><button data-action="csv"><span>${icon('ticket')}</span><strong>导出CSV表格</strong><small>便于整理和其他软件使用</small>${icon('download')}</button></div></section>
+  </div>`;
+}
+function render() {
+  if (composing) { deferredRender = true; return; }
+  const active = document.activeElement, focused = root.contains(active) ? { id: active.id, name: active.name, form: active.form?.id, start: active.selectionStart, end: active.selectionEnd } : null;
+  mapCleanup?.(); mapCleanup = null; mapEpoch++;
+  statisticsCleanup?.(); statisticsCleanup = null;
+  ticketSpaceCleanup?.();ticketSpaceCleanup=null;
+  clearTimeout(searchTimer);
+  const scroll = window.scrollY;
+  if(!['archive','map','statistics','import','data'].includes(state.page) || (state.showDemo && ['import','data'].includes(state.page))){state.page='archive';history.replaceState(null,'','#archive');}
+  if (!state.showDemo && (!state.config?.id || !state.syncMeta.verified)) { root.innerHTML = connectionPage(); bindPage(); }
+  else { root.innerHTML = `${nav()}<main id="main"><div id="connection-state">${connectionNotice()}</div>${({ archive: archivePage, map: journeyMapPage, statistics: statisticsPage, import: importPage, data: dataPage }[state.page] || archivePage)()}${state.page === 'archive' ? '' : pageFooter()}</main>`;
+  bindPage(); applyAccessPolicy(); renderedRecords = JSON.stringify(state.records); renderedSettings = JSON.stringify(state.settings); renderedWritable = canWrite(); }
+  if (focused) {
+    const input = focused.id ? document.getElementById(focused.id) : [...root.querySelectorAll('[name]')].find(input => input.name === focused.name && input.form?.id === focused.form);
+    input?.focus({ preventScroll: true }); if (input?.setSelectionRange && focused.start !== null && ['text', 'search', 'password', 'tel', 'url'].includes(input.type)) input.setSelectionRange(focused.start, focused.end);
+  }
+  window.scrollTo(0, scroll);
+}
+function renderSyncState() {
+  if (!document.querySelector('#connection-state') || !state.config?.id || !state.syncMeta.verified || renderedRecords !== JSON.stringify(state.records) || (['data','import'].includes(state.page) && renderedSettings !== JSON.stringify(state.settings)) || (state.page === 'import' && renderedWritable !== canWrite())) { render(); return; }
+  document.querySelector('#connection-state').innerHTML = connectionNotice();
+  for (const button of document.querySelectorAll('.sync-button')) { button.innerHTML = icon(state.syncing ? 'refresh' : 'cloud', state.syncing ? 'spin' : '') + '<span>' + e(syncLabel()) + '</span>'; button.title = syncLabel(); }
+  const cloudLabel = root.querySelector('[data-cloud-label]'); if (cloudLabel) cloudLabel.textContent = syncLabel();
+  const connectButton = root.querySelector('#github-form [type="submit"]'); if (connectButton) connectButton.disabled = state.syncing || state.connecting;
+  applyAccessPolicy();
+}
+document.addEventListener('compositionstart', () => { composing = true; });
+document.addEventListener('compositionend', () => { composing = false; if (deferredRender) { deferredRender = false; setTimeout(render, 0); } });
+function navigate(page) {
+  state.page = ['archive', 'map', 'statistics', 'import', 'data'].includes(page) ? page : 'archive';
+  history.replaceState(null, '', '#' + state.page); render(); window.scrollTo(0, 0);
+}
+function mountCollectionSpace() {
+  const container=root.querySelector('[data-ticket-space]');if(!container)return;
+  const result=searchTickets(live(),state.filters);
+  ticketSpaceCleanup=mountTicketSpace(container,result.records);
+}
+function bindPage() {
+  if(state.page==='archive'){
+    bindTicketViewControls(root,{value:ticketView,change:mode=>{ticketView.mode=mode;render();root.querySelector(`[data-ticket-view="${mode}"]`)?.focus({preventScroll:true});}});
+    mountCollectionSpace();
+  }
+  const statisticsRoot = root.querySelector('#statistics-root');
+  if (statisticsRoot) import('./statistics.js').then(({ mountStatistics }) => {
+    if (statisticsRoot.isConnected) statisticsCleanup = mountStatistics(statisticsRoot, live(), { options: statisticsView });
+  }).catch(error => { if (statisticsRoot.isConnected) statisticsRoot.innerHTML = '<p class="form-error">' + e(error.message) + '</p>'; });
+  const mapRoot = root.querySelector('#journey-map-root'), epoch = mapEpoch;
+  if (mapRoot) import('./journey-map.js').then(({ mountJourneyMap }) => {
+    if (mapRoot.isConnected && epoch === mapEpoch) mapCleanup = mountJourneyMap(mapRoot, live(), { icon, options: state.mapView });
+  }).catch(error => { if (mapRoot.isConnected) mapRoot.innerHTML = '<p class="form-error">' + e(error.message) + '</p>'; });
+  if (state.page === 'archive') refreshArchiveSelection();
+  bindSeatClassFields(root);
+  bindPlaceFields(root);
+  bindDatePickers(root);
+  for (const input of document.querySelectorAll('[data-search-field]')) {
+    const commit = event => { if (event.isComposing) return; updateSearch(input.dataset.searchField, input.type === 'checkbox' ? input.checked : input.value, input.tagName === 'SELECT' || input.type === 'checkbox'); };
+    input.addEventListener(input.tagName === 'SELECT' || input.type === 'checkbox' ? 'change' : 'input', commit);
+    input.addEventListener('compositionend', commit);
+  }
+  document.querySelector('#advanced-search')?.addEventListener('toggle', event => { state.filterOpen = event.target.open; });
+  const githubForm = root.querySelector('#github-form');
+  if (githubForm) { githubForm.addEventListener('input', () => captureConnectionDraft(githubForm)); githubForm.addEventListener('change', () => captureConnectionDraft(githubForm)); githubForm.addEventListener('submit', connectGitHub); }
+  root.querySelector('#demo-toggle')?.addEventListener('change', async event => {
+    event.target.disabled = true;
+    try { await setDemoMode(event.target.checked); render(); }
+    catch (error) { event.target.checked = state.showDemo; event.target.disabled = false; fail(error); }
+  });
+  root.querySelector('#flight-year')?.addEventListener('input', event => { state.flightYear = event.target.value; });
+  const flightForm = document.querySelector('#flight-form');
+  flightForm?.addEventListener('input', () => { state.flightKeyDraft = flightForm.elements.key.value; applyAccessPolicy(); });
+  flightForm?.addEventListener('submit', saveFlightSettings);
+  const updateProfileDraft = profile => {
+    if (!state.profileDirty) state.profileBase = clone(state.settings);
+    state.profileDraft = profile; state.profileDirty = true;
+  };
+  bindPersonalProfileForm(root.querySelector('#profile-form'),{change:updateProfileDraft,restructure:profile=>{updateProfileDraft(profile);render();},submit:savePersonalProfile});
+  for (const id of ['import-files', 'camera-file']) document.querySelector('#' + id)?.addEventListener('change', event => handleFiles([...event.target.files]));
+  const drop = document.querySelector('#dropzone');
+  if (drop) {
+    drop.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); document.querySelector('#import-files').click(); } });
+    drop.addEventListener('dragover', event => { event.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', event => { event.preventDefault(); drop.classList.remove('dragover'); handleFiles([...event.dataTransfer.files]); });
+  }
+}
+let arithmeticCancel=null;
+function requireArithmetic(title){
+  const challenge=createArithmeticChallenge();
+  return new Promise(resolve=>{
+    openModal(modalHead(title)+ '<form class="detail-body" data-delete-challenge>'+arithmeticField(challenge)+'<div class="reset-actions"><button type="button" class="button secondary" data-action="close-modal">取消</button><button type="submit" class="button danger">确认删除</button></div></form>');
+    const form=modalRoot.querySelector('[data-delete-challenge]');let finished=false;
+    const finish=accepted=>{if(finished)return;finished=true;arithmeticCancel=null;form.removeEventListener('submit',submit);if(accepted)closeModal(true);resolve(accepted);};
+    const submit=event=>{event.preventDefault();if(!checkArithmeticAnswer(challenge,form.elements['arithmetic-answer'].value)){form.querySelector('[data-arithmetic-error]').textContent='答案不正确，请重新计算';return;}finish(true);};
+    arithmeticCancel=()=>finish(false);form.addEventListener('submit',submit);form.elements['arithmetic-answer'].focus();
+  });
+}
+function disposeModalBindings() {
+  arithmeticCancel?.();
+  flightLookupCleanup?.(); flightLookupCleanup = null;
+  railLookupCleanup?.(); railLookupCleanup = null;
+  railRouteCleanup?.(); railRouteCleanup = null;
+  railJourneyCleanup?.(); railJourneyCleanup = null;
+  exportCleanup?.(); exportCleanup = null;
+  scannerCleanup?.(); scannerCleanup = null;
+  codeCleanup?.(); codeCleanup = null;
+}
+function openModal(html, wide = false) {
+  disposeModalBindings();
+  modalFocus = document.activeElement;
+  modalRoot.innerHTML = `<dialog class="modal ${wide ? 'wide' : ''}">${html}</dialog>`;
+  const dialog = modalRoot.querySelector('dialog'); dialog.addEventListener('cancel', event => { event.preventDefault(); closeModal(); });
+  dialog.addEventListener('click', event => { if (event.target === dialog && !editor?.dirty) closeModal(); });
+  dialog.showModal(); document.body.classList.add('modal-open');
+  applyAccessPolicy();
+}
+function closeModal(force = false) {
+  if ((state.resetting || modalRoot.querySelector('form[data-pending="true"]')) && !force) return false;
+  if (editor?.dirty && !force) {
+    if (!confirm('还没有保存这次修改，确定放弃吗？')) return false;
+  }
+  disposeModalBindings();
+  modalRoot.querySelector('dialog')?.close(); modalRoot.innerHTML = ''; document.body.classList.remove('modal-open'); editor = null;
+  if (localFileURL) { URL.revokeObjectURL(localFileURL); localFileURL = null; }
+  modalFocus?.focus?.(); return true;
+}
+const modalHead = (title, subtitle = '') => `<div class="modal-heading"><div><h2>${title}</h2>${subtitle ? `<p>${subtitle}</p>` : ''}</div><button class="icon-button" data-action="close-modal" aria-label="关闭对话框">${icon('close')}</button></div>`;
+function findRecord(id) { return live().find(r => r.id === id); }
+function viewRecord(id) {
+  const r = findRecord(id); if (!r) return;
+  const demo = id.startsWith('demo-');
+  const details = ticketDetails(r);
+  openModal(modalHead(`<span class="heading-service">${e(r.service || (r.flightStatus === 'open' ? 'OPEN' : '班次待补充'))}</span><span class="heading-route">${e(r.origin || '出发地')} <span class="muted">→</span> ${e(r.destination || '到达地')}</span>`, demo ? '虚构示例' : '') + `<div class="detail-preview">${ticketSVG(r)}</div><div class="detail-body"><dl class="detail-grid">${details.map(([key, value]) => `<div><dt>${e(key === 'price' && isRefundReceipt(r) ? '退票费（元）' : key === 'seat' && r.type === 'flight' ? '座位 / 舱位' : key === 'gate' && r.type === 'flight' ? '登机口' : ticketFieldLabel(key,r.type,labels[key]))}</dt><dd>${e(value || '未收录')}</dd></div>`).join('')}</dl>${boardingJourneyMarkup(r,live())}${railJourneyMarkup(r,live())}${r.type === 'rail' ? '<section class="rail-route" data-rail-route hidden aria-label="铁路线路"></section>' : ''}<details class="source-details"><summary>数据来源 · ${r.sources.length} 条</summary>${r.sources.map(s => `<p>${e(s.label)}<span>${e(s.at.slice(0, 10))}</span></p>`).join('') || '<p>手动录入</p>'}</details></div><div class="modal-footer"><button class="button secondary" data-action="export-png" data-id="${e(id)}">${icon('download')}导出图片</button><button class="button secondary" data-action="export-svg" data-id="${e(id)}">SVG</button><div class="spacer"></div>${!demo ? `<button class="icon-button danger" data-action="delete" data-id="${e(id)}" aria-label="删除票据">${icon('trash')}</button><button class="button primary" data-action="edit" data-id="${e(id)}">${icon('edit')}编辑票据</button>` : ''}</div>`);
+  const journeyContainer=modalRoot.querySelector('.rail-journey');
+  if(journeyContainer)railJourneyCleanup=bindRailJourney(journeyContainer,()=>r);
+  const routeContainer = modalRoot.querySelector('[data-rail-route]');
+  if (routeContainer && isJourneyRecord(r)) import('./rail-route-map.js').then(({ mountRailRoute }) => { if (routeContainer.isConnected) railRouteCleanup = mountRailRoute(routeContainer, r); }).catch(() => {});
+}
+function field(key, r, options = {}) {
+  if (key === 'seatClass') return seatClassField(r);
+  if (key === 'seat' && r.type === 'rail') return seatField(r);
+  const type = options.type || (['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime', 'actualBoardingTime'].includes(key) ? 'time' : 'text');
+  const airportField = r.type === 'flight' && ['origin', 'destination', 'originCode', 'destinationCode'].includes(key);
+  const placeholders = { railBureau: '如：上海局', railModel: '如：25T、CR400BF-S', railPowerSupply:'如：DC600V、AC380V', railMileage:'如：1463', departureDate: '如 2026-11-15', arrivalDate: '如 2026-11-15', origin: r.type === 'rail' ? '如：北京南' : '如：PEK / 北京首都', destination: r.type === 'rail' ? '如：上海虹桥' : '如：HND / 东京羽田', service: r.type === 'rail' ? '如：G103' : '如：CA181', originCode: r.type === 'rail' ? '如：Beijingnan' : '如：PEK', destinationCode: r.type === 'rail' ? '如：Shanghaihongqiao' : '如：HND', identity: '完整号码或含 * 的号码', departureZone: '如：Asia/Shanghai', arrivalZone: '如：Asia/Tokyo' };
+  const required = requiredTicketFields(r.type, r.template, r.flightStatus).includes(key) || ['type', 'template'].includes(key);
+  const requiredAttrs = required ? 'required aria-required="true"' : '';
+  if(JOURNEY_DATE_FIELDS.includes(key))return ticketDateField(key,r,{label:ticketFieldLabel(key,r.type,labels[key]),required});
+  const control = options.options ? `<select name="${key}" ${requiredAttrs}>${options.options.map(([v, label]) => `<option value="${e(v)}" ${r[key] === v ? 'selected' : ''}>${e(label)}</option>`).join('')}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${options.type === 'number' ? 'min="-30" max="30" step="1"' : ''} ${['price','railMileage','flightDistance'].includes(key) ? 'inputmode="decimal"' : ''} ${key === 'identity' ? 'autocomplete="off" spellcheck="false"' : ''} />`;
+  const content = airportField || ['origin','destination','airline'].includes(key) ? `<span class="airport-picker">${control}<span class="airport-suggestions" role="listbox" hidden></span></span>` : control;
+  const label = key === 'price' && isRefundReceipt(r) ? '退票费（元）' : ticketFieldLabel(key, r.type, labels[key]);
+  return `<label class="field ${options.full ? 'full-field' : ''}"><span>${e(label)}${required ? '<b class="required-mark" aria-label="必填">*</b>' : ''}${fieldSourceBadge(key,r)}</span>${content}</label>`;
+}
+function bindPlaceFields(container) {
+  for (const input of container.querySelectorAll('[name="origin"], [name="destination"]')) {
+    const form = input.closest('form'), side = input.name;
+    let acceptedName = input.value, acceptedCode = form.elements[side + 'Code'].value;
+    const refresh = canonical => {
+      const type = form.elements.type.value;
+      const place = resolvePlace({ type, [side]: input.value, [side + 'Code']: input.value === acceptedName ? acceptedCode : '' }, side);
+      form.elements[side + 'Code'].value = place.status === 'matched' ? (type === 'flight' ? place.code : place.pinyin) : '';
+      if (canonical && type === 'flight' && place.status === 'matched') input.value = place.chineseFullName || place.name;
+      acceptedName = input.value; acceptedCode = form.elements[side + 'Code'].value;
+    };
+    const flight=form.elements.type.value==='flight';
+    const bindPicker=flight?bindAirportPicker:bindStationPicker;
+    bindPicker(input, place => {
+      input.value = place.chineseFullName || place.name;
+      acceptedName = input.value; acceptedCode = flight?place.code:place.pinyin;
+      input.dispatchEvent(new input.ownerDocument.defaultView.Event('input', { bubbles: true }));
+    });
+    input.addEventListener('input', () => refresh(false));
+    input.addEventListener('change', () => { refresh(true); input.dispatchEvent(new input.ownerDocument.defaultView.Event('input', { bubbles: true })); });
+  }
+}
+function marksEditor(record) {
+  return `<section class="editor-extra"><h3>票面标识${fieldSourceBadge('ticketMarks',record)}</h3><p class="fine-print">选择标识的文字与外框。</p><div id="mark-rows">${markRows(record.ticketMarks)}</div><button class="button small secondary" type="button" data-mark-add>＋ 添加标识</button></section>`;
+}
+function markRows(marks) {
+  return marks.map((mark, i) => `<div class="ticket-mark-row" data-mark-index="${i}"><div class="mark-main"><label class="field"><span>标识文字</span><input name="markText-${i}" value="${e(mark.text)}" placeholder="如：网" maxlength="2" /></label><label class="field"><span>外框</span><select name="markShape-${i}">${Object.entries(MARK_SHAPES).map(([value, label]) => `<option value="${value}" ${mark.shape === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><button type="button" class="icon-button danger" data-mark-remove="${i}" aria-label="删除第${i + 1}个标识">${icon('trash')}</button></div><div class="mark-adjust"><p class="fine-print">此标识的位置微调</p><div class="form-grid"><label class="field"><span>横向偏移</span><input type="number" name="markX-${i}" value="${Number(mark.offsetX) || 0}" min="-100" max="100" step="1" /></label><label class="field"><span>纵向偏移</span><input type="number" name="markY-${i}" value="${Number(mark.offsetY) || 0}" min="-100" max="100" step="1" /></label></div></div></div>`).join('');
+}
+function collectMarks(form) {
+  return [...form.querySelectorAll('.ticket-mark-row')].map((row, i) => ({ text: form.elements[`markText-${i}`].value.trim(), shape: form.elements[`markShape-${i}`].value, offsetX: Number(form.elements[`markX-${i}`].value), offsetY: Number(form.elements[`markY-${i}`].value) }));
+}
+function reviewBoardingLegs(code,current) {
+  const records=parseScanText('', '登机牌联程条码', {boardingCodes:[code]});
+  if(records.length<2)return;
+  const matching=records.find(record=>record.service===current.service)||records[0];
+  const candidates=records.map(record=>{
+    const values=clone(record);
+    if(record===matching){
+      for(const key of FIELDS)if(!values[key]&&current[key]&&key!=='boardingLegIndex'){
+        values[key]=clone(current[key]);
+        if(current.fieldSources?.[key])values.fieldSources[key]=current.fieldSources[key];
+        if(current.lockedFields?.includes(key))values.lockedFields.push(key);
+      }
+      const year=current.departureDate?.year;
+      if(year&&values.departureDate?.dayOfYear<=daysInYear(year)){
+        values.departureDate.year=year;
+        if(current.fieldSources?.departureDateYear)values.fieldSources.departureDateYear=current.fieldSources.departureDateYear;
+      }
+    }
+    return createRecord(applyProfileDefaults(values,state.settings.profile));
+  });
+  if(editor)editor.dirty=false;closeModal(true);
+  state.candidates=candidates;state.selected=new Set(candidates.map((_,index)=>index));reviewCandidates();
+}
+function editRecord(record = newPersonalRecord(), importIndex = null, preserve = false, originalOverride = null) {
+  const original = clone(originalOverride || record), draft = normalizePlaces(clone(record));
+  if(draft.type==='flight')draft.passenger=flightPassengerName(draft,readBoardingCode(draft.boardingCode,draft.boardingLegIndex) || {});
+  draft.flightStatus = draft.type === 'flight' ? normalizeFlightStatus(draft.flightStatus) : '';
+  const personalEdited = preserve ? new Set(editor?.personalEdited || []) : new Set(record.lockedFields || []);
+  const typeFixed = importIndex !== null || state.records.some(record => record.id === draft.id);
+  editor = { original, draft, importIndex, dirty: preserve, personalEdited };
+  const flight = draft.type === 'flight';
+  const basics = flight ? ['origin','destination','service','departureDate','departureTime','arrivalTime','arrivalDate','boardingTime','passenger','identity','airline','seat','seatClass','price','gate'] : ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seatClass','seat','price','gate','railPlatform'];
+  const extra = flight ? ['orderNumber', 'terminal', 'aircraft', 'aircraftRegistration', 'pnr', 'ticketNumber', 'flightDistance'] : ['arrivalDate','arrivalTime','railBureau','railRunner','railCarOwner','railModel','railPowerSupply','railMileage','orderNumber','ticketNumber','saleCode','issuer'];
+  openModal(modalHead(importIndex !== null ? '核对这张票据' : state.records.some(r => r.id === draft.id) ? '编辑票据' : '添加一张票据', '红色 * 为保存票据必填') + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${field('type', draft, { options: [['rail', '火车票'], ['flight', '机票']] })}${flight ? '<input type="hidden" name="template" value="air-boarding-pass" />' : field('template', {...draft,template:isRefundReceipt(draft) ? 'rail-receipt' : draft.template}, { options: Object.entries(TEMPLATES).filter(([id]) => id !== 'rail-refund-receipt' && id.startsWith('rail-')).sort(([a],[b]) => Number(b === DEFAULT_RAIL_TEMPLATE) - Number(a === DEFAULT_RAIL_TEMPLATE)) })}${!flight && ['rail-receipt','rail-refund-receipt'].includes(draft.template) ? '<label class="checkbox-row receipt-refund-switch"><input type="checkbox" data-refund-receipt ' + (isRefundReceipt(draft) ? 'checked' : '') + ' />退票费凭证' + fieldSourceBadge('template',draft) + '</label>' : ''}${flight ? field('flightStatus', draft, { options: Object.entries(FLIGHT_STATUSES) }) + ticketCodeEditor(draft,!!localFileURL,'',{generator:false}) : ''}${basics.map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile}) : ticketCodeEditor(draft, !!localFileURL)}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div><p class="fine-print"></p>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div><div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="close-modal">取消</button><span class="save-note">${icon('database')}保存票据</span><div class="spacer"></div><button class="button primary" type="submit">${icon('check')}保存票据</button></div></form>`, true);
+  // openModal replaces the DOM, but keeps the editor state deliberately.
+  const form = document.querySelector('#editor-form');
+  bindTicketDates(form,()=>draft);
+  form.elements.type.toggleAttribute('data-transport-fixed', typeFixed);
+  form.elements.type.disabled = typeFixed;
+  let lookupApplying=false;
+  function updatePersonalFields(previousRecord) {
+    if(importIndex===null && !state.records.some(record=>record.id===draft.id))Object.assign(draft,applyProfileDefaults(draft,state.settings.profile,{edited:[...editor.personalEdited],previousRecord}));
+    if(draft.type==='flight' && draft.boardingCode){
+      const passenger=flightPassengerName(draft,readBoardingCode(draft.boardingCode,draft.boardingLegIndex) || {});
+      if(passenger!==draft.passenger){draft.passenger=passenger;markFieldSources(draft,['passenger'],draft.boardingCodeSource==='generated' ? 'generated' : 'barcode');}
+    }
+    for(const key of ['passenger','identity'])if(form.elements[key])form.elements[key].value=draft[key];
+    if(draft.passenger!==previousRecord.passenger)refreshBoardingPassenger(form,draft,{profile:state.settings.profile});
+  }
+  bindUppercaseNames(form, ['passenger'], () => form.elements.type.value === 'flight');
+  bindSeatClassFields(form);
+  bindSeatFields(form);
+  bindDatePickers(form);
+  bindPlaceFields(form);
+  bindReferenceFields(form, state.records);
+  form.addEventListener('change',event=>{
+    const input=event.target;
+    if(input.matches('[data-refund-receipt]'))input.dispatchEvent(new window.Event('input',{bubbles:true}));
+    if(input.tagName==='SELECT'&&FIELDS.includes(input.name)&&draft[input.name]!==input.value)input.dispatchEvent(new window.Event('input',{bubbles:true}));
+  });
+  codeCleanup = bindTicketCodeEditor(form, draft, ({filled=[],previousRecord={...draft}}={}) => { if(lookupContext(previousRecord)!==lookupContext(draft)){const cleared=clearLookupValues(draft);for(const key of Object.keys(cleared))if(form.elements[key])form.elements[key].value='';} normalizePlaces(draft); updatePersonalFields(previousRecord); for(const key of filled)if(form.elements[key])form.elements[key].value=draft[key]; editor.dirty = true; refreshFieldSources(form,draft); refreshBarcodeFieldLocks(form,draft);const metadata=form.querySelector('.boarding-metadata');if(metadata&&BOARDING_METADATA_FIELDS.some(key=>draft[key]))metadata.open=true;const journey=form.querySelector('[data-boarding-journey]');if(journey)journey.innerHTML=boardingJourneyMarkup(draft);document.querySelector('#editor-preview').innerHTML = ticketSVG(draft); }, { onMultiple:importIndex===null&&!state.records.some(record=>record.id===draft.id) ? (code,current)=>reviewBoardingLegs(code,{...draft,...current}) : undefined, profile:state.settings.profile, referenceURL: localFileURL, autoRead: draft.type === 'rail' && importIndex !== null && state.candidates.length === 1 });
+  form.addEventListener('input', event => {
+    if (event.target.matches('[data-rail-start]')) return;
+    const changedKey=event.target.name || (event.target.matches('[data-seat-preset]') ? 'seatClass' : '');
+    if (!lookupApplying && changedKey === 'type') {
+      if (typeFixed || barcodeFieldLocked(draft,'type')) { form.elements.type.value=draft.type; return; }
+      if (['rail','flight'].includes(event.target.value) && event.target.value !== draft.type) {
+        editRecord(newPersonalRecord(event.target.value));
+        editor.dirty=true;
+        return;
+      }
+    }
+    if(!lookupApplying && barcodeFieldLocked(draft,changedKey)){refreshBarcodeFieldLocks(form,draft);return;}
+    const previousRecord={...draft}, previousTemplate = draft.template, previousStatus = draft.flightStatus, previousQuery=lookupContext(draft);
+    if (!lookupApplying && ['passenger','identity'].includes(event.target.name)) editor.personalEdited.add(event.target.name);
+    const data = new FormData(form); for (const [key, value] of data) if (FIELDS.includes(key) && !JOURNEY_DATE_FIELDS.includes(key) && !barcodeFieldLocked(draft,key)) draft[key] = value;
+    for(const key of JOURNEY_DATE_FIELDS)if(form.elements[key+'Year'])draft[key]=readTicketDate(form,key,draft);
+    if (!flight) { draft.ticketMarks = collectMarks(form).filter(mark => mark.text); if (data.get('template') === 'rail-receipt' && form.querySelector('[data-refund-receipt]')?.checked) draft.template = 'rail-refund-receipt'; }
+    normalizePlaces(draft);
+    if(!lookupApplying){
+      const key=event.target.name || (event.target.matches('[data-seat-number],[data-berth]') ? 'seat' : event.target.matches('[data-seat-preset]') ? 'seatClass' : event.target.matches('[data-refund-receipt]') ? 'template' : '');
+      if(event.target.closest('.ticket-mark-row'))markManualFields(draft,['ticketMarks']);
+      const dateKey=event.target.closest('[data-journey-date]')?.dataset.journeyDate;
+      if(dateKey){markManualFields(draft,[dateKey]);markFieldSources(draft,[dateKey+'Year'],'manual');if(barcodeDateDay(draft,dateKey))draft.fieldSources[dateKey]='barcode';}
+      else if(FIELDS.includes(key))markManualFields(draft,[key,...(['origin','destination'].includes(key) ? [key+'Code'] : [])]);
+      if(previousQuery!==lookupContext(draft)){
+        const cleared=clearLookupValues(draft);
+        for(const key of Object.keys(cleared))if(JOURNEY_DATE_FIELDS.includes(key))writeTicketDate(form,key,'');else if(form.elements[key])form.elements[key].value='';
+      }
+    }
+    if (draft.railJourney && !railJourneyMatches(draft)) draft.railJourney='';
+    editor.dirty = true;
+    if (previousStatus !== draft.flightStatus || previousTemplate !== draft.template) { editRecord(draft, importIndex, true, original); return; }
+    if(flight)updatePersonalFields(previousRecord);
+    refreshFieldSources(form,draft);
+    refreshBarcodeFieldLocks(form,draft);
+    document.querySelector('#editor-preview').innerHTML = ticketSVG(draft);
+  });
+  form.addEventListener('click', event => {
+    const add = event.target.closest('[data-mark-add]'), remove = event.target.closest('[data-mark-remove]');
+    if (!add && !remove) return;
+    const marks = collectMarks(form);
+    if (add) {
+      if (marks.length >= 4) return toast('每张票最多添加4个标识', true);
+      marks.push({ text: '', shape: 'circle', offsetX: 0, offsetY: 0 });
+    } else marks.splice(Number(remove.dataset.markRemove), 1);
+    draft.ticketMarks = marks.filter(mark => mark.text);markManualFields(draft,['ticketMarks']); editor.dirty = true;
+    form.querySelector('#mark-rows').innerHTML = markRows(marks);
+    refreshFieldSources(form,draft);
+    document.querySelector('#editor-preview').innerHTML = ticketSVG(draft);
+    if (add) form.elements[`markText-${marks.length - 1}`].focus();
+  });
+  const showError = ticketFormFeedback(form, () => draft);
+  form.addEventListener('submit', async event => {
+    event.preventDefault(); if (form.dataset.pending) return;
+    let release = () => {};
+    try {
+      for(const key of JOURNEY_DATE_FIELDS)if(form.elements[key+'Year']){
+        try{draft[key]=readTicketDate(form,key,draft,{strict:true});}catch(error){error.fields=[key];throw error;}
+      }
+      validateTicketForm(draft);
+    } catch (error) { showError(error); return; }
+    release = freezeForm(form, '保存中…');
+    try {
+      const checked = validateRecord({ ...draft, updatedAt: now(), lockedFields: draft.lockedFields, sources: draft.sources.length ? draft.sources : [{ kind: 'manual', label: '手动录入', at: now() }] });
+      if (importIndex !== null) {
+        state.candidates[importIndex] = checked;
+        if (state.candidates.length === 1) await saveCandidates([checked]);
+        else { editor.dirty = false; closeModal(true); reviewCandidates(); }
+      } else {
+        const records = clone(state.records); const index = records.findIndex(r => r.id === checked.id);
+        if (index >= 0) {
+          const merged=mergeThreeWay([original],[checked],[records[index]]);
+          if(merged.conflicts.length)throw new Error('此票的同一字段已在同步时更新。请先复制你的修改，关闭并重新打开这张票后校对。');
+          records[index]=merged.records[0];
+        } else { const imported = applyImport(records, [checked]); records.splice(0, records.length, ...imported.records); }
+        await persist(records); await setDemoMode(false); editor.dirty = false; closeModal(true); render(); toast(savedMessage());
+      }
+    } catch (err) { release(); release = () => {}; applyAccessPolicy(); showError(err); } finally { release(); applyAccessPolicy(); }
+  });
+  if (flight) flightLookupCleanup = bindFlightLookup(form, {
+    getRecord: () => draft, getKey: flightKey, canQuery: canWrite, desktop: supportsDesktopMcp,
+    apply(changes, source) {
+      lookupApplying=true;
+      try {
+      applyLookupValues(draft,changes,!!source,source);
+      for (const [field, value] of Object.entries(changes)) if(JOURNEY_DATE_FIELDS.includes(field))writeTicketDate(form,field,draft[field]);else if (form.elements[field]) form.elements[field].value = value;
+      for (const side of ['origin', 'destination']) if (changes[side] || changes[side + 'Code']) {
+        const input = form.elements[side];
+        input.value = draft[side + 'Code'] || draft[side];
+        input.dispatchEvent(new window.Event('input', { bubbles: true }));
+        input.dispatchEvent(new window.Event('change', { bubbles: true }));
+      }
+      normalizePlaces(draft);
+      if (!draft.sources.length) draft.sources.push({ kind: 'manual', label: '手动录入', at: now() });
+      if (!draft.sources.some(item => item.kind === source.kind && item.label === source.label)) draft.sources.push(source);
+      form.elements.service.dispatchEvent(new window.Event('input', { bubbles: true }));
+      } finally {lookupApplying=false;}
+    }
+  });
+  else railLookupCleanup = bindRailLookup(form, {
+    getRecord: () => draft, canQuery: canWrite,
+    apply(changes, source) {
+      lookupApplying=true;
+      try {
+      applyLookupValues(draft,changes,!!source,source);
+      for (const [key,value] of Object.entries(changes)) if(JOURNEY_DATE_FIELDS.includes(key))writeTicketDate(form,key,draft[key]);else if (form.elements[key]) form.elements[key].value=value;
+      if (!draft.sources.length) draft.sources.push({ kind:'manual', label:'手动录入', at:now() });
+      if (source && !draft.sources.some(item=>item.kind===source.kind && item.label===source.label)) draft.sources.push(source);
+      form.elements.service.dispatchEvent(new window.Event('input', { bubbles:true }));
+      } finally {lookupApplying=false;}
+    }
+  });
+  applyAccessPolicy();
+}
+function importStatus(message) { const el = document.querySelector('#import-status'); if (el) el.textContent = message; }
+async function handleFiles(files) {
+  if (!canWrite()) return toast('当前仅可查看缓存', true);
+  if (state.busy) return toast('上一批资料仍在解析，请稍候', true);
+  if (files.length > 20) return toast('每批最多处理20个文件，可以分批导入', true);
+  state.busy = true; const found = []; const failures = [];
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]; importStatus(`正在处理 ${i + 1}/${files.length}：${file.name}`);
+      try {
+        if (file.size > 50 * 1024 * 1024) throw new Error('文件超过50MB，请拆分后导入');
+        const name = file.name.toLowerCase();
+        if (name.endsWith('.json')) {
+          const content = JSON.parse(await file.text());
+          if (content.schemaVersion && Array.isArray(content.records)) content.records = await upgradeCodeRecords(content.records);
+          found.push(...(content.schemaVersion ? readArchive(content) : mapFlightResult(content)));
+        } else if (name.endsWith('.csv')) found.push(...parseCSV(await file.text()));
+        else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|heic)$/.test(name)) {
+          const { recognize } = await import('./ocr.js');
+          const recognized = await recognize(file, status => importStatus(`${i + 1}/${files.length} · ${status}`), { details: true });
+          const {text}=recognized;
+          const result = parseScanText(text, file.name, recognized);
+          if (!result.length) {
+            state.lastOCRText = text;
+            throw new Error('没有识别到行程。可复制识别文字并手动修订');
+          }
+          found.push(...result);
+          if (files.length === 1) { if (localFileURL) URL.revokeObjectURL(localFileURL); localFileURL = URL.createObjectURL(file); }
+        } else {
+          const text = name.endsWith('.pdf') ? await extractPDF(file) : name.endsWith('.eml') ? decodeMail(await file.text()) : await file.text();
+          const result = parseText(text, name.endsWith('.eml') ? 'email' : 'file', file.name);
+          if (!result.length) throw new Error('没有识别到行程字段，请粘贴正文并手动补充');
+          found.push(...result);
+        }
+      } catch (error) { failures.push(`${file.name}：${error.message}`); }
+    }
+    if (found.length) { state.candidates = found; state.selected = new Set(found.map((_, i) => i)); if (found.length === 1) editRecord(found[0], 0); else reviewCandidates(); }
+    if (failures.length) {
+      importStatus(failures.join('\n'));
+      toast(`${failures.length} 个文件需要手动处理，详情见导入状态`, true);
+      if (state.lastOCRText) { const area = document.querySelector('#import-text'); if (area) area.value = state.lastOCRText; }
+    } else importStatus(`已识别 ${found.length} 条候选记录，请核对后保存。`);
+  } finally { state.busy = false; }
+}
+function reviewCandidates() {
+  editor = null;
+  openModal(modalHead(`核对 ${state.candidates.length} 条候选票据`, '重复票据会合并补充，已有的手动修订会保留。') + `<div class="review-list">${state.candidates.map((r, i) => `<div class="review-row"><label><input type="checkbox" class="candidate-select" data-index="${i}" ${state.selected.has(i) ? 'checked' : ''} aria-label="选择第${i + 1}条" /></label><div><strong>${e(r.origin || '出发地待补充')} → ${e(r.destination || '到达地待补充')}</strong><p>${e(r.service || (r.flightStatus === 'open' ? 'OPEN' : '班次待补充'))} · ${e(formatDate(r.departureDate))} · ${e(r.passenger || '旅客待补充')}</p></div><button class="button small secondary" data-action="edit-candidate" data-index="${i}">${icon('edit')}校对</button></div>`).join('')}</div><div class="modal-footer"><button class="button secondary" data-action="close-modal">稍后处理</button><div class="spacer"></div><button class="button primary" data-action="save-candidates">${icon('check')}收藏所选票据</button></div>`);
+  modalRoot.querySelectorAll('.candidate-select').forEach(input => input.addEventListener('change', () => { const i = Number(input.dataset.index); if (input.checked) state.selected.add(i); else state.selected.delete(i); }));
+}
+async function saveCandidates(candidates) {
+  if (!candidates.length) return toast('请先选择要收藏的票据', true);
+  const result = applyImport(state.records, candidates);
+  await persist(result.records); await setDemoMode(false); state.candidates = []; state.selected.clear();
+  closeModal(true); navigate('archive'); toast(savedMessage(`已新增 ${result.added} 张，补充 ${result.enriched} 张票据，已同步`));
+}
+async function connectGitHub(event) {
+  event.preventDefault();
+  if (state.connecting) return;
+  captureConnectionDraft(event.target);
+  const form = event.target, data = new FormData(form), secret = String(data.get('token')).trim();
+  const config = { ...(state.config || {}), owner: String(data.get('owner')).trim(), repo: String(data.get('repo')).trim() };
+  state.connecting = true;
+  const release = freezeForm(form);
+  try {
+    if (!navigator.onLine) throw new Error('首次连接需要联网');
+    const store = new GitHubStore(config, secret); await store.verify(); try { await store.read(); } catch (error) { if (error.code !== 'ARCHIVE_FILES_MISSING') throw error; }
+    useSnapshot(await bindRepository(config)); state.rememberToken = data.get('remember') === 'on';
+    authEpoch++; sessionStorage.setItem('xingji-github-token', secret); await db.set('githubToken', state.rememberToken ? secret : '');
+    state.connectionDraft = null;
+    await doSync();
+  } catch (error) { state.connectionStatus = 'offline'; state.syncMessage = error.message; render(); }
+  finally { state.connecting = false; release(); renderSyncState(); }
+}
+async function doSync(resolutions = {}) {
+  if (state.resetting) return false;
+  if (syncPromise) return syncPromise;
+  if (!state.config?.id || !token()) { state.connectionStatus = 'auth'; renderSyncState(); return false; }
+  if (!navigator.onLine) { state.connectionStatus = 'offline'; renderSyncState(); return false; }
+  const epoch = authEpoch;
+  const run = async () => {
+    state.syncing = true; state.syncMessage = ''; renderSyncState();
+    let retryAt = 0, needsRetry = false;
+    try {
+      if (epoch !== authEpoch) return false;
+      syncAbort = new AbortController();
+      const captured = await readSyncState(), store = new GitHubStore(clone(captured.config), token(), fetch, { signal: syncAbort.signal });
+      await store.verify();
+      let result;
+      if (!captured.meta.pending && captured.meta.verified && !Object.keys(resolutions).length && await store.head() === captured.meta.head) result = { records: captured.base, settings: captured.settingsBase, head: captured.meta.head, generation: captured.meta.generation || '', conflicts: [] };
+      else for (let attempt = 0; attempt < 3; attempt++) {
+        try { result = await synchronize(store, captured.base, captured.records, resolutions, { baseHead: captured.meta.head, baseGeneration: captured.meta.generation || '', baseSettings: captured.settingsBase, localSettings: captured.settings }); break; }
+        catch (error) { if (attempt < 2 && [409, 422].includes(error.status)) continue; throw error; }
+      }
+      if (result.conflicts.length) { state.pendingConflicts = result.conflicts; state.connectionStatus = 'conflict'; return false; }
+      if (epoch !== authEpoch) return false;
+      const accepted = await acknowledgeSync(captured, result); useSnapshot(accepted);
+      needsRetry = !!accepted.retry; state.connectionStatus = accepted.retry ? 'checking' : navigator.onLine ? 'online' : 'offline'; state.pendingConflicts = []; state.resetRequest = null; syncFailures = 0; if (accepted.changed) announce();
+      if (accepted.retry || accepted.meta.pending) queueSync(200);
+      return !accepted.retry;
+    } catch (error) {
+      state.connectionStatus = !token() || ([401, 403].includes(error.status) && !error.retryAt) ? 'auth' : 'offline';
+      state.syncMessage = error.message; retryAt = error.retryAt || 0; syncFailures++;
+      if (['ARCHIVE_FILES_MISSING', 'ARCHIVE_RESET'].includes(error.code)) { state.resetRequest = error; queueMicrotask(() => { if (!modalRoot.querySelector('dialog') && resetPromptHead !== error.snapshot.head) { resetPromptHead = error.snapshot.head; showArchiveReset().catch(fail); } }); }
+      return false;
+    } finally {
+      state.syncing = false; renderSyncState();
+      if (state.connectionStatus !== 'conflict') queueSync(needsRetry ? 250 : state.connectionStatus === 'online' ? state.syncMeta.pending ? 250 : 30000 : Math.max(retryAt - Date.now(), Math.min(120000, 5000 * 2 ** Math.min(syncFailures, 5))));
+    }
+  };
+  const execute = () => run();
+  syncPromise = navigator.locks?.request ? navigator.locks.request('xingji-sync-' + state.config.id + '-' + state.config.branch, execute) : execute();
+  try { return await syncPromise; } finally { syncPromise = null; }
+}
+let resetPromptHead = '';
+async function showArchiveReset(manual=false) {
+  if(state.resetting || modalRoot.querySelector('[data-reset-preparing],[data-archive-reset]'))return;
+  if(!navigator.onLine)return toast('请先恢复网络连接再重置仓库',true);
+  openModal(modalHead(manual ? '重置仓库' : '采用新票库')+'<div class="detail-body" data-reset-preparing><p class="operation-status" role="status">'+icon('refresh','spin')+'正在读取仓库状态…</p><p class="form-error" role="alert" data-reset-prepare-error></p><button class="button secondary" data-action="close-modal">取消</button></div>');
+  const preparing=modalRoot.querySelector('[data-reset-preparing]');
+  let captured,request;
+  try {
+    if(!token()){const remembered=await db.get('githubToken','');if(remembered)sessionStorage.setItem('xingji-github-token',remembered);}
+    if(!token())throw new Error('请先连接 GitHub 再重置仓库');
+    captured=await readResetState();if(!captured.config?.id)throw new Error('请先配置仓库');
+    request=state.resetRequest;
+    if(manual){const store=new GitHubStore(clone(captured.config),token());request={code:'REPOSITORY_RESET',snapshot:await store.resetTarget(captured.settings)};}
+    if(!preparing.isConnected)return;
+    if(!request){closeModal(true);return;}
+  } catch(error) {
+    if(preparing.isConnected){preparing.querySelector('[role="status"]').textContent='暂时无法读取仓库';preparing.querySelector('[data-reset-prepare-error]').textContent=error.message;}
+    return;
+  }
+  const challenge=createArithmeticChallenge();
+  openModal(modalHead(request.code==='ARCHIVE_RESET' ? '采用新票库' : '重置仓库')+archiveResetMarkup(request,captured,challenge));
+  const form=modalRoot.querySelector('[data-archive-reset]'),submit=form.querySelector('[type="submit"]');
+  form.elements['confirm-reset'].addEventListener('change',event=>{submit.disabled=!event.target.checked;});
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();if(!form.elements['confirm-reset'].checked || state.resetting)return;
+    if(!checkArithmeticAnswer(challenge,form.elements['arithmetic-answer'].value)){form.querySelector('[data-arithmetic-error]').textContent='答案不正确，请重新计算';return;}
+    state.resetting=true;authEpoch++;syncAbort?.abort();clearTimeout(syncTimer);
+    const release=freezeForm(form,'重置中…');
+    form.querySelector('[data-reset-error]').textContent='';
+    try{
+      if(syncPromise)await syncPromise;
+      const execute=async()=>{
+        const current=await readResetState();
+        if(current.meta.revision!==captured.meta.revision || current.meta.head!==captured.meta.head || current.config?.id!==captured.config?.id)throw new Error('本机数据已变化，请关闭窗口后重新确认');
+        const store=new GitHubStore(clone(captured.config),token());let remote;
+        if(request.code==='ARCHIVE_RESET'){await store.verify();remote=await store.read();if(remote.head!==request.snapshot.head)throw new Error('新票库已有变化，请重新确认');}
+        else remote=await store.resetRepository(request.snapshot.head,captured.settings);
+        return replaceWithRemote(captured,remote);
+      };
+      const accepted=navigator.locks?.request ? await navigator.locks.request('xingji-sync-'+captured.config.id+'-'+captured.config.branch,execute) : await execute();
+      useSnapshot(accepted);state.resetRequest=null;state.profileDraft=null;state.profileBase=null;state.profileDirty=false;state.profileError='';state.flightKeyDraft=null;state.flightResult=null;state.flightResultYear=null;state.settingsError='';state.filters=searchOptions();state.mapView={layers:['airway','railway'],year:'all'};state.limit=48;state.pendingConflicts=[];state.candidates=[];state.selected.clear();archiveSelected.clear();state.syncMessage='';state.connectionStatus='online';state.showDemo=false;
+      announce();closeModal(true);navigate('archive');toast(request.code==='ARCHIVE_RESET' ? '已采用新票库并清理旧数据' : '仓库已重置，个人资料和 MCP 设置已保留');
+    }catch(error){if(form.isConnected)form.querySelector('[data-reset-error]').textContent=error.message;}
+    finally{state.resetting=false;release();renderSyncState();queueSync(1000);}
+  });
+}
+function showConflicts(conflicts) {
+  state.pendingConflicts = conflicts;
+  const valueText = (value, field) => field === 'railJourney' ? value ? `${value.query?.startDate || ''} 始发 · ${value.stops?.length || 0} 个全程站点 · ${(value.trainsets || []).map(stock=>stock.id).join(' / ') || '具体车组未收录'}` : '未收录' : field === 'ticketMarks' ? describeMarks(value) : field === 'deleted' ? value ? '删除票据' : '保留票据' : String(value || '（空白）');
+  const conflictValue = (value, field) => field === 'flightMcpKey' ? e(maskedKey(value)) : field === 'profile' ? `<span class="profile-conflict">${e(personalProfileSummary(value))}</span>` : ['ticketCode', 'boardingCode'].includes(field) ? value ? renderCodeData(value, { className: 'conflict-code' }) : '未收录' : e(valueText(value, field));
+  openModal(modalHead('两台设备修改了同一处', '选择你要保留的内容。未选择之前，不会覆盖远端票库。') + `<form id="conflict-form"><div class="conflicts">${conflicts.map((c, i) => { const r = c.context ? (c.local ? c.context.remote : c.context.local) : state.records.find(r => r.id === c.id); return `<fieldset class="conflict"><legend>${c.kind === 'settings' ? (c.field === 'profile' ? '个人常用资料' : '飞常准 MCP Key') : e(r?.service) + ' ' + e(r?.origin) + ' → ' + e(r?.destination) + ' · ' + e(labels[c.field])}</legend><label><input type="radio" name="conflict-${i}" value="local" required /><span><small>本机</small>${conflictValue(c.local, c.field)}</span></label><label><input type="radio" name="conflict-${i}" value="remote" required /><span><small>私有仓库</small>${conflictValue(c.remote, c.field)}</span></label></fieldset>`; }).join('')}</div><div class="modal-footer"><button class="button secondary" type="button" data-action="close-modal">稍后处理</button><div class="spacer"></div><button class="button primary" type="submit">保留所选并同步</button></div></form>`);
+  document.querySelector('#conflict-form').addEventListener('submit', event => {
+    event.preventDefault(); const data = new FormData(event.target); const resolutions = {};
+    conflicts.forEach((c, i) => { resolutions[`${c.id}:${c.field}`] = { choice: data.get(`conflict-${i}`), local: c.local, remote: c.remote, context: c.context }; });
+    closeModal(true); doSync(resolutions);
+  });
+}
+async function saveFlightSettings(event) {
+  event.preventDefault(); state.settingsError = '';
+  if (!canWrite() || state.saving) { state.settingsError = '请先恢复 GitHub 连接再保存设置'; render(); return; }
+  const form = event.target, secret = String(new FormData(form).get('key') || '').trim(), expected = clone(state.settings);
+  state.flightKeyDraft = secret; state.saving = true;
+  const release = freezeForm(form);
+  try {
+    const proposed = sharedSettings({ ...expected, flightMcpKey: secret });
+    if (!await doSync() || !canWrite()) throw new Error('云端核对未完成，Key 尚未提交');
+    useSnapshot(await stageSettings(expected, proposed, state.config)); announce();
+    await doSync(); state.flightKeyDraft = null; toast(savedMessage('连接设置已同步'));
+  } catch (error) { state.settingsError = error.message; }
+  finally { state.saving = false; release(); render(); }
+}
+async function savePersonalProfile(event) {
+  event.preventDefault(); state.profileError = '';
+  if (!canWrite() || state.saving) { state.profileError = '请先恢复 GitHub 连接再保存资料'; render(); return; }
+  const form = event.target, expected = clone(state.profileBase || state.settings);
+  state.profileDraft = collectPersonalProfile(form); state.profileDirty = true;
+  state.saving = true; const release = freezeForm(form);
+  try {
+    const proposed = sharedSettings({ ...expected, profile:personalProfile(state.profileDraft) });
+    if (!await doSync() || !canWrite()) throw new Error('云端核对未完成，个人资料尚未提交');
+    useSnapshot(await stageSettings(expected,proposed,state.config)); announce();
+    await doSync(); state.profileDraft = null; state.profileBase = null; state.profileDirty = false;
+    toast(savedMessage('个人资料已同步'));
+  } catch (error) { state.profileError = error.message; }
+  finally { state.saving = false; release(); render(); }
+}
+async function checkFlights() {
+  if (!supportsDesktopMcp()) return toast('请在电脑浏览器查询飞常准行程');
+  if (!flightKey() || state.flightChecking) return;
+  if (!navigator.onLine) return toast('请联网后查询历史行程', true);
+  const year = state.flightYear, requestEpoch = authEpoch;
+  state.flightChecking = true; state.flightResult = null; if (state.page === 'data') render();
+  try {
+    const { FlightConnector } = await import('./mcp.js');
+    const result = await new FlightConnector(flightKey()).historyTrips(year);
+    if (requestEpoch !== authEpoch) return;
+    state.flightResult = result; state.flightResultYear = year;
+    let payload = result.structuredContent;
+    if (!payload) {
+      const text = result.content?.filter(c => c.type === 'text').map(c => c.text).join('\n');
+      try { payload = JSON.parse(text); } catch {}
+    }
+    if (payload?.kind === 'collection' && Array.isArray(payload.items) && !payload.items.length) {
+      toast(`${year} 年未返回历史行程`);
+    } else if (payload && (Array.isArray(payload) || Array.isArray(payload.flights))) {
+      try {
+        const candidates = mapFlightResult(payload);
+        state.candidates = candidates; state.selected = new Set(candidates.map((_, i) => i));
+        if (candidates.length) reviewCandidates();
+        else toast(`${year} 年未返回历史行程`);
+      } catch { toast('接口已返回内容，请查看并校对字段'); }
+    } else toast('已取得接口返回；尚需核对结构，请在数据页查看');
+  } catch (error) { fail(error); }
+  finally { state.flightChecking = false; if (state.page === 'data') render(); }
+}
+function showFlightResult() {
+  const raw = JSON.stringify(state.flightResult, null, 2);
+  openModal(modalHead(`${state.flightResultYear} 年历史行程返回`, '仅供本人校对，关闭后不会保存到票库。') + `<div class="detail-body"><pre class="raw-result">${e(raw)}</pre><p class="fine-print">查询结果不会自动入库。请核对后，在导入页识别并修订。</p></div><div class="modal-footer"><button class="button secondary" data-action="close-modal">关闭</button><button class="button primary" data-action="flight-to-import">将文字送往导入页</button></div>`);
+}
+const actions = {
+  'profile-reload': () => { state.profileDraft = null; state.profileBase = null; state.profileDirty = false; state.profileError = ''; render(); },
+  navigate: button => navigate(button.dataset.page),
+  'toggle-routes': button => { state.routesOpen = !state.routesOpen; button.closest('.route-shortcuts-section').dataset.expanded = String(state.routesOpen); button.setAttribute('aria-expanded', String(state.routesOpen)); },
+  filter: button => { state.filters.type = button.dataset.type; state.limit = 48; render(); },
+  'load-more': () => { state.limit += 48; render(); },
+  'reset-archive': () => showArchiveReset(),
+  'reset-repository': () => showArchiveReset(true),
+  'reset-filters': () => { state.filters = searchOptions(); state.limit = 48; render(); },
+  'clear-search-field': button => { state.filters = clearSearchField(state.filters, button.dataset.field); state.limit = 48; render(); },
+  'swap-route': () => { const f = state.filters; [f.originCity, f.destinationCity] = [f.destinationCity, f.originCity]; [f.origin, f.destination] = [f.destination, f.origin]; state.limit = 48; render(); },
+  'quick-route': button => { state.filters = searchOptions({ ...state.filters, city: '', originCity: button.dataset.from, destinationCity: button.dataset.to, origin: '', destination: '', bothDirections: true }); state.limit = 48; render(); },
+  'export-album': () => exportArchiveSelection('pdf'),
+  'export-images': () => exportArchiveSelection('zip'),
+  'export-selected-csv': () => {
+    const records = selectedArchiveRecords();
+    if (records.length) download(csv(records), '行迹所选票据_' + now().slice(0,10) + '.csv', 'text/csv;charset=utf-8');
+  },
+  'delete-selected': async () => {
+    const selected = selectedArchiveRecords();
+    if (!selected.length || state.showDemo || !canWrite() || state.saving) return;
+    if (!confirm('删除所选的 ' + selected.length + ' 张票据？删除后无法恢复。')) return;
+    if (!await requireArithmetic('删除所选 '+selected.length+' 张票据') || !canWrite() || state.saving) return;
+    const ids = new Set(selected.map(record => record.id)), records = clone(state.records), updatedAt = now();
+    for (const record of records) if (ids.has(record.id) && !record.deleted) { record.deleted = true; record.updatedAt = updatedAt; }
+    await persist(records); archiveSelected.clear(); render(); toast(savedMessage('所选票据已删除并同步'));
+  },
+  'enter-demo': async button => { button.disabled=true; try { await setDemoMode(true); navigate('archive'); } finally { button.disabled=false; } },
+  'exit-demo': async () => { await setDemoMode(false); render(); },
+  'scan-ticket': scanTicket,
+  new: () => { if (!state.showDemo && closeModal() !== false) editRecord(); },
+  view: button => viewRecord(button.dataset.id),
+  edit: button => { const r = findRecord(button.dataset.id); if (r) editRecord(r); },
+  'close-modal': () => closeModal(),
+  'edit-candidate': button => editRecord(state.candidates[Number(button.dataset.index)], Number(button.dataset.index)),
+  'save-candidates': () => saveCandidates(state.candidates.filter((_, i) => state.selected.has(i))),
+  review: () => { if (state.candidates.length === 1) editRecord(state.candidates[0], 0); else reviewCandidates(); },
+  'parse-text': () => {
+    const text = document.querySelector('#import-text').value.trim();
+    if (!text) return toast('请先粘贴一段行程信息', true);
+    const candidates = parseText(text);
+    if (!candidates.length) return toast('没有识别到行程，请补充日期、车次或起终点，也可直接手动添加', true);
+    state.candidates = candidates; state.selected = new Set(candidates.map((_, i) => i));
+    if (candidates.length === 1) editRecord(candidates[0], 0); else reviewCandidates();
+  },
+  backup: () => download(JSON.stringify(archive(state.records), null, 2), `行迹备份_${now().slice(0, 10)}.json`),
+  csv: () => download(csv(state.records), `行迹票据_${now().slice(0, 10)}.csv`, 'text/csv;charset=utf-8'),
+  'export-svg': async button => { const r = findRecord(button.dataset.id); button.disabled = true; toast('正在准备包含字体的票面…'); try { download(await exportSVG(r), fileName(r) + '.svg', 'image/svg+xml;charset=utf-8'); } finally { button.disabled = false; } },
+  'export-png': async button => { const r = findRecord(button.dataset.id); button.disabled = true; toast('正在生成高清票面…'); try { download(await exportPNG(r), fileName(r) + '.png'); } finally { button.disabled = false; } },
+  delete: async button => {
+    if (!confirm('删除这张票据？删除后无法恢复。')) return;
+    const id=button.dataset.id;
+    if (!await requireArithmetic('删除票据') || !canWrite() || state.saving) return;
+    const records = clone(state.records), r = records.find(r => r.id === id); if (!r) return;
+    r.deleted = true; r.updatedAt = now(); await persist(records); closeModal(true); render(); toast(savedMessage('删除已同步'));
+  },
+  sync: () => { if (!token()) { navigate('data'); return; } return doSync(); },
+  'review-conflicts': () => { if (modalRoot.querySelector('dialog') && !closeModal()) return; showConflicts(state.pendingConflicts || []); },
+  disconnect: async () => { state.connectionDraft = null; authEpoch++; syncAbort?.abort(); clearTimeout(syncTimer); sessionStorage.removeItem('xingji-github-token'); await db.set('githubToken', ''); state.connectionStatus = 'auth'; state.syncMessage = ''; render(); toast('已退出授权，本机缓存仅可查看'); },
+  'flight-refresh': checkFlights,
+  'flight-result': showFlightResult,
+  'flight-to-import': () => { const text = state.flightResult?.content?.filter(c => c.type === 'text').map(c => c.text).join('\n') || JSON.stringify(state.flightResult); closeModal(true); navigate('import'); document.querySelector('#import-text').value = text; },
+  install: async () => { if (installPrompt) { await installPrompt.prompt(); installPrompt = null; render(); } }
+};
+document.addEventListener('change', event => {
+  const input = event.target;
+  if (input.matches('[data-archive-select]')) {
+    if (input.checked) archiveSelected.add(input.dataset.archiveSelect); else archiveSelected.delete(input.dataset.archiveSelect);
+    refreshArchiveSelection();
+  } else if (input.matches('[data-archive-select-all]')) {
+    const result = searchTickets(live(), state.filters);
+    if (input.checked && !result.error) for (const record of result.records) archiveSelected.add(record.id); else archiveSelected.clear();
+    refreshArchiveSelection(result); document.querySelector('[data-archive-select-all]')?.focus();
+  }
+});
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-action]'); if (!button || button.disabled) return;
+  if (['new', 'edit', 'delete', 'delete-selected', 'scan-ticket', 'edit-candidate', 'save-candidates', 'parse-text', 'flight-to-import'].includes(button.dataset.action) && !canWrite()) return toast('当前仅可查看缓存，请恢复 GitHub 连接', true);
+  const fn = actions[button.dataset.action]; if (fn) Promise.resolve().then(() => fn(button)).catch(fail);
+});
+window.addEventListener('hashchange', () => { state.page = location.hash.slice(1) || 'archive'; render(); });
+window.addEventListener('online', () => { state.connectionStatus = 'checking'; renderSyncState(); doSync(); });
+window.addEventListener('offline', () => { state.connectionStatus = 'offline'; renderSyncState(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') doSync(); else clearTimeout(syncTimer); });
+channel?.addEventListener('message', async () => { useSnapshot(await readSyncState()); state.connectionStatus = 'checking'; renderSyncState(); queueSync(100); });
+window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); installPrompt = event; if (state.page === 'data') render(); });
+window.addEventListener('beforeunload', event => { if (state.profileDirty || editor?.dirty) { event.preventDefault(); event.returnValue = ''; } });
+async function boot() {
+  try {
+    const [snapshot, secret, showDemo] = await Promise.all([readSyncState(), db.get('githubToken', ''), db.get('showDemo', false)]);
+    useSnapshot(snapshot); state.rememberToken = !!secret;
+    if (secret) sessionStorage.setItem('xingji-github-token', secret);
+    state.showDemo = showDemo === true; state.page = location.hash.slice(1) || 'archive'; render();
+    doSync();
+  } catch (error) {
+    root.innerHTML = `<main class="boot-error"><h1>本机档案暂时无法打开</h1><p>${e(error.message)}</p><p>请保留当前浏览器数据，不要清空缓存。可以刷新重试，或从已有备份恢复。</p><button class="button primary" id="rescue-data">导出原始本机数据</button><button class="button danger" data-action="reset-repository">重置仓库</button></main>`;
+    document.querySelector('#rescue-data').onclick = async () => { try { download(JSON.stringify(await db.get('records', []), null, 2), 'xingji-rescue.json'); } catch (err) { fail(err); } };
+  }
+}
+watchAppUpdates({
+  canReload: () => {
+    if (state.saving || state.syncing || state.busy || state.connecting || state.resetting || state.flightChecking) return '请等待当前操作完成后再更新';
+    if (state.profileDirty || editor?.dirty || state.candidates.length || (state.flightKeyDraft !== null && state.flightKeyDraft.trim() !== flightKey())) return '请先保存或关闭正在编辑的内容，再更新';
+    return true;
+  },
+  notify: message => toast(message, true),
+  onError: () => toast('离线缓存未启用，当前仍可正常使用', true)
+});
+boot();

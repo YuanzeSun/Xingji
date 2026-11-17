@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {JSDOM} from 'jsdom';
+import {indexedDB} from 'fake-indexeddb';
+import {createRecord} from '../src/model.js';
+import {prepareCloud} from './helpers/cloud.js';
+
+test('archive opens in medium newest-first grid and combines layouts with shared filtering and selection',async()=>{
+  const dom=new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>',{url:'http://localhost/#archive'}),{window}=dom;
+  for(const key of ['window','document','location','history','sessionStorage','FormData','Image'])Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true});
+  Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});
+  window.scrollTo=()=>{};window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){this.open=false;};
+  const rows=Array.from({length:80},(_,i)=>createRecord({id:'trip-'+i,service:'G'+(i+1),origin:'北京南',destination:'南京南',departureDate:i<40 ? '2025-11-16' : '2026-11-16',passenger:'示例旅客',seatClass:'二等座'}));
+  const server=await prepareCloud(rows),db=await import('../src/db.js');
+  const wait=async predicate=>{for(let i=0;i<300;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('Ticket view did not settle');};
+  const click=selector=>{const element=document.querySelector(selector);assert.ok(element,selector);element.click();};
+  const mode=async value=>{click('[data-ticket-view="'+value+'"]');await wait(()=>document.querySelector('[data-ticket-view="'+value+'"][aria-pressed="true"]'));};
+  try{
+    await import('../src/app.js');await wait(()=>document.querySelectorAll('.ticket-grid .ticket-card').length===48);
+    assert.equal(document.querySelector('[data-ticket-view="grid"]').getAttribute('aria-pressed'),'true');assert.equal(document.querySelector('[data-ticket-size="medium"]').getAttribute('aria-pressed'),'true');assert.equal(document.querySelector('#search-sort').value,'newest');
+    click('[data-ticket-size="small"]');await mode('list');await wait(()=>document.querySelectorAll('.ticket-list-row').length===48);
+    assert.equal(document.querySelector('nav [data-page="timeline"]'),null);
+    const id=document.querySelector('[data-archive-select]').dataset.archiveSelect;click('[data-archive-select="'+id+'"]');
+    await mode('grid');assert.equal(document.querySelector('[data-archive-select="'+id+'"]').checked,true);
+    click('[data-ticket-size="small"]');
+    await mode('space');assert.equal(document.querySelectorAll('.space-ticket').length,36);assert.equal(document.querySelector('[data-archive-select]'),null);assert.equal(document.querySelector('.archive-selection-bar'),null);
+    click('.space-ticket-current [data-action="view"]');await wait(()=>document.querySelector('.detail-grid'));click('[data-action="close-modal"]');
+    await mode('list');assert.equal(document.querySelector('[data-archive-select="'+id+'"]').checked,true);
+    click('[data-ticket-size="medium"]');await wait(()=>document.querySelectorAll('.timeline-item').length===48);
+    assert.deepEqual([...document.querySelectorAll('.timeline-year-heading h2')].map(node=>node.textContent),['2026','2025']);
+    assert.equal(document.querySelector('[data-archive-select="'+id+'"]').checked,true);assert.equal(document.querySelector('.ticket-preview'),null);
+    click('[data-archive-select-all]');assert.equal(document.querySelectorAll('.timeline-ticket input:checked').length,48);
+    assert.match(document.querySelector('.archive-selection-count').textContent,/80/);click('[data-archive-select-all]');click('[data-archive-select="'+id+'"]');
+    const sort=value=>{const select=document.querySelector('#search-sort');select.value=value;select.dispatchEvent(new window.Event('change',{bubbles:true}));};
+    sort('oldest');await wait(()=>document.querySelector('.timeline-year-heading h2')?.textContent==='2025');
+    click('[data-action="load-more"]');await wait(()=>document.querySelectorAll('.timeline-item').length===80);
+    assert.equal(document.querySelector('[data-archive-select="'+id+'"]').checked,true);
+    sort('service');await wait(()=>!document.querySelector('.timeline-year-heading'));
+    assert.equal(document.querySelector('.timeline-service').textContent,'G1');
+    click('[data-action="load-more"]');await wait(()=>document.querySelectorAll('.timeline-item').length===80);
+    click('[data-ticket-size="small"]');await wait(()=>document.querySelectorAll('.ticket-list-row').length===80);
+    sort('newest');await wait(()=>document.querySelector('.ticket-list-open').dataset.id==='trip-40');
+    await mode('space');
+    assert.equal(document.querySelector('[data-ticket-view="space"]').getAttribute('aria-pressed'),'true');
+    const filter=document.querySelector('[data-search-field="service"]');filter.value='G80';filter.dispatchEvent(new window.Event('input',{bubbles:true}));await wait(()=>document.querySelectorAll('.space-ticket').length===1);
+    assert.equal(document.querySelector('.space-ticket-current [data-action="view"]').dataset.id,'trip-79');
+    filter.value='DOES-NOT-EXIST';filter.dispatchEvent(new window.Event('input',{bubbles:true}));await wait(()=>!document.querySelector('[data-ticket-space]'));assert.match(document.querySelector('#search-results').textContent,/没有匹配/);
+    const ordered=values=>[...values].sort((a,b)=>a.id.localeCompare(b.id));
+    assert.deepEqual(ordered(await db.get('records')),ordered(rows));assert.deepEqual(ordered(server.records()),ordered(rows));
+    assert.equal(await db.get('ticketViews'),undefined);
+  }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();}
+});

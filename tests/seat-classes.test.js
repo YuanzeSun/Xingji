@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createRecord, archive, readArchive, csv } from '../src/model.js';
+import { parseCSV, parseText } from '../src/importers.js';
+import { normalizeSeatClass } from '../src/seat-classes.js';
+
+test('common seat class aliases are stored consistently across entry, imports and export', () => {
+  for (const value of ['二等', '二等座', ' 二 等 座 ']) assert.equal(createRecord({ seatClass: value }).seatClass, '二等座');
+  assert.equal(parseCSV('车次,席别\nG103,二等')[0].seatClass, '二等座');
+  assert.equal(parseText('日期：2026-11-15 车次：G103 出发：北京南 到达：上海虹桥 二等座')[0].seatClass, '二等座');
+  const record = createRecord({ seatClass: '站票' });
+  assert.equal(readArchive(archive([record]))[0].seatClass, '无座');
+  assert.equal(parseCSV(csv([record]))[0].seatClass, '无座');
+  assert.equal(normalizeSeatClass('商务舱', 'flight'), '公务舱');
+  assert.equal(normalizeSeatClass('商务', 'rail'), '商务座');
+  assert.equal(normalizeSeatClass('特别观景包厢', 'rail'), '特别观景包厢');
+  assert.equal(normalizeSeatClass('Y', 'flight'), 'Y');
+  assert.equal(normalizeSeatClass('constructor', 'rail'), 'constructor');
+});
+
+ test('flight booking codes preserve explicit letters without inferring them from a cabin name', () => {
+  for (const value of ['Y','y','Y舱','Y 舱','经济舱（Y）','Y（经济舱）']) assert.equal(normalizeSeatClass(value,'flight'),'Y');
+  assert.equal(normalizeSeatClass('M1','flight'),'M1');
+  assert.equal(normalizeSeatClass('经济舱','flight'),'经济舱');
+  const input='航班：CA181 日期：2026-11-15 出发：北京首都 到达：东京羽田\n舱位：M1 经济舱';
+  assert.equal(parseText(input)[0].seatClass,'M1');
+  assert.equal(parseText(input.replace('舱位：M1','CLASS Y'))[0].seatClass,'Y');
+  const imported=parseCSV('交通方式,航班号,舱位,证件号,登机口\n机票,CA181,M1,E12****89,32A')[0];
+  assert.equal(imported.seatClass,'M1'); assert.equal(imported.identity,'E12****89'); assert.equal(imported.gate,'32A');
+  assert.equal(parseText('车次：D3759 日期：2023-05-26 出发：柳州 到达：来宾北 检票:5B')[0].gate,'5B');
+  const record=createRecord({type:'flight',template:'air-boarding-pass',seatClass:'j'});
+  assert.equal(parseCSV(csv([record]))[0].seatClass,'J'); assert.equal(readArchive(archive([record]))[0].seatClass,'J');
+});
+
+test('timeline describes flight cabin codes with 舱 while printed passes retain bare codes and rail classes stay unchanged',async()=>{
+  const {timeline}=await import('../src/timeline.js'),{ticketSVG}=await import('../src/tickets.js');
+  const flight=createRecord({type:'flight',template:'air-boarding-pass',departureDate:'2026-01-01',seatClass:'Y'}),rail=createRecord({departureDate:'2026-01-01',seatClass:'二等座'});
+  assert.match(timeline([flight,rail],()=>''),/>Y舱</);assert.match(timeline([flight,rail],()=>''),/>二等座</);
+  assert.doesNotMatch(ticketSVG(flight),/Y舱/);assert.match(ticketSVG(flight),/>Y</);
+  const named=createRecord({...flight,seatClass:'经济舱'});assert.match(timeline([named],()=>''),/>经济舱</);assert.doesNotMatch(ticketSVG(named),/>经济舱</);assert.match(ticketSVG(named),/>经济</);
+});

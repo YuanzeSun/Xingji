@@ -1,0 +1,53 @@
+import {answerArithmetic} from './helpers/arithmetic.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { JSDOM } from 'jsdom';
+import { indexedDB } from 'fake-indexeddb';
+import { createRecord } from '../src/model.js';
+import { prepareCloud } from './helpers/cloud.js';
+
+test('archive selection supports direct actions and confirmed deletion, while maps reuse saved results without modifying tickets', async () => {
+  const dom=new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>',{url:'http://localhost/'}),{window}=dom;
+  for(const key of ['window','document','location','history','sessionStorage','FormData'])Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true});
+  Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});
+  window.scrollTo=()=>{};window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){this.open=false;};
+  let accepted=false,prompt='';globalThis.confirm=message=>{prompt=message;return accepted;};
+  const route={service:'D3759',origin:'柳州',destination:'来宾北',segments:[[[109.388,24.307],[109.244,23.751]]],stops:[{name:'柳州',coordinates:[109.388,24.307]},{name:'来宾北',coordinates:[109.244,23.751]}],queriedAt:'2026-11-17T00:00:00Z'};
+  const rail=id=>createRecord({id,passenger:id,service:'D3759',origin:'柳州',destination:'来宾北',departureDate:'2023-05-26'});
+  const rows=[rail('a'),createRecord({...rail('b'),railRoute:route}),createRecord({id:'c',type:'flight',template:'air-boarding-pass',service:'CA1',origin:'PEK',destination:'SHA',departureDate:'2023-05-25'})];
+  const server=await prepareCloud(rows);
+  const cloudFetch=globalThis.fetch;let routeRequests=0;
+  globalThis.fetch=async(...args)=>{if(String(args[0]).includes('rg-api.zenglingkun.cn')){routeRequests++;throw Error('Saved routes must not query RailGo');}return cloudFetch(...args);};
+  const wait=async fn=>{for(let i=0;i<300;i++){if(fn())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('Archive operation did not settle');};
+  const click=selector=>{const node=document.querySelector(selector);assert.ok(node,selector);node.click();};
+  try{
+    await import('../src/app.js');await wait(()=>document.querySelectorAll('[data-archive-select]').length===3);
+    assert.equal(document.querySelector('[data-action="export-tickets"]'),null);
+    assert.equal(document.querySelector('[data-action="export-album"]'),null);
+    click('[data-archive-select="a"]');
+    assert.deepEqual([...document.querySelectorAll('.archive-selection-actions button')].map(button=>button.textContent),['导出纪念册','逐个导出','导出 CSV','删除']);
+    assert.equal(document.querySelector('[data-archive-select-all]').indeterminate,true);
+    click('[data-action="export-images"]');await wait(()=>document.querySelector('[data-export-format="zip"]'));
+    assert.match(document.querySelector('[data-export-count]').textContent,/1/);assert.equal(document.querySelector('[data-export-index]'),null);
+    click('[data-action="close-modal"]');
+    await wait(()=>!document.querySelector('[data-action="delete-selected"]').disabled);
+    click('[data-action="delete-selected"]');await wait(()=>!!prompt);assert.match(prompt,/1 张票据/);assert.equal(server.records().filter(row=>row.deleted).length,0);
+    click('[data-archive-select-all]');assert.equal(document.querySelector('[data-archive-select-all]').checked,true);
+    assert.match(document.querySelector('.archive-selection-count').textContent,/3/);
+    click('[data-archive-select-all]');assert.equal(document.querySelector('[data-action="delete-selected"]'),null);
+    const filter=document.querySelector('[data-search-field="service"]');filter.value='D3759';filter.dispatchEvent(new window.Event('input',{bubbles:true}));await wait(()=>document.querySelectorAll('[data-archive-select]').length===2);
+    click('[data-action="navigate"][data-page="map"]');await wait(()=>document.querySelector('.map-track'));
+    assert.equal(server.records().find(row=>row.id==='a').railRoute,'');
+    assert.deepEqual(server.records().find(row=>row.id==='b').railRoute,route);
+    assert.equal(routeRequests,0);
+    assert.doesNotMatch(document.body.textContent,/重合线段已合并|未匹配时可核对/);
+    click('[data-action="navigate"][data-page="archive"]');await wait(()=>document.querySelector('[data-archive-select="a"]'));
+    click('[data-archive-select="a"]');await wait(()=>!document.querySelector('[data-action="delete-selected"]').disabled);accepted=true;click('[data-action="delete-selected"]');
+    await wait(()=>document.querySelector('[data-delete-challenge]'));document.querySelector('[name="arithmetic-answer"]').value='999999';document.querySelector('[data-delete-challenge]').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));assert.match(document.querySelector('[data-arithmetic-error]').textContent,/不正确/);assert.equal(server.records().some(row=>row.deleted),false);answerArithmetic(document);document.querySelector('[data-delete-challenge]').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
+    await wait(()=>server.records().find(row=>row.id==='a')?.deleted);await wait(()=>document.querySelector('[data-archive-select="a"]')===null);
+    await wait(()=>document.querySelector('#toast-root').textContent.includes('所选票据已删除'));
+    assert.equal(server.records().filter(row=>!row.deleted).length,2);assert.match(document.querySelector('.archive-selection-count').textContent,/0/);
+    click('[data-archive-select="b"]');window.dispatchEvent(new window.Event('offline'));
+    assert.equal(document.querySelector('[data-action="delete-selected"]').disabled,true);
+  }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();globalThis.fetch=cloudFetch;}
+});

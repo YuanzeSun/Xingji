@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "responseHeaders": [
+        { "header": "Access-Control-Expose-Headers", "operation": "append", "value": "Mcp-Session-Id" },
+        { "header": "Access-Control-Allow-Headers", "operation": "append", "value": "Authorization, Content-Type, MCP-Protocol-Version, Mcp-Session-Id" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "|https://c-gw.variflight.com/chat_message/mcp/api|",
+      "isUrlFilterCaseSensitive": true,
+      "initiatorDomains": ["yuanzesun.github.io"],
+      "requestMethods": ["post", "options"],
+      "resourceTypes": ["xmlhttprequest", "other"]
+    }
+  }
+]

@@ -1,0 +1,37 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {JSDOM} from 'jsdom';import {indexedDB} from 'fake-indexeddb';
+import {prepareCloud} from './helpers/cloud.js';
+test('saving or receiving a shared MCP key never consumes quota; explicit refresh alone queries flights',async()=>{
+ const dom=new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>',{url:'http://localhost/#data'}),{window}=dom;
+ for(const key of ['window','document','location','history','sessionStorage','FormData'])Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true});
+ Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});window.scrollTo=()=>{};
+ const server=await prepareCloud([],{flightMcpKey:'initial-key'}),db=await import('../src/db.js');let queries=0;
+ globalThis.fetch=async(url,options)=>{
+  if(!String(url).includes('variflight.com'))return server.fetch(url,options);
+  const body=JSON.parse(options.body);if(body.method==='notifications/initialized')return new Response(null,{status:204});
+  if(body.method==='tools/call'){queries++;assert.deepEqual(body.params,{name:'queryUserHistoryTrip',arguments:{year:'2024',identityType:0}});}
+  const result=body.method==='tools/call'?{structuredContent:{kind:'collection',items:[]},isError:false}:{};
+  return new Response(JSON.stringify({jsonrpc:'2.0',id:body.id,result}),{headers:{'Content-Type':'application/json',...(body.method==='initialize'?{'Mcp-Session-Id':'test-session'}:{})}});
+ };
+ const wait=async fn=>{for(let i=0;i<300;i++){if(await fn())return;await new Promise(r=>setTimeout(r,10));}assert.fail('Settings did not settle');};
+ await import('../src/app.js');await wait(()=>document.querySelector('#flight-form [name="key"]')?.disabled===false);
+ const yearInput=document.querySelector('#flight-year');assert.equal(yearInput.value,String(new Date().getFullYear()));yearInput.value='2024';yearInput.dispatchEvent(new window.Event('input',{bubbles:true}));assert.equal(queries,0);
+ assert.equal(document.querySelector('#flight-form [name="key"]').value,'initial-key');assert.equal(queries,0);
+ assert.equal(document.querySelector('.desktop-flight-settings a[download]').getAttribute('href'),'./downloads/xingji-variflight-extension.zip');
+ let form=document.querySelector('#flight-form');form.elements.key.value='saved-once-key';form.dispatchEvent(new window.Event('input',{bubbles:true}));form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
+ await wait(async()=>server.settings().flightMcpKey==='saved-once-key'&&!(await db.get('syncMeta')).pending&&!document.querySelector('#flight-form [name="key"]').disabled);
+ assert.equal(queries,0,'saving credentials must not query the metered service');
+ assert.equal(document.querySelector('#flight-year').value,'2024');assert.equal(document.querySelector('[data-action="flight-refresh"]').textContent,'查询历史行程');
+ document.querySelector('[data-action="flight-refresh"]').click();await wait(()=>queries===1&&!document.querySelector('[data-action="flight-refresh"]').disabled);
+ assert.ok(document.querySelector('#toast-root').textContent.includes('2024 年未返回历史行程'));
+ server.push([],{flightMcpKey:'changed-on-other-device'});document.querySelector('[data-action="sync"]').click();
+ await wait(()=>document.querySelector('#flight-form [name="key"]').value==='changed-on-other-device');assert.equal(queries,1);
+ let online=false;Object.defineProperty(navigator,'onLine',{get:()=>online,configurable:true});window.dispatchEvent(new window.Event('offline'));
+ assert.equal(document.querySelector('#flight-form [name="key"]').disabled,true);
+ form=document.querySelector('#flight-form');form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,20));
+ assert.equal((await db.get('settings')).flightMcpKey,'changed-on-other-device');assert.equal(queries,1);
+ Object.defineProperty(navigator,'userAgent',{value:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',configurable:true});
+ document.querySelector('[data-action="navigate"][data-page="archive"]').click();await wait(()=>document.querySelector('h1')?.textContent==='我的票据');
+ document.querySelector('[data-action="navigate"][data-page="data"]').click();await wait(()=>document.querySelector('.data-layout'));
+ assert.equal(document.querySelector('#flight-form'),null);assert.equal(document.querySelector('[data-action="flight-refresh"]'),null);assert.equal(queries,1);
+ dom.window.close();
+});

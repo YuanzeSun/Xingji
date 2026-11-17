@@ -1,0 +1,1383 @@
+{
+  "source": "https://github.com/soaring-symbols/soaring-symbols",
+  "version": "0.4.1",
+  "airlines": [
+    {
+      "name": "Aegean Airlines",
+      "slug": "aegean-airlines",
+      "iata": "A3",
+      "icao": "AEE",
+      "aliases": [],
+      "type": "icon",
+      "file": "aegean-airlines.svg"
+    },
+    {
+      "name": "Aer Lingus",
+      "slug": "aer-lingus",
+      "iata": "EI",
+      "icao": "EIN",
+      "aliases": [],
+      "type": "icon",
+      "file": "aer-lingus.svg"
+    },
+    {
+      "name": "Aerolíneas Argentinas",
+      "slug": "aerolineas-argentinas",
+      "iata": "AR",
+      "icao": "ARG",
+      "aliases": [],
+      "type": "icon",
+      "file": "aerolineas-argentinas.svg"
+    },
+    {
+      "name": "Aeroméxico",
+      "slug": "aeromexico",
+      "iata": "AM",
+      "icao": "AMX",
+      "aliases": [],
+      "type": "icon",
+      "file": "aeromexico.svg"
+    },
+    {
+      "name": "Air Albania",
+      "slug": "air-albania",
+      "iata": "ZB",
+      "icao": "ABN",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-albania.svg"
+    },
+    {
+      "name": "Air Algérie",
+      "slug": "air-algerie",
+      "iata": "AH",
+      "icao": "DAH",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-algerie.svg"
+    },
+    {
+      "name": "Air Arabia",
+      "slug": "air-arabia",
+      "iata": "G9",
+      "icao": "ABY",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-arabia.svg"
+    },
+    {
+      "name": "Air Arabia Abu Dhabi",
+      "slug": "air-arabia-abu-dhabi",
+      "iata": "3L",
+      "icao": "ADY",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-arabia-abu-dhabi.svg"
+    },
+    {
+      "name": "Air Arabia Egypt",
+      "slug": "air-arabia-egypt",
+      "iata": "E5",
+      "icao": "RBG",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-arabia-egypt.svg"
+    },
+    {
+      "name": "Air Arabia Maroc",
+      "slug": "air-arabia-maroc",
+      "iata": "3O",
+      "icao": "MAC",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-arabia-maroc.svg"
+    },
+    {
+      "name": "Air Astana",
+      "slug": "air-astana",
+      "iata": "KC",
+      "icao": "KZR",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-astana.svg"
+    },
+    {
+      "name": "Air Berlin",
+      "slug": "air-berlin",
+      "iata": "AB",
+      "icao": "BER",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-berlin.svg"
+    },
+    {
+      "name": "Air Canada",
+      "slug": "air-canada",
+      "iata": "AC",
+      "icao": "ACA",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-canada.svg"
+    },
+    {
+      "name": "Air China",
+      "slug": "air-china",
+      "iata": "CA",
+      "icao": "CCA",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-china.svg"
+    },
+    {
+      "name": "Air Dolomiti",
+      "slug": "air-dolomiti",
+      "iata": "EN",
+      "icao": "DLA",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-dolomiti.svg"
+    },
+    {
+      "name": "Air Europa",
+      "slug": "air-europa",
+      "iata": "UX",
+      "icao": "AEA",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-europa.svg"
+    },
+    {
+      "name": "Air France",
+      "slug": "air-france",
+      "iata": "AF",
+      "icao": "AFR",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-france.svg"
+    },
+    {
+      "name": "Air India",
+      "slug": "air-india",
+      "iata": "AI",
+      "icao": "AIC",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-india.svg"
+    },
+    {
+      "name": "Air Mauritius",
+      "slug": "air-mauritius",
+      "iata": "MK",
+      "icao": "MAU",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-mauritius.svg"
+    },
+    {
+      "name": "Air New Zealand",
+      "slug": "air-new-zealand",
+      "iata": "NZ",
+      "icao": "ANZ",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-new-zealand.svg"
+    },
+    {
+      "name": "Air Serbia",
+      "slug": "air-serbia",
+      "iata": "JU",
+      "icao": "ASL",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-serbia.svg"
+    },
+    {
+      "name": "Air Transat",
+      "slug": "air-transat",
+      "iata": "TS",
+      "icao": "TSC",
+      "aliases": [],
+      "type": "icon",
+      "file": "air-transat.svg"
+    },
+    {
+      "name": "AirAsia",
+      "slug": "airasia",
+      "iata": "AK",
+      "icao": "AXM",
+      "aliases": [],
+      "type": "logo",
+      "file": "airasia.svg"
+    },
+    {
+      "name": "AirAsia Cambodia",
+      "slug": "airasia-cambodia",
+      "iata": "KT",
+      "icao": "KTC",
+      "aliases": [],
+      "type": "logo",
+      "file": "airasia-cambodia.svg"
+    },
+    {
+      "name": "airBaltic",
+      "slug": "airbaltic",
+      "iata": "BT",
+      "icao": "BTI",
+      "aliases": [],
+      "type": "logo",
+      "file": "airbaltic.svg"
+    },
+    {
+      "name": "Akasa Air",
+      "slug": "akasa-air",
+      "iata": "QP",
+      "icao": "AKJ",
+      "aliases": [],
+      "type": "icon",
+      "file": "akasa-air.svg"
+    },
+    {
+      "name": "Alaska Airlines",
+      "slug": "alaska-airlines",
+      "iata": "AS",
+      "icao": "ASA",
+      "aliases": [],
+      "type": "logo",
+      "file": "alaska-airlines.svg"
+    },
+    {
+      "name": "All Nippon Airways",
+      "slug": "all-nippon-airways",
+      "iata": "NH",
+      "icao": "ANA",
+      "aliases": [],
+      "type": "logo",
+      "file": "all-nippon-airways.svg"
+    },
+    {
+      "name": "American Airlines",
+      "slug": "american-airlines",
+      "iata": "AA",
+      "icao": "AAL",
+      "aliases": [],
+      "type": "icon",
+      "file": "american-airlines.svg"
+    },
+    {
+      "name": "Asiana Airlines",
+      "slug": "asiana-airlines",
+      "iata": "OZ",
+      "icao": "AAR",
+      "aliases": [],
+      "type": "icon",
+      "file": "asiana-airlines.svg"
+    },
+    {
+      "name": "Atlantic Airways",
+      "slug": "atlantic-airways",
+      "iata": "RC",
+      "icao": "FLI",
+      "aliases": [],
+      "type": "icon",
+      "file": "atlantic-airways.svg"
+    },
+    {
+      "name": "Austrian Airlines",
+      "slug": "austrian-airlines",
+      "iata": "OS",
+      "icao": "AUA",
+      "aliases": [],
+      "type": "icon",
+      "file": "austrian-airlines.svg"
+    },
+    {
+      "name": "avianca",
+      "slug": "avianca",
+      "iata": "AV",
+      "icao": "AVA",
+      "aliases": [],
+      "type": "icon",
+      "file": "avianca.svg"
+    },
+    {
+      "name": "Avianca Costa Rica",
+      "slug": "avianca-costa-rica",
+      "iata": "LR",
+      "icao": "LRC",
+      "aliases": [],
+      "type": "icon",
+      "file": "avianca-costa-rica.svg"
+    },
+    {
+      "name": "Avianca Ecuador",
+      "slug": "avianca-ecuador",
+      "iata": "2K",
+      "icao": "GLG",
+      "aliases": [],
+      "type": "icon",
+      "file": "avianca-ecuador.svg"
+    },
+    {
+      "name": "Avianca El Salvador",
+      "slug": "avianca-el-salvador",
+      "iata": "AV",
+      "icao": "TAI",
+      "aliases": [],
+      "type": "icon",
+      "file": "avianca-el-salvador.svg"
+    },
+    {
+      "name": "Azerbaijan Airlines",
+      "slug": "azerbaijan-airlines",
+      "iata": "J2",
+      "icao": "AHY",
+      "aliases": [],
+      "type": "icon",
+      "file": "azerbaijan-airlines.svg"
+    },
+    {
+      "name": "Azul",
+      "slug": "azul",
+      "iata": "AD",
+      "icao": "AZU",
+      "aliases": [],
+      "type": "icon",
+      "file": "azul.svg"
+    },
+    {
+      "name": "Bamboo Airways",
+      "slug": "bamboo-airways",
+      "iata": "QH",
+      "icao": "BAV",
+      "aliases": [],
+      "type": "icon",
+      "file": "bamboo-airways.svg"
+    },
+    {
+      "name": "Bangkok Airways",
+      "slug": "bangkok-airways",
+      "iata": "PG",
+      "icao": "BKP",
+      "aliases": [],
+      "type": "icon",
+      "file": "bangkok-airways.svg"
+    },
+    {
+      "name": "Binter Canarias",
+      "slug": "binter-canarias",
+      "iata": "NT",
+      "icao": "IBB",
+      "aliases": [],
+      "type": "logo",
+      "file": "binter-canarias.svg"
+    },
+    {
+      "name": "British Airways",
+      "slug": "british-airways",
+      "iata": "BA",
+      "icao": "BAW",
+      "aliases": [],
+      "type": "icon",
+      "file": "british-airways.svg"
+    },
+    {
+      "name": "Brussels Airlines",
+      "slug": "brussels-airlines",
+      "iata": "SN",
+      "icao": "BEL",
+      "aliases": [],
+      "type": "icon",
+      "file": "brussels-airlines.svg"
+    },
+    {
+      "name": "Cathay Pacific",
+      "slug": "cathay-pacific",
+      "iata": "CX",
+      "icao": "CPA",
+      "aliases": [],
+      "type": "icon",
+      "file": "cathay-pacific.svg"
+    },
+    {
+      "name": "Cebu Pacific",
+      "slug": "cebu-pacific",
+      "iata": "5J",
+      "icao": "CEB",
+      "aliases": [],
+      "type": "icon",
+      "file": "cebu-pacific.svg"
+    },
+    {
+      "name": "China Airlines",
+      "slug": "china-airlines",
+      "iata": "CI",
+      "icao": "CAL",
+      "aliases": [],
+      "type": "icon",
+      "file": "china-airlines.svg"
+    },
+    {
+      "name": "China Eastern Airlines",
+      "slug": "china-eastern-airlines",
+      "iata": "MU",
+      "icao": "CES",
+      "aliases": [],
+      "type": "icon",
+      "file": "china-eastern-airlines.svg"
+    },
+    {
+      "name": "China Southern Airlines",
+      "slug": "china-southern-airlines",
+      "iata": "CZ",
+      "icao": "CSN",
+      "aliases": [],
+      "type": "icon",
+      "file": "china-southern-airlines.svg"
+    },
+    {
+      "name": "Condor",
+      "slug": "condor",
+      "iata": "DE",
+      "icao": "CFG",
+      "aliases": [],
+      "type": "icon",
+      "file": "condor.svg"
+    },
+    {
+      "name": "Copa Airlines",
+      "slug": "copa-airlines",
+      "iata": "CM",
+      "icao": "CMP",
+      "aliases": [],
+      "type": "icon",
+      "file": "copa-airlines.svg"
+    },
+    {
+      "name": "Delta Air Lines",
+      "slug": "delta-air-lines",
+      "iata": "DL",
+      "icao": "DAL",
+      "aliases": [],
+      "type": "icon",
+      "file": "delta-air-lines.svg"
+    },
+    {
+      "name": "easyJet",
+      "slug": "easyjet",
+      "iata": "U2",
+      "icao": "EZY",
+      "aliases": [],
+      "type": "icon",
+      "file": "easyjet.svg"
+    },
+    {
+      "name": "EgyptAir",
+      "slug": "egyptair",
+      "iata": "MS",
+      "icao": "MSR",
+      "aliases": [],
+      "type": "icon",
+      "file": "egyptair.svg"
+    },
+    {
+      "name": "Emirates",
+      "slug": "emirates",
+      "iata": "EK",
+      "icao": "UAE",
+      "aliases": [],
+      "type": "icon",
+      "file": "emirates.svg"
+    },
+    {
+      "name": "Ethiopian Airlines",
+      "slug": "ethiopian-airlines",
+      "iata": "ET",
+      "icao": "ETH",
+      "aliases": [],
+      "type": "icon",
+      "file": "ethiopian-airlines.svg"
+    },
+    {
+      "name": "Etihad Airways",
+      "slug": "etihad-airways",
+      "iata": "EY",
+      "icao": "ETD",
+      "aliases": [],
+      "type": "logo",
+      "file": "etihad-airways.svg"
+    },
+    {
+      "name": "Eurowings",
+      "slug": "eurowings",
+      "iata": "EW",
+      "icao": "EWG",
+      "aliases": [],
+      "type": "icon",
+      "file": "eurowings.svg"
+    },
+    {
+      "name": "EVA Air",
+      "slug": "eva-air",
+      "iata": "BR",
+      "icao": "EVA",
+      "aliases": [],
+      "type": "icon",
+      "file": "eva-air.svg"
+    },
+    {
+      "name": "Ewa Air",
+      "slug": "ewa-air",
+      "iata": "ZD",
+      "icao": "EWR",
+      "aliases": [],
+      "type": "logo",
+      "file": "ewa-air.svg"
+    },
+    {
+      "name": "Fiji Airways",
+      "slug": "fiji-airways",
+      "iata": "FJ",
+      "icao": "FJI",
+      "aliases": [],
+      "type": "icon",
+      "file": "fiji-airways.svg"
+    },
+    {
+      "name": "Finnair",
+      "slug": "finnair",
+      "iata": "AY",
+      "icao": "FIN",
+      "aliases": [],
+      "type": "icon",
+      "file": "finnair.svg"
+    },
+    {
+      "name": "Firefly",
+      "slug": "firefly",
+      "iata": "FY",
+      "icao": "FFM",
+      "aliases": [],
+      "type": "icon",
+      "file": "firefly.svg"
+    },
+    {
+      "name": "Flybe",
+      "slug": "flybe",
+      "iata": "BE",
+      "icao": "BEE",
+      "aliases": [],
+      "type": "logo",
+      "file": "flybe.svg"
+    },
+    {
+      "name": "flydubai",
+      "slug": "flydubai",
+      "iata": "FZ",
+      "icao": "FDB",
+      "aliases": [],
+      "type": "logo",
+      "file": "flydubai.svg"
+    },
+    {
+      "name": "flynas",
+      "slug": "flynas",
+      "iata": "XY",
+      "icao": "KNE",
+      "aliases": [],
+      "type": "icon",
+      "file": "flynas.svg"
+    },
+    {
+      "name": "Frontier Airlines",
+      "slug": "frontier-airlines",
+      "iata": "F9",
+      "icao": "FFT",
+      "aliases": [],
+      "type": "icon",
+      "file": "frontier-airlines.svg"
+    },
+    {
+      "name": "Garuda Indonesia",
+      "slug": "garuda-indonesia",
+      "iata": "GA",
+      "icao": "GIA",
+      "aliases": [],
+      "type": "icon",
+      "file": "garuda-indonesia.svg"
+    },
+    {
+      "name": "GOL",
+      "slug": "gol",
+      "iata": "G3",
+      "icao": "GLO",
+      "aliases": [],
+      "type": "icon",
+      "file": "gol.svg"
+    },
+    {
+      "name": "Hainan Airlines",
+      "slug": "hainan-airlines",
+      "iata": "HU",
+      "icao": "CHH",
+      "aliases": [],
+      "type": "icon",
+      "file": "hainan-airlines.svg"
+    },
+    {
+      "name": "Hawaiian Airlines",
+      "slug": "hawaiian-airlines",
+      "iata": "AS",
+      "icao": "ASA",
+      "aliases": [],
+      "type": "icon",
+      "file": "hawaiian-airlines.svg"
+    },
+    {
+      "name": "HK Express",
+      "slug": "hk-express",
+      "iata": "UO",
+      "icao": "HKE",
+      "aliases": [],
+      "type": "icon",
+      "file": "hk-express.svg"
+    },
+    {
+      "name": "Iberia",
+      "slug": "iberia",
+      "iata": "IB",
+      "icao": "IBE",
+      "aliases": [],
+      "type": "icon",
+      "file": "iberia.svg"
+    },
+    {
+      "name": "Icelandair",
+      "slug": "icelandair",
+      "iata": "FI",
+      "icao": "ICE",
+      "aliases": [],
+      "type": "icon",
+      "file": "icelandair.svg"
+    },
+    {
+      "name": "IndiGo",
+      "slug": "indigo",
+      "iata": "6E",
+      "icao": "IGO",
+      "aliases": [],
+      "type": "icon",
+      "file": "indigo.svg"
+    },
+    {
+      "name": "Indonesia AirAsia",
+      "slug": "indonesia-airasia",
+      "iata": "QZ",
+      "icao": "AWQ",
+      "aliases": [],
+      "type": "logo",
+      "file": "indonesia-airasia.svg"
+    },
+    {
+      "name": "ITA Airways",
+      "slug": "ita-airways",
+      "iata": "AZ",
+      "icao": "ITY",
+      "aliases": [],
+      "type": "logo",
+      "file": "ita-airways.svg"
+    },
+    {
+      "name": "Japan Airlines",
+      "slug": "japan-airlines",
+      "iata": "JL",
+      "icao": "JAL",
+      "aliases": [],
+      "type": "icon",
+      "file": "japan-airlines.svg"
+    },
+    {
+      "name": "Jet2.com",
+      "slug": "jet2com",
+      "iata": "LS",
+      "icao": "EXS",
+      "aliases": [],
+      "type": "icon",
+      "file": "jet2com.svg"
+    },
+    {
+      "name": "JetBlue Airways",
+      "slug": "jetblue-airways",
+      "iata": "B6",
+      "icao": "JBU",
+      "aliases": [],
+      "type": "logo",
+      "file": "jetblue-airways.svg"
+    },
+    {
+      "name": "Jetstar",
+      "slug": "jetstar",
+      "iata": "JQ",
+      "icao": "JST",
+      "aliases": [],
+      "type": "icon",
+      "file": "jetstar.svg"
+    },
+    {
+      "name": "Jetstar Japan",
+      "slug": "jetstar-japan",
+      "iata": "GK",
+      "icao": "JJP",
+      "aliases": [],
+      "type": "icon",
+      "file": "jetstar-japan.svg"
+    },
+    {
+      "name": "Jetstar Pacific",
+      "slug": "jetstar-pacific",
+      "iata": "BL",
+      "icao": "PIC",
+      "aliases": [],
+      "type": "icon",
+      "file": "jetstar-pacific.svg"
+    },
+    {
+      "name": "Jin Air",
+      "slug": "jin-air",
+      "iata": "LJ",
+      "icao": "JNA",
+      "aliases": [],
+      "type": "icon",
+      "file": "jin-air.svg"
+    },
+    {
+      "name": "Juneyao Air",
+      "slug": "juneyao-air",
+      "iata": "HO",
+      "icao": "DKH",
+      "aliases": [],
+      "type": "icon",
+      "file": "juneyao-air.svg"
+    },
+    {
+      "name": "Kenya Airways",
+      "slug": "kenya-airways",
+      "iata": "KQ",
+      "icao": "KQA",
+      "aliases": [],
+      "type": "icon",
+      "file": "kenya-airways.svg"
+    },
+    {
+      "name": "KLM",
+      "slug": "klm",
+      "iata": "KL",
+      "icao": "KLM",
+      "aliases": [],
+      "type": "icon",
+      "file": "klm.svg"
+    },
+    {
+      "name": "Korean Air",
+      "slug": "korean-air",
+      "iata": "KE",
+      "icao": "KAL",
+      "aliases": [],
+      "type": "icon",
+      "file": "korean-air.svg"
+    },
+    {
+      "name": "Kuwait Airways",
+      "slug": "kuwait-airways",
+      "iata": "KU",
+      "icao": "KAC",
+      "aliases": [],
+      "type": "icon",
+      "file": "kuwait-airways.svg"
+    },
+    {
+      "name": "LATAM Airlines Argentina",
+      "slug": "latam-airlines-argentina",
+      "iata": "4M",
+      "icao": "DSM",
+      "aliases": [],
+      "type": "icon",
+      "file": "latam-airlines-argentina.svg"
+    },
+    {
+      "name": "LATAM Airlines Brasil",
+      "slug": "latam-airlines-brasil",
+      "iata": "JJ",
+      "icao": "TAM",
+      "aliases": [],
+      "type": "icon",
+      "file": "latam-airlines-brasil.svg"
+    },
+    {
+      "name": "LATAM Airlines Chile",
+      "slug": "latam-airlines-chile",
+      "iata": "LA",
+      "icao": "LAN",
+      "aliases": [],
+      "type": "icon",
+      "file": "latam-airlines-chile.svg"
+    },
+    {
+      "name": "LATAM Airlines Colombia",
+      "slug": "latam-airlines-colombia",
+      "iata": "4C",
+      "icao": "ARE",
+      "aliases": [],
+      "type": "icon",
+      "file": "latam-airlines-colombia.svg"
+    },
+    {
+      "name": "LATAM Airlines Ecuador",
+      "slug": "latam-airlines-ecuador",
+      "iata": "XL",
+      "icao": "LNE",
+      "aliases": [],
+      "type": "icon",
+      "file": "latam-airlines-ecuador.svg"
+    },
+    {
+      "name": "LATAM Airlines Paraguay",
+      "slug": "latam-airlines-paraguay",
+      "iata": "PZ",
+      "icao": "LAP",
+      "aliases": [],
+      "type": "icon",
+      "file": "latam-airlines-paraguay.svg"
+    },
+    {
+      "name": "LATAM Airlines Perú",
+      "slug": "latam-airlines-peru",
+      "iata": "LP",
+      "icao": "LPE",
+      "aliases": [],
+      "type": "icon",
+      "file": "latam-airlines-peru.svg"
+    },
+    {
+      "name": "Level",
+      "slug": "level",
+      "iata": "LL",
+      "icao": "LVL",
+      "aliases": [],
+      "type": "icon",
+      "file": "level.svg"
+    },
+    {
+      "name": "Lion Air",
+      "slug": "lion-air",
+      "iata": "JT",
+      "icao": "LNI",
+      "aliases": [],
+      "type": "icon",
+      "file": "lion-air.svg"
+    },
+    {
+      "name": "LOT Polish Airlines",
+      "slug": "lot-polish-airlines",
+      "iata": "LO",
+      "icao": "LOT",
+      "aliases": [],
+      "type": "icon",
+      "file": "lot-polish-airlines.svg"
+    },
+    {
+      "name": "Lufthansa",
+      "slug": "lufthansa",
+      "iata": "LH",
+      "icao": "DLH",
+      "aliases": [],
+      "type": "icon",
+      "file": "lufthansa.svg"
+    },
+    {
+      "name": "Malaysia Airlines",
+      "slug": "malaysia-airlines",
+      "iata": "MH",
+      "icao": "MAS",
+      "aliases": [],
+      "type": "icon",
+      "file": "malaysia-airlines.svg"
+    },
+    {
+      "name": "Myanmar National Airlines",
+      "slug": "myanmar-national-airlines",
+      "iata": "UB",
+      "icao": "UBA",
+      "aliases": [],
+      "type": "icon",
+      "file": "myanmar-national-airlines.svg"
+    },
+    {
+      "name": "Norwegian Air Shuttle",
+      "slug": "norwegian-air-shuttle",
+      "iata": "DY",
+      "icao": "NOZ",
+      "aliases": [],
+      "type": "icon",
+      "file": "norwegian-air-shuttle.svg"
+    },
+    {
+      "name": "Oman Air",
+      "slug": "oman-air",
+      "iata": "WY",
+      "icao": "OMA",
+      "aliases": [],
+      "type": "icon",
+      "file": "oman-air.svg"
+    },
+    {
+      "name": "Pacific Airlines",
+      "slug": "pacific-airlines",
+      "iata": "BL",
+      "icao": "PIC",
+      "aliases": [],
+      "type": "icon",
+      "file": "pacific-airlines.svg"
+    },
+    {
+      "name": "Paranair",
+      "slug": "paranair",
+      "iata": "ZP",
+      "icao": "AZP",
+      "aliases": [],
+      "type": "icon",
+      "file": "paranair.svg"
+    },
+    {
+      "name": "Peach Aviation",
+      "slug": "peach-aviation",
+      "iata": "MM",
+      "icao": "APJ",
+      "aliases": [],
+      "type": "logo",
+      "file": "peach-aviation.svg"
+    },
+    {
+      "name": "Pegasus Airlines",
+      "slug": "pegasus-airlines",
+      "iata": "PC",
+      "icao": "PGT",
+      "aliases": [],
+      "type": "icon",
+      "file": "pegasus-airlines.svg"
+    },
+    {
+      "name": "Philippine Airlines",
+      "slug": "philippine-airlines",
+      "iata": "PR",
+      "icao": "PAL",
+      "aliases": [],
+      "type": "icon",
+      "file": "philippine-airlines.svg"
+    },
+    {
+      "name": "Philippines AirAsia",
+      "slug": "philippines-airasia",
+      "iata": "Z2",
+      "icao": "APG",
+      "aliases": [],
+      "type": "logo",
+      "file": "philippines-airasia.svg"
+    },
+    {
+      "name": "Qantas",
+      "slug": "qantas",
+      "iata": "QF",
+      "icao": "QFA",
+      "aliases": [],
+      "type": "logo",
+      "file": "qantas.svg"
+    },
+    {
+      "name": "Qatar Airways",
+      "slug": "qatar-airways",
+      "iata": "QR",
+      "icao": "QTR",
+      "aliases": [],
+      "type": "icon",
+      "file": "qatar-airways.svg"
+    },
+    {
+      "name": "Riyadh Air",
+      "slug": "riyadh-air",
+      "iata": "RX",
+      "icao": "RXI",
+      "aliases": [],
+      "type": "icon",
+      "file": "riyadh-air.svg"
+    },
+    {
+      "name": "Royal Air Maroc",
+      "slug": "royal-air-maroc",
+      "iata": "AT",
+      "icao": "RAM",
+      "aliases": [],
+      "type": "icon",
+      "file": "royal-air-maroc.svg"
+    },
+    {
+      "name": "Royal Brunei Airlines",
+      "slug": "royal-brunei-airlines",
+      "iata": "BI",
+      "icao": "RBA",
+      "aliases": [],
+      "type": "logo",
+      "file": "royal-brunei-airlines.svg"
+    },
+    {
+      "name": "Ryanair",
+      "slug": "ryanair",
+      "iata": "FR",
+      "icao": "RYR",
+      "aliases": [],
+      "type": "icon",
+      "file": "ryanair.svg"
+    },
+    {
+      "name": "SAS Connect",
+      "slug": "sas-connect",
+      "iata": "SL",
+      "icao": "SZS",
+      "aliases": [],
+      "type": "logo",
+      "file": "sas-connect.svg"
+    },
+    {
+      "name": "Saudia",
+      "slug": "saudia",
+      "iata": "SV",
+      "icao": "SVA",
+      "aliases": [],
+      "type": "icon",
+      "file": "saudia.svg"
+    },
+    {
+      "name": "Scandinavian Airlines",
+      "slug": "scandinavian-airlines",
+      "iata": "SK",
+      "icao": "SAS",
+      "aliases": [],
+      "type": "logo",
+      "file": "scandinavian-airlines.svg"
+    },
+    {
+      "name": "Scoot",
+      "slug": "scoot",
+      "iata": "TR",
+      "icao": "TGW",
+      "aliases": [],
+      "type": "logo",
+      "file": "scoot.svg"
+    },
+    {
+      "name": "Shandong Airlines",
+      "slug": "shandong-airlines",
+      "iata": "SC",
+      "icao": "CDG",
+      "aliases": [],
+      "type": "icon",
+      "file": "shandong-airlines.svg"
+    },
+    {
+      "name": "Shenzhen Airlines",
+      "slug": "shenzhen-airlines",
+      "iata": "ZH",
+      "icao": "CSZ",
+      "aliases": [],
+      "type": "icon",
+      "file": "shenzhen-airlines.svg"
+    },
+    {
+      "name": "Sichuan Airlines",
+      "slug": "sichuan-airlines",
+      "iata": "3U",
+      "icao": "CSC",
+      "aliases": [],
+      "type": "icon",
+      "file": "sichuan-airlines.svg"
+    },
+    {
+      "name": "Singapore Airlines",
+      "slug": "singapore-airlines",
+      "iata": "SQ",
+      "icao": "SIA",
+      "aliases": [],
+      "type": "icon",
+      "file": "singapore-airlines.svg"
+    },
+    {
+      "name": "Southwest Airlines",
+      "slug": "southwest-airlines",
+      "iata": "WN",
+      "icao": "SWA",
+      "aliases": [],
+      "type": "icon",
+      "file": "southwest-airlines.svg"
+    },
+    {
+      "name": "SpiceJet",
+      "slug": "spicejet",
+      "iata": "SG",
+      "icao": "SEJ",
+      "aliases": [],
+      "type": "icon",
+      "file": "spicejet.svg"
+    },
+    {
+      "name": "Spirit Airlines",
+      "slug": "spirit-airlines",
+      "iata": "NK",
+      "icao": "NKS",
+      "aliases": [],
+      "type": "logo",
+      "file": "spirit-airlines.svg"
+    },
+    {
+      "name": "Starlux Airlines",
+      "slug": "starlux-airlines",
+      "iata": "JX",
+      "icao": "SJX",
+      "aliases": [],
+      "type": "icon",
+      "file": "starlux-airlines.svg"
+    },
+    {
+      "name": "Sun PhuQuoc Airways",
+      "slug": "sun-phuquoc-airways",
+      "iata": "9G",
+      "icao": "SPQ",
+      "aliases": [],
+      "type": "icon",
+      "file": "sun-phuquoc-airways.svg"
+    },
+    {
+      "name": "SWISS",
+      "slug": "swiss",
+      "iata": "LX",
+      "icao": "SWR",
+      "aliases": [],
+      "type": "icon",
+      "file": "swiss.svg"
+    },
+    {
+      "name": "TAP Air Portugal",
+      "slug": "tap-air-portugal",
+      "iata": "TP",
+      "icao": "TAP",
+      "aliases": [],
+      "type": "icon",
+      "file": "tap-air-portugal.svg"
+    },
+    {
+      "name": "TAROM",
+      "slug": "tarom",
+      "iata": "RO",
+      "icao": "ROT",
+      "aliases": [],
+      "type": "icon",
+      "file": "tarom.svg"
+    },
+    {
+      "name": "Thai AirAsia",
+      "slug": "thai-airasia",
+      "iata": "FD",
+      "icao": "AIQ",
+      "aliases": [],
+      "type": "logo",
+      "file": "thai-airasia.svg"
+    },
+    {
+      "name": "Thai Airways",
+      "slug": "thai-airways",
+      "iata": "TG",
+      "icao": "THA",
+      "aliases": [],
+      "type": "icon",
+      "file": "thai-airways.svg"
+    },
+    {
+      "name": "Thai Lion Air",
+      "slug": "thai-lion-air",
+      "iata": "SL",
+      "icao": "TLM",
+      "aliases": [],
+      "type": "icon",
+      "file": "thai-lion-air.svg"
+    },
+    {
+      "name": "Transavia",
+      "slug": "transavia",
+      "iata": "HV",
+      "icao": "TRA",
+      "aliases": [],
+      "type": "icon",
+      "file": "transavia.svg"
+    },
+    {
+      "name": "Trinity Airways",
+      "slug": "trinity-airways",
+      "iata": "TW",
+      "icao": "TWB",
+      "aliases": [],
+      "type": "icon",
+      "file": "trinity-airways.svg"
+    },
+    {
+      "name": "Turkish Airlines",
+      "slug": "turkish-airlines",
+      "iata": "TK",
+      "icao": "THY",
+      "aliases": [],
+      "type": "icon",
+      "file": "turkish-airlines.svg"
+    },
+    {
+      "name": "United Airlines",
+      "slug": "united-airlines",
+      "iata": "UA",
+      "icao": "UAL",
+      "aliases": [],
+      "type": "icon",
+      "file": "united-airlines.svg"
+    },
+    {
+      "name": "VietJet Air",
+      "slug": "vietjet-air",
+      "iata": "VJ",
+      "icao": "VJC",
+      "aliases": [],
+      "type": "logo",
+      "file": "vietjet-air.svg"
+    },
+    {
+      "name": "Vietnam Airlines",
+      "slug": "vietnam-airlines",
+      "iata": "VN",
+      "icao": "HVN",
+      "aliases": [],
+      "type": "icon",
+      "file": "vietnam-airlines.svg"
+    },
+    {
+      "name": "Vietravel Airlines",
+      "slug": "vietravel-airlines",
+      "iata": "VU",
+      "icao": "VAG",
+      "aliases": [],
+      "type": "icon",
+      "file": "vietravel-airlines.svg"
+    },
+    {
+      "name": "Virgin Atlantic",
+      "slug": "virgin-atlantic",
+      "iata": "VS",
+      "icao": "VIR",
+      "aliases": [],
+      "type": "icon",
+      "file": "virgin-atlantic.svg"
+    },
+    {
+      "name": "Virgin Australia",
+      "slug": "virgin-australia",
+      "iata": "VA",
+      "icao": "VOZ",
+      "aliases": [],
+      "type": "icon",
+      "file": "virgin-australia.svg"
+    },
+    {
+      "name": "Viva",
+      "slug": "viva",
+      "iata": "VB",
+      "icao": "VIV",
+      "aliases": [],
+      "type": "icon",
+      "file": "viva.svg"
+    },
+    {
+      "name": "Volaris",
+      "slug": "volaris",
+      "iata": "Y4",
+      "icao": "VOI",
+      "aliases": [],
+      "type": "icon",
+      "file": "volaris.svg"
+    },
+    {
+      "name": "Volotea",
+      "slug": "volotea",
+      "iata": "V7",
+      "icao": "VOE",
+      "aliases": [],
+      "type": "icon",
+      "file": "volotea.svg"
+    },
+    {
+      "name": "Vueling",
+      "slug": "vueling",
+      "iata": "VY",
+      "icao": "VLG",
+      "aliases": [],
+      "type": "logo",
+      "file": "vueling.svg"
+    },
+    {
+      "name": "WestJet",
+      "slug": "westjet",
+      "iata": "WS",
+      "icao": "WJA",
+      "aliases": [],
+      "type": "icon",
+      "file": "westjet.svg"
+    },
+    {
+      "name": "Winair",
+      "slug": "winair",
+      "iata": "WM",
+      "icao": "WIA",
+      "aliases": [],
+      "type": "logo",
+      "file": "winair.svg"
+    },
+    {
+      "name": "Wizz Air",
+      "slug": "wizz-air",
+      "iata": "W6",
+      "icao": "WZZ",
+      "aliases": [],
+      "type": "logo",
+      "file": "wizz-air.svg"
+    },
+    {
+      "name": "Wizz Air Abu Dhabi",
+      "slug": "wizz-air-abu-dhabi",
+      "iata": "5W",
+      "icao": "WAZ",
+      "aliases": [],
+      "type": "logo",
+      "file": "wizz-air-abu-dhabi.svg"
+    },
+    {
+      "name": "Wizz Air UK",
+      "slug": "wizz-air-uk",
+      "iata": "W9",
+      "icao": "WUK",
+      "aliases": [],
+      "type": "logo",
+      "file": "wizz-air-uk.svg"
+    },
+    {
+      "name": "XiamenAir",
+      "slug": "xiamenair",
+      "iata": "MF",
+      "icao": "CXA",
+      "aliases": [],
+      "type": "icon",
+      "file": "xiamenair.svg"
+    }
+  ]
+}

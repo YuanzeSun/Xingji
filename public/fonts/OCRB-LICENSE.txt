@@ -1,0 +1,19 @@
+OCR B — Matthew Skala / Norbert Schwarz
+
+Source: https://tsukurimashou.org/ocr.php.en
+Archive: https://tsukurimashou.org/files/ocr-0.3.1.zip
+Original OCRB.ttf SHA-256: 67b11c470222c7bb4550e7d4c216fd06145a939208af77e5f946bcee53e70868
+Original OCRBS.ttf SHA-256: 29587e27376566463c4d5a1b8dfb7792fde91cb1261b511fa10f65aed8c1f354
+
+%
+% Modified by Matthew Skala, March 2011, to make it MetaType1 compatible
+%
+
+% This is OCRB10_mf   (the normal OCRB-B)
+% Copyright 1995, 2010 Norbert Schwarz
+% You may freely use, modify and/or distribute this file, without limitation.
+
+
+Xingji Ticket OCR is a renamed ASCII subset of OCRB.ttf. Letterforms and original copyright records are retained; glyphs are translated horizontally to calibrate side bearings. Character advances are 620/1000 em, with narrower decimal points, colons and spaces. Rebuild with scripts/prepare-date-font.py.
+Xingji Date OCR is a numeral-only subset of OCRBS.ttf (sharp OCR-B), with adjusted cap height, side bearings and colon spacing. Its original copyright records are retained. Rebuild with scripts/prepare-date-font.py.
+Matthew Skala states that he makes no copyright claim on the OCR B fonts.

@@ -1,0 +1,1385 @@
+{
+  "source": "https://github.com/soaring-symbols/soaring-symbols",
+  "version": "0.4.1",
+  "checked": "2026-11-17",
+  "notice": "The original catalogue is MIT licensed. Airline marks belong to their respective owners and are excluded from the library MIT and application licenses.",
+  "images": [
+    {
+      "slug": "aegean-airlines",
+      "iata": "A3",
+      "icao": "AEE",
+      "asset": "aegean-airlines.svg",
+      "type": "icon",
+      "bytes": 750,
+      "sha256": "2a731c6ba54752a4b1e53f0f19e15f2c17cb71b79a59d284048333f86fd6200f"
+    },
+    {
+      "slug": "aer-lingus",
+      "iata": "EI",
+      "icao": "EIN",
+      "asset": "aer-lingus.svg",
+      "type": "icon",
+      "bytes": 1856,
+      "sha256": "b6ab1f48bc3ead3512880aa8a9dfac5a083fffb3d2f31f1e60e515f6573acc5b"
+    },
+    {
+      "slug": "aerolineas-argentinas",
+      "iata": "AR",
+      "icao": "ARG",
+      "asset": "aerolineas-argentinas.svg",
+      "type": "icon",
+      "bytes": 520,
+      "sha256": "f9e3675d312fc7292f2572984779eac1272fbd0c5de4bb02f5971f757ff2f291"
+    },
+    {
+      "slug": "aeromexico",
+      "iata": "AM",
+      "icao": "AMX",
+      "asset": "aeromexico.svg",
+      "type": "icon",
+      "bytes": 1658,
+      "sha256": "87a1d7647dbef158a647c033448b33a2552c4b687cce6ea8b9be0262b2c7ec10"
+    },
+    {
+      "slug": "air-albania",
+      "iata": "ZB",
+      "icao": "ABN",
+      "asset": "air-albania.svg",
+      "type": "icon",
+      "bytes": 855,
+      "sha256": "22b90ae019826e7fdc214b44a6bfc7e7dd95c7d460389407d682707b6f32814d"
+    },
+    {
+      "slug": "air-algerie",
+      "iata": "AH",
+      "icao": "DAH",
+      "asset": "air-algerie.svg",
+      "type": "icon",
+      "bytes": 925,
+      "sha256": "12d039493f1d8ced277dce04dd2666680dbc2572d42b24cd0ca20a7f9cbe2a17"
+    },
+    {
+      "slug": "air-arabia",
+      "iata": "G9",
+      "icao": "ABY",
+      "asset": "air-arabia.svg",
+      "type": "icon",
+      "bytes": 1065,
+      "sha256": "5c851451e3b4aa865d78d04cb4bdaf0b41ad1e04a5142e2437b69c67fd4754c1"
+    },
+    {
+      "slug": "air-arabia-abu-dhabi",
+      "iata": "3L",
+      "icao": "ADY",
+      "asset": "air-arabia-abu-dhabi.svg",
+      "type": "icon",
+      "bytes": 1065,
+      "sha256": "5c851451e3b4aa865d78d04cb4bdaf0b41ad1e04a5142e2437b69c67fd4754c1"
+    },
+    {
+      "slug": "air-arabia-egypt",
+      "iata": "E5",
+      "icao": "RBG",
+      "asset": "air-arabia-egypt.svg",
+      "type": "icon",
+      "bytes": 1065,
+      "sha256": "5c851451e3b4aa865d78d04cb4bdaf0b41ad1e04a5142e2437b69c67fd4754c1"
+    },
+    {
+      "slug": "air-arabia-maroc",
+      "iata": "3O",
+      "icao": "MAC",
+      "asset": "air-arabia-maroc.svg",
+      "type": "icon",
+      "bytes": 1065,
+      "sha256": "5c851451e3b4aa865d78d04cb4bdaf0b41ad1e04a5142e2437b69c67fd4754c1"
+    },
+    {
+      "slug": "air-astana",
+      "iata": "KC",
+      "icao": "KZR",
+      "asset": "air-astana.svg",
+      "type": "icon",
+      "bytes": 1253,
+      "sha256": "ab0eb8ec419d21b6d1d45385972c1df09444ae032712b0eb2338b2923e2e00f1"
+    },
+    {
+      "slug": "air-berlin",
+      "iata": "AB",
+      "icao": "BER",
+      "asset": "air-berlin.svg",
+      "type": "icon",
+      "bytes": 1464,
+      "sha256": "c63c22f105777a4a229d1ad2f38284de3eba04d444eb23ecb5b55e9ea2da4455"
+    },
+    {
+      "slug": "air-canada",
+      "iata": "AC",
+      "icao": "ACA",
+      "asset": "air-canada.svg",
+      "type": "icon",
+      "bytes": 1428,
+      "sha256": "1dceb02a8d69f09f5c5bf6613eebadd660ea018a7a16b484d83b0f6e6b12dbc0"
+    },
+    {
+      "slug": "air-china",
+      "iata": "CA",
+      "icao": "CCA",
+      "asset": "air-china.svg",
+      "type": "icon",
+      "bytes": 1606,
+      "sha256": "0b79c774760c459a82ca85c1d8a44fa17a44bcb203b4374ce3a9bb1494313529"
+    },
+    {
+      "slug": "air-dolomiti",
+      "iata": "EN",
+      "icao": "DLA",
+      "asset": "air-dolomiti.svg",
+      "type": "icon",
+      "bytes": 247,
+      "sha256": "72cefb2e5f415e3df2308a71c66b4f360134268a39f52a18959f862d83f421d4"
+    },
+    {
+      "slug": "air-europa",
+      "iata": "UX",
+      "icao": "AEA",
+      "asset": "air-europa.svg",
+      "type": "icon",
+      "bytes": 851,
+      "sha256": "26d980c798e2110c33529feb243f722938d48a5e4965ea4c27972d57da92c430"
+    },
+    {
+      "slug": "air-france",
+      "iata": "AF",
+      "icao": "AFR",
+      "asset": "air-france.svg",
+      "type": "icon",
+      "bytes": 249,
+      "sha256": "628828e9848a256611fbdeaba8287368490758c3adcaf4f1086ad2aaf0987064"
+    },
+    {
+      "slug": "air-india",
+      "iata": "AI",
+      "icao": "AIC",
+      "asset": "air-india.svg",
+      "type": "icon",
+      "bytes": 1478,
+      "sha256": "230e352a40383568d962bbac37ce0580cc0f826a0dea4bc7a1f125ff3e8ab416"
+    },
+    {
+      "slug": "air-mauritius",
+      "iata": "MK",
+      "icao": "MAU",
+      "asset": "air-mauritius.svg",
+      "type": "icon",
+      "bytes": 644,
+      "sha256": "dd0df8d3c3c8ee7ba181c38bc6c51ffad9bf887a66544b0d80f04dffe75bc99b"
+    },
+    {
+      "slug": "air-new-zealand",
+      "iata": "NZ",
+      "icao": "ANZ",
+      "asset": "air-new-zealand.svg",
+      "type": "icon",
+      "bytes": 860,
+      "sha256": "4ebd3462b1ef4b3e785a32036b570972dad72f467bfb3834151b9862d4eb3b32"
+    },
+    {
+      "slug": "air-serbia",
+      "iata": "JU",
+      "icao": "ASL",
+      "asset": "air-serbia.svg",
+      "type": "icon",
+      "bytes": 3108,
+      "sha256": "e243c13fdd459f29d5fe7985392a1f70daf74a972dd37cba44f9759ed466859d"
+    },
+    {
+      "slug": "air-transat",
+      "iata": "TS",
+      "icao": "TSC",
+      "asset": "air-transat.svg",
+      "type": "icon",
+      "bytes": 757,
+      "sha256": "82badfef5f62d64f8f9ef4c160554c5c676f8ca2a144d7d663d5ac7dea0ac6ee"
+    },
+    {
+      "slug": "airasia",
+      "iata": "AK",
+      "icao": "AXM",
+      "asset": "airasia.svg",
+      "type": "logo",
+      "bytes": 4480,
+      "sha256": "29083cdea9c48178e974cbadb010a8e511000fe6d9fd9feaab300f90a002498a"
+    },
+    {
+      "slug": "airasia-cambodia",
+      "iata": "KT",
+      "icao": "KTC",
+      "asset": "airasia-cambodia.svg",
+      "type": "logo",
+      "bytes": 4480,
+      "sha256": "29083cdea9c48178e974cbadb010a8e511000fe6d9fd9feaab300f90a002498a"
+    },
+    {
+      "slug": "airbaltic",
+      "iata": "BT",
+      "icao": "BTI",
+      "asset": "airbaltic.svg",
+      "type": "logo",
+      "bytes": 2111,
+      "sha256": "5467be0c69dba1a48bfcf411fe00689fa342fc6cf2648dd9766c5810e0f26d76"
+    },
+    {
+      "slug": "akasa-air",
+      "iata": "QP",
+      "icao": "AKJ",
+      "asset": "akasa-air.svg",
+      "type": "icon",
+      "bytes": 674,
+      "sha256": "d0252407e1a6af8bd559507bc7ef4b2db9fe62a89c6d892beba2796f6bc68cfe"
+    },
+    {
+      "slug": "alaska-airlines",
+      "iata": "AS",
+      "icao": "ASA",
+      "asset": "alaska-airlines.svg",
+      "type": "logo",
+      "bytes": 3204,
+      "sha256": "83f23713f6045449d4224b889363136946a254b2a8f2c7f220404117acb27c0c"
+    },
+    {
+      "slug": "all-nippon-airways",
+      "iata": "NH",
+      "icao": "ANA",
+      "asset": "all-nippon-airways.svg",
+      "type": "logo",
+      "bytes": 890,
+      "sha256": "d05c4bc1f267a1f5fb94701edf9b21b66c4f49d6d5dd8a209c315e2039a5d92f"
+    },
+    {
+      "slug": "american-airlines",
+      "iata": "AA",
+      "icao": "AAL",
+      "asset": "american-airlines.svg",
+      "type": "icon",
+      "bytes": 775,
+      "sha256": "ad1523fa2a12b768b6ae3beede80e32903dad345b6797cf953bc3b20059c1874"
+    },
+    {
+      "slug": "asiana-airlines",
+      "iata": "OZ",
+      "icao": "AAR",
+      "asset": "asiana-airlines.svg",
+      "type": "icon",
+      "bytes": 548,
+      "sha256": "d7afa88dded761ed2c0b12ced5c060cc749ec8e483a16bc7df8a1574cd65ab99"
+    },
+    {
+      "slug": "atlantic-airways",
+      "iata": "RC",
+      "icao": "FLI",
+      "asset": "atlantic-airways.svg",
+      "type": "icon",
+      "bytes": 658,
+      "sha256": "717f635425fa9f803061162c9897900da8b4f0b50ab686e07800a4b67ce00320"
+    },
+    {
+      "slug": "austrian-airlines",
+      "iata": "OS",
+      "icao": "AUA",
+      "asset": "austrian-airlines.svg",
+      "type": "icon",
+      "bytes": 473,
+      "sha256": "4bc3a3b776c7f1a186fd6d7e214871a40f3090548761ad7a0bf5aa3bffc4f312"
+    },
+    {
+      "slug": "avianca",
+      "iata": "AV",
+      "icao": "AVA",
+      "asset": "avianca.svg",
+      "type": "icon",
+      "bytes": 486,
+      "sha256": "cac41949299fa0597926c0cc7cff0abfb649ab5cfdf6bd469e9d567241538506"
+    },
+    {
+      "slug": "avianca-costa-rica",
+      "iata": "LR",
+      "icao": "LRC",
+      "asset": "avianca-costa-rica.svg",
+      "type": "icon",
+      "bytes": 486,
+      "sha256": "cac41949299fa0597926c0cc7cff0abfb649ab5cfdf6bd469e9d567241538506"
+    },
+    {
+      "slug": "avianca-ecuador",
+      "iata": "2K",
+      "icao": "GLG",
+      "asset": "avianca-ecuador.svg",
+      "type": "icon",
+      "bytes": 486,
+      "sha256": "cac41949299fa0597926c0cc7cff0abfb649ab5cfdf6bd469e9d567241538506"
+    },
+    {
+      "slug": "avianca-el-salvador",
+      "iata": "AV",
+      "icao": "TAI",
+      "asset": "avianca-el-salvador.svg",
+      "type": "icon",
+      "bytes": 486,
+      "sha256": "cac41949299fa0597926c0cc7cff0abfb649ab5cfdf6bd469e9d567241538506"
+    },
+    {
+      "slug": "azerbaijan-airlines",
+      "iata": "J2",
+      "icao": "AHY",
+      "asset": "azerbaijan-airlines.svg",
+      "type": "icon",
+      "bytes": 1075,
+      "sha256": "a9e055a766af348680347991efca090b233f2ebe01b9223cb75d6546ac858bf7"
+    },
+    {
+      "slug": "azul",
+      "iata": "AD",
+      "icao": "AZU",
+      "asset": "azul.svg",
+      "type": "icon",
+      "bytes": 2099,
+      "sha256": "8920ad898b44257fc4d5195e973ebe4d612b7bf876468a8af7f44d3f42ba6985"
+    },
+    {
+      "slug": "bamboo-airways",
+      "iata": "QH",
+      "icao": "BAV",
+      "asset": "bamboo-airways.svg",
+      "type": "icon",
+      "bytes": 2117,
+      "sha256": "cbbca12603ba9f9297e70620befb89cf81e4bae6c8137a3365899cfff235da27"
+    },
+    {
+      "slug": "bangkok-airways",
+      "iata": "PG",
+      "icao": "BKP",
+      "asset": "bangkok-airways.svg",
+      "type": "icon",
+      "bytes": 2824,
+      "sha256": "e8e731c2d2880e99e877f41d204f5b96266e722ffaf0c65d191f085d2c29d415"
+    },
+    {
+      "slug": "binter-canarias",
+      "iata": "NT",
+      "icao": "IBB",
+      "asset": "binter-canarias.svg",
+      "type": "logo",
+      "bytes": 3732,
+      "sha256": "2c08d46594a1a453a857cac3af9243547635911159d85a775c67e88cc4763e11"
+    },
+    {
+      "slug": "british-airways",
+      "iata": "BA",
+      "icao": "BAW",
+      "asset": "british-airways.svg",
+      "type": "icon",
+      "bytes": 1589,
+      "sha256": "4f3b041f97708583d2b215e10f0d8786fe1af2f3cddd765817c87b5ca42be002"
+    },
+    {
+      "slug": "brussels-airlines",
+      "iata": "SN",
+      "icao": "BEL",
+      "asset": "brussels-airlines.svg",
+      "type": "icon",
+      "bytes": 1466,
+      "sha256": "dd8e2435f788ba31af403775a09eee4df643b5e56f22ac39e396ba5f8944d2cc"
+    },
+    {
+      "slug": "cathay-pacific",
+      "iata": "CX",
+      "icao": "CPA",
+      "asset": "cathay-pacific.svg",
+      "type": "icon",
+      "bytes": 25336,
+      "sha256": "35d36b44293b1bfe3794cff4d0f7ba4d569a1d332eb0d4634022b2cab965dc15"
+    },
+    {
+      "slug": "cebu-pacific",
+      "iata": "5J",
+      "icao": "CEB",
+      "asset": "cebu-pacific.svg",
+      "type": "icon",
+      "bytes": 2784,
+      "sha256": "0558ea1d50d41f018a6afdf71d708cd4bf1d21f2a4dea025d9aa50bc5f9570b9"
+    },
+    {
+      "slug": "china-airlines",
+      "iata": "CI",
+      "icao": "CAL",
+      "asset": "china-airlines.svg",
+      "type": "icon",
+      "bytes": 34074,
+      "sha256": "7cbff67081a011f83f7dc7d38f9df9daa95a8f944c6111186b3d563148c4950f"
+    },
+    {
+      "slug": "china-eastern-airlines",
+      "iata": "MU",
+      "icao": "CES",
+      "asset": "china-eastern-airlines.svg",
+      "type": "icon",
+      "bytes": 1087,
+      "sha256": "3872cb4e3c59ce4765b5e20fc76a0c504b6e6cc7431bf8a585e5b8674e6b5ad6"
+    },
+    {
+      "slug": "china-southern-airlines",
+      "iata": "CZ",
+      "icao": "CSN",
+      "asset": "china-southern-airlines.svg",
+      "type": "icon",
+      "bytes": 2375,
+      "sha256": "7e5cce60336e6121401938b2630a2e23e070d73e5f135d91c17acc48579adca3"
+    },
+    {
+      "slug": "condor",
+      "iata": "DE",
+      "icao": "CFG",
+      "asset": "condor.svg",
+      "type": "icon",
+      "bytes": 875,
+      "sha256": "cae2813fd5042f4e7aa8ed5472137a1076850211d4aea936945a759c3b50eabe"
+    },
+    {
+      "slug": "copa-airlines",
+      "iata": "CM",
+      "icao": "CMP",
+      "asset": "copa-airlines.svg",
+      "type": "icon",
+      "bytes": 1790,
+      "sha256": "8c973cbb5ae96677b8275626f31947b9afb7f65ea46a8671eaae2596d5fdc6af"
+    },
+    {
+      "slug": "delta-air-lines",
+      "iata": "DL",
+      "icao": "DAL",
+      "asset": "delta-air-lines.svg",
+      "type": "icon",
+      "bytes": 264,
+      "sha256": "272a9c1e201c95bdbb85f85a8cb475e875d1f68be589e57dcef25c2351116a3f"
+    },
+    {
+      "slug": "easyjet",
+      "iata": "U2",
+      "icao": "EZY",
+      "asset": "easyjet.svg",
+      "type": "icon",
+      "bytes": 784,
+      "sha256": "387c4ed30f08b630a8931f27bf5f245cae469d5e51579085406adec698fb0c40"
+    },
+    {
+      "slug": "egyptair",
+      "iata": "MS",
+      "icao": "MSR",
+      "asset": "egyptair.svg",
+      "type": "icon",
+      "bytes": 1271,
+      "sha256": "e42711619bab2b5ed1b22ce6485dc4977b399e57bdf55d5efcfdef033cc9ccea"
+    },
+    {
+      "slug": "emirates",
+      "iata": "EK",
+      "icao": "UAE",
+      "asset": "emirates.svg",
+      "type": "icon",
+      "bytes": 2432,
+      "sha256": "82d8ac9420db28a6b85cc8dae5c82f1b3a50cfd4f1c2603c5b25b29658d6dd2c"
+    },
+    {
+      "slug": "ethiopian-airlines",
+      "iata": "ET",
+      "icao": "ETH",
+      "asset": "ethiopian-airlines.svg",
+      "type": "icon",
+      "bytes": 713,
+      "sha256": "37d6ff50b9b6231391128df5ec0796d6494c651d04e23eeafde839bcef5978e7"
+    },
+    {
+      "slug": "etihad-airways",
+      "iata": "EY",
+      "icao": "ETD",
+      "asset": "etihad-airways.svg",
+      "type": "logo",
+      "bytes": 4798,
+      "sha256": "b67a3efc5c8bbb99f965e2568df66e561a9e5836cae856bd7ce005592bdd37d4"
+    },
+    {
+      "slug": "eurowings",
+      "iata": "EW",
+      "icao": "EWG",
+      "asset": "eurowings.svg",
+      "type": "icon",
+      "bytes": 577,
+      "sha256": "3da6322a5bacb3816d81e13f7d1b517cc90ff300547908d6e879c45526f70297"
+    },
+    {
+      "slug": "eva-air",
+      "iata": "BR",
+      "icao": "EVA",
+      "asset": "eva-air.svg",
+      "type": "icon",
+      "bytes": 4259,
+      "sha256": "559443ab9a7e19e1e67b8608fe86b10031242da385e8e3cc9503181d6b2ba55e"
+    },
+    {
+      "slug": "ewa-air",
+      "iata": "ZD",
+      "icao": "EWR",
+      "asset": "ewa-air.svg",
+      "type": "logo",
+      "bytes": 3245,
+      "sha256": "afa7954aa6eafd8873f6a240d3001531b2717614f51f0d355984e7645da15266"
+    },
+    {
+      "slug": "fiji-airways",
+      "iata": "FJ",
+      "icao": "FJI",
+      "asset": "fiji-airways.svg",
+      "type": "icon",
+      "bytes": 15764,
+      "sha256": "5dcfbb704786ba279c88d42387dfed5ae71743f27e43fec669e505756b5db7d6"
+    },
+    {
+      "slug": "finnair",
+      "iata": "AY",
+      "icao": "FIN",
+      "asset": "finnair.svg",
+      "type": "icon",
+      "bytes": 812,
+      "sha256": "b80d2f00a267966743075650b20126be72e7493f249b84b878b3d286fc9d481e"
+    },
+    {
+      "slug": "firefly",
+      "iata": "FY",
+      "icao": "FFM",
+      "asset": "firefly.svg",
+      "type": "icon",
+      "bytes": 1298,
+      "sha256": "39b8bd54e5233b9c93ed54888b5e5b8640171c72e1af6a93c3d46d29bbed7e63"
+    },
+    {
+      "slug": "flybe",
+      "iata": "BE",
+      "icao": "BEE",
+      "asset": "flybe.svg",
+      "type": "logo",
+      "bytes": 3790,
+      "sha256": "24eb739df0d70032d781accee617d43ad00424bec39ff7797308745a8b0dce35"
+    },
+    {
+      "slug": "flydubai",
+      "iata": "FZ",
+      "icao": "FDB",
+      "asset": "flydubai.svg",
+      "type": "logo",
+      "bytes": 2597,
+      "sha256": "f89270a6c167a78b5b824a3888bb2f2c34528c9aede932e950f9a2516e58f435"
+    },
+    {
+      "slug": "flynas",
+      "iata": "XY",
+      "icao": "KNE",
+      "asset": "flynas.svg",
+      "type": "icon",
+      "bytes": 577,
+      "sha256": "28caa4e4ead77755cc3fef44c07fdbeee9aff4c827f7b09dca518663c7964f28"
+    },
+    {
+      "slug": "frontier-airlines",
+      "iata": "F9",
+      "icao": "FFT",
+      "asset": "frontier-airlines.svg",
+      "type": "icon",
+      "bytes": 809,
+      "sha256": "c004adaafaa5ad4bf6da1dc2b7467dab374e630958a495272720c081c1dac8ab"
+    },
+    {
+      "slug": "garuda-indonesia",
+      "iata": "GA",
+      "icao": "GIA",
+      "asset": "garuda-indonesia.svg",
+      "type": "icon",
+      "bytes": 1804,
+      "sha256": "d78b6d585bebde533c9efba0097acfdaae95a34be9be5f70b8dfefafb7a6a536"
+    },
+    {
+      "slug": "gol",
+      "iata": "G3",
+      "icao": "GLO",
+      "asset": "gol.svg",
+      "type": "icon",
+      "bytes": 844,
+      "sha256": "518128825469fe8f6da8fc30ecc17d672f9c5f1d1d73bdb3774dd44c2f389ee6"
+    },
+    {
+      "slug": "hainan-airlines",
+      "iata": "HU",
+      "icao": "CHH",
+      "asset": "hainan-airlines.svg",
+      "type": "icon",
+      "bytes": 3977,
+      "sha256": "7427d377749b2803df3e1e25f10a7caefae813e5c843f84dcbb74bc2c4a33baa"
+    },
+    {
+      "slug": "hawaiian-airlines",
+      "iata": "AS",
+      "icao": "ASA",
+      "asset": "hawaiian-airlines.svg",
+      "type": "icon",
+      "bytes": 7078,
+      "sha256": "9f8285be42264c0dc54670ab7e46a59b13288b0cb111850eb0b42f2c9edd14bd"
+    },
+    {
+      "slug": "hk-express",
+      "iata": "UO",
+      "icao": "HKE",
+      "asset": "hk-express.svg",
+      "type": "icon",
+      "bytes": 812,
+      "sha256": "e7d881ed306fee2c8018ca6d1d938283011cef62b5f586ae2eb1de5c8dcfdee3"
+    },
+    {
+      "slug": "iberia",
+      "iata": "IB",
+      "icao": "IBE",
+      "asset": "iberia.svg",
+      "type": "icon",
+      "bytes": 1010,
+      "sha256": "52f595288ed1c80ede33f064b0ef7bdf1533820a03f5adc299ca2d5508acac7e"
+    },
+    {
+      "slug": "icelandair",
+      "iata": "FI",
+      "icao": "ICE",
+      "asset": "icelandair.svg",
+      "type": "icon",
+      "bytes": 1026,
+      "sha256": "574973ab6de36315edf8c7100591888c2020d2d4ff59ad6f72a84e678d4c94c9"
+    },
+    {
+      "slug": "indigo",
+      "iata": "6E",
+      "icao": "IGO",
+      "asset": "indigo.svg",
+      "type": "icon",
+      "bytes": 1886,
+      "sha256": "87a1576ac6565e1fa7f14dd1b8224156d864841c54c7c53cd73ec1a248c33676"
+    },
+    {
+      "slug": "indonesia-airasia",
+      "iata": "QZ",
+      "icao": "AWQ",
+      "asset": "indonesia-airasia.svg",
+      "type": "logo",
+      "bytes": 4480,
+      "sha256": "29083cdea9c48178e974cbadb010a8e511000fe6d9fd9feaab300f90a002498a"
+    },
+    {
+      "slug": "ita-airways",
+      "iata": "AZ",
+      "icao": "ITY",
+      "asset": "ita-airways.svg",
+      "type": "logo",
+      "bytes": 2100,
+      "sha256": "688440c5eb6b9fff00245b0afe4bfee953f55e7fb54bc808053bf9f1ed88d311"
+    },
+    {
+      "slug": "japan-airlines",
+      "iata": "JL",
+      "icao": "JAL",
+      "asset": "japan-airlines.svg",
+      "type": "icon",
+      "bytes": 1955,
+      "sha256": "168b311da049362c371a2893983176ee77ed4f430603a805f1d54f1c514f8301"
+    },
+    {
+      "slug": "jet2com",
+      "iata": "LS",
+      "icao": "EXS",
+      "asset": "jet2com.svg",
+      "type": "icon",
+      "bytes": 983,
+      "sha256": "a136e321b26ca52556efd6fd9871abdb47abba9fa0427a8a47b16c7df39fe063"
+    },
+    {
+      "slug": "jetblue-airways",
+      "iata": "B6",
+      "icao": "JBU",
+      "asset": "jetblue-airways.svg",
+      "type": "logo",
+      "bytes": 1652,
+      "sha256": "068334dded83d0cfb0a5f26a517aa93c84702dee5e9428d0017a3afb61a0acea"
+    },
+    {
+      "slug": "jetstar",
+      "iata": "JQ",
+      "icao": "JST",
+      "asset": "jetstar.svg",
+      "type": "icon",
+      "bytes": 230,
+      "sha256": "6a3311129904d255d7d4b701df2aa3a06a2deecd0422dae7ac796b4f64ae5110"
+    },
+    {
+      "slug": "jetstar-japan",
+      "iata": "GK",
+      "icao": "JJP",
+      "asset": "jetstar-japan.svg",
+      "type": "icon",
+      "bytes": 230,
+      "sha256": "6a3311129904d255d7d4b701df2aa3a06a2deecd0422dae7ac796b4f64ae5110"
+    },
+    {
+      "slug": "jetstar-pacific",
+      "iata": "BL",
+      "icao": "PIC",
+      "asset": "jetstar-pacific.svg",
+      "type": "icon",
+      "bytes": 230,
+      "sha256": "6a3311129904d255d7d4b701df2aa3a06a2deecd0422dae7ac796b4f64ae5110"
+    },
+    {
+      "slug": "jin-air",
+      "iata": "LJ",
+      "icao": "JNA",
+      "asset": "jin-air.svg",
+      "type": "icon",
+      "bytes": 2184,
+      "sha256": "94ffda4d956da69d3f26df23e7c5150b80d44f8c6b121b2e4006a5534316f189"
+    },
+    {
+      "slug": "juneyao-air",
+      "iata": "HO",
+      "icao": "DKH",
+      "asset": "juneyao-air.svg",
+      "type": "icon",
+      "bytes": 11643,
+      "sha256": "67909348d0a8b14f16aa554599d1f5de66825636caa75d9b07529653d5870af6"
+    },
+    {
+      "slug": "kenya-airways",
+      "iata": "KQ",
+      "icao": "KQA",
+      "asset": "kenya-airways.svg",
+      "type": "icon",
+      "bytes": 1038,
+      "sha256": "c3a7ac6bcf6c97adaccf96d3c2a5a5f350f7a99d924270f0dbe3b006d0b912bc"
+    },
+    {
+      "slug": "klm",
+      "iata": "KL",
+      "icao": "KLM",
+      "asset": "klm.svg",
+      "type": "icon",
+      "bytes": 919,
+      "sha256": "0ed50e747da79e7987a4eede1565ea2f7876157ce55b78c4bbb6ab9b1622a43d"
+    },
+    {
+      "slug": "korean-air",
+      "iata": "KE",
+      "icao": "KAL",
+      "asset": "korean-air.svg",
+      "type": "icon",
+      "bytes": 821,
+      "sha256": "002e3d8d15d2c15f50b595015cbab669628ef916484e53f96f7e9a0e7d58ecab"
+    },
+    {
+      "slug": "kuwait-airways",
+      "iata": "KU",
+      "icao": "KAC",
+      "asset": "kuwait-airways.svg",
+      "type": "icon",
+      "bytes": 578,
+      "sha256": "12361fe4c416e344a4e9cf5a1a85ca31b5a4228fa6721732ff34d4bf42083e1c"
+    },
+    {
+      "slug": "latam-airlines-argentina",
+      "iata": "4M",
+      "icao": "DSM",
+      "asset": "latam-airlines-argentina.svg",
+      "type": "icon",
+      "bytes": 1210,
+      "sha256": "99e692643b766076987d287bf69a2f07fba45c2dfaa94986b3f37ed97826e59f"
+    },
+    {
+      "slug": "latam-airlines-brasil",
+      "iata": "JJ",
+      "icao": "TAM",
+      "asset": "latam-airlines-brasil.svg",
+      "type": "icon",
+      "bytes": 1210,
+      "sha256": "99e692643b766076987d287bf69a2f07fba45c2dfaa94986b3f37ed97826e59f"
+    },
+    {
+      "slug": "latam-airlines-chile",
+      "iata": "LA",
+      "icao": "LAN",
+      "asset": "latam-airlines-chile.svg",
+      "type": "icon",
+      "bytes": 1210,
+      "sha256": "99e692643b766076987d287bf69a2f07fba45c2dfaa94986b3f37ed97826e59f"
+    },
+    {
+      "slug": "latam-airlines-colombia",
+      "iata": "4C",
+      "icao": "ARE",
+      "asset": "latam-airlines-colombia.svg",
+      "type": "icon",
+      "bytes": 1210,
+      "sha256": "99e692643b766076987d287bf69a2f07fba45c2dfaa94986b3f37ed97826e59f"
+    },
+    {
+      "slug": "latam-airlines-ecuador",
+      "iata": "XL",
+      "icao": "LNE",
+      "asset": "latam-airlines-ecuador.svg",
+      "type": "icon",
+      "bytes": 1210,
+      "sha256": "99e692643b766076987d287bf69a2f07fba45c2dfaa94986b3f37ed97826e59f"
+    },
+    {
+      "slug": "latam-airlines-paraguay",
+      "iata": "PZ",
+      "icao": "LAP",
+      "asset": "latam-airlines-paraguay.svg",
+      "type": "icon",
+      "bytes": 1210,
+      "sha256": "99e692643b766076987d287bf69a2f07fba45c2dfaa94986b3f37ed97826e59f"
+    },
+    {
+      "slug": "latam-airlines-peru",
+      "iata": "LP",
+      "icao": "LPE",
+      "asset": "latam-airlines-peru.svg",
+      "type": "icon",
+      "bytes": 1210,
+      "sha256": "99e692643b766076987d287bf69a2f07fba45c2dfaa94986b3f37ed97826e59f"
+    },
+    {
+      "slug": "level",
+      "iata": "LL",
+      "icao": "LVL",
+      "asset": "level.svg",
+      "type": "icon",
+      "bytes": 178,
+      "sha256": "59037e3c3c4f33af8d2277cfddc9072fcb7b5c263247561b8abb213f15551991"
+    },
+    {
+      "slug": "lion-air",
+      "iata": "JT",
+      "icao": "LNI",
+      "asset": "lion-air.svg",
+      "type": "icon",
+      "bytes": 5571,
+      "sha256": "54b6b1a4dc3c5dc55112a561b68dc9195c018283ce0e3152af686f2bf4ecbfeb"
+    },
+    {
+      "slug": "lot-polish-airlines",
+      "iata": "LO",
+      "icao": "LOT",
+      "asset": "lot-polish-airlines.svg",
+      "type": "icon",
+      "bytes": 710,
+      "sha256": "0ccce1c14e1b4df37d4b197f3968a89586b18579ecc915036eec1e6dfb7c2f40"
+    },
+    {
+      "slug": "lufthansa",
+      "iata": "LH",
+      "icao": "DLH",
+      "asset": "lufthansa.svg",
+      "type": "icon",
+      "bytes": 1068,
+      "sha256": "f2d43c9d57f3b6b27a4ccf91e8ab0d8bb7ac8f326d727ef6326534b0d6512b5c"
+    },
+    {
+      "slug": "malaysia-airlines",
+      "iata": "MH",
+      "icao": "MAS",
+      "asset": "malaysia-airlines.svg",
+      "type": "icon",
+      "bytes": 1428,
+      "sha256": "de726f20cf485d2274a8d1b8ea05c21e41087f45fa34b4b690a40db75bbd399d"
+    },
+    {
+      "slug": "myanmar-national-airlines",
+      "iata": "UB",
+      "icao": "UBA",
+      "asset": "myanmar-national-airlines.svg",
+      "type": "icon",
+      "bytes": 10625,
+      "sha256": "4227e122fc01d850e2f85b07055ed80e9fd6ab868b965147c46dad690128fc3a"
+    },
+    {
+      "slug": "norwegian-air-shuttle",
+      "iata": "DY",
+      "icao": "NOZ",
+      "asset": "norwegian-air-shuttle.svg",
+      "type": "icon",
+      "bytes": 2462,
+      "sha256": "f54633fbc5129302d4957417c8cd6a4d6b9bfda21f3127dad9a7fe8bff4b8f8c"
+    },
+    {
+      "slug": "oman-air",
+      "iata": "WY",
+      "icao": "OMA",
+      "asset": "oman-air.svg",
+      "type": "icon",
+      "bytes": 2218,
+      "sha256": "a7921feea57ecd01f5c1c326ce541105de54b93deae3e69dac2274fd3057c5ab"
+    },
+    {
+      "slug": "pacific-airlines",
+      "iata": "BL",
+      "icao": "PIC",
+      "asset": "pacific-airlines.svg",
+      "type": "icon",
+      "bytes": 538,
+      "sha256": "1ee0298b5d40538b4722c902b3e5b954a3c0d6392c09a633432339f3aefaf9c1"
+    },
+    {
+      "slug": "paranair",
+      "iata": "ZP",
+      "icao": "AZP",
+      "asset": "paranair.svg",
+      "type": "icon",
+      "bytes": 656,
+      "sha256": "73ffe12c14964836e15f3e6fe53eeeff51c8effc4f9cf8ea2812ff82f3c54964"
+    },
+    {
+      "slug": "peach-aviation",
+      "iata": "MM",
+      "icao": "APJ",
+      "asset": "peach-aviation.svg",
+      "type": "logo",
+      "bytes": 1989,
+      "sha256": "ff54456586723d545bcd8ff7e745706e0a4c83fc26081a75141847bbd44ca972"
+    },
+    {
+      "slug": "pegasus-airlines",
+      "iata": "PC",
+      "icao": "PGT",
+      "asset": "pegasus-airlines.svg",
+      "type": "icon",
+      "bytes": 818,
+      "sha256": "e9d675f3f3644cce79aa8a06eecd64e69879a1fd7da4ac798254dc89602a4691"
+    },
+    {
+      "slug": "philippine-airlines",
+      "iata": "PR",
+      "icao": "PAL",
+      "asset": "philippine-airlines.svg",
+      "type": "icon",
+      "bytes": 1206,
+      "sha256": "d419836de7875d44c498acbc1d22b13b7dcab7b6669c23962bb8f30e37ae73f8"
+    },
+    {
+      "slug": "philippines-airasia",
+      "iata": "Z2",
+      "icao": "APG",
+      "asset": "philippines-airasia.svg",
+      "type": "logo",
+      "bytes": 4480,
+      "sha256": "29083cdea9c48178e974cbadb010a8e511000fe6d9fd9feaab300f90a002498a"
+    },
+    {
+      "slug": "qantas",
+      "iata": "QF",
+      "icao": "QFA",
+      "asset": "qantas.svg",
+      "type": "logo",
+      "bytes": 2353,
+      "sha256": "dfc67d6f419c1fbc84fee10582e82f8a65409e45d869664cf209b12faa8c7d2a"
+    },
+    {
+      "slug": "qatar-airways",
+      "iata": "QR",
+      "icao": "QTR",
+      "asset": "qatar-airways.svg",
+      "type": "icon",
+      "bytes": 4615,
+      "sha256": "94ace167b39313ce2ffb7255731b30812ff649ceb6fc64843a9c5b9aa45bb357"
+    },
+    {
+      "slug": "riyadh-air",
+      "iata": "RX",
+      "icao": "RXI",
+      "asset": "riyadh-air.svg",
+      "type": "icon",
+      "bytes": 1592,
+      "sha256": "6048aff1360d34d2625bb5b5b7422b5acc2568058971270c041179481b46521a"
+    },
+    {
+      "slug": "royal-air-maroc",
+      "iata": "AT",
+      "icao": "RAM",
+      "asset": "royal-air-maroc.svg",
+      "type": "icon",
+      "bytes": 3835,
+      "sha256": "4912dc58c89a08928c058bcd6da408f12f9d330065c31a4fa9be2c322fb42a9a"
+    },
+    {
+      "slug": "royal-brunei-airlines",
+      "iata": "BI",
+      "icao": "RBA",
+      "asset": "royal-brunei-airlines.svg",
+      "type": "logo",
+      "bytes": 17044,
+      "sha256": "780240eda26a4f613db2ff52e33f82778a2e29303bbe5f95b27e076524f95408"
+    },
+    {
+      "slug": "ryanair",
+      "iata": "FR",
+      "icao": "RYR",
+      "asset": "ryanair.svg",
+      "type": "icon",
+      "bytes": 2243,
+      "sha256": "249c874b493614d38b9b3932c857d56397ca9ef452811c89f88a9ee4e3c5b7b7"
+    },
+    {
+      "slug": "sas-connect",
+      "iata": "SL",
+      "icao": "SZS",
+      "asset": "sas-connect.svg",
+      "type": "logo",
+      "bytes": 1428,
+      "sha256": "dfd65573839e67dedd29a03b9e9a40e7f47d56a54b728dc5a37566a212a1dad5"
+    },
+    {
+      "slug": "saudia",
+      "iata": "SV",
+      "icao": "SVA",
+      "asset": "saudia.svg",
+      "type": "icon",
+      "bytes": 2685,
+      "sha256": "a75142b65a25a65a8eabefe0d37c5d4ac77f0c4268e8f68494774ef358889a57"
+    },
+    {
+      "slug": "scandinavian-airlines",
+      "iata": "SK",
+      "icao": "SAS",
+      "asset": "scandinavian-airlines.svg",
+      "type": "logo",
+      "bytes": 1428,
+      "sha256": "dfd65573839e67dedd29a03b9e9a40e7f47d56a54b728dc5a37566a212a1dad5"
+    },
+    {
+      "slug": "scoot",
+      "iata": "TR",
+      "icao": "TGW",
+      "asset": "scoot.svg",
+      "type": "logo",
+      "bytes": 1655,
+      "sha256": "b8f0e184fcb25cbdf4950b34a7d752c7d4e8ec042755254509c14c37360dc139"
+    },
+    {
+      "slug": "shandong-airlines",
+      "iata": "SC",
+      "icao": "CDG",
+      "asset": "shandong-airlines.svg",
+      "type": "icon",
+      "bytes": 2033,
+      "sha256": "2c515d7368bf2f892dfae8291605c12e1eefe8d831a4e2cae9ff54456ddd9ab0"
+    },
+    {
+      "slug": "shenzhen-airlines",
+      "iata": "ZH",
+      "icao": "CSZ",
+      "asset": "shenzhen-airlines.svg",
+      "type": "icon",
+      "bytes": 2564,
+      "sha256": "977f71219a63f85ea0398aeff521e66b7a61ec0422360264d3e7ac20b119a532"
+    },
+    {
+      "slug": "sichuan-airlines",
+      "iata": "3U",
+      "icao": "CSC",
+      "asset": "sichuan-airlines.svg",
+      "type": "icon",
+      "bytes": 2420,
+      "sha256": "799362b517df74a4e4bc95b0b6d620e4b7d104cf1cf5a75d25edafd7794f69ac"
+    },
+    {
+      "slug": "singapore-airlines",
+      "iata": "SQ",
+      "icao": "SIA",
+      "asset": "singapore-airlines.svg",
+      "type": "icon",
+      "bytes": 824,
+      "sha256": "259e51e317f12322f949c5ebff03d0e127b4128563b2301edb452bec335eeea5"
+    },
+    {
+      "slug": "southwest-airlines",
+      "iata": "WN",
+      "icao": "SWA",
+      "asset": "southwest-airlines.svg",
+      "type": "icon",
+      "bytes": 1800,
+      "sha256": "0fe13b528056a057e0015306160193686bae4f50e1bb65735d786815bcc0b70a"
+    },
+    {
+      "slug": "spicejet",
+      "iata": "SG",
+      "icao": "SEJ",
+      "asset": "spicejet.svg",
+      "type": "icon",
+      "bytes": 2795,
+      "sha256": "aa32acc7796b236c690c8afef71a2de5ce0976e54693fef305c8d9b5e22261c1"
+    },
+    {
+      "slug": "spirit-airlines",
+      "iata": "NK",
+      "icao": "NKS",
+      "asset": "spirit-airlines.svg",
+      "type": "logo",
+      "bytes": 2986,
+      "sha256": "20cd58512ff78df91963fcb9e7a1711f872ae45a6ed6e1224dff0e9b0a3c3564"
+    },
+    {
+      "slug": "starlux-airlines",
+      "iata": "JX",
+      "icao": "SJX",
+      "asset": "starlux-airlines.svg",
+      "type": "icon",
+      "bytes": 1036,
+      "sha256": "0d03ae4fc75fa765a379d2563538c8dcb6ca144f6155cb1c218927fb0178f97f"
+    },
+    {
+      "slug": "sun-phuquoc-airways",
+      "iata": "9G",
+      "icao": "SPQ",
+      "asset": "sun-phuquoc-airways.svg",
+      "type": "icon",
+      "bytes": 1483,
+      "sha256": "009b3f80ab2e13093e5b7a02b642845674ae49da89e70e6d81c284c8d7379c90"
+    },
+    {
+      "slug": "swiss",
+      "iata": "LX",
+      "icao": "SWR",
+      "asset": "swiss.svg",
+      "type": "icon",
+      "bytes": 241,
+      "sha256": "0886f662db3efb4c386ef111f1f677cfb2e14e05e863329336c87f3dc446be1c"
+    },
+    {
+      "slug": "tap-air-portugal",
+      "iata": "TP",
+      "icao": "TAP",
+      "asset": "tap-air-portugal.svg",
+      "type": "icon",
+      "bytes": 549,
+      "sha256": "f8c1cea7e70b8a24c3b0f9965c058250b1b68d9b0ee9f7ef8c2ca5688bfe6ff0"
+    },
+    {
+      "slug": "tarom",
+      "iata": "RO",
+      "icao": "ROT",
+      "asset": "tarom.svg",
+      "type": "icon",
+      "bytes": 706,
+      "sha256": "be92ad62dc172b92638ab018b2e9428c60848af03a4d3304ee6f35f52c89c430"
+    },
+    {
+      "slug": "thai-airasia",
+      "iata": "FD",
+      "icao": "AIQ",
+      "asset": "thai-airasia.svg",
+      "type": "logo",
+      "bytes": 4480,
+      "sha256": "29083cdea9c48178e974cbadb010a8e511000fe6d9fd9feaab300f90a002498a"
+    },
+    {
+      "slug": "thai-airways",
+      "iata": "TG",
+      "icao": "THA",
+      "asset": "thai-airways.svg",
+      "type": "icon",
+      "bytes": 5248,
+      "sha256": "8b7f65aed27891ac29fed821746d1c74ed09e93b25b1d9fd6a228499a7370ce4"
+    },
+    {
+      "slug": "thai-lion-air",
+      "iata": "SL",
+      "icao": "TLM",
+      "asset": "thai-lion-air.svg",
+      "type": "icon",
+      "bytes": 3739,
+      "sha256": "8dfe8d2d04dc0753cade6a1f145ab1e2f6d07f3a78156d715b7a90bdae09c8d3"
+    },
+    {
+      "slug": "transavia",
+      "iata": "HV",
+      "icao": "TRA",
+      "asset": "transavia.svg",
+      "type": "icon",
+      "bytes": 814,
+      "sha256": "c7cb7213f6b62756ca5f6e2a722d4bf8d5b16d3f6cea225440d005589342e04d"
+    },
+    {
+      "slug": "trinity-airways",
+      "iata": "TW",
+      "icao": "TWB",
+      "asset": "trinity-airways.svg",
+      "type": "icon",
+      "bytes": 1178,
+      "sha256": "bd8c22a68401536aeb9cb32dd658eda331f66ac0869c35fd91a5af4ed639e3e0"
+    },
+    {
+      "slug": "turkish-airlines",
+      "iata": "TK",
+      "icao": "THY",
+      "asset": "turkish-airlines.svg",
+      "type": "icon",
+      "bytes": 1204,
+      "sha256": "88310282bba0279d9947f75e8b0975e402b48d69d205e5d40d514f23e88051a8"
+    },
+    {
+      "slug": "united-airlines",
+      "iata": "UA",
+      "icao": "UAL",
+      "asset": "united-airlines.svg",
+      "type": "icon",
+      "bytes": 4223,
+      "sha256": "468fd4faa748a20d141b8a595ac9d1ffbe684bd6b2a134d63a7d86751b9de95c"
+    },
+    {
+      "slug": "vietjet-air",
+      "iata": "VJ",
+      "icao": "VJC",
+      "asset": "vietjet-air.svg",
+      "type": "logo",
+      "bytes": 3091,
+      "sha256": "4bee3e27cd9248f37cce79063e7f26ea2d7af20c634cb37f07bc82b3cc1afc89"
+    },
+    {
+      "slug": "vietnam-airlines",
+      "iata": "VN",
+      "icao": "HVN",
+      "asset": "vietnam-airlines.svg",
+      "type": "icon",
+      "bytes": 1898,
+      "sha256": "86465c2d7497795f17d075f70894d7c1ee99ec030c3305326705045b118344e6"
+    },
+    {
+      "slug": "vietravel-airlines",
+      "iata": "VU",
+      "icao": "VAG",
+      "asset": "vietravel-airlines.svg",
+      "type": "icon",
+      "bytes": 606,
+      "sha256": "4976e8cb8d0387e7d8a3253664019e9ed3c6d55e71d32171ae81bd614d0bfddd"
+    },
+    {
+      "slug": "virgin-atlantic",
+      "iata": "VS",
+      "icao": "VIR",
+      "asset": "virgin-atlantic.svg",
+      "type": "icon",
+      "bytes": 2649,
+      "sha256": "95d2b20eac4887cea2d43c1b260ededc58cdc976b5e84161389f81626ac613b4"
+    },
+    {
+      "slug": "virgin-australia",
+      "iata": "VA",
+      "icao": "VOZ",
+      "asset": "virgin-australia.svg",
+      "type": "icon",
+      "bytes": 32075,
+      "sha256": "64d4a330d536d2df6168ed1f8d6aeb2e28a05a786006647e88c987a5f8a8b541"
+    },
+    {
+      "slug": "viva",
+      "iata": "VB",
+      "icao": "VIV",
+      "asset": "viva.svg",
+      "type": "icon",
+      "bytes": 664,
+      "sha256": "0412d3e9bf1132b64fa4edcce930e3e79fec4403a018d705d543c77d77dd490b"
+    },
+    {
+      "slug": "volaris",
+      "iata": "Y4",
+      "icao": "VOI",
+      "asset": "volaris.svg",
+      "type": "icon",
+      "bytes": 1090,
+      "sha256": "ae5d8772f99e73682bd3bffedfcc1dfdc5d12d304a5cf8f08b5346df260af56f"
+    },
+    {
+      "slug": "volotea",
+      "iata": "V7",
+      "icao": "VOE",
+      "asset": "volotea.svg",
+      "type": "icon",
+      "bytes": 1188,
+      "sha256": "de4db0d07fa4fc2b4fb2da4cca0781e017a9d34c6f9b90b7cf7a9c99c01bfd98"
+    },
+    {
+      "slug": "vueling",
+      "iata": "VY",
+      "icao": "VLG",
+      "asset": "vueling.svg",
+      "type": "logo",
+      "bytes": 5539,
+      "sha256": "455034d1d7a91e178302cd4950fb4d18e7fc87fb07e40b2c18ca5c1d451fee85"
+    },
+    {
+      "slug": "westjet",
+      "iata": "WS",
+      "icao": "WJA",
+      "asset": "westjet.svg",
+      "type": "icon",
+      "bytes": 1149,
+      "sha256": "b963a514b54b7b6dc08f2fb2fe0b4a8b0d3ed367c433fa2cd15ea47905477b11"
+    },
+    {
+      "slug": "winair",
+      "iata": "WM",
+      "icao": "WIA",
+      "asset": "winair.svg",
+      "type": "logo",
+      "bytes": 2185,
+      "sha256": "70984938f1b1fd7bd5dcaa16480d45295e55960db3af03b959aa1941c3284cb5"
+    },
+    {
+      "slug": "wizz-air",
+      "iata": "W6",
+      "icao": "WZZ",
+      "asset": "wizz-air.svg",
+      "type": "logo",
+      "bytes": 2675,
+      "sha256": "a1b38dc91a28d8a6832dd101abf33b2bf5d678986b82e164eb6dc25ae5f887a6"
+    },
+    {
+      "slug": "wizz-air-abu-dhabi",
+      "iata": "5W",
+      "icao": "WAZ",
+      "asset": "wizz-air-abu-dhabi.svg",
+      "type": "logo",
+      "bytes": 2675,
+      "sha256": "a1b38dc91a28d8a6832dd101abf33b2bf5d678986b82e164eb6dc25ae5f887a6"
+    },
+    {
+      "slug": "wizz-air-uk",
+      "iata": "W9",
+      "icao": "WUK",
+      "asset": "wizz-air-uk.svg",
+      "type": "logo",
+      "bytes": 2675,
+      "sha256": "a1b38dc91a28d8a6832dd101abf33b2bf5d678986b82e164eb6dc25ae5f887a6"
+    },
+    {
+      "slug": "xiamenair",
+      "iata": "MF",
+      "icao": "CXA",
+      "asset": "xiamenair.svg",
+      "type": "icon",
+      "bytes": 526,
+      "sha256": "15fa244fcd8f170fa3bcb72475d5e8e251ae71a5596db1212a0ded364081008c"
+    }
+  ]
+}

@@ -1,0 +1,183 @@
+# Noncommercial Modification & Fork License (NCMF)
+
+**Version 1.0 — November 2026**
+
+Copyright (c) 2026 @YuanzeSun
+
+All rights reserved except as expressly granted under this License.
+
+## 1. Definitions
+
+**"Software"** means the source code, documentation, assets, and other materials made available under this License, including modified versions and derivative works to the extent that they incorporate materials covered by this License.
+
+**"Copyright Holder"** means the individual or legal entity identified in the copyright notice above, or its lawful successors or assigns.
+
+**"User"** means any individual or legal entity accessing or using the Software.
+
+**"Noncommercial Use"** means use that is not primarily intended for or directed toward commercial advantage, monetary compensation, business operations, or revenue generation.
+
+**"Commercial Use"** includes, but is not limited to:
+
+- Selling or commercially licensing the Software.
+- Incorporating the Software into paid products or services.
+- Using the Software to generate revenue, directly or indirectly.
+- Using the Software for commercial business operations.
+- Providing commercial services based on the Software.
+- Monetizing modified versions or derivative works of the Software.
+
+**"GitHub Fork"** means a repository created through GitHub's native fork functionality that maintains its fork relationship with the original repository, including subsequent forks created through the same functionality.
+
+**"Redistribution"** means making copies of the Software, whether modified or unmodified, available to third parties by publication, distribution, transfer, or other means.
+
+## 2. Grant of Permission
+
+Subject to the terms and conditions of this License, the Copyright Holder grants Users a worldwide, royalty-free, non-exclusive, non-transferable license to:
+
+a. View, download, clone, and inspect the Software.
+
+b. Use, execute, test, and study the Software for Noncommercial Use.
+
+c. Modify the Software for Noncommercial Use.
+
+d. Create and maintain GitHub Forks of the Software.
+
+e. Make GitHub Forks publicly accessible.
+
+f. Publish noncommercial modifications within GitHub Forks.
+
+g. Create local copies and backups reasonably necessary for the activities permitted above.
+
+These permissions are granted only to the extent that the Copyright Holder has the legal authority to grant them.
+
+All permissions are subject to the restrictions set forth in this License.
+
+## 3. Restrictions
+
+Unless prior written authorization is obtained from the Copyright Holder, Users must not:
+
+a. Use the Software, whether modified or unmodified, for Commercial Use.
+
+b. Sell, rent, commercially license, sublicense, or otherwise commercially exploit the Software.
+
+c. Redistribute the Software, whether modified or unmodified, except as expressly permitted under Section 4.
+
+d. Publish the Software in independent repositories, mirrors, package registries, container registries, downloadable archives, or other distribution channels outside the permitted GitHub Fork mechanism.
+
+e. Incorporate the Software into commercial products, applications, platforms, or services.
+
+f. Provide paid services based on the Software or its modified versions.
+
+g. Remove, alter, or misrepresent copyright notices, license notices, or ownership information.
+
+h. Claim ownership of intellectual property rights belonging to the Copyright Holder.
+
+i. Grant third parties permissions exceeding those expressly provided by this License.
+
+These restrictions apply equally to modified versions and derivative works incorporating the Software, to the extent of the Copyright Holder's rights.
+
+## 4. GitHub Fork Exception
+
+Notwithstanding the redistribution restrictions in Section 3, the following activities are expressly permitted:
+
+a. Creating a GitHub Fork using GitHub's native fork functionality.
+
+b. Maintaining a publicly accessible GitHub Fork.
+
+c. Modifying the Software within a GitHub Fork for Noncommercial Use.
+
+d. Publishing modified versions within a GitHub Fork, provided that such publication is noncommercial.
+
+e. Creating subsequent GitHub Forks from existing GitHub Forks, subject to the same restrictions.
+
+f. Sharing links to the original repository or permitted GitHub Forks.
+
+All GitHub Forks must retain the applicable copyright and license notices associated with the Software.
+
+This exception does not authorize:
+
+- Commercial Use of the Software.
+- Redistribution through independent repositories or external distribution services.
+- Publication outside the permitted GitHub Fork mechanism.
+- Commercial exploitation of modifications or derivative works incorporating the Software.
+
+Permissions under this section are also subject to GitHub's applicable Terms of Service.
+
+## 5. Copyright and Ownership
+
+The Copyright Holder retains all copyright and other intellectual property rights in the original Software.
+
+No ownership rights in the original Software are transferred to Users under this License.
+
+Users receive only the permissions expressly granted by this License.
+
+All rights not expressly granted are reserved by the Copyright Holder.
+
+## 6. Rights Reserved by the Copyright Holder
+
+Nothing in this License restricts the Copyright Holder's exercise of rights that the Copyright Holder legally controls.
+
+The Copyright Holder expressly reserves the right to:
+
+a. Use the Software for any purpose, including Commercial Use.
+
+b. Sell, distribute, and commercially exploit the Software.
+
+c. License the Software to third parties under separate terms.
+
+d. Release the Software under different licenses.
+
+e. Develop, modify, and distribute alternative versions of the Software.
+
+f. Grant commercial permissions or exceptions to selected third parties.
+
+g. Discontinue distribution of the Software at any time.
+
+The restrictions imposed on Users under this License do not apply to the Copyright Holder's exercise of its own rights.
+
+## 7. Third-Party Materials
+
+This License applies only to materials for which the Copyright Holder possesses the necessary licensing rights.
+
+Any third-party materials included in or used with the Software remain subject to their respective licenses and applicable laws.
+
+Nothing in this License supersedes the rights of third-party copyright holders.
+
+## 8. Termination
+
+The permissions granted under this License terminate automatically if a User violates its terms.
+
+Upon termination, the User must cease all activities requiring permission under this License, including unauthorized use, modification, and distribution.
+
+Reinstatement requires express written authorization from the Copyright Holder.
+
+Termination does not affect rights that cannot legally be restricted or revoked.
+
+## 9. Disclaimer of Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+THE COPYRIGHT HOLDER DOES NOT WARRANT THAT THE SOFTWARE WILL BE ERROR-FREE, SECURE, UNINTERRUPTED, OR SUITABLE FOR ANY PARTICULAR PURPOSE.
+
+USERS ASSUME ALL RISKS ASSOCIATED WITH THEIR USE OF THE SOFTWARE.
+
+## 10. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE COPYRIGHT HOLDER SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR RELATED TO THE USE OF OR INABILITY TO USE THE SOFTWARE.
+
+THIS LIMITATION APPLIES REGARDLESS OF THE LEGAL THEORY OF LIABILITY, EVEN IF THE COPYRIGHT HOLDER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+## 11. No Implied Rights
+
+No rights or permissions are granted by implication, estoppel, or otherwise beyond those expressly stated in this License.
+
+Any use exceeding the permissions granted herein requires prior written authorization from the Copyright Holder.
+
+Nothing in this License limits rights that cannot lawfully be restricted, including rights expressly provided by applicable law or GitHub's Terms of Service.
+
+## 12. Severability
+
+If any provision of this License is found to be invalid or unenforceable under applicable law, that provision shall be limited to the minimum extent necessary, and the remaining provisions shall remain effective to the extent permitted by law.
+
+---
+
+**End of NCMF License 1.0**
