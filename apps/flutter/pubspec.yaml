@@ -1,0 +1,37 @@
+name: xingji
+description: 行迹 · 私人旅行票据档案
+publish_to: none
+version: 1.0.0+1
+environment:
+  sdk: ^3.14.0
+dependencies:
+  flutter:
+    sdk: flutter
+  material_ui: ^1.1.0
+  xingji_core:
+    path: ../../packages/xingji_core
+  shared_preferences: ^2.5.6
+  file_selector: ^1.1.0
+  flutter_svg: ^2.4.0
+  vector_graphics: ^1.3.1
+  path_drawing: ^1.0.1
+  pdf: ^3.13.1
+  quickjs_engine: ^0.1.7
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/reference.json
+    - assets/demo.json
+    - assets/map.json
+    - assets/renderer.js
+    - assets/renderer-notices.txt
+    - assets/tickets/
+    - assets/fonts/
+  fonts:
+    - family: UiSans
+      fonts:
+        - asset: assets/fonts/ticket-hei.ttf

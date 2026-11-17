@@ -11,6 +11,3 @@ coverage/
 .flutter-plugins-dependencies
 packages/*/coverage/
 packages/*/build/
-
-# App files build in the app branch.
-/apps/flutter/

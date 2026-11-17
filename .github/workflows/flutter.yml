@@ -1,0 +1,48 @@
+name: Check Flutter common app
+on:
+  push:
+    branches: [main]
+    paths: ['apps/**', 'packages/**', 'specs/**', 'scripts/*flutter*', 'tests/flutter*', '.github/workflows/flutter.yml']
+  pull_request:
+    paths: ['apps/**', 'packages/**', 'specs/**', 'scripts/*flutter*', 'tests/flutter*', '.github/workflows/flutter.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  common:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.50.0'
+          channel: stable
+          cache: true
+      - run: dart pub get && dart analyze && dart test
+        working-directory: packages/xingji_core
+      - run: flutter pub get
+        working-directory: apps/flutter
+      - run: flutter analyze
+        working-directory: apps/flutter
+      - run: flutter test
+        working-directory: apps/flutter
+      - run: flutter build web --release
+        working-directory: apps/flutter
+  native-renderer:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/flutter
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.50.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - run: |
+          $env:LIBQUICKJSC_TEST_PATH=(Resolve-Path -LiteralPath 'build/windows/x64/runner/Release/quickjs_c_bridge_plugin.dll').Path
+          flutter test test/native_renderer_test.dart

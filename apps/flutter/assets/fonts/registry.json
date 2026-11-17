@@ -1,0 +1,17 @@
+{
+  "UiSans": "ticket-hei.ttf",
+  "TicketHei": "ticket-hei.ttf",
+  "TicketSong": "ticket-song.ttf",
+  "TicketFang": "ticket-fang.ttf",
+  "TicketRailFallback": "ticket-rail-fallback.ttf",
+  "TicketRailHei": "ticket-rail-hei.ttf",
+  "TicketRailSerif": "ticket-rail-serif.ttf",
+  "TicketRailNarrow": "ticket-rail-narrow.ttf",
+  "TicketRailPinyin": "ticket-rail-pinyin.ttf",
+  "TicketDateNumber": "ticket-date-numbers.ttf",
+  "TicketDateLabel": "ticket-date-labels.ttf",
+  "TicketOCR": "ticket-ocr-v2.ttf",
+  "TicketLatin": "ticket-latin.ttf",
+  "TicketMono": "ticket-mono.ttf",
+  "TicketArabic": "ticket-arabic.ttf"
+}

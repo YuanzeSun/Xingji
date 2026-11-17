@@ -25,9 +25,12 @@
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
+    "@xmldom/xmldom": "0.9.12",
     "esbuild": "^0.25.12",
     "fake-indexeddb": "^6.2.8",
+    "fontkit": "3.0.0",
     "geo-tz": "^8.1.11",
-    "jsdom": "^27.4.0"
+    "jsdom": "^27.4.0",
+    "text-encoding": "0.7.0"
   }
 }
