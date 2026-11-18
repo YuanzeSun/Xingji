@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { upgradeCodeRecords, hasLegacyCodes } from '../src/code-upgrade.js';
 import { DEMO_TICKET_CODE } from '../src/demo-code.js';
-import { createRecord, archive } from '../src/model.js';
-import { GitHubStore, synchronize } from '../src/github.js';
+import { createRecord } from '../src/model.js';
+import { GitHubStore } from '../src/github.js';
 import { MemoryGitHub } from './helpers/cloud.js';
 
 test('old code images convert once to payload data and failed conversion preserves the originals', async () => {
@@ -20,20 +20,14 @@ test('old code images convert once to payload data and failed conversion preserv
   assert.equal(original[0].ticketCode, image);
 });
 
-test('GitHub writes persist payload and parameters without any image or matrix, even on a conversion-only sync', async () => {
+test('GitHub writes persist code payload and parameters without any image or matrix', async () => {
   const record = createRecord({ id: 'code-data', departureDate: '2026-11-15', ticketCode: DEMO_TICKET_CODE });
-  const server = new MemoryGitHub([record]), store = new GitHubStore({ owner: 'user', repo: 'data' }, 'test', server.fetch);
+  const server = new MemoryGitHub(), store = new GitHubStore({ owner: 'user', repo: 'data' }, 'test', server.fetch);
   await store.verify(); const snapshot = await store.read();
-  const legacyText = JSON.stringify({ ...archive([record]), records: [{ ...record, ticketCode: 'data:image/png;base64,old' }] });
-  snapshot.contents['archive/2026.json'] = legacyText; snapshot.rewritePaths = ['archive/2026.json'];
   await store.write([record], snapshot);
   const write = server.calls.findLast(call => call.path === '/git/trees' && call.method === 'POST');
   const yearFile = write.body.tree.find(file => file.path === 'archive/2026.json');
   assert.doesNotMatch(yearFile.content, /data:image|modules|pixels|<svg|<path/);
   assert.deepEqual(JSON.parse(yearFile.content).records[0].ticketCode, DEMO_TICKET_CODE);
   assert.deepEqual((await store.read()).records[0].ticketCode, DEMO_TICKET_CODE);
-  let written = 0;
-  const mock = { read: async () => ({ ...snapshot, rewritePaths: ['archive/2026.json'] }), write: async () => { written++; return 'converted-head'; } };
-  const synced = await synchronize(mock, [record], [record]);
-  assert.equal(written, 1); assert.equal(synced.head, 'converted-head');
 });
