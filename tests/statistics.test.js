@@ -187,3 +187,52 @@ test('rail power supply grouping separates conventional coaches, preserves EMUs 
     change(false);assert.doesNotMatch(root.querySelector('[data-stat-ranking="rail-models"]').textContent,/DC600V|AC380V|供电制式未知/);assert.equal(JSON.stringify(rows),before);
   }finally{cleanup();dom.window.close();}
 });
+
+test('each ranking switches charts independently and keeps its grouping and date filters', () => {
+  const rows = [
+    rail({ railModel: '25GDC600V', railBureau: '上海局', railCarOwner: '上海动车段' }),
+    rail({ railModel: '25GAC380V', railBureau: '上海局', railCarOwner: '南京动车段' }),
+    ...['737-800', '737-200', 'A320', 'A321', 'A380', '787-9', 'DHC-8-400'].map(aircraft => flight({ aircraft }))
+  ];
+  const dom = new JSDOM('<div id="root"></div>'), root = dom.window.document.querySelector('#root');
+  const options = { ...range };
+  let cleanup = mountStatistics(root, rows, { options });
+  const card = kind => root.querySelector(`[data-stat-ranking="${kind}"]`);
+  const picked = kind => card(kind).querySelector('[data-stat-view][aria-pressed=true]').dataset.statView;
+  const change = (selector, update) => {
+    const control = root.querySelector(selector);
+    Object.assign(control, update);
+    control.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  };
+  try {
+    const trend = root.querySelector('.statistics-trend');
+    assert.equal(picked('rail-models'), 'bars');
+    card('rail-models').querySelector('[data-stat-view=columns]').click();
+    card('aircraft').querySelector('[data-stat-view=donut]').click();
+    assert.equal(picked('rail-bureaus'), 'bars');
+    assert.ok(card('rail-models').querySelector('.statistics-column-scroll'));
+    assert.equal(root.querySelector('.statistics-trend'), trend);
+    const tail = card('aircraft').querySelector('.statistics-ring-other');
+    assert.match(tail.querySelector('summary').textContent, /其他（2 项）2 次28\.6%/);
+    assert.equal(tail.querySelectorAll('li').length, 2);
+    assert.equal(card('aircraft').querySelector('.statistics-ring strong').textContent, '7');
+    change('[data-stat-option=railPowerSupplies]', { checked: true });
+    assert.equal(picked('rail-models'), 'columns');
+    assert.match(card('rail-models').textContent, /DC600V/);
+    change('[data-stat-option=aircraftSubtypes]', { checked: false });
+    assert.equal(picked('aircraft'), 'donut');
+    assert.equal(card('aircraft').querySelector('.statistics-ring strong').textContent, '7');
+    assert.doesNotMatch(card('aircraft').textContent, /737-800/);
+    change('[data-stat-to]', { value: '2024-02-29' });
+    assert.equal(picked('aircraft'), 'donut');
+    assert.match(card('aircraft').textContent, /暂无记录/);
+    cleanup();
+    cleanup = mountStatistics(root, rows, { options });
+    assert.equal(picked('rail-models'), 'columns');
+    assert.equal(picked('aircraft'), 'donut');
+    assert.equal(picked('rail-bureaus'), 'bars');
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});

@@ -12,15 +12,16 @@ import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } fro
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
 import { upgradeCodeRecords } from './code-upgrade.js';
 import { renderCodeData } from './barcode-data.js';
-import { createRecord, validateRecord, mergeThreeWay, TEMPLATES, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, readArchive, archive, applyImport, formatDate } from './model.js';
+import { createRecord, validateRecord, mergeThreeWay, TEMPLATES, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, readArchive, applyImport, formatDate } from './model.js';
 import * as db from './db.js';
-import { readSyncState, readResetState, activeBinding, activateD1, bindRepository, stageRecords, stageSettings, acknowledgeSync, replaceWithRemote } from './sync-state.js';
+import { readSyncState, readResetState, activeBinding, activateD1, bindRepository, stageBackup, stageRecords, stageSettings, acknowledgeSync, replaceWithRemote } from './sync-state.js';
 import { sharedSettings, maskedKey } from './shared-settings.js';
 import { watchAppUpdates } from './app-update.js';
 import { supportsDesktopMcp } from './device.js';
 import { archiveResetMarkup } from './archive-reset.js';
 import { ArchiveResetError, GitHubStore, synchronize } from './github.js';
 import { D1Store, workerURL } from './d1.js';
+import { fullBackup, readFullBackup } from './archive-backup.js';
 import { copyGitHubToD1, clearGitHubArchive, backUpToGitHub } from './archive-migration.js';
 import { parseText, decodeMail, mapFlightResult, extractPDF, parseCSV } from './importers.js';
 import { ticketSVG, exportSVG, exportPNG } from './tickets.js';
@@ -142,12 +143,14 @@ function freezeForm(form, pendingLabel) {
   };
 }
 
-async function persist(records) {
+async function persist(records, settings) {
   if (!canWrite() || state.saving) throw new Error('当前不能修改票据，请先完成云端核对');
-  const expected = clone(state.records), { config, d1 } = state; state.saving = true;
+  const expected = { records: clone(state.records), settings: clone(state.settings) }, { config, d1 } = state; state.saving = true;
   try {
     if (!await doSync() || !canWrite()) throw new Error('云端尚未核对成功，修改未提交，请保留当前输入');
-    useSnapshot(await withCloudLock(() => stageRecords(expected, records, config, d1))); announce();
+    useSnapshot(await withCloudLock(() => settings ? stageBackup(expected, { records, settings }, config, d1) :
+      stageRecords(expected.records, records, config, d1)));
+    announce();
     await doSync();
   } finally { state.saving = false; render(); }
 }
@@ -166,7 +169,7 @@ function connectionForm() {
   return `<form id="github-form"><div class="form-grid"><label class="field"><span>GitHub用户名</span><input name="owner" value="${e(config.owner)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>私有仓库名</span><input name="repo" value="${e(config.repo)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label></div><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token ?? token())}" autocomplete="off" required /></label><label class="checkbox-row"><input type="checkbox" name="remember" ${(draft?.remember ?? state.rememberToken) ? 'checked' : ''} />在此设备记住凭证</label><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${label}</button>${bound ? '<button class="text-button" type="button" data-action="disconnect">退出 GitHub 授权</button>' : ''}</div></form><div class="setup-help"><p>创建 GitHub 私有仓库并勾选添加 README。创建细粒度访问凭证时，仅授权该仓库，并将 Contents 设为 Read and write。</p><p><a href="https://github.com/new" target="_blank" rel="noopener noreferrer">创建私有仓库 ↗</a><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">创建访问凭证 ↗</a></p></div>`;
 }
 function captureConnectionDraft(form) {
-  state.connectionDraft = { owner: form.elements.owner.value, repo: form.elements.repo.value, token: form.elements.token.value, remember: form.elements.remember.checked };
+  state.connectionDraft = { ...state.connectionDraft, owner: form.elements.owner.value, repo: form.elements.repo.value, token: form.elements.token.value, remember: form.elements.remember.checked };
 }
 function d1ConnectionPanel() {
   const draft = state.d1Draft, bound = !!state.d1;
@@ -202,8 +205,7 @@ function connectionNotice() {
 }
 function applyAccessPolicy() {
   for (const button of document.querySelectorAll('[data-action="new"],[data-action="edit"],[data-action="delete"],[data-action="scan-ticket"]')) button.disabled = !canWrite() || state.saving || state.showDemo;
-  const csvImport = document.querySelector('[data-action="import-csv"]');
-  if (csvImport) csvImport.disabled = !canWrite() || state.saving || state.busy;
+  for (const button of document.querySelectorAll('[data-action="import-csv"],[data-action="import-json"]')) button.disabled = !canWrite() || state.saving || state.busy;
   const batchDelete = document.querySelector('[data-action="delete-selected"]'); if (batchDelete) batchDelete.disabled = !canWrite() || state.saving || state.showDemo;
   for (const input of document.querySelectorAll('[data-setting-control]')) input.disabled = !canWrite() || state.saving;
   const refresh = document.querySelector('[data-action="flight-refresh"]'); if (refresh) refresh.disabled = !flightKey() || state.flightChecking || !navigator.onLine || (state.flightKeyDraft !== null && state.flightKeyDraft.trim() !== flightKey());
@@ -330,7 +332,7 @@ function dataPage() {
     <div class="data-column"><section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h2>GitHub 私有仓库</h2><p data-cloud-label>${state.d1 ? '手动备份' : e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError)}</p>${githubExtras()}</section>${d1ConnectionPanel()}</div>
     <aside class="data-column">${flightSettingsPanel()}
     <section class="panel quiet-panel"><h3>${icon('ticket')}随身票夹</h3><p>在手机浏览器中选择“添加到主屏幕”，即可像应用一样打开。已有票据可离线查看。</p>${installPrompt ? '<button class="button secondary" data-action="install">安装行迹</button>' : ''}</section></aside>
-    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>完整JSON备份</strong><small>完整票据与票面信息</small>${icon('download')}</button><button type="button" data-action="import-csv"><span>${icon('ticket')}</span><strong>导入 CSV</strong><small>选择表格并核对票据</small>${icon('upload')}</button></div><input id="import-csv-file" type="file" accept=".csv,text/csv" hidden /><div id="import-status" class="import-status" role="status"></div></section>
+    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-csv"><span>${icon('ticket')}</span><strong>导入 CSV</strong><small>选择表格并核对票据</small>${icon('upload')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button></div><input id="import-csv-file" type="file" accept=".csv,text/csv" hidden /><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div></section>
   </div>`;
 }
 function render() {
@@ -398,7 +400,7 @@ function bindPage() {
   if (githubForm) { githubForm.addEventListener('input', () => captureConnectionDraft(githubForm)); githubForm.addEventListener('change', () => captureConnectionDraft(githubForm)); githubForm.addEventListener('submit', connectGitHub); }
   const d1Form = root.querySelector('#d1-form');
   if (d1Form) {
-    const capture = () => { state.d1Draft = { url: d1Form.elements.url.value, token: d1Form.elements.token.value, remember: d1Form.elements.remember.checked }; };
+    const capture = () => { state.d1Draft = { ...state.d1Draft, url: d1Form.elements.url.value, token: d1Form.elements.token.value, remember: d1Form.elements.remember.checked }; };
     d1Form.addEventListener('input', capture);
     d1Form.addEventListener('change', capture);
     d1Form.addEventListener('submit', event => { event.preventDefault(); capture(); connectD1(d1Form); });
@@ -418,15 +420,16 @@ function bindPage() {
   };
   bindPersonalProfileForm(root.querySelector('#profile-form'),{change:updateProfileDraft,restructure:profile=>{updateProfileDraft(profile);render();},submit:savePersonalProfile});
   for (const id of ['import-files', 'camera-file']) document.querySelector('#' + id)?.addEventListener('change', event => handleFiles([...event.target.files]));
-  const csvFile = root.querySelector('#import-csv-file');
-  if (csvFile) {
-    root.querySelector('[data-action="import-csv"]').addEventListener('click', () => csvFile.click());
-    csvFile.addEventListener('change', () => {
-      const [file] = csvFile.files;
-      csvFile.value = '';
+  for (const type of ['csv', 'json']) {
+    const picker = root.querySelector('#import-' + type + '-file');
+    if (!picker) continue;
+    root.querySelector('[data-action="import-' + type + '"]').addEventListener('click', () => picker.click());
+    picker.addEventListener('change', () => {
+      const [file] = picker.files;
+      picker.value = '';
       if (!file) return;
-      if (!/\.csv$/i.test(file.name)) return importStatus('请选择 CSV 文件');
-      handleFiles([file]);
+      if (!file.name.toLowerCase().endsWith('.' + type)) return importStatus('请选择 ' + type.toUpperCase() + ' 文件');
+      handleFiles([file], { backupOnly: type === 'json' });
     });
   }
   const drop = document.querySelector('#dropzone');
@@ -712,7 +715,7 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
   applyAccessPolicy();
 }
 function importStatus(message) { const el = document.querySelector('#import-status'); if (el) el.textContent = message; }
-async function handleFiles(files) {
+async function handleFiles(files, { backupOnly = false } = {}) {
   if (!canWrite()) return toast('当前仅可查看缓存', true);
   if (state.busy) return toast('上一批资料仍在解析，请稍候', true);
   if (files.length > 20) return toast('每批最多处理20个文件，可以分批导入', true);
@@ -726,6 +729,12 @@ async function handleFiles(files) {
         const name = file.name.toLowerCase();
         if (name.endsWith('.json')) {
           const content = JSON.parse(await file.text());
+          if (backupOnly || content?.format === 'xingji-backup') {
+            if (files.length !== 1) throw new Error('请单独选择要恢复的 JSON 备份');
+            reviewFullBackup(readFullBackup(content));
+            importStatus('备份已读取，请确认导入。');
+            return;
+          }
           if (content.schemaVersion && Array.isArray(content.records)) content.records = await upgradeCodeRecords(content.records);
           found.push(...(content.schemaVersion ? readArchive(content) : mapFlightResult(content)));
         } else if (name.endsWith('.csv')) found.push(...parseCSV(await file.text()));
@@ -767,6 +776,45 @@ async function saveCandidates(candidates) {
   await persist(result.records); await setDemoMode(false); state.candidates = []; state.selected.clear();
   closeModal(true); navigate('archive'); toast(savedMessage(`已新增 ${result.added} 张，补充 ${result.enriched} 张票据，已同步`));
 }
+function reviewFullBackup(backup) {
+  const count = backup.records.filter(record => !record.deleted).length;
+  openModal(modalHead('导入 JSON 备份', '票据将合并到当前票库，个人资料和飞常准 MCP 设置将以备份为准。') +
+    `<form class="detail-body" data-backup-restore><p>${count} 张票据</p><p class="form-error" role="alert"></p><div class="reset-actions"><button type="button" class="button secondary" data-action="close-modal">取消</button><button class="button primary" type="submit">恢复票库和设置</button></div></form>`);
+  const form = modalRoot.querySelector('[data-backup-restore]');
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (state.saving) return;
+    const release = freezeForm(form, '正在恢复…');
+    try {
+      await persist(applyImport(state.records, backup.records).records, backup.settings);
+      state.profileDraft = null; state.profileBase = null; state.profileDirty = false; state.flightKeyDraft = null;
+      closeModal(true);
+      render();
+      toast(savedMessage('已恢复票库和设置'));
+      if (!state.syncMeta.pending) offerBackupConnection(backup.connections);
+    } catch (error) { form.querySelector('.form-error').textContent = error.message; }
+    finally { release(); }
+  });
+}
+function offerBackupConnection({ github, d1 }) {
+  const missing = state.d1 ? (!state.config?.id && github ? 'github' : '') : (state.config?.id && d1 ? 'd1' : '');
+  if (!missing) return;
+  const name = missing === 'd1' ? 'Cloudflare D1' : 'GitHub';
+  const target = missing === 'd1' ? d1 : github;
+  const label = missing === 'd1' ? target.url : target.owner + '/' + target.repo;
+  openModal(modalHead('是否添加 ' + name + ' 连接', e(label)) +
+    '<div class="detail-body"><div class="reset-actions"><button type="button" class="button secondary" data-action="close-modal">跳过</button><button type="button" class="button primary" data-connect-from-backup>继续连接</button></div></div>');
+  modalRoot.querySelector('[data-connect-from-backup]').addEventListener('click', () => {
+    if (state[missing === 'd1' ? 'd1' : 'config']?.id) { closeModal(true); return; }
+    if (missing === 'd1') state.d1Draft = { ...target, target, remember: false };
+    else state.connectionDraft = { ...target, target, remember: false };
+    closeModal(true);
+    navigate('data');
+    const form = root.querySelector(missing === 'd1' ? '#d1-form' : '#github-form');
+    form?.scrollIntoView?.({ block: 'center' });
+    form?.querySelector(target.token ? '[type="submit"]' : '[name="token"]')?.focus();
+  });
+}
 async function connectCloud(form, errorKey, action) {
   if (state.connecting || state.saving || state.githubBackingUp || state.resetting) return false;
   state.connecting = true;
@@ -782,11 +830,12 @@ async function connectGitHub(event) {
   event.preventDefault();
   const form = event.target;
   captureConnectionDraft(form);
-  const { owner, repo, token: secretInput, remember } = state.connectionDraft;
+  const { owner, repo, token: secretInput, remember, target } = state.connectionDraft;
   const secret = secretInput.trim();
   const attached = await connectCloud(form, 'githubError', async () => {
     const captured = await readSyncState();
-    const config = { ...captured.config, owner: owner.trim(), repo: repo.trim() };
+    const verifiedTarget = target?.owner === owner.trim() && target?.repo === repo.trim() ? { id: target.id, branch: target.branch } : {};
+    const config = { ...(captured.config || verifiedTarget), owner: owner.trim(), repo: repo.trim() };
     const github = new GitHubStore(config, secret);
     await github.verify();
     if (captured.d1 && !captured.config?.id) {
@@ -808,14 +857,14 @@ async function connectGitHub(event) {
   if (attached && !state.d1) await doSync();
 }
 async function connectD1(form) {
-  const { url, token: secretInput, remember } = state.d1Draft;
+  const { url, token: secretInput, remember, target } = state.d1Draft;
   const secret = secretInput.trim();
   const attached = await connectCloud(form, 'd1Error', async () => {
     const captured = await readSyncState();
     const address = workerURL(url.trim());
     if (captured.d1 && captured.d1.url !== address) throw new Error('本机票库已绑定其他 D1 地址');
     if (!secret || /\s/.test(secret)) throw new Error('请填写部署 Worker 时设置的访问凭证');
-    const config = { url: address, id: captured.d1?.id };
+    const config = { url: address, id: captured.d1?.id ?? (target?.url === address ? target.id : undefined) };
     const d1 = new D1Store(config, secret);
     let remote = await d1.read();
     config.id = remote.id;
@@ -1110,7 +1159,10 @@ const actions = {
     state.candidates = candidates; state.selected = new Set(candidates.map((_, i) => i));
     if (candidates.length === 1) editRecord(candidates[0], 0); else reviewCandidates();
   },
-  backup: () => download(JSON.stringify(archive(state.records), null, 2), `行迹备份_${now().slice(0, 10)}.json`),
+  backup: () => download(JSON.stringify(fullBackup(state.records, state.settings, {
+    github: state.config?.id ? { ...state.config, token: token() } : null,
+    d1: state.d1?.id ? { ...state.d1, token: d1Token() } : null
+  }), null, 2), `行迹备份_${now().slice(0, 10)}.json`),
   'export-svg': async button => { const r = findRecord(button.dataset.id); button.disabled = true; toast('正在准备包含字体的票面…'); try { download(await exportSVG(r), fileName(r) + '.svg', 'image/svg+xml;charset=utf-8'); } finally { button.disabled = false; } },
   'export-png': async button => { const r = findRecord(button.dataset.id); button.disabled = true; toast('正在生成高清票面…'); try { download(await exportPNG(r), fileName(r) + '.png'); } finally { button.disabled = false; } },
   delete: async button => {

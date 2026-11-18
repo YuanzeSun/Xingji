@@ -43,25 +43,36 @@ export async function activateD1(captured, config, remote, rememberedToken) {
   });
 }
 
-export async function stageRecords(expected, proposed, config, d1 = null) {
+function stageChange(config, d1, change) {
   return db.atomic(keys, raw => {
     const current = unpack(raw);
     if (!current.meta.verified || activeBinding(current) !== activeBinding({ config, d1 })) throw new Error('请先连接并同步云端票库');
-    const merged = mergeThreeWay(expected, proposed, current.records);
-    if (merged.conflicts.length) throw new Error('另一标签页已修改同一处，请保留当前输入并重新打开票据核对');
-    const records = deduplicateRecords(merged.records), meta = { ...current.meta, revision: current.meta.revision + 1, pending: !sameRecords(records, current.base) || !sameSettings(current.settings, current.settingsBase) };
-    return { write: { records, syncMeta: meta }, result: { ...current, records, meta } };
+    const { records = current.records, settings = current.settings } = change(current);
+    const meta = { ...current.meta, revision: current.meta.revision + 1, pending: !sameRecords(records, current.base) || !sameSettings(settings, current.settingsBase) };
+    return { write: { records, settings, syncMeta: meta }, result: { ...current, records, settings, meta } };
   });
 }
-export async function stageSettings(expected, proposed, config, d1 = null) {
-  return db.atomic(keys, raw => {
-    const current = unpack(raw);
-    if (!current.meta.verified || activeBinding(current) !== activeBinding({ config, d1 })) throw new Error('请先连接并同步云端票库');
-    const merged = mergeSettings(expected, proposed, current.settings);
-    if (merged.conflicts.length) throw new Error('设置已在其他设备或标签页更新，请核对后再保存');
-    const settings = merged.settings, meta = { ...current.meta, revision: current.meta.revision + 1, pending: !sameRecords(current.records, current.base) || !sameSettings(settings, current.settingsBase) };
-    return { write: { settings, syncMeta: meta }, result: { ...current, settings, meta } };
-  });
+function mergedRecords(expected, proposed, current) {
+  const { records, conflicts } = mergeThreeWay(expected, proposed, current);
+  if (conflicts.length) throw new Error('另一标签页已修改同一处，请保留当前输入并重新打开票据核对');
+  return deduplicateRecords(records);
+}
+function mergedSettings(expected, proposed, current) {
+  const { settings, conflicts } = mergeSettings(expected, proposed, current);
+  if (conflicts.length) throw new Error('设置已在其他设备或标签页更新，请核对后再保存');
+  return settings;
+}
+export function stageRecords(expected, proposed, config, d1 = null) {
+  return stageChange(config, d1, current => ({ records: mergedRecords(expected, proposed, current.records) }));
+}
+export function stageSettings(expected, proposed, config, d1 = null) {
+  return stageChange(config, d1, current => ({ settings: mergedSettings(expected, proposed, current.settings) }));
+}
+export function stageBackup(expected, proposed, config, d1) {
+  return stageChange(config, d1, current => ({
+    records: mergedRecords(expected.records, proposed.records, current.records),
+    settings: mergedSettings(expected.settings, proposed.settings, current.settings)
+  }));
 }
 export async function acknowledgeSync(captured, remote) {
   if (!remote.head) throw new Error('云端没有确认版本，保留本机待同步内容');
