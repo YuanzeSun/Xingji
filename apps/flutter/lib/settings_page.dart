@@ -59,6 +59,11 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 8),
               Text(store.status, style: const TextStyle(color: muted)),
+              if (store.syncError case final error?)
+                Text(
+                  error,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               if (store.busy)
                 const Padding(
                   padding: EdgeInsets.only(top: 16),

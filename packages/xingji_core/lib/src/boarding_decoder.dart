@@ -198,6 +198,16 @@ Map<String, dynamic> boardingMetadata(Map<String, dynamic> read) {
   return values;
 }
 
+Map<String, dynamic> pdf417BoardingCode(List<int> bytes) => {
+  'version': 1,
+  'format': 'PDF417',
+  'rawBytes': base64Encode(bytes),
+  'symbologyIdentifier': ']L2',
+  'gs1': false,
+  'eci': <dynamic>[],
+  'parameters': {'symbolVersion': '', 'errorCorrectionLevel': '', 'mask': null},
+};
+
 List<TicketRecord> boardingRecords(
   List<int> bytes,
   ReferenceCatalog catalog, {
@@ -207,28 +217,13 @@ List<TicketRecord> boardingRecords(
   if (read == null) return [];
   final rebuilt = Uint8List.fromList(bytes);
   rebuilt[22] = 32;
-  final code = {
-    'version': 1,
-    'format': 'PDF417',
-    'rawBytes': base64Encode(rebuilt),
-    'symbologyIdentifier': ']L2',
-    'gs1': false,
-    'eci': <dynamic>[],
-    'parameters': {
-      'symbolVersion': '',
-      'errorCorrectionLevel': '',
-      'mask': null,
-    },
-  };
+  final code = pdf417BoardingCode(rebuilt);
   return (read['legs'] as List).indexed.map((entry) {
     final (index, raw) = entry;
     final leg = Map<String, dynamic>.from(raw);
     final matching =
         read['legCount'] == 1 || supplement['service'] == leg['service'];
-    final values = <String, dynamic>{
-      'type': 'flight',
-      if (matching) ...supplement,
-      'template': 'air-boarding-pass',
+    final barcodeFields = <String, dynamic>{
       'service': leg['service'],
       'origin': leg['originCode'],
       'destination': leg['destinationCode'],
@@ -243,50 +238,35 @@ List<TicketRecord> boardingRecords(
       if (leg['gate'] != null) 'gate': leg['gate'],
       ...boardingMetadata(leg),
       'boardingCode': code,
-      'boardingCodeSource': 'original',
-      'boardingLegIndex': '$index',
     };
     final year = matching
         ? JourneyDate.fromJson(supplement['departureDate'])?.year
         : null;
-    values['departureDate'] = JourneyDate(
+    final date = JourneyDate(
       year != null && (leg['dayOfYear'] as int) <= JourneyDate.daysInYear(year)
           ? year
           : null,
       leg['dayOfYear'],
-    ).toJson();
-    values['fieldSources'] = {
-      for (final key in values.keys.where(
-        (key) => ![
-          'type',
-          'template',
-          'fieldSources',
-          'boardingCodeSource',
-          'boardingLegIndex',
-        ].contains(key),
-      ))
-        key: 'barcode',
-    };
-    if (matching)
-      for (final key in supplement.keys) {
-        if (key != 'departureDate' &&
-            ![
-              'service',
-              'origin',
-              'destination',
-              'originCode',
-              'destinationCode',
-              'passenger',
-              'airline',
-              'pnr',
-              'seat',
-              'seatClass',
-              'boardingCode',
-            ].contains(key) &&
-            values[key] == supplement[key])
-          (values['fieldSources'] as Map)[key] = 'ocr';
-      }
-    return catalog.normalize(TicketRecord.create(values));
+    );
+    barcodeFields['departureDate'] = date.toJson();
+    return catalog.normalize(
+      TicketRecord.create({
+        if (matching) ...supplement,
+        ...barcodeFields,
+        'type': 'flight',
+        'template': 'air-boarding-pass',
+        'boardingCodeSource': 'original',
+        'boardingLegIndex': '$index',
+        'fieldSources': {
+          if (matching)
+            for (final key in supplement.keys)
+              if (!const ['type', 'template', 'fieldSources'].contains(key))
+                key: 'ocr',
+          for (final key in barcodeFields.keys) key: 'barcode',
+          if (date.year != null) 'departureDateYear': 'ocr',
+        },
+      }),
+    );
   }).toList();
 }
 
@@ -302,6 +282,7 @@ String encodeBoardingPass({
   required String seat,
   required String sequence,
   required String status,
+  bool electronic = false,
 }) {
   String field(String value, String pattern, String label, int width) {
     final text = value.trim().toUpperCase();
@@ -333,5 +314,5 @@ String encodeBoardingPass({
       place = field(seat, r'^[A-Z0-9]{1,4}$', '座位须为 1 至 4 位代码', 4);
   final order = field(sequence, r'^[A-Z0-9]{1,5}$', '值机序号须为 1 至 5 位代码', 5),
       state = field(status, r'^\d$', '旅客状态须为一位数字', 1);
-  return 'M1${name.padRight(20)} ${locator.padRight(7)}$from$to${airline.padRight(3)}${flight[1]!.padLeft(4, '0')}${flight[2]!.isEmpty ? ' ' : flight[2]}${date.dayOfYear.toString().padLeft(3, '0')}$compartment${place.padLeft(4, '0')}${order.padLeft(5, '0')}${state}00';
+  return 'M1${name.padRight(20)}${electronic ? 'E' : ' '}${locator.padRight(7)}$from$to${airline.padRight(3)}${flight[1]!.padLeft(4, '0')}${flight[2]!.isEmpty ? ' ' : flight[2]}${date.dayOfYear.toString().padLeft(3, '0')}$compartment${place.padLeft(4, '0')}${order.padLeft(5, '0')}${state}00';
 }

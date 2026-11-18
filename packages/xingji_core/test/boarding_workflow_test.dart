@@ -56,6 +56,16 @@ void main() {
     expect(result.text('gate'), 'A101');
     expect(result.fieldSources['gate'], 'ocr');
   });
+  test('OCR agreeing with an optional barcode field keeps it locked', () {
+    final record = boardingRecords(
+      utf8.encode('${payload()}#90示例旅客#91拉萨#92成都#93A101#9418:21'),
+      catalog,
+      supplement: {'gate': 'A101', 'actualBoardingTime': '18:21'},
+    ).single;
+    expect(record.text('gate'), 'A101');
+    expect(record.barcodeLocked('gate'), true);
+    expect(record.barcodeLocked('actualBoardingTime'), true);
+  });
   test(
     'duplicate readings of the same symbol do not become a multi-ticket error',
     () {

@@ -46,7 +46,9 @@ class _TicketEditorState extends State<TicketEditor> {
       querying = false,
       importing = false,
       generate = false,
-      submitted = false;
+      submitted = false,
+      dirty = false,
+      confirmingExit = false;
   int revision = 0;
   String error = '';
   AppStore get store => widget.store;
@@ -92,14 +94,21 @@ class _TicketEditorState extends State<TicketEditor> {
         text: JourneyDate.fromJson(record[key])?.year?.toString() ?? '',
       );
     }
+    final code = record['boardingCode'];
+    generate =
+        flight &&
+        record.text('boardingCodeSource') == 'generated' &&
+        code is Map;
+    final saved = generate
+        ? decodeBoardingBytes(base64Decode(code['rawBytes'] as String))
+        : null;
     fields['barcodeName'] = TextEditingController(
-      text: flight ? record.text('passenger') : '',
+      text: flight ? (saved?['passenger'] ?? record.text('passenger')) : '',
     );
-    fields['sequence'] = TextEditingController();
-    fields['status'] = TextEditingController(text: '1');
+    fields['sequence'] = TextEditingController(text: saved?['sequence'] ?? '');
+    fields['status'] = TextEditingController(text: saved?['status'] ?? '1');
     error = '';
     submitted = false;
-    generate = false;
   }
 
   @override
@@ -124,6 +133,8 @@ class _TicketEditorState extends State<TicketEditor> {
       entry.key: entry.value.text,
   };
   void changed(String key) {
+    dirty = true;
+    if (!fieldLabels.containsKey(key)) return;
     (data['fieldSources'] as Map)[key] = 'manual';
     final lockedFields = Set<String>.from(data['lockedFields']);
     lockedFields.add(key);
@@ -210,9 +221,17 @@ class _TicketEditorState extends State<TicketEditor> {
         if (record.departure?.dayOfYear == null) {
           throw const FormatException('生成条码前，请填写出发月日');
         }
-        final service = RegExp(r'^([A-Z0-9]{2,3}?)(\d{1,4}[A-Z]?)$')
-            .firstMatch(record.text('service'));
+        final operating = record.text('boardingCodeOperatingFlight');
+        final service = RegExp(r'^([A-Z]{2,3}|[A-Z]\d|\d[A-Z])(\d{1,4}[A-Z]?)$')
+            .firstMatch(operating.isEmpty ? record.text('service') : operating);
         if (service == null) throw const FormatException('请检查航班号');
+        final saved = record.text('boardingCodeSource') == 'generated'
+            ? record['boardingCode'] as Map?
+            : null;
+        final raw = saved?['rawBytes'];
+        final electronic =
+            raw is String &&
+            decodeBoardingBytes(base64Decode(raw))?['electronic'] == 'E';
         final payload = encodeBoardingPass(
           passenger: RegExp(r'[\u3400-\u9fff]').hasMatch(value('passenger'))
               ? value('barcodeName')
@@ -227,18 +246,32 @@ class _TicketEditorState extends State<TicketEditor> {
           seat: record.text('seat'),
           sequence: value('sequence'),
           status: value('status'),
+          electronic: electronic,
         );
-        final code = boardingRecords(
-          ascii.encode(payload),
-          store.catalog,
-        ).single['boardingCode'];
+        final code = pdf417BoardingCode(ascii.encode(payload));
         record = record.withChanges({
-          'boardingCode': code,
+          'boardingCode': {...code, ...?saved, 'rawBytes': code['rawBytes']},
           'boardingCodeSource': 'generated',
         });
+      } else if (record.text('boardingCodeSource') == 'generated') {
+        record = record.withChanges({
+          for (final key in [
+            'boardingCode',
+            'boardingCodeSource',
+            'boardingCodeOperatingFlight',
+            'boardingLegIndex',
+          ])
+            key: '',
+        });
       }
-      await store.save(record);
-      if (mounted) Navigator.pop(context);
+      final result = await store.save(record);
+      if (mounted) {
+        if (result == SaveOutcome.pending) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('票据已保存到本机，等待同步')));
+        }
+        Navigator.pop(context);
+      }
     } catch (failure) {
       if (mounted) {
         setState(
@@ -269,6 +302,7 @@ class _TicketEditorState extends State<TicketEditor> {
         startDate: railStart,
       );
       if (!mounted) return;
+      dirty = true;
       final lookup = data['lookupValues'] as Map,
           sources = data['fieldSources'] as Map;
       final start = JourneyDate.fromJson(
@@ -278,7 +312,11 @@ class _TicketEditorState extends State<TicketEditor> {
           ? null
           : start;
       for (final entry in result.entries) {
-        if (entry.value == '' || entry.value == null) continue;
+        if ((entry.value == '' || entry.value == null) &&
+            entry.key != 'railRoute' &&
+            !before.isAutomatic(entry.key)) {
+          continue;
+        }
         if (!['railRoute', 'railJourney'].contains(entry.key) &&
             (before.lockedFields.contains(entry.key) ||
                 before.barcodeLocked(entry.key) ||
@@ -292,8 +330,13 @@ class _TicketEditorState extends State<TicketEditor> {
           fields['${entry.key}-year']?.text =
               JourneyDate.fromJson(entry.value)?.year?.toString() ?? '';
         }
-        lookup[entry.key] = cloneJson(entry.value);
-        sources[entry.key] = 'railgo';
+        if (entry.value == '' || entry.value == null) {
+          lookup.remove(entry.key);
+          sources.remove(entry.key);
+        } else {
+          lookup[entry.key] = cloneJson(entry.value);
+          sources[entry.key] = 'railgo';
+        }
       }
     } catch (failure) {
       error = failure.toString().replaceFirst('FormatException: ', '');
@@ -314,6 +357,7 @@ class _TicketEditorState extends State<TicketEditor> {
     );
     if (picked != null && mounted) {
       setState(() {
+        dirty = true;
         railStart = DateUtils.isSameDay(picked, boarding)
             ? null
             : JourneyDate.fromDateTime(picked);
@@ -359,14 +403,7 @@ class _TicketEditorState extends State<TicketEditor> {
         throw const FormatException('扫描结果的交通方式与当前票据不符，请另行录入');
       }
       if (mounted) {
-        setState(
-          () => _replace(
-            records.single.withChanges({
-              'id': data['id'],
-              'createdAt': data['createdAt'],
-            }),
-          ),
-        );
+        setState(() => _applyRecognition(records.single));
       }
     } catch (failure) {
       if (mounted) showError(context, failure);
@@ -389,17 +426,96 @@ class _TicketEditorState extends State<TicketEditor> {
         return;
       }
       if (decoded.isEmpty) throw const FormatException('未识别到登机牌条码，请检查完整内容');
-      setState(
-        () => _replace(
-          decoded.single.withChanges({
-            'id': data['id'],
-            'createdAt': data['createdAt'],
-          }),
-        ),
-      );
+      if (mounted) setState(() => _applyRecognition(decoded.single));
     } catch (failure) {
       showError(context, failure);
     }
+  }
+
+  void _applyRecognition(TicketRecord recognized) {
+    final draft = TicketRecord.fromJson(values());
+    final changes = <String, dynamic>{};
+    final sources = draft.fieldSources;
+    final manualLocks = draft.lockedFields;
+    final lookup = Map<String, dynamic>.from(draft['lookupValues'] as Map);
+    final replacingCode = recognized.text('boardingCodeSource') == 'original';
+    if (replacingCode &&
+        !sameValue(draft['boardingCode'], recognized['boardingCode'])) {
+      sources.removeWhere((_, source) => source == 'barcode');
+    }
+    for (final entry in recognized.fieldSources.entries) {
+      final key = entry.key, source = entry.value;
+      final incoming = recognized[key];
+      if (source == 'barcode' || (draft.text(key).isEmpty && incoming != '')) {
+        changes[key] = incoming;
+        sources[key] = source;
+        manualLocks.remove(key);
+        lookup.remove(key);
+      }
+    }
+    if (replacingCode) {
+      changes.addAll({
+        'boardingCodeSource': 'original',
+        'boardingCodeOperatingFlight': '',
+        'boardingLegIndex': recognized['boardingLegIndex'],
+      });
+      final day = recognized.departure!.dayOfYear!;
+      final savedYear = draft.departure?.year;
+      final retained =
+          savedYear != null && day <= JourneyDate.daysInYear(savedYear);
+      final year = retained ? savedYear : recognized.departure!.year;
+      changes['departureDate'] = JourneyDate(year, day).toJson();
+      if (!retained) {
+        sources.remove('departureDateYear');
+        if (year != null) sources['departureDateYear'] = 'ocr';
+      }
+    } else if (widget.record == null && !dirty && !flight) {
+      changes['template'] = recognized['template'];
+    }
+    final generation = generate && !replacingCode;
+    final generationFields = {
+      for (final key in ['barcodeName', 'sequence', 'status']) key: value(key),
+    };
+    _replace(
+      draft.withChanges({
+        ...changes,
+        'fieldSources': sources,
+        'lockedFields': manualLocks.toList(),
+        'lookupValues': lookup,
+      }),
+    );
+    if (generation) {
+      generate = true;
+      for (final entry in generationFields.entries) {
+        fields[entry.key]!.text = entry.value;
+      }
+    }
+    dirty = true;
+  }
+
+  bool get busy => saving || querying || importing;
+
+  Future<void> confirmExit(bool didPop, Object? result) async {
+    if (didPop || busy || !dirty || confirmingExit) return;
+    confirmingExit = true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('放弃未保存的修改？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('继续编辑'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('放弃修改'),
+          ),
+        ],
+      ),
+    );
+    confirmingExit = false;
+    if (mounted && discard == true) Navigator.pop(context);
   }
 
   Widget _scanControl() => FutureBuilder<bool>(
@@ -419,7 +535,8 @@ class _TicketEditorState extends State<TicketEditor> {
 
   @override
   Widget build(BuildContext context) => PopScope(
-    canPop: !saving && !querying && !importing,
+    canPop: !busy && !dirty,
+    onPopInvokedWithResult: confirmExit,
     child: Scaffold(
       appBar: AppBar(title: Text(widget.record == null ? '录入票据' : '编辑票据')),
       bottomNavigationBar: SafeArea(
@@ -493,6 +610,7 @@ class _TicketEditorState extends State<TicketEditor> {
                           ],
                           selected: {data['type']},
                           onSelectionChanged: (selection) => setState(() {
+                            dirty = true;
                             barcodeText.clear();
                             _replace(
                               TicketRecord.create({'type': selection.single}),
@@ -506,6 +624,7 @@ class _TicketEditorState extends State<TicketEditor> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: barcodeText,
+                        onChanged: (_) => setState(() => dirty = true),
                         minLines: 2,
                         maxLines: 3,
                         decoration: const InputDecoration(
@@ -549,8 +668,10 @@ class _TicketEditorState extends State<TicketEditor> {
                               ),
                             )
                             .toList(),
-                        onChanged: (value) =>
-                            setState(() => data['template'] = value),
+                        onChanged: (value) => setState(() {
+                          dirty = true;
+                          data['template'] = value;
+                        }),
                       ),
                       if ([
                         'rail-receipt',
@@ -560,11 +681,12 @@ class _TicketEditorState extends State<TicketEditor> {
                           contentPadding: EdgeInsets.zero,
                           title: const Text('退票费凭证'),
                           value: data['template'] == 'rail-refund-receipt',
-                          onChanged: (value) => setState(
-                            () => data['template'] = value
+                          onChanged: (value) => setState(() {
+                            dirty = true;
+                            data['template'] = value
                                 ? 'rail-refund-receipt'
-                                : 'rail-receipt',
-                          ),
+                                : 'rail-receipt';
+                          }),
                         ),
                     ],
                     const SectionTitle('行程'),
@@ -584,8 +706,10 @@ class _TicketEditorState extends State<TicketEditor> {
                             child: Text('无效票'),
                           ),
                         ],
-                        onChanged: (value) =>
-                            setState(() => data['flightStatus'] = value),
+                        onChanged: (value) => setState(() {
+                          dirty = true;
+                          data['flightStatus'] = value;
+                        }),
                       ),
                     const SizedBox(height: 16),
                     _pair(
@@ -686,7 +810,7 @@ class _TicketEditorState extends State<TicketEditor> {
                               seatClass: value('seatClass'),
                               required: requiredFields.contains('seat'),
                               locked: locked('seat'),
-                              onChanged: () => changed('seat'),
+                              onChanged: () => setState(() => changed('seat')),
                             ),
                             _source('seat'),
                           ],
@@ -758,7 +882,10 @@ class _TicketEditorState extends State<TicketEditor> {
                         value: generate,
                         onChanged: scanned
                             ? null
-                            : (value) => setState(() => generate = value!),
+                            : (value) => setState(() {
+                                dirty = true;
+                                generate = value!;
+                              }),
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
                       if (generate) ...[
@@ -1004,16 +1131,17 @@ class _TicketEditorState extends State<TicketEditor> {
       },
       onChanged: (text) {
         final year = int.tryParse(text);
-        if (year == null && text.isNotEmpty) return;
-        try {
-          setState(() {
+        setState(() {
+          dirty = true;
+          if (year == null && text.isNotEmpty) return;
+          try {
             data[key] = JourneyDate(year, date?.dayOfYear).toJson();
             (data['fieldSources'] as Map)['${key}Year'] = 'manual';
             if (!dayLocked) changed(key);
-          });
-        } on FormatException {
-          /* Validator retains the year input. */
-        }
+          } on FormatException {
+            // Validator retains the year input.
+          }
+        });
       },
     );
     final dayField = FormField<int>(

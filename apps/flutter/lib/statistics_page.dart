@@ -5,6 +5,7 @@ import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
 import 'design.dart';
+import 'journey_statistics.dart';
 import 'ride_trend_chart.dart';
 
 class StatisticsPage extends StatefulWidget {
@@ -24,106 +25,24 @@ class _StatisticsPageState extends State<StatisticsPage> {
       mergeDirections = true;
   @override
   Widget build(BuildContext context) {
-    final catalog = widget.store.catalog;
-    final records = widget.store.records.where((record) {
-      final day = record.departure?.date;
-      return record.isJourney &&
-          day != null &&
-          (from == null ||
-              !day.isBefore(
-                DateTime.utc(from!.year, from!.month, from!.day),
-              )) &&
-          !day.isAfter(DateTime.utc(until.year, until.month, until.day));
-    }).toList();
-    final rails = records.where((row) => !row.isFlight).toList(),
-        flights = records.where((row) => row.isFlight).toList();
-    final airports = <String, Place>{}, stations = <String, Place>{};
-    for (final record in records) {
-      for (final side in ['origin', 'destination']) {
-        final place = catalog.endpoint(record, side);
-        if (place != null) {
-          (place.flight ? airports : stations)[place.identity] = place;
-        }
-      }
-    }
-    Map<String, int> count(Iterable<String> values) {
-      final result = <String, int>{};
-      for (final value in values.where((value) => value.isNotEmpty)) {
-        result.update(value, (count) => count + 1, ifAbsent: () => 1);
-      }
-      return result;
-    }
-
-    final models = count(
-      rails.map(
-        (r) =>
-            '${r.text('railModel')}${supply && r.text('railPowerSupply').isNotEmpty ? ' · ${r.text('railPowerSupply')}' : ''}',
-      ),
+    final statistics = JourneyStatistics(
+      widget.store.records,
+      widget.store.catalog,
+      from: from,
+      until: until,
+      monthly: monthly,
+      supply: supply,
+      subtype: subtype,
+      owner: owner,
+      mergeDirections: mergeDirections,
     );
-    final bureaus = count(
-      rails.map(
-        (r) => owner && r.text('railCarOwner').isNotEmpty
-            ? r.text('railCarOwner')
-            : r.text('railBureau'),
-      ),
-    );
-    final aircraft = count(
-      flights.map(
-        (r) => catalog.aircraft(r.text('aircraft'), family: !subtype),
-      ),
-    );
-    final routes = count(
-      flights.map((r) {
-        var a = r.text('origin'), b = r.text('destination');
-        if (mergeDirections && a.compareTo(b) > 0) {
-          final temp = a;
-          a = b;
-          b = temp;
-        }
-        return '$a${mergeDirections ? ' ↔ ' : ' → '}$b';
-      }),
-    );
-    final countries = airports.values
-            .map((place) => place.text('country'))
-            .where((value) => value.isNotEmpty)
-            .toSet(),
-        continents = airports.values
-            .map((place) => place.text('continent'))
-            .where((value) => value.isNotEmpty)
-            .toSet();
-    countries.addAll(
-      stations.values
-          .map((place) => place.text('country'))
-          .where((value) => value.isNotEmpty),
-    );
-    continents.addAll(
-      stations.values
-          .map((place) => place.text('continent'))
-          .where((value) => value.isNotEmpty),
-    );
-    final year = DateTime.now().year,
-        first = records.isEmpty
-            ? year
-            : records.map((r) => r.departure!.year!).reduce(math.min),
-        last = records.isEmpty
-            ? year
-            : records.map((r) => r.departure!.year!).reduce(math.max);
-    final buckets = <String, (int, int)>{};
-    for (var y = first; y <= last; y++) {
-      final firstMonth = monthly && from?.year == y ? from!.month : 1;
-      final lastMonth = monthly ? (until.year == y ? until.month : 12) : 1;
-      for (var m = firstMonth; m <= lastMonth; m++) {
-        buckets[monthly ? '$y-${m.toString().padLeft(2, '0')}' : '$y'] = (0, 0);
-      }
-    }
-    for (final r in records) {
-      final d = r.departure!.date!,
-          key = monthly
-              ? '${d.year}-${d.month.toString().padLeft(2, '0')}'
-              : '${d.year}',
-          old = buckets[key] ?? (0, 0);
-      buckets[key] = r.isFlight ? (old.$1, old.$2 + 1) : (old.$1 + 1, old.$2);
-    }
+    final rails = statistics.rails, flights = statistics.flights;
+    final airports = statistics.airports, stations = statistics.stations;
+    final distance = statistics.railMileageTrips == 0
+        ? '—'
+        : statistics.railMileage
+              .toStringAsFixed(3)
+              .replaceFirst(RegExp(r'\.?0+$'), '');
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 48),
       children: [
@@ -228,14 +147,42 @@ class _StatisticsPageState extends State<StatisticsPage> {
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        Card(
+          color: Colors.white,
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                const Text('铁路里程', style: TextStyle(color: muted)),
+                Text(
+                  '$distance km',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  '${statistics.railMileageTrips} / ${rails.length} 程已收录',
+                  style: const TextStyle(color: muted),
+                ),
+              ],
+            ),
+          ),
+        ),
         RideTrendChart(
-          data: records.isEmpty ? {} : buckets,
+          data: statistics.buckets,
           monthly: monthly,
           onMonthlyChanged: (value) => setState(() => monthly = value),
         ),
         _bars(
           '乘坐车型',
-          models,
+          statistics.models,
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('细分供电制式'),
@@ -245,7 +192,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
         ),
         _bars(
           '担当路局',
-          bureaus,
+          statistics.bureaus,
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('显示车辆归属单位'),
@@ -255,7 +202,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
         ),
         _bars(
           '乘坐机型',
-          aircraft,
+          statistics.aircraft,
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('包含子型号'),
@@ -267,7 +214,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: continents
+          children: statistics.continents
               .map(
                 (value) => Chip(
                   label: Text(
@@ -290,7 +237,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: countries
+          children: statistics.countries
               .map(
                 (value) => Chip(
                   label: Text(
@@ -344,7 +291,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
         ),
         _bars(
           '乘坐过的航线',
-          routes,
+          statistics.routes,
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('合并双向航线'),

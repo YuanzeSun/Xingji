@@ -7,6 +7,8 @@ import 'package:xingji_core/xingji_core.dart';
 
 import 'ticket_face.dart';
 
+enum SaveOutcome { local, synced, pending }
+
 /// Demo data never enters the private archive or the persistence envelope.
 class AppStore extends ChangeNotifier {
   final SharedPreferences preferences;
@@ -25,6 +27,7 @@ class AppStore extends ChangeNotifier {
   String _head = '', _generation = '';
   bool demo = false, busy = false, pending = false;
   String status = '本机票库';
+  String? syncError;
   AppStore(
     this.preferences,
     this.catalog,
@@ -96,19 +99,19 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _run(Future<void> Function() action) async {
+  Future<T> _run<T>(Future<T> Function() action) async {
     if (busy) throw StateError('正在保存，请稍候');
     busy = true;
     notifyListeners();
     try {
-      await action();
+      return await action();
     } finally {
       busy = false;
       notifyListeners();
     }
   }
 
-  Future<void> _saveLocal(List<TicketRecord> records) async {
+  Future<SaveOutcome> _saveLocal(List<TicketRecord> records) async {
     final previous = _records,
         previousPending = pending,
         previousStatus = status;
@@ -123,18 +126,27 @@ class AppStore extends ChangeNotifier {
       status = previousStatus;
       rethrow;
     }
-    if (connected) {
-      await _sync();
-    } else {
-      status = '已保存在本机';
-    }
+    return _syncSaved('已保存在本机');
   }
 
-  Future<void> save(TicketRecord record) => _run(() async {
+  Future<SaveOutcome> _syncSaved(String localStatus) async {
+    if (!connected) {
+      status = localStatus;
+      return connection == null ? SaveOutcome.local : SaveOutcome.pending;
+    }
+    try {
+      await _sync();
+    } catch (_) {
+      return SaveOutcome.pending;
+    }
+    return pending ? SaveOutcome.pending : SaveOutcome.synced;
+  }
+
+  Future<SaveOutcome> save(TicketRecord record) => _run(() async {
     if (demo) throw StateError('请退出示例模式后录入票据');
     if (record.missingFields.isNotEmpty) throw const FormatException('请补全必填项');
     final next = catalog.normalize(record.withChanges({'updatedAt': utcNow()}));
-    await _saveLocal([..._records.where((row) => row.id != next.id), next]);
+    return _saveLocal([..._records.where((row) => row.id != next.id), next]);
   });
   Future<void> delete(TicketRecord record) => _run(() async {
     if (demo) throw StateError('示例票据不能删除');
@@ -175,11 +187,7 @@ class AppStore extends ChangeNotifier {
       pending = wasPending;
       rethrow;
     }
-    if (connected) {
-      await _sync();
-    } else {
-      status = '个人资料已保存在本机';
-    }
+    await _syncSaved('个人资料已保存在本机');
   });
   Future<void> importArchive(TicketArchive archive) => _run(() async {
     if (demo) throw StateError('请退出示例模式后导入');
@@ -235,6 +243,7 @@ class AppStore extends ChangeNotifier {
     final remote = _remote;
     if (remote == null) return;
     _clearReview();
+    syncError = null;
     status = '正在同步';
     notifyListeners();
     try {
@@ -270,7 +279,8 @@ class AppStore extends ChangeNotifier {
       pending = false;
       status = '已同步';
       await _persist();
-    } catch (_) {
+    } catch (failure) {
+      syncError = failure.toString().replaceFirst('FormatException: ', '');
       status = pending ? '已存本机，等待同步' : '同步未完成';
       rethrow;
     }
@@ -331,6 +341,7 @@ class AppStore extends ChangeNotifier {
     _generation = snapshot.generation;
     pending = false;
     resetDetected = false;
+    syncError = null;
     _clearReview();
   }
 
@@ -346,6 +357,7 @@ class AppStore extends ChangeNotifier {
     _generation = '';
     pending = false;
     resetDetected = false;
+    syncError = null;
     _clearReview();
     status = '本机票库已清空，个人资料已保留';
     await _persist();

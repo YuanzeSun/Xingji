@@ -35,7 +35,7 @@ void main() {
     'offline save persists a pending private archive without copying examples',
     () async {
       final app = await store(), record = ticket();
-      await app.save(record);
+      expect(await app.save(record), SaveOutcome.local);
       expect(app.pending, true);
       expect(app.records.single.id, record.id);
       final saved = jsonDecode(app.preferences.getString(AppStore.storageKey)!);
@@ -141,14 +141,24 @@ void main() {
           record.withChanges({'seat': '11F'}),
         ],
       );
-      await app.save(record.withChanges({'seat': '12F'}));
+      expect(
+        await app.save(record.withChanges({'seat': '12F'})),
+        SaveOutcome.pending,
+      );
       expect(app.conflicts?.conflicts.single.field, 'seat');
 
       remote.offline = true;
-      await expectLater(
-        app.save(record.withChanges({'seat': '13F'})),
-        throwsStateError,
+      expect(
+        await app.save(record.withChanges({'seat': '13F'})),
+        SaveOutcome.pending,
       );
+      final saved = jsonDecode(app.preferences.getString(AppStore.storageKey)!);
+      expect(
+        TicketArchive.fromJson(saved['local']).records.single.text('seat'),
+        '13F',
+      );
+      expect(app.syncError, isNotEmpty);
+      await expectLater(app.sync(), throwsStateError);
       await app.resolveConflicts({'${record.id}:seat': true});
       expect(app.records.single.text('seat'), '13F');
       expect(app.pending, true);

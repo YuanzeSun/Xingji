@@ -191,14 +191,51 @@ class RailGoClient {
     final model = car.startsWith('BST') || car == '25TAC380V'
         ? '25T（BSP）'
         : car.replaceAll(RegExp(r'(DC\d+V|AC\d+V|AC\d+KV)'), '').trim();
+    final query = {
+      'trainNum': service,
+      'startDate': start.toJson(),
+      'boardingDate': boarding.toJson(),
+      'origin': origin.name,
+      'destination': destination.name,
+    };
+    final archived = record['railJourney'];
+    final savedStops = archived is Map ? archived['stops'] : null;
+    const timetableFields = [
+      'trainCode',
+      'arrivalDate',
+      'arrivalTime',
+      'departureDate',
+      'departureTime',
+    ];
+    final sameJourney =
+        archived is Map &&
+        sameValue(archived['query'], query) &&
+        savedStops is List &&
+        savedStops.length == stops.length &&
+        stops.indexed.every((entry) {
+          final (i, stop) = entry;
+          final saved = savedStops[i];
+          return saved is Map &&
+              station(saved['station']) == stop['station'] &&
+              timetableFields.every((key) => sameValue(saved[key], stop[key]));
+        });
+    final saved = sameJourney ? archived : null;
+    final savedRoute = sameJourney ? record['railRoute'] : null;
+    final savedStocks = <String, Map>{
+      if (saved != null)
+        for (final row in (saved['trainsets'] as List? ?? []).whereType<Map>())
+          if (row['id'] is String && row['id'] != '') row['id']: row,
+    };
+    final savedAccess = (saved?['access'] as List? ?? [])
+        .whereType<Map>()
+        .where(
+          (row) =>
+              station(row['station']) == station(origin.name) &&
+              sameValue(row['date'], boarding.toJson()),
+        )
+        .firstOrNull;
     final journey = <String, dynamic>{
-      'query': {
-        'trainNum': service,
-        'startDate': start.toJson(),
-        'boardingDate': boarding.toJson(),
-        'origin': origin.name,
-        'destination': destination.name,
-      },
+      'query': query,
       'queriedAt': at,
       'stops': stops,
       'distanceQueriedAt': '',
@@ -217,7 +254,54 @@ class RailGoClient {
       'arrivalDate': stops[to()]['arrivalDate'],
       'arrivalTime': stops[to()]['arrivalTime'],
       'railJourney': journey,
+      if (record['railRoute'] is Map && !sameJourney) 'railRoute': '',
+      for (final key in [
+        'railMileage',
+        'railTrainsets',
+        'gate',
+        'railPlatform',
+      ])
+        if (record.isAutomatic(key)) key: '',
     };
+
+    void useAccess(Map access) {
+      values['gate'] = (access['gates'] as List? ?? [])
+          .whereType<String>()
+          .map(
+            (value) =>
+                RegExp(r'([A-Z]?\d+[A-Z]?(?:[-/、][A-Z]?\d+[A-Z]?)*)\s*检票口$')
+                    .firstMatch(value)?[1] ??
+                value,
+          )
+          .toSet()
+          .join(' / ');
+      values['railPlatform'] = access['platform'] ?? '';
+      journey['access'] = [access];
+    }
+
+    void useStock(List<Map> stocks, bool coupling) {
+      journey['trainsets'] = stocks;
+      journey['coupling'] = coupling;
+      values['railTrainsets'] = stocks.map((row) => row['id']).join(' / ');
+      if (stocks.every((row) => (row['model'] ?? '') != '')) {
+        values['railModel'] = stocks
+            .map((row) => row['model'])
+            .toSet()
+            .join(' / ');
+      }
+    }
+
+    void useDistances(List<num> distances, String queriedAt) {
+      for (var i = 0; i < distances.length; i++) {
+        stops[i]['distanceKm'] = distances[i];
+      }
+      final km = ((distances[to()] - distances[from()]) * 1000).round() / 1000;
+      values['railMileage'] = km == km.roundToDouble()
+          ? km.toInt().toString()
+          : km.toString();
+      journey['distanceQueriedAt'] = queriedAt;
+    }
+
     Future<void> gate() async {
       final payload = await _get('rg-api.zenglingkun.cn', '/api/v2/getExit', {
         'trainNum': from() > 0 && stops[from() - 1]['trainCode'] != ''
@@ -232,24 +316,15 @@ class RailGoClient {
               .map((value) => value.toString())
               .toList(),
           platform = (payload['data']['platform'] ?? '').toString();
-      values['gate'] = entrances
-          .map(
-            (value) =>
-                RegExp(r'([A-Z]?\d+[A-Z]?(?:[-/、][A-Z]?\d+[A-Z]?)*)\s*检票口$')
-                    .firstMatch(value)?[1] ??
-                value,
-          )
-          .toSet()
-          .join(' / ');
-      values['railPlatform'] = platform;
-      journey['access'] = [
-        {
-          'station': origin.name,
-          'date': boarding.toJson(),
-          'platform': platform,
-          'gates': entrances,
-        },
-      ];
+      if (entrances.isEmpty && platform.isEmpty) return;
+      useAccess({
+        'station': origin.name,
+        'date': boarding.toJson(),
+        'platform': platform.isEmpty
+            ? (savedAccess?['platform'] ?? '')
+            : platform,
+        'gates': entrances.isEmpty ? (savedAccess?['gates'] ?? []) : entrances,
+      });
     }
 
     Future<void> route() async {
@@ -263,12 +338,28 @@ class RailGoClient {
         destination.name,
       );
       if (selected == null) return;
-      final named = await _lineNames.load(selected),
-          saved = record['railRoute'];
+      bool coversFullJourney(dynamic fullRoute) {
+        final mapped = fullRoute is Map ? fullRoute['stops'] : null;
+        return mapped is List &&
+            mapped.length >= 2 &&
+            station(mapped.first['name']) == stops.first['station'] &&
+            station(mapped.last['name']) == stops.last['station'];
+      }
+
+      if (!coversFullJourney(selected['fullRoute'])) {
+        selected.remove('fullRoute');
+      }
+      final named = await _lineNames.load(selected);
+      if (savedRoute is Map &&
+          sameValue(named['segments'], savedRoute['segments']) &&
+          named['fullRoute'] is! Map &&
+          coversFullJourney(savedRoute['fullRoute'])) {
+        named['fullRoute'] = cloneJson(savedRoute['fullRoute']);
+      }
       for (final key in ['', 'fullRoute']) {
         final current = key.isEmpty ? named : named[key];
-        final previous = saved is Map
-            ? (key.isEmpty ? saved : saved[key])
+        final previous = savedRoute is Map
+            ? (key.isEmpty ? savedRoute : savedRoute[key])
             : null;
         if (current is Map &&
             previous is Map &&
@@ -308,45 +399,48 @@ class RailGoClient {
       if (codes.length > 1 && matching.any((row) => row['coupling'] != true)) {
         return;
       }
-      final stocks = <Map<String, dynamic>>[];
-      for (final id in codes) {
-        if (!RegExp(r'^CR[A-Z\d-]{3,35}$').hasMatch(id)) continue;
-        final payload = await _get(
+      final validIds = codes.where(
+        (id) => RegExp(r'^CR[A-Z\d-]{3,35}$').hasMatch(id),
+      );
+      final stocks = await Future.wait(
+        validIds.map((id) async {
+          final fallback = savedStocks[id] ?? {'id': id};
+          try {
+            final payload = await _get(
               'emu.railgo.zenglingkun.cn',
               '/api/car/info',
               {'id': id},
-            ),
-            row = payload['data'];
-        if (payload['success'] != true || row is! Map || row['id'] != id) {
-          stocks.add({'id': id});
-          continue;
-        }
-        stocks.add({
-          'id': id,
-          'model': row['model'] ?? '',
-          'subModel': row['sub_model'] ?? '',
-          'manufactureMonth': row['manufacture_month'] ?? '',
-          'manufacturer': row['trainset_manufacturer'] ?? '',
-          'trailerManufacturer': row['trailer_manufacturer'] ?? '',
-          'depot': row['depot'] ?? '',
-          'trainDepot': row['train_depot'] ?? '',
-          'socket': row['socket_location'] ?? '',
-          'customType': row['custom_type'] ?? '',
-          'modelRemark': row['remark']?['model'] ?? '',
-          'carRemark': row['remark']?['car']?['note'] ?? '',
-          'queriedAt': at,
-        });
-      }
-      values['railTrainsets'] = stocks.map((row) => row['id']).join(' / ');
-      if (stocks.isNotEmpty &&
-          stocks.every((row) => (row['model'] ?? '') != '')) {
-        values['railModel'] = stocks
-            .map((row) => row['model'])
-            .toSet()
-            .join(' / ');
-      }
-      journey['trainsets'] = stocks;
-      journey['coupling'] = codes.length > 1;
+            );
+            final row = payload['data'];
+            if (payload['success'] != true || row is! Map || row['id'] != id) {
+              return fallback;
+            }
+            final fresh = {
+              'model': row['model'],
+              'subModel': row['sub_model'],
+              'manufactureMonth': row['manufacture_month'],
+              'manufacturer': row['trainset_manufacturer'],
+              'trailerManufacturer': row['trailer_manufacturer'],
+              'depot': row['depot'],
+              'trainDepot': row['train_depot'],
+              'socket': row['socket_location'],
+              'customType': row['custom_type'],
+              'modelRemark': row['remark']?['model'],
+              'carRemark': row['remark']?['car']?['note'],
+            };
+            return {
+              ...fallback,
+              for (final entry in fresh.entries)
+                if (entry.value != null && entry.value != '')
+                  entry.key: entry.value,
+              'queriedAt': at,
+            };
+          } catch (_) {
+            return fallback;
+          }
+        }),
+      );
+      if (stocks.isNotEmpty) useStock(stocks, stocks.length > 1);
     }
 
     Future<void> mileage() async {
@@ -411,16 +505,7 @@ class RailGoClient {
         }
         previous = distance;
       }
-      for (var i = 0; i < rows.length; i++) {
-        stops[i]['distanceKm'] = rows[i]['distance'];
-      }
-      final distance =
-          (rows[to()]['distance'] as num) - (rows[from()]['distance'] as num);
-      final km = (distance * 1000).round() / 1000;
-      values['railMileage'] = km == km.roundToDouble()
-          ? km.toInt().toString()
-          : km.toString();
-      journey['distanceQueriedAt'] = at;
+      useDistances([for (final row in rows) row['distance'] as num], at);
     }
 
     Future<void> coaches() async {
@@ -448,7 +533,7 @@ class RailGoClient {
           'number': RegExp(r'^(\d{1,2})车').firstMatch(name)?[1] ?? '',
         });
       }
-      journey['coaches'] = {
+      final details = <String, dynamic>{
         'model': text(row['trainStyle']),
         'code': text(row['carCode']),
         'type': text(row['carType']),
@@ -466,6 +551,25 @@ class RailGoClient {
               },
         ],
       };
+      const identifyingFields = ['model', 'code', 'type'];
+      if (cars.isEmpty &&
+          (details['info'] as List).isEmpty &&
+          identifyingFields.every((key) => details[key] == ''))
+        return;
+      final archivedCoaches = saved?['coaches'];
+      if (archivedCoaches is Map &&
+          identifyingFields.every(
+            (key) => details[key] == '' || details[key] == archivedCoaches[key],
+          )) {
+        for (final key in identifyingFields) {
+          if (details[key] == '') details[key] = archivedCoaches[key] ?? '';
+        }
+        for (final key in ['cars', 'info']) {
+          if ((details[key] as List).isEmpty)
+            details[key] = archivedCoaches[key] ?? [];
+        }
+      }
+      journey['coaches'] = details;
     }
 
     await Future.wait(
@@ -477,6 +581,38 @@ class RailGoClient {
         coaches(),
       ].map((future) => future.catchError((_) {})),
     );
+    if (saved != null) {
+      if ((journey['access'] as List).isEmpty && savedAccess != null)
+        useAccess(savedAccess);
+      if ((journey['trainsets'] as List).isEmpty &&
+          (car.isEmpty || car.startsWith('CR')) &&
+          savedStocks.isNotEmpty) {
+        useStock(savedStocks.values.toList(), saved['coupling'] == true);
+      }
+      if (journey['coaches'] == '' && saved['coaches'] is Map) {
+        journey['coaches'] = saved['coaches'];
+      }
+      if (journey['distanceQueriedAt'] == '') {
+        final distances = (savedStops as List)
+            .map((stop) => stop['distanceKm'])
+            .toList();
+        if (distances.indexed.every((entry) {
+          final (i, km) = entry;
+          return km is num &&
+              km.isFinite &&
+              km <= 100000 &&
+              (i == 0
+                  ? km == 0
+                  : distances[i - 1] is num && km > distances[i - 1]);
+        })) {
+          useDistances(
+            distances.cast<num>(),
+            (saved['distanceQueriedAt'] ?? '').toString(),
+          );
+        }
+      }
+      if (savedRoute is Map) values.putIfAbsent('railRoute', () => savedRoute);
+    }
     return values;
   }
 

@@ -8,6 +8,7 @@ import 'app_store.dart';
 import 'design.dart';
 import 'map_page_header.dart';
 import 'map_annotations.dart';
+import 'map_projection.dart';
 
 class MapPage extends StatefulWidget {
   final AppStore store;
@@ -163,8 +164,8 @@ class _JourneyCanvasState extends State<JourneyCanvas> {
 }
 
 Offset project(List coordinates) => Offset(
-  ((coordinates[0] as num).toDouble() + 180) / 360 * 1000,
-  (90 - (coordinates[1] as num).toDouble()) / 360 * 1000,
+  ((coordinates[0] as num).toDouble() + 180) / 360 * mapWorldWidth,
+  (90 - (coordinates[1] as num).toDouble()) / 360 * mapWorldWidth,
 );
 
 Map? matchingRailRoute(TicketRecord record, ReferenceCatalog catalog) {
@@ -196,17 +197,18 @@ class JourneyPainter extends CustomPainter {
     this.transform,
     this.textScale,
   ) : super(repaint: transform);
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty || !size.width.isFinite || !size.height.isFinite) return;
+  late final geometry = _buildGeometry();
+
+  _JourneyGeometry _buildGeometry() {
     final tracks = <List<Offset>>[],
         full = <List<Offset>>[],
-        links = <(Offset, Offset, bool)>[],
+        surfaceLinks = <(Offset, Offset)>[],
+        flightPairs = <(String, String), (Offset, Offset, int)>{},
         labels = <String, List<Offset>>{},
         nodes = <String, Offset>{},
         endpoints = <String>{},
         all = <Offset>[];
-    final seen = <String>{};
+    final seenEdges = <(Offset, Offset)>{};
     void addSegments(dynamic segments, List<List<Offset>> target) {
       if (segments is! List) return;
       for (final raw in segments) {
@@ -214,13 +216,23 @@ class JourneyPainter extends CustomPainter {
         final points = raw
             .map((point) => project(railWgs84Point(point)))
             .toList();
-        final key = canonicalJson(raw),
-            reverse = canonicalJson(raw.reversed.toList());
-        if (identical(target, tracks) &&
-            (!seen.add(key) || seen.contains(reverse))) {
-          continue;
+        if (identical(target, tracks)) {
+          var run = <Offset>[points.first];
+          for (var i = 1; i < points.length; i++) {
+            final from = points[i - 1], to = points[i];
+            final fresh =
+                !seenEdges.contains((to, from)) && seenEdges.add((from, to));
+            if (fresh) {
+              run.add(to);
+            } else {
+              if (run.length > 1) target.add(run);
+              run = [to];
+            }
+          }
+          if (run.length > 1) target.add(run);
+        } else {
+          target.add(points);
         }
-        target.add(points);
         all.addAll(points);
       }
     }
@@ -253,48 +265,121 @@ class JourneyPainter extends CustomPainter {
         final a = view.store.catalog.endpoint(record, 'origin'),
             b = view.store.catalog.endpoint(record, 'destination');
         if (a?.coordinates == null || b?.coordinates == null) continue;
-        final from = project(a!.coordinates!),
-            to = project(b!.coordinates!),
-            ids = [a.identity, b.identity]..sort();
-        if (record.isFlight && view.airRoutes && !seen.add(ids.join(':'))) {
-          continue;
+        final from = project(a!.coordinates!), to = project(b!.coordinates!);
+        if (record.isFlight) {
+          final forward = a.identity.compareTo(b.identity) <= 0;
+          final key = forward
+              ? (a.identity, b.identity)
+              : (b.identity, a.identity);
+          final count = view.airRoutes ? 1 : (flightPairs[key]?.$3 ?? 0) + 1;
+          flightPairs[key] = forward ? (from, to, count) : (to, from, count);
+        } else {
+          surfaceLinks.add((from, to));
         }
-        links.add((from, to, record.isFlight));
         all.addAll([from, to]);
         nodes[a.name] = from;
         nodes[b.name] = to;
         endpoints.addAll([a.name, b.name]);
       }
     }
-    if (all.isEmpty) {
-      all.addAll([const Offset(700, 70), const Offset(900, 230)]);
-    }
-    final left = all.map((p) => p.dx).reduce(math.min),
-        right = all.map((p) => p.dx).reduce(math.max),
-        top = all.map((p) => p.dy).reduce(math.min),
-        bottom = all.map((p) => p.dy).reduce(math.max);
-    final scale = math.min(
-          size.width / math.max(30, right - left + 25),
-          size.height / math.max(25, bottom - top + 25),
+    final frame = MapLongitudeFrame(all);
+    final fitted = all.isEmpty
+        ? [const Offset(700, 70), const Offset(900, 230)]
+        : all.map(frame.wrap).toList();
+    final links = [
+      for (final (from, to) in surfaceLinks)
+        MapLink(
+          frame.wrap(from),
+          nearestMapCopy(frame.wrap(to), frame.wrap(from)),
         ),
-        center = Offset((left + right) / 2, (top + bottom) / 2);
+      for (final (from, to, repeats) in flightPairs.values)
+        for (var i = 0; i < repeats; i++)
+          MapLink.flight(frame.wrap(from), frame.wrap(to), i, repeats),
+    ];
+    for (final link in links) {
+      if (link.control != null &&
+          (frame.wrap(link.to).dx - link.to.dx).abs() < 0.001) {
+        fitted.add(link.control!);
+      }
+    }
+    List<Offset> wrapTrack(List<Offset> points) {
+      final line = [frame.wrap(points.first)];
+      for (final point in points.skip(1)) {
+        line.add(nearestMapCopy(frame.wrap(point), line.last));
+      }
+      return line;
+    }
+
+    return _JourneyGeometry(
+      tracks: tracks.map(wrapTrack).toList(),
+      full: full.map(wrapTrack).toList(),
+      links: links,
+      nodes: nodes.map((name, point) => MapEntry(name, frame.wrap(point))),
+      labels: labels.map(
+        (name, anchors) => MapEntry(name, anchors.map(frame.wrap).toList()),
+      ),
+      endpoints: endpoints,
+      bounds: Rect.fromLTRB(
+        fitted.map((point) => point.dx).reduce(math.min),
+        fitted.map((point) => point.dy).reduce(math.min),
+        fitted.map((point) => point.dx).reduce(math.max),
+        fitted.map((point) => point.dy).reduce(math.max),
+      ),
+    );
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty || !size.width.isFinite || !size.height.isFinite) return;
+    final bounds = geometry.bounds;
+    final scale = math.min(
+          size.width / math.max(30, bounds.width + 25),
+          size.height / math.max(25, bounds.height + 25),
+        ),
+        center = bounds.center;
     final pixelScale = scale * transform.value.getMaxScaleOnAxis();
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.scale(scale);
     canvas.translate(-center.dx, -center.dy);
-    canvas.drawPath(land, Paint()..color = const Color(0xFFF8FAF5));
-    final boundaries = Paint()
+    final viewport = canvas.getLocalClipBounds();
+    final worlds = [
+      for (final shift in [-mapWorldWidth, 0.0, mapWorldWidth])
+        if (viewport.left <= shift + mapWorldWidth && viewport.right >= shift)
+          shift,
+    ];
+    final landPaint = Paint()..color = const Color(0xFFF8FAF5);
+    final borders = Paint()
       ..color = const Color(0xFFBBCBC5)
       ..style = PaintingStyle.stroke
       ..strokeWidth = .7 / pixelScale;
-    canvas.drawPath(countries, boundaries);
-    canvas.drawPath(
-      provinces,
-      boundaries
-        ..color = const Color(0xFFD8E1DA)
-        ..strokeWidth = .4 / pixelScale,
-    );
+    final provinceBorders = Paint()
+      ..color = const Color(0xFFD8E1DA)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = .4 / pixelScale;
+    for (final shift in worlds) {
+      canvas.save();
+      canvas.translate(shift, 0);
+      canvas.drawPath(land, landPaint);
+      canvas.drawPath(countries, borders);
+      canvas.drawPath(provinces, provinceBorders);
+      canvas.restore();
+    }
+
+    void drawCopies(Path path, Paint paint) {
+      final bounds = path.getBounds();
+      for (final shift in [-mapWorldWidth, 0.0, mapWorldWidth]) {
+        if (bounds.left + shift > viewport.right ||
+            bounds.right + shift < viewport.left) {
+          continue;
+        }
+        canvas.save();
+        canvas.translate(shift, 0);
+        canvas.drawPath(path, paint);
+        canvas.restore();
+      }
+    }
+
     Path path(List<Offset> points) {
       final result = Path()..moveTo(points.first.dx, points.first.dy);
       for (final point in points.skip(1)) {
@@ -308,8 +393,8 @@ class JourneyPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeWidth = 2 / pixelScale;
-    for (final line in full) {
-      canvas.drawPath(
+    for (final line in geometry.full) {
+      drawCopies(
         dashPath(
           path(line),
           dashArray: CircularIntervalList([6 / pixelScale, 5 / pixelScale]),
@@ -317,33 +402,19 @@ class JourneyPainter extends CustomPainter {
         trackPaint,
       );
     }
-    for (final line in tracks) {
-      canvas.drawPath(path(line), trackPaint);
+    for (final line in geometry.tracks) {
+      drawCopies(path(line), trackPaint);
     }
-    for (final (from, to, flight) in links) {
-      final end = (to.dx - from.dx).abs() > 500
-          ? Offset(to.dx + (to.dx > from.dx ? -1000 : 1000), to.dy)
-          : to;
-      final curve = Path()..moveTo(from.dx, from.dy);
-      if (flight) {
-        curve.quadraticBezierTo(
-          (from.dx + end.dx) / 2,
-          (from.dy + end.dy) / 2 - (end - from).distance * .14,
-          end.dx,
-          end.dy,
-        );
-      } else {
-        curve.lineTo(end.dx, end.dy);
-      }
-      canvas.drawPath(
-        curve,
-        Paint()
-          ..color = flight ? ticketRed : ink
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5 / pixelScale,
+    final linkPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5 / pixelScale;
+    for (final link in geometry.links) {
+      drawCopies(
+        link.path,
+        linkPaint..color = link.control == null ? ink : ticketRed,
       );
     }
-    for (final point in nodes.values) {
+    for (final point in geometry.nodes.values) {
       canvas.drawCircle(point, 3 / pixelScale, Paint()..color = Colors.white);
       canvas.drawCircle(point, 2 / pixelScale, Paint()..color = ink);
     }
@@ -354,11 +425,13 @@ class JourneyPainter extends CustomPainter {
     );
     final inset = view.annotationInsets;
     final annotations = layoutMapAnnotations(
-      stations: nodes.map((name, point) => MapEntry(name, screen(point))),
-      lines: labels.map(
+      stations: geometry.nodes.map(
+        (name, point) => MapEntry(name, screen(point)),
+      ),
+      lines: geometry.labels.map(
         (name, anchors) => MapEntry(name, anchors.map(screen).toList()),
       ),
-      endpoints: endpoints,
+      endpoints: geometry.endpoints,
       bounds: Rect.fromLTRB(
         inset.left,
         inset.top,
@@ -387,4 +460,22 @@ class JourneyPainter extends CustomPainter {
   @override
   bool shouldRepaint(JourneyPainter old) =>
       old.view != view || old.textScale != textScale;
+}
+
+class _JourneyGeometry {
+  final List<List<Offset>> tracks, full;
+  final List<MapLink> links;
+  final Map<String, Offset> nodes;
+  final Map<String, List<Offset>> labels;
+  final Set<String> endpoints;
+  final Rect bounds;
+  const _JourneyGeometry({
+    required this.tracks,
+    required this.full,
+    required this.links,
+    required this.nodes,
+    required this.labels,
+    required this.endpoints,
+    required this.bounds,
+  });
 }
