@@ -2,8 +2,7 @@ import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRecord, archive, readArchive, mergeThreeWay, applyImport, validDate, partition } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import { parseText, decodeMail, parseCSV, mapFlightResult } from '../src/importers.js';
+import { parseText, decodeMail, mapFlightResult } from '../src/importers.js';
 import { ticketSVG } from '../src/tickets.js';
 const sample = (values = {}) => createRecord({ id: 'test-1', origin: '北京南', destination: '上海虹桥', service: 'G103', departureDate: '2026-11-15', departureTime: '08:00', passenger: '张三', ...values });
 
@@ -49,19 +48,9 @@ test('deletion conflicting with an edit needs explicit selection; unchanged reco
   const normal = mergeThreeWay([base], [base], [{ ...base, deleted: true }]);
   assert.equal(normal.conflicts.length, 0); assert.equal(normal.records[0].deleted, true);
 });
-test('CSV is formula-safe, preserves newlines and can be re-imported', () => {
-  const r = sample({ issuer: '售票站,"北京南"\n下一站', passenger: '=HYPERLINK("https://invalid")' });
-  const content = csv([r]); assert.match(content, /'=HYPERLINK/);
-  const imported = parseCSV(content)[0]; assert.equal(imported.issuer, r.issuer); assert.equal(imported.origin, '北京南');
-});
-test('Chinese train notice is parsed for human review', () => {
-  const r = parseText('日期：2026-11-15  车次：G103\n出发：北京南  到达：上海虹桥\n时间：08:00  05车08F号  二等座\n票价：553.00  姓名：张三')[0];
-  assert.equal(r.service, 'G103'); assert.equal(r.type, 'rail'); assert.equal(r.origin, '北京南'); assert.equal(r.destination, '上海虹桥'); assert.equal(calendarDate(r.departureDate), '2026-11-15'); assert.equal(r.seat, '08F');
-});
-
-test('order numbers survive backups and CSV independently of ticket numbers and do not merge different passengers', () => {
+test('order numbers survive backups independently of ticket numbers and do not merge different passengers', () => {
   const r = sample({ orderNumber: 'E123456789', ticketNumber: 'A01234567' });
-  for (const restored of [readArchive(JSON.parse(JSON.stringify(archive([r]))))[0], parseCSV(csv([r]))[0]]) {
+  for (const restored of [readArchive(JSON.parse(JSON.stringify(archive([r]))))[0]]) {
     assert.equal(restored.orderNumber, 'E123456789'); assert.equal(restored.ticketNumber, 'A01234567');
   }
   const other = sample({ id: 'another-passenger', orderNumber: r.orderNumber, passenger: '李四' });

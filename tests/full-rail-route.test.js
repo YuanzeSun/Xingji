@@ -2,8 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {createRecord,archive,readArchive} from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import {parseCSV} from '../src/importers.js';
 import {selectRailRoute,loadRailRoute} from '../src/rail-route.js';
 import {normalizeRailRoute,railRouteNeedsSave} from '../src/rail-route-snapshot.js';
 import {loadRailwayNetwork,uniqueRailEdges} from '../src/railway-network.js';
@@ -17,7 +15,7 @@ test('full route context persists independently of the traveled segments and sta
   const route=selectRailRoute(record(),payload());
   assert.deepEqual(route.stops.map(stop=>stop.name),['济南西','南京南']);assert.deepEqual(route.fullRoute.stops.map(stop=>stop.name),['北京南','济南西','南京南','上海虹桥']);
   const saved=record({railRoute:route});
-  for(const restored of [readArchive(archive([saved]))[0],parseCSV(csv([saved]))[0]])assert.deepEqual(restored.railRoute.fullRoute,route.fullRoute);
+  assert.deepEqual(readArchive(archive([saved]))[0].railRoute.fullRoute,route.fullRoute);
   const network=await loadRailwayNetwork([saved]);assert.equal(uniqueRailEdges(network.routes).length,1);
   const invalid=structuredClone(route);invalid.fullRoute.segments.splice(1,1);assert.throws(()=>normalizeRailRoute(invalid),/乘坐区间/);
   const partial=structuredClone(route);delete partial.fullRoute;assert.equal(railRouteNeedsSave(record({railRoute:partial}),route),true);assert.equal(railRouteNeedsSave(saved,partial),false);

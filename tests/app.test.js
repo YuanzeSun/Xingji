@@ -1,3 +1,4 @@
+import { archive, createRecord } from '../src/model.js';
 import {answerArithmetic} from './helpers/arithmetic.js';
 import { codeDataFromResult } from '../src/barcode-data.js';
 import test from 'node:test';
@@ -145,13 +146,24 @@ test('app creates, reloads, edits, imports and filters personal records without 
   assert.equal((await get('records', [])).find(r => r.type === 'flight').deleted, true);
   const removed = (await get('records', [])).find(r => r.type === 'flight');
   assert.equal(removed.origin, ''); assert.equal(removed.service, ''); assert.deepEqual(removed.sources, []);
-  click('[data-action="navigate"][data-page="data"]'); await waitFor(() => document.querySelector('#github-form'));
+  click('[data-action="navigate"][data-page="data"]'); await waitFor(() => document.querySelector('[data-action="disconnect"]'));
+  assert.equal(document.querySelector('#github-form,[data-action="import-csv"]'), null);
   assert.equal(document.querySelector('[data-action="restore"]'), null);
   assert.doesNotMatch(document.body.textContent, /回收站/);
   click('[data-action="navigate"][data-page="import"]'); await waitFor(() => document.querySelector('#import-files'));
-  const csv = '车次,日期,出发站,到达站\n' + Array.from({ length: 100 }, (_, i) => `G${100 + i},2026-10-01,测试出发${i},测试到达${i}`).join('\n');
   const input = document.querySelector('#import-files');
-  Object.defineProperty(input, 'files', { value: [{ name: 'test.csv', type: 'text/csv', size: csv.length, text: async () => csv }] });
+  assert.doesNotMatch(input.accept, /csv/i);
+  Object.defineProperty(input, 'files', {
+    value: [{ name: 'tickets.csv', type: 'text/csv', size: 10, text: async () => assert.fail('CSV should not be read') }],
+    configurable: true,
+  });
+  input.dispatchEvent(new window.Event('change', { bubbles: true }));
+  await waitFor(() => document.querySelector('#import-status').textContent.includes('请选择图片'));
+  assert.equal(document.querySelector('dialog'), null);
+  const json = JSON.stringify(archive(Array.from({ length: 100 }, (_, i) => createRecord({
+    service: 'G' + (100 + i), departureDate: '2026-10-01', origin: '测试出发' + i, destination: '测试到达' + i,
+  }))));
+  Object.defineProperty(input, 'files', { value: [{ name: 'test.json', type: 'application/json', size: json.length, text: async () => json }] });
   input.dispatchEvent(new window.Event('change', { bubbles: true }));
   await waitFor(() => document.querySelector('[data-action="save-candidates"]'));
   click('[data-action="save-candidates"]'); await waitFor(() => !document.querySelector('dialog'));

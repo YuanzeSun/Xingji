@@ -2,9 +2,8 @@ import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseScanText } from '../src/scan-engine.js';
-import { parseText, parseSingleTicket, parseCSV, mapFlightResult } from '../src/importers.js';
+import { parseText, parseSingleTicket, mapFlightResult } from '../src/importers.js';
 import { archive, readArchive, createRecord } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
 import { ticketSVG } from '../src/tickets.js';
 import { flightScreenshotPixels } from '../src/flight-screenshot-image.js';
 import { JSDOM } from 'jsdom';
@@ -91,7 +90,6 @@ test('white text on colored screenshot headers and dark text on white cards both
 test('aircraft and registration survive backups and imports and render only when supplied in both boarding languages',()=>{
   const r=createRecord({type:'flight',template:'air-boarding-pass',service:'MF8123',origin:'PKX',destination:'XNN',aircraft:'Boeing 737-85C(WL)',aircraftRegistration:'B0000'});
   assert.equal(readArchive(archive([r]))[0].aircraftRegistration,'B0000');
-  assert.equal(parseCSV(csv([r]))[0].aircraftRegistration,'B0000');
   assert.equal(mapFlightResult([{aircraft:'A350',aircraftRegistration:'G-TEST'}])[0].aircraftRegistration,'G-TEST');
   assert.equal(parseText('航班:CA1234\n机型:A350\n飞机编号:G-TEST')[0].aircraftRegistration,'G-TEST');
   for(const [origin,label] of [['PKX','飞机编号'],['LHR','REG']]){

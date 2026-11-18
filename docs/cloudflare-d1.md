@@ -1,26 +1,15 @@
-# 网页版 Cloudflare D1
+# Cloudflare D1 部署
 
-部署自己的 Cloudflare Worker 和 D1 数据库后，在行迹网页填写 Worker 地址和访问凭证。使用 Workers 免费计划即可开始。
+在 Cloudflare 控制台操作即可，支持 Workers 免费计划。
 
-## 部署
+1. 在 **D1 SQL Database** 新建数据库，在该库的 **Console** 执行 [初始化 SQL](../cloudflare/d1/migrations/0001_archive.sql)。
+2. 在 **Workers & Pages** 新建 Worker。通过 **Edit Code** 粘贴 [Worker 源码](../cloudflare/d1/worker.js)，点击 **Deploy**。
+3. 在同一个 Worker 的 **Bindings** 添加 D1 绑定，变量名填 `ARCHIVE`，选择刚建的数据库。
+4. 在 **Settings → Variables and Secrets** 添加 **Secret**，名称为 `ARCHIVE_TOKEN`，值用密码管理器生成的随机密码。
+5. 打开行迹网页的 **Cloudflare D1** 连接卡片，填写 Worker 根地址和同一串凭证。
 
-1. 安装 Node.js，进入项目的 `cloudflare/d1` 目录，运行 `npx wrangler login` 登录 Cloudflare。
-2. 运行 `npx wrangler d1 create xingji-archive --update-config=false`，将数据库 ID 写入 `wrangler.jsonc` 的 `database_id`。为行迹单独创建一个数据库。
-3. 运行 `npx wrangler d1 migrations apply xingji-archive --remote`，然后运行 `npx wrangler deploy`。
-4. 运行 `npx wrangler secret put ARCHIVE_TOKEN`，粘贴随机生成的访问凭证。可以用 `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` 生成。下次更新 Worker 时继续使用同一个 D1 数据库。
-5. 在网页「Cloudflare D1」卡片中填写部署结果里的 Worker 根地址和 `ARCHIVE_TOKEN`。Cloudflare 账户 API Token 用于部署授权，网页只需要 Worker 的访问凭证。
+仅连接 GitHub 时，网页使用 GitHub 票库。此时添加 D1 会先用 GitHub 的数据覆盖 D1，再切换到 D1 日常读写。D1 暂时不可用时，仍可查看它的本机缓存。
 
-可从任意域名访问同一个 Worker。读取和写入票库都需要在请求的 `Authorization` 标头中传入 `Bearer <ARCHIVE_TOKEN>`。
+先用 D1 再绑定 GitHub 时，确认后会自动备份一次。此后通过「立即备份到 GitHub」手动更新。覆盖和备份都包含票据、个人资料、MCP 和两种连接的凭证，写入 GitHub 的凭证会保留在 Git 历史中。手动重置仓库保留设置。
 
-## 连接和备份
-
-| 当前主票库 | 下一步 | 结果 |
-| --- | --- | --- |
-| 无 | 连接 D1 | 使用 D1 中现有票据，新数据库从空票库开始 |
-| GitHub | 在当前浏览器首次连接 D1 | 确认后用 GitHub 中现有的行迹票据和设置整体替换 D1，切换为 D1 日常同步 |
-| D1 | 在当前浏览器首次绑定 GitHub | 确认后清空 GitHub 中当前的行迹票据和设置，保留仓库其他文件与 Git 历史 |
-| D1 | 立即备份到 GitHub | 确认后用 D1 中当前的票据和设置覆盖 GitHub 中的行迹数据 |
-
-在新设备使用已有 D1 票库，直接连接 D1 即可。更新同一连接的凭证会保留已绑定的数据。D1 暂时不可用时，网页显示本地只读缓存。Flutter 继续使用其现有的本机及 GitHub 模式。
-
-免费额度按 Cloudflare 账户计算，每日 500 万行读取与 10 万行写入，单个 D1 数据库最多 500 MB。额度用尽后可等待下次重置。 [D1 免费额度](https://developers.cloudflare.com/d1/platform/pricing/) · [D1 容量限制](https://developers.cloudflare.com/d1/platform/limits/)
+[Cloudflare 的 D1 配置文档](https://developers.cloudflare.com/d1/get-started/) · [Worker 凭证设置](https://developers.cloudflare.com/workers/configuration/secrets/)

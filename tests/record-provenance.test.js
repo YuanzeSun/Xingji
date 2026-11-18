@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRecord,archive,readArchive,mergeThreeWay,deduplicateRecords,resolveRecordConflict} from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import {parseCSV} from '../src/importers.js';
 import {createBoardingCode,readBoardingCode} from '../src/bcbp.js';
 import {refreshGeneratedCode,boardingCodeDifferences} from '../src/boarding-code-state.js';
 import {applyLookupValues,markManualFields,clearLookupValues,isLookupValue} from '../src/lookup-values.js';
@@ -39,9 +37,9 @@ test('original codes retain all bytes, compare only known flight-day data, and n
   assert.deepEqual(boardingCodeDifferences(digitalCarrier),[]);
 });
 
-test('provenance round-trips through backups and CSV, validates metadata and disappears on deletion',()=>{
+test('provenance round-trips through backups, validates metadata and disappears on deletion',()=>{
   const record=flight({boardingCodeOperatingFlight:'AA45A',railModel:'CR400BF-S',lookupValues:{aircraft:'A320-200'},aircraft:'A320-200'});
-  for(const restored of [readArchive(archive([record]))[0],parseCSV(csv([record]))[0]]){
+  for(const restored of [readArchive(archive([record]))[0]]){
     assert.equal(restored.boardingCodeSource,'generated');assert.equal(restored.boardingCodeOperatingFlight,'AA45A');assert.deepEqual(restored.lookupValues,record.lookupValues);assert.deepEqual(restored.boardingCode,record.boardingCode);
   }
   const deleted=createRecord({...record,deleted:true});assert.equal(deleted.boardingCodeSource,'');assert.equal(deleted.boardingCodeOperatingFlight,'');assert.deepEqual(deleted.lookupValues,{});
@@ -83,7 +81,7 @@ test('RailGo refresh replaces previous automatic values but preserves original a
   const fresh={...first,railModel:'CR400AF',railBureau:'哈尔滨局',arrivalTime:'12:00'};applyLookupValues(record,railCompletion(record,fresh));
   assert.equal(record.railModel,'CR400AF');assert.equal(record.railBureau,'北京局');assert.equal(record.arrivalTime,'12:00');assert.equal(record.departureTime,'07:00');
   const noData=railCompletion(record,{...fresh,railModel:''});assert.equal(noData.railModel,undefined);
-  for(const restored of [readArchive(archive([createRecord(record)]))[0],parseCSV(csv([record]))[0]])assert.ok(isLookupValue(restored,'railModel'));
+  assert.ok(isLookupValue(readArchive(archive([createRecord(record)]))[0],'railModel'));
   record.service='G2';const cleared=clearLookupValues(record);assert.equal(cleared.railModel,'');assert.equal(record.railBureau,'北京局');assert.equal(record.departureTime,'07:00');assert.equal(record.railJourney,'');
 });
 

@@ -1,5 +1,5 @@
 import {JOURNEY_DATE_FIELDS} from './journey-date.js';
-import { createRecord, now, validDate, DEFAULT_RAIL_TEMPLATE } from './model.js';
+import { createRecord, now, validDate } from './model.js';
 import { railTemplateFromText } from './rail-template.js';
 import { marksFromText } from './ticket-marks.js';
 import { parseRailOrder } from './rail-order.js';
@@ -91,35 +91,6 @@ export function mapFlightResult(payload) {
   const items = Array.isArray(payload) ? payload : payload?.flights;
   if (!Array.isArray(items)) throw new Error('尚未识别接口返回结构，请使用导出文件或文本导入');
   return items.map(item => createRecord({ type: 'flight', template: 'air-boarding-pass', service: String(item.flightNumber || ''), origin: String(item.origin || ''), destination: String(item.destination || ''), originCity: String(item.originCity || ''), destinationCity: String(item.destinationCity || ''), originCode: String(item.originCode || ''), destinationCode: String(item.destinationCode || ''), departureDate: item.departureDate || '', departureTime: String(item.departureTime || ''), arrivalDate: item.arrivalDate || '', arrivalTime: String(item.arrivalTime || ''), actualDepartureDate: item.actualDepartureDate || '', actualDepartureTime: String(item.actualDepartureTime || ''), actualArrivalDate: item.actualArrivalDate || '', actualArrivalTime: String(item.actualArrivalTime || ''), flightDistance: String(item.flightDistance || ''), departureZone: String(item.departureZone || ''), arrivalZone: String(item.arrivalZone || ''), passenger: String(item.passenger || ''), seat: String(item.seat || ''), airline: String(item.airline || ''), flightStatus: String(item.flightStatus || ''), aircraft: String(item.aircraft || ''), aircraftRegistration: String(item.aircraftRegistration || ''), sources: [{ kind: 'flight-json', label: '航空JSON导入', at: now() }] }));
-}
-export function parseCSV(text) {
-  const rows = []; let row = [], value = '', quoted = false;
-  const input = text.replace(/^\uFEFF/, '');
-  for (let i = 0; i < input.length; i++) {
-    const c = input[i];
-    if (c === '"') { if (quoted && input[i + 1] === '"') { value += '"'; i++; } else quoted = !quoted; }
-    else if (c === ',' && !quoted) { row.push(value); value = ''; }
-    else if ((c === '\n' || c === '\r') && !quoted) { if (c === '\r' && input[i + 1] === '\n') i++; row.push(value); if (row.some(Boolean)) rows.push(row); row = []; value = ''; }
-    else value += c;
-  }
-  if (quoted) throw new Error('CSV引号不完整');
-  row.push(value); if (row.some(Boolean)) rows.push(row);
-  if (rows.length < 2) throw new Error('CSV没有可导入的数据');
-  const alias = { 交通方式: 'type', 出发站: 'origin', 出发机场: 'origin', 到达站: 'destination', 出发城市: 'originCity', 到达城市: 'destinationCity', 到达机场: 'destination', 车次: 'service', 航班号: 'service', 日期: 'departureDate', 出发日期: 'departureDate', 出发时间: 'departureTime', 计划起飞日期: 'departureDate', 计划起飞时间: 'departureTime', 计划到达日期: 'arrivalDate', 计划到达时间: 'arrivalTime', 实际起飞日期: 'actualDepartureDate', 实际起飞时间: 'actualDepartureTime', 实际到达日期: 'actualArrivalDate', 实际到达时间: 'actualArrivalTime', 航程距离: 'flightDistance', '航程距离（km）': 'flightDistance', 姓名: 'passenger', 旅客: 'passenger', 座位: 'seat', 车厢: 'carriage', 票价: 'price', 席别: 'seatClass', 舱位: 'seatClass', 身份证号: 'identity', 证件号: 'identity', 检票口: 'gate', 登机口: 'gate', 机票状态: 'flightStatus', 票据状态: 'flightStatus', 机型: 'aircraft', 担当客运段:'railRunner', 客运担当单位:'railRunner', 车辆归属单位:'railCarOwner', 担当路局: 'railBureau', 担当局: 'railBureau', 车型: 'railModel', 列车车型: 'railModel', 飞机编号: 'aircraftRegistration', 注册号: 'aircraftRegistration', 票面标识: 'ticketMarks', 票面样式: 'template', 模板: 'template' };
-  const headers = rows.shift().map(h => alias[h.trim()] || h.trim());
-  const ownExport = headers[0] === 'id' && headers[1] === 'mergedIds' && headers.includes('boardingCode');
-  return rows.filter(row => row.some(Boolean)).map(row => {
-    const values = Object.fromEntries(headers.map((h, i) => [h, row[i] || '']));
-    if (ownExport) for (const key of headers) if (/^'[=+\-@\t\r]/.test(values[key])) values[key] = values[key].slice(1);
-    if (values.mergedIds) { try { values.mergedIds = JSON.parse(values.mergedIds); } catch { throw new Error('合并记录ID格式不正确'); } }
-    for (const field of [...JOURNEY_DATE_FIELDS.filter(key=>values[key]?.startsWith('{')), 'ticketCode', 'boardingCode']) if (values[field]) { try { values[field] = JSON.parse(values[field]); } catch { throw new Error('条码重建数据格式不正确'); } }
-    if (values.lookupValues) { try { values.lookupValues = JSON.parse(values.lookupValues); } catch { throw new Error('自动补全来源格式不正确'); } }
-    if (values.fieldSources) { try { values.fieldSources = JSON.parse(values.fieldSources); } catch { throw new Error('字段来源格式不正确'); } }
-    if (values.railRoute) { try { values.railRoute = JSON.parse(values.railRoute); } catch { throw new Error('铁路线路资料格式不正确'); } }
-    if (values.railJourney) { try { values.railJourney = JSON.parse(values.railJourney); } catch { throw new Error('铁路行程资料格式不正确'); } }
-    const type = ['flight', '机票', '飞机'].includes(values.type) || (!values.type && /^[A-Z]{2}\d+$/i.test(values.service)) ? 'flight' : 'rail';
-    return createRecord({ ...values, type, template: values.template || (type === 'flight' ? 'air-boarding-pass' : DEFAULT_RAIL_TEMPLATE), sources: [{ kind: 'csv', label: 'CSV表格导入', at: now() }] });
-  });
 }
 export async function extractPDF(file) {
   const pdfjs = await import('pdfjs-dist/build/pdf.mjs');

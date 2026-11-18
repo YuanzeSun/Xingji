@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRecord, archive, readArchive } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import { parseCSV } from '../src/importers.js';
 import { normalizeRailRoute } from '../src/rail-route-snapshot.js';
 import { selectRailRoute, loadRailRoute } from '../src/rail-route.js';
 import { railMapPoint } from '../src/rail-route-map.js';
@@ -63,9 +61,9 @@ test('GCJ-02 track coordinates align with the WGS84 country basemap', () => {
   assert.ok(Math.abs(y - (90 - 39.915) / 360 * 1000) < .0001);
 });
 
-test('saved raw route geometry survives JSON and CSV and never queries again when its train and endpoints match', async () => {
+test('saved raw route geometry survives JSON and never queries again when its train and endpoints match', async () => {
   const route=selectRailRoute(record(),payload()),saved=record({railRoute:route});
-  for (const restored of [readArchive(archive([saved]))[0],parseCSV(csv([saved]))[0]]) {
+  for (const restored of [readArchive(archive([saved]))[0]]) {
     assert.deepEqual(restored.railRoute,route);
     assert.deepEqual(await loadRailRoute(restored,{fetcher:()=>{throw Error('Saved routes must not make requests');}}),route);
   }

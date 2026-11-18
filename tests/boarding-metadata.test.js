@@ -4,8 +4,6 @@ import {readBCBP} from '../src/bcbp-reader.js';
 import {readBoardingCode} from '../src/bcbp.js';
 import {parsePrintedBoardingPass} from '../src/boarding-pass.js';
 import {createRecord,archive,readArchive,applyImport} from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import {parseCSV} from '../src/importers.js';
 import {barcodeFieldLocked} from '../src/barcode-fields.js';
 import {boardingJourneyMarkup,boardingMetadataDetails} from '../src/boarding-details.js';
 import {scanCandidate,createScanConsensus} from '../src/scan-engine.js';
@@ -29,7 +27,7 @@ test('one barcode creates distinct linked records, preserves unknown years and n
   assert.equal(rows[0].actualBoardingTime,'18:21');assert.equal(rows[0].boardingTime,'17:30');assert.equal(rows[0].checkedBaggageCount,'2');assert.equal(rows[0].baggageTagNumbers,'0123456789–0123456790');assert.equal(rows[1].frequentFlyerCarrier,'CA');
   for(const key of ['actualBoardingTime','checkedBaggageCount','freeBaggageAllowance','frequentFlyerNumber','marketingCarrier'])assert.equal(barcodeFieldLocked(rows[0],key),true,key);
   const second=createRecord({...rows[1],departureDate:{year:2025,dayOfYear:1}});assert.equal(calendarDate(second.departureDate),'2025-01-01');assert.equal(readBoardingCode(second.boardingCode,second.boardingLegIndex).service,'UA857');
-  assert.equal(applyImport(rows,rows).records.length,2);assert.equal(readArchive(archive([second]))[0].frequentFlyerNumber,second.frequentFlyerNumber);assert.equal(parseCSV(csv([second]))[0].boardingLegIndex,'1');
+  assert.equal(applyImport(rows,rows).records.length,2);assert.equal(readArchive(archive([second]))[0].frequentFlyerNumber,second.frequentFlyerNumber);
   assert.match(boardingJourneyMarkup(rows[0],rows),new RegExp('data-id="'+rows[1].id+'"'));assert.ok(boardingMetadataDetails(second).some(([key])=>key==='marketingCarrier'));
   assert.equal(ticketSVG({...rows[0],actualBoardingTime:'22:00',frequentFlyerNumber:'OTHER'}),ticketSVG(rows[0]));
   assert.throws(()=>createRecord({...second,boardingLegIndex:'3'}),/航段/);

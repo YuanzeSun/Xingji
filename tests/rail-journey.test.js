@@ -3,8 +3,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord, archive, readArchive, mergeThreeWay } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import { parseCSV } from '../src/importers.js';
 import { lookupRailDetails, matchingRailTrainsets } from '../src/rail-data.js';
 import { railQuery, railDetails, railCompletion } from '../src/rail-lookup-model.js';
 import { normalizeRailJourney } from '../src/rail-journey.js';
@@ -159,13 +157,10 @@ test('missing historical trainsets and failed optional requests do not replace t
   assert.equal(partial.departureTime,'00:05');assert.equal(partial.partial,true);
 });
 
-test('rail snapshots survive JSON, CSV and independent cloud edits; a changed journey drops stale snapshots',async()=>{
+test('rail snapshots survive JSON and independent cloud edits; a changed journey drops stale snapshots',async()=>{
   const record=await completed();
   assert.deepEqual(readArchive(archive([record]))[0].railJourney,record.railJourney);
-  assert.deepEqual(parseCSV(csv([record]))[0].railJourney,record.railJourney);
-  assert.equal(parseCSV(csv([record]))[0].railRunner,'上海客运段');
   assert.equal(readArchive(archive([record]))[0].railTrainsets,'CR400BF-5033');
-  assert.equal(parseCSV(csv([record]))[0].railTrainsets,'CR400BF-5033');
   const merged=mergeThreeWay([record],[createRecord({...record,seat:'09A'})],[createRecord({...record,price:'100'})]);
   assert.equal(merged.conflicts.length,0);assert.deepEqual(merged.records[0].railJourney,record.railJourney);
   assert.equal(createRecord({...record,departureDate:'2026-11-18'}).railJourney,'');
@@ -180,7 +175,7 @@ test('manually entered trainset IDs normalize, round-trip and remain protected w
   record.railTrainsets=' cr400af-0001，CR400AF-0002 / cr400af-0001';markManualFields(record,['railTrainsets']);
   const saved=createRecord(record);assert.equal(saved.railTrainsets,'CR400AF-0001 / CR400AF-0002');
   assert.equal(railCompletion(saved,result).railTrainsets,undefined);
-  assert.equal(readArchive(archive([saved]))[0].railTrainsets,saved.railTrainsets);assert.equal(parseCSV(csv([saved]))[0].railTrainsets,saved.railTrainsets);
+  assert.equal(readArchive(archive([saved]))[0].railTrainsets,saved.railTrainsets);
   assert.equal(ticketSVG(saved),ticketSVG({...saved,railTrainsets:''}));
   saved.railTrainsets='';markManualFields(saved,['railTrainsets']);assert.equal(railCompletion(saved,result).railTrainsets,undefined);
   const automatic=ticket();applyLookupValues(automatic,railCompletion(automatic,result),true,{kind:'rail-lookup'});

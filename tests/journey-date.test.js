@@ -3,8 +3,6 @@ import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {journeyDate,calendarDate,dateWithYear,dateFromMonthDay,dateLabel} from '../src/journey-date.js';
 import {createRecord,archive,readArchive} from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import {parseCSV} from '../src/importers.js';
 import {createBoardingCode,readBoardingCode} from '../src/bcbp.js';
 import {ticketDateField,bindTicketDates,readTicketDate,refreshTicketDateLocks} from '../src/date-field.js';
 import {railQuery,railDetails,railCompletion} from '../src/rail-lookup-model.js';
@@ -26,12 +24,13 @@ test('the barcode day survives without a guessed year and is decoded only after 
   const flight=createRecord({type:'flight',template:'air-boarding-pass',service:'CA1234',departureDate:date});assert.throws(()=>flightQuery(flight));
 });
 
-test('all planned and actual dates and cached railway stop dates remain ordinal in archive and CSV round trips',()=>{
+test('all planned and actual dates and cached railway stop dates remain ordinal in archive round trips',()=>{
   const record=createRecord({type:'flight',template:'air-boarding-pass',departureDate:'2024-12-31',arrivalDate:'2025-01-01',actualDepartureDate:'2025-01-01',actualArrivalDate:'2025-01-02'});
   const saved=JSON.parse(JSON.stringify(archive([record]))).records[0];
   assert.deepEqual(saved.departureDate,{year:2024,dayOfYear:366});assert.deepEqual(saved.arrivalDate,{year:2025,dayOfYear:1});
   assert.deepEqual(saved.actualDepartureDate,{year:2025,dayOfYear:1});assert.deepEqual(saved.actualArrivalDate,{year:2025,dayOfYear:2});
-  for(const restored of [readArchive(archive([record]))[0],parseCSV(csv([record]))[0]])for(const key of ['departureDate','arrivalDate','actualDepartureDate','actualArrivalDate'])assert.deepEqual(restored[key],record[key]);
+  const restored = readArchive(archive([record]))[0];
+  for(const key of ['departureDate','arrivalDate','actualDepartureDate','actualArrivalDate'])assert.deepEqual(restored[key],record[key]);
   const rail=readArchive(archive([demoRecords('2026-11-18')[0]]))[0];assert.equal(typeof rail.railJourney.query.startDate,'object');
   assert.ok(rail.railJourney.stops.every(stop=>[stop.arrivalDate,stop.departureDate].every(date=>!date||Number.isInteger(date.year)&&Number.isInteger(date.dayOfYear))));
   assert.equal(archive([record]).schemaVersion,2);

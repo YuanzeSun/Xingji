@@ -4,8 +4,6 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { Resvg } from '@resvg/resvg-js';
 import { createRecord, archive, readArchive, applyImport, mergeThreeWay } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import { parseCSV } from '../src/importers.js';
 import { ticketSVG, exportSVG, exportPNG } from '../src/tickets.js';
 import { normalizeTicketCode } from '../src/ticket-code.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from '../src/code-editor.js';
@@ -43,10 +41,9 @@ test('rail codes appear in the lower-right region and are embedded in standalone
   } finally { globalThis.Image = oldImage; globalThis.document = oldDocument; URL.createObjectURL = oldCreate; URL.revokeObjectURL = oldRevoke; }
 });
 
-test('backup, CSV, import locks and three-way sync preserve complete code data', () => {
+test('backup, import locks and three-way sync preserve complete code data', () => {
   const record = sample({ ticketCode: code, lockedFields: ['ticketCode'] });
   assert.deepEqual(readArchive(JSON.parse(JSON.stringify(archive([record])))), [record]);
-  assert.deepEqual(parseCSV(csv([record]))[0].ticketCode, code);
   const empty = sample();
   assert.deepEqual(applyImport([empty], [record]).records[0].ticketCode, code);
   assert.equal(applyImport([{ ...empty, lockedFields: ['ticketCode'] }], [record]).records[0].ticketCode, '');

@@ -3,8 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord, archive, readArchive } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import { parseCSV, parseText } from '../src/importers.js';
+import { parseText } from '../src/importers.js';
 import { railQuery, railDetails, railCompletion } from '../src/rail-lookup-model.js';
 import { lookupRailDetails } from '../src/rail-data.js';
 import { railLookupMarkup, bindRailLookup } from '../src/rail-lookup.js';
@@ -51,8 +50,6 @@ test('rail metadata persists through imports and backups, is absent from printed
   const ticket=record({railBureau:'中国铁路上海局集团有限公司',railModel:'ｃｒ４００ｂｆ－ｓ'});
   assert.equal(ticket.railBureau,'上海局');assert.equal(ticket.railModel,'CR400BF-S');
   assert.equal(readArchive(archive([ticket]))[0].railModel,ticket.railModel);
-  assert.equal(parseCSV(csv([ticket]))[0].railBureau,ticket.railBureau);
-  assert.equal(parseCSV('车次,担当路局,车型\nG1,上局,cr400bf-s')[0].railBureau,'上海局');
   assert.equal(parseText('车次：G1 日期：2026-11-17 出发：北京南 到达：上海虹桥 担当路局：上局 车型：CR400BF-S')[0].railModel,ticket.railModel);
   assert.equal(ticketSVG(ticket),ticketSVG({...ticket,railBureau:'',railModel:''}));
   const rows=[ticket,record({railBureau:'上局',railModel:'cr400bf-s'}),record({railBureau:'京局',railModel:'CR400AF'}),record({railBureau:'未来局',departureDate:'2027-01-01'}),record({railBureau:'退票局',template:'rail-refund-receipt'}),record({railBureau:'删除局',deleted:true}),createRecord({type:'flight',template:'air-boarding-pass',departureDate:'2026-11-17',railBureau:'飞机局',railModel:'AIR'})];

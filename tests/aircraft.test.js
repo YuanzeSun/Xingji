@@ -4,8 +4,7 @@ import { JSDOM } from 'jsdom';
 import { identifyAircraft, normalizeAircraft, extractAircraft, aircraftMentions } from '../src/aircraft.js';
 import { AIRCRAFT_ALIASES } from '../src/data/aircraft-reference.js';
 import { createRecord, archive, readArchive } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import { parseText, parseCSV, mapFlightResult } from '../src/importers.js';
+import { parseText, mapFlightResult } from '../src/importers.js';
 import { parseFlightScreenshot } from '../src/flight-screenshot.js';
 import { flightCandidates } from '../src/flight-lookup-model.js';
 import { journeyStatistics } from '../src/statistics-model.js';
@@ -73,7 +72,7 @@ test('flight screenshots keep one journey when equipment resembles a flight numb
   }
 });
 
-test('text, CSV, JSON, backups and rendered boarding passes retain canonical aircraft', () => {
+test('text, JSON, backups and rendered boarding passes retain canonical aircraft', () => {
   const [text] = parseText('机型: E190\n航班: CA1234\n日期: 2023-11-18\n出发机场: PEK\n到达机场: SHA');
   assert.equal(text.service, 'CA1234'); assert.equal(text.aircraft, 'E190');
   const [paragraphs] = parseText('航班: CA1234\n\n机型: C919\n日期: 2023-11-18\n出发机场: PEK\n到达机场: SHA');
@@ -83,7 +82,7 @@ test('text, CSV, JSON, backups and rendered boarding passes retain canonical air
   for (const input of ['DHC-8', 'Q400', 'ATR 72-600', 'Embraer E195-E2', 'CRJ900']) {
     const record = createRecord({ type: 'flight', template: 'air-boarding-pass', service: 'CA1234', origin: 'PEK', destination: 'SHA', aircraft: input });
     const expected = normalizeAircraft(input);
-    for (const imported of [readArchive(archive([record]))[0], parseCSV(csv([record]))[0], mapFlightResult([{ aircraft: input }])[0]]) assert.equal(imported.aircraft, expected);
+    for (const imported of [readArchive(archive([record]))[0], mapFlightResult([{ aircraft: input }])[0]]) assert.equal(imported.aircraft, expected);
     for (const origin of ['PEK', 'LHR']) {
       const dom = new JSDOM(ticketSVG({ ...record, origin, originCode: origin }), { contentType: 'image/svg+xml' });
       assert.ok(dom.window.document.querySelector('[data-boarding-aircraft]').textContent.includes(expected)); dom.window.close();

@@ -53,12 +53,16 @@ test('restored tickets and settings sync before proposing the only missing accou
     await until(() => document.querySelector('[data-d1-cloud-label]')?.textContent === '已同步');
     const migrated = await d1Store.read();
     assert.deepEqual(migrated.records.map(row => row.id), ['restored']);
-    assert.deepEqual(migrated.settings, settings);
+    assert.deepEqual(migrated.settings, { ...settings, connections: {
+      github: { owner: 'user', repo: 'data', id: 77, branch: 'main', token: 'test-key' },
+      d1: connections.d1
+    } });
+    assert.deepEqual(readFullBackup(fullBackup(migrated.records, migrated.settings, {})).connections, migrated.settings.connections);
 
     const newSettings = sharedSettings({ flightMcpKey: 'backup-only-settings' });
     await restore(fullBackup([], newSettings, connections));
     await until(() => !document.querySelector('dialog'));
-    assert.deepEqual((await d1Store.read()).settings, newSettings);
+    assert.deepEqual((await d1Store.read()).settings, { ...newSettings, connections: migrated.settings.connections });
     assert.deepEqual(github.settings(), settings);
     assert.equal(document.querySelector('[data-connect-from-backup]'), null);
   } finally { window.dispatchEvent(new window.Event('offline')); window.close(); }

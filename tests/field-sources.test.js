@@ -2,8 +2,7 @@ import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRecord,archive,readArchive,mergeThreeWay,resolveRecordConflict,deduplicateRecords} from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import {parseCSV,parseText} from '../src/importers.js';
+import {parseText} from '../src/importers.js';
 import {parseScanText} from '../src/scan-engine.js';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
 import {fieldSourceLabel,fieldSourceBadge,markFieldSources} from '../src/field-sources.js';
@@ -32,9 +31,9 @@ test('mixed barcode and OCR reads keep field-level origins through query fills, 
   assert.equal(record.fieldSources.passenger,'barcode');
 });
 
-test('field origins round-trip in archive and CSV and merge with the values chosen for each field',()=>{
+test('field origins round-trip in archive and merge with the values chosen for each field',()=>{
   const base=flight({seat:'12A',gate:'A101',fieldSources:{seat:'barcode',gate:'barcode',passenger:'barcode'}});
-  assert.deepEqual(readArchive(archive([base]))[0].fieldSources,base.fieldSources);assert.deepEqual(parseCSV(csv([base]))[0].fieldSources,base.fieldSources);
+  assert.deepEqual(readArchive(archive([base]))[0].fieldSources,base.fieldSources);
   const local=structuredClone(base),remote=structuredClone(base);local.seat='20C';markManualFields(local,['seat']);applyLookupValues(remote,{gate:'B2'},true,{kind:'flight-lookup'});
   const merged=mergeThreeWay([base],[local],[remote]);assert.equal(merged.conflicts.length,0);
   assert.equal(merged.records[0].seat,'20C');assert.equal(merged.records[0].fieldSources.seat,'manual');assert.equal(merged.records[0].gate,'B2');assert.equal(merged.records[0].fieldSources.gate,'variflight');

@@ -4,8 +4,6 @@ import {candidateRailLines,matchRailLineNames,loadRailLineNames,railLineAnnotati
 import {railWgs84Point,railMapPoint} from '../src/rail-projection.js';
 import {normalizeRailRoute} from '../src/rail-route-snapshot.js';
 import {createRecord,archive,readArchive} from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import {parseCSV} from '../src/importers.js';
 import {loadRailwayNetwork,railwayGeometry} from '../src/railway-network.js';
 
 const a=[116,39],b=[116.2,39],c=[116.4,39];
@@ -35,7 +33,7 @@ test('names persist through backups and the offline journey map only uses labels
   const shape=geometry(),route=normalizeRailRoute({service:'G123',origin:'乙',destination:'丙',queriedAt:'2026-11-17T01:00:00Z',segments:[[b,c]],stops:shape.stops.slice(1),lineLabels:[{name:'乙线',coordinates:[116.3,39]}],fullRoute:{...shape,segments:[[a,b],[b,c]],lineLabels:[{name:'甲客专',coordinates:[116.1,39]},{name:'乙线',coordinates:[116.3,39]}]}});
   // Stop labels are normalized with the same trailing 站 rule used by normal routes.
   const record=createRecord({service:'G123',origin:'乙',destination:'丙',departureDate:'2026-11-17',railRoute:route});
-  for(const restored of [readArchive(archive([record]))[0],parseCSV(csv([record]))[0]])assert.deepEqual(restored.railRoute.lineLabels,route.lineLabels);
+  assert.deepEqual(readArchive(archive([record]))[0].railRoute.lineLabels,route.lineLabels);
   const network=await loadRailwayNetwork([record]),map=railwayGeometry(network);
   assert.deepEqual(map.lineLabels.map(row=>row.name),['乙线']);
   const point=railMapPoint([116.3,39]),viewport={x:point[0],y:point[1],zoom:100};
