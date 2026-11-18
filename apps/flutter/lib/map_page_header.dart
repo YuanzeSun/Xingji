@@ -5,7 +5,15 @@ import 'design.dart';
 class MapOverlay extends StatelessWidget {
   final Set<String> layers;
   final void Function(String, bool) onChanged;
-  const MapOverlay(this.layers, this.onChanged, {super.key});
+  final VoidCallback? onFullscreen;
+  final Widget? mapStyle;
+  const MapOverlay(
+    this.layers,
+    this.onChanged, {
+    super.key,
+    this.onFullscreen,
+    this.mapStyle,
+  });
   @override
   Widget build(BuildContext context) => Positioned(
     top: 24,
@@ -14,8 +22,24 @@ class MapOverlay extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('行程地图', style: Theme.of(context).textTheme.headlineLarge),
-        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '行程地图',
+                style: Theme.of(context).textTheme.headlineLarge,
+              ),
+            ),
+            if (onFullscreen != null)
+              IconButton.filledTonal(
+                onPressed: onFullscreen,
+                tooltip: '全屏显示地图',
+                icon: const Icon(Icons.fullscreen),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (mapStyle != null) ...[mapStyle!, const SizedBox(height: 8)],
         Wrap(
           spacing: 8,
           runSpacing: 8,

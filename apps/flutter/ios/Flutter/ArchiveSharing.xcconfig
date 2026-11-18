@@ -1,0 +1,3 @@
+XINGJI_APP_GROUP = group.dev.yuanzesun.xingji.import
+CODE_SIGN_ENTITLEMENTS[sdk=iphonesimulator*] = SharedImport/ShareGroup.entitlements
+#include? "LocalShare.xcconfig"

@@ -5,16 +5,20 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:xingji_core/xingji_core.dart';
 
+import 'platform_services.dart';
 import 'ticket_face.dart';
 
 Future<void> saveFile(String name, Uint8List data, String mime) async {
+  if (AppleServices.available) {
+    await AppleServices.shareFile(name, data);
+    return;
+  }
   final file = XFile.fromData(data, name: name, mimeType: mime);
   if (kIsWeb) {
     await file.saveTo(name);
     return;
   }
-  if (defaultTargetPlatform == TargetPlatform.iOS ||
-      defaultTargetPlatform == TargetPlatform.android) {
+  if (defaultTargetPlatform == TargetPlatform.android) {
     throw UnsupportedError('此平台的系统文件导出尚未接入');
   }
   final location = await getSaveLocation(suggestedName: name);

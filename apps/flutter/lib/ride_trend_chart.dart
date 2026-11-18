@@ -34,6 +34,8 @@ class _RideTrendChartState extends State<RideTrendChart>
   );
   String? selected;
   double zoom = 1, viewport = 0, pinchDistance = 1, pinchZoom = 1;
+  double pinchFraction = .5;
+  double? pendingOffset;
   bool started = false, pinching = false;
 
   List<MapEntry<String, (int, int)>> get rows => widget.data.entries.toList();
@@ -75,10 +77,34 @@ class _RideTrendChartState extends State<RideTrendChart>
     _revealSelected();
   }
 
-  double _width(double scale) => math.max(
-    viewport,
-    math.max(0, rows.length - 1) * 60 * scale + 2 * plotPadding,
-  );
+  double _width(double scale) => viewport * scale;
+
+  double get maxZoom => widget.data.length < 2
+      ? 1
+      : math.max(
+          4,
+          ((widget.data.length - 1) * 180 + 2 * plotPadding) /
+              math.max(1, viewport),
+        );
+
+  double _fractionAt(double anchor) =>
+      (((pendingOffset ?? (scroll.hasClients ? scroll.offset : 0)) +
+                  anchor -
+                  plotPadding) /
+              math.max(1, _width(zoom) - 2 * plotPadding))
+          .clamp(0.0, 1.0);
+
+  void _queueScroll(double target) {
+    final queued = pendingOffset != null;
+    pendingOffset = target.clamp(0.0, math.max(0, _width(zoom) - viewport));
+    if (queued) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = pendingOffset;
+      pendingOffset = null;
+      if (mounted && target != null) _jump(target);
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
 
   void _jump(double offset) {
     if (scroll.hasClients) {
@@ -109,24 +135,26 @@ class _RideTrendChartState extends State<RideTrendChart>
     );
   }
 
-  void _zoom(double value, {double? anchor}) {
-    final next = value.clamp(1.0, 4.0);
-    if (next == zoom) return;
+  void _zoom(double value, {double? anchor, double? fraction}) {
+    if (viewport <= 0 || widget.data.length < 2) return;
+    final next = value.clamp(1.0, maxZoom);
+    if (next == zoom && fraction == null) return;
     final focal = anchor ?? viewport / 2;
-    final fraction =
-        ((scroll.hasClients ? scroll.offset : 0) + focal) / _width(zoom);
-    setState(() => zoom = next);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _jump(fraction * _width(zoom) - focal);
-    });
+    final position = fraction ?? _fractionAt(focal);
+    if (next != zoom) setState(() => zoom = next);
+    _queueScroll(
+      plotPadding + position * (_width(zoom) - 2 * plotPadding) - focal,
+    );
   }
 
   void _touchDown(PointerDownEvent event) {
     if (event.kind != PointerDeviceKind.touch) return;
     touches[event.pointer] = event.localPosition;
     if (touches.length == 2) {
-      pinchDistance = (touches.values.first - touches.values.last).distance;
+      final first = touches.values.first, last = touches.values.last;
+      pinchDistance = (first - last).distance;
       pinchZoom = zoom;
+      pinchFraction = _fractionAt((first.dx + last.dx) / 2);
       setState(() => pinching = true);
     }
   }
@@ -139,6 +167,7 @@ class _RideTrendChartState extends State<RideTrendChart>
     _zoom(
       pinchZoom * (points[0] - points[1]).distance / pinchDistance,
       anchor: (points[0].dx + points[1].dx) / 2,
+      fraction: pinchFraction,
     );
   }
 
@@ -288,13 +317,18 @@ class _RideTrendChartState extends State<RideTrendChart>
                                       _touchEnd(event.pointer),
                                   onPointerCancel: (event) =>
                                       _touchEnd(event.pointer),
-                                  onPointerPanZoomStart: (_) =>
-                                      pinchZoom = zoom,
+                                  onPointerPanZoomStart: (event) {
+                                    pinchZoom = zoom;
+                                    pinchFraction = _fractionAt(
+                                      event.localPosition.dx,
+                                    );
+                                  },
                                   onPointerPanZoomUpdate: (event) {
                                     if (event.scale != 1) {
                                       _zoom(
                                         pinchZoom * event.scale,
                                         anchor: event.localPosition.dx,
+                                        fraction: pinchFraction,
                                       );
                                     }
                                   },
@@ -339,7 +373,8 @@ class _RideTrendChartState extends State<RideTrendChart>
                                               _pick(event.localPosition.dx),
                                           child: GestureDetector(
                                             behavior: HitTestBehavior.opaque,
-                                            onTapDown: (event) {
+                                            onTapUp: (event) {
+                                              if (pinching) return;
                                               focus.requestFocus();
                                               _pick(event.localPosition.dx);
                                             },
@@ -383,40 +418,7 @@ class _RideTrendChartState extends State<RideTrendChart>
               ),
             ),
             const SizedBox(height: 16),
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                Text(range, style: Theme.of(context).textTheme.bodySmall),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: paper,
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: '缩小折线图',
-                        onPressed: zoom > 1 ? () => _zoom(zoom - .5) : null,
-                        icon: const Icon(Icons.remove, size: 18),
-                      ),
-                      TextButton(
-                        onPressed: () => _zoom(1),
-                        child: Text('${zoom.toStringAsFixed(1)}×'),
-                      ),
-                      IconButton(
-                        tooltip: '放大折线图',
-                        onPressed: zoom < 4 ? () => _zoom(zoom + .5) : null,
-                        icon: const Icon(Icons.add, size: 18),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            Text(range, style: Theme.of(context).textTheme.bodySmall),
           ],
         ],
       ),
@@ -641,6 +643,9 @@ class _TrendPainter extends CustomPainter {
         ..color = ink.withValues(alpha: .16)
         ..strokeWidth = 1,
     );
+    final pointSpacing =
+        math.max(1.0, size.width - 48 * fontScale) /
+        math.max(1, rows.length - 1);
     canvas.save();
     canvas.clipRect(
       Rect.fromLTWH(
@@ -695,7 +700,7 @@ class _TrendPainter extends CustomPainter {
       for (var i = 0; i < points.length; i++) {
         final point = points[i], active = i == selected;
         final count = series == 0 ? rows[i].value.$1 : rows[i].value.$2;
-        if (!active && count == 0) continue;
+        if (!active && (count == 0 || pointSpacing < 10)) continue;
         if (active) canvas.drawCircle(point, 7, Paint()..color = Colors.white);
         if (series == 0) {
           canvas.drawCircle(point, active ? 5 : 2.8, Paint()..color = color);
@@ -714,17 +719,23 @@ class _TrendPainter extends CustomPainter {
       }
     }
     canvas.restore();
-    final labelStride = math.max(
-      1,
-      (64 *
-              fontScale /
-              ((size.width - 48 * fontScale) / math.max(1, rows.length - 1)))
-          .ceil(),
-    );
+    final labelGap = 64 * fontScale;
+    final labelStride = math.max(1, (labelGap / pointSpacing).ceil());
+    var lastLabelX = double.negativeInfinity;
     for (var i = 0; i < rows.length; i++) {
       final yearBoundary = monthly && rows[i].key.endsWith('-01');
       if (i % labelStride != 0 && i != selected && !yearBoundary) continue;
-      if (i != selected && (i - selected).abs() < labelStride) continue;
+      final labelX = _pointX(
+        i,
+        rows.length,
+        size.width,
+        padding: 24 * fontScale,
+      );
+      if (i != selected &&
+          ((labelX - x).abs() < labelGap || labelX - lastLabelX < labelGap)) {
+        continue;
+      }
+      lastLabelX = labelX;
       final label = monthly
           ? (yearBoundary
                 ? '${rows[i].key.substring(0, 4)}年\n1月'

@@ -1,16 +1,22 @@
 import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:material_ui/material_ui.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
+import 'archive_text_field.dart';
 import 'design.dart';
 import 'export_service.dart';
 import 'ticket_detail.dart';
 import 'profile_editor.dart';
 import 'import_review.dart';
 import 'sync_review.dart';
+import 'platform_services.dart';
+import 'travel_message_inbox.dart';
+import 'variflight_import.dart';
+import 'ticket_file_import.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppStore store;
@@ -22,6 +28,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   final choices = <String, bool>{};
   ArchiveMerge? reviewed;
+  bool queryingFlights = false;
   @override
   Widget build(BuildContext context) {
     final store = widget.store;
@@ -41,7 +48,13 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: archivePagePadding(context),
       children: [
         Text('数据与同步', style: Theme.of(context).textTheme.headlineLarge),
-        const SectionTitle('GitHub 同步（可选）'),
+        SectionTitle(
+          'GitHub 同步（可选）',
+          trailing: TextButton(
+            onPressed: () => _showGitHubSetup(context),
+            child: const Text('连接说明'),
+          ),
+        ),
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -191,7 +204,52 @@ class _SettingsPageState extends State<SettingsPage> {
             child: const Text('保留选择并同步'),
           ),
         ],
+        if (AppleServices.available) ...[
+          SectionTitle(
+            '自动导入',
+            trailing: TextButton(
+              onPressed: () => _showSourceGuide(context),
+              child: const Text('使用说明'),
+            ),
+          ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () =>
+                    action(() => reviewSharedTickets(context, store)),
+                icon: const Icon(Icons.inbox_outlined),
+                label: const Text('分享收件箱'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    action(() => showTravelMessageInbox(context, store)),
+                icon: const Icon(Icons.sms_outlined),
+                label: const Text('行程短信'),
+              ),
+              OutlinedButton.icon(
+                onPressed: queryingFlights
+                    ? null
+                    : () => action(() async {
+                        setState(() => queryingFlights = true);
+                        try {
+                          await openVariFlightImport(context, store);
+                        } finally {
+                          if (mounted) setState(() => queryingFlights = false);
+                        }
+                      }),
+                icon: const Icon(Icons.flight_outlined),
+                label: Text(queryingFlights ? '飞常准查询中…' : '飞常准行程'),
+              ),
+            ],
+          ),
+        ],
         const SectionTitle('导入与导出'),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: Text('备份将当前全部票据存为一个 JSON 文件，可重新导入。GitHub 同步会按年份分文件保存。'),
+        ),
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -206,30 +264,46 @@ class _SettingsPageState extends State<SettingsPage> {
                       }
                       final file = await openFile(
                         acceptedTypeGroups: [
-                          const XTypeGroup(
-                            label: '行迹票库',
-                            extensions: ['json', 'csv', 'txt'],
-                          ),
+                          if (AppleServices.available)
+                            const XTypeGroup(
+                              label: '行迹票库与票据文件',
+                              extensions: [
+                                'json',
+                                'csv',
+                                'txt',
+                                'pdf',
+                                'pkpass',
+                                'jpg',
+                                'jpeg',
+                                'png',
+                                'heic',
+                                'heif',
+                              ],
+                              uniformTypeIdentifiers: [
+                                'public.json',
+                                'public.comma-separated-values-text',
+                                'public.plain-text',
+                                'com.adobe.pdf',
+                                'com.apple.pkpass',
+                                'public.image',
+                              ],
+                            )
+                          else
+                            const XTypeGroup(
+                              label: '行迹票库',
+                              extensions: ['json', 'csv', 'txt', 'pkpass'],
+                            ),
                         ],
                       );
                       if (file != null) {
-                        final text = await file.readAsString();
-                        final extension = file.name
-                            .split('.')
-                            .last
-                            .toLowerCase();
-                        final records = extension == 'csv'
-                            ? parseTicketCsv(text)
-                            : extension == 'txt'
-                            ? parseTicketText(
-                                text,
-                                store.catalog,
-                                flight: RegExp(
-                                  r'航班|登机|FLIGHT',
-                                  caseSensitive: false,
-                                ).hasMatch(text),
-                              )
-                            : TicketArchive.fromJson(jsonDecode(text)).records;
+                        if (await file.length() > 40_000_000) {
+                          throw const FormatException('请选择 40 MB 以内的文件');
+                        }
+                        final records = await readLocalImport(
+                          file.name,
+                          await file.readAsBytes(),
+                          store.catalog,
+                        );
                         if (context.mounted) {
                           await reviewImport(context, store, records);
                         }
@@ -237,18 +311,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     }),
               icon: const Icon(Icons.file_open_outlined),
               label: const Text('导入票库'),
-            ),
-            OutlinedButton.icon(
-              onPressed: !store.canWrite
-                  ? null
-                  : () async {
-                      if (await checkArchiveWrite(context, store) &&
-                          context.mounted) {
-                        await importTextDialog(context, store);
-                      }
-                    },
-              icon: const Icon(Icons.text_snippet_outlined),
-              label: const Text('粘贴行程文字'),
             ),
             OutlinedButton.icon(
               onPressed: () => action(
@@ -274,28 +336,17 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(foregroundColor: ticketRed),
-              onPressed: store.busy
+              onPressed:
+                  store.busy || !store.connected || store.connection == null
                   ? null
                   : () => action(() async {
-                      final target = store.connection;
-                      if (!store.connected || target == null) {
-                        await connectDialog(context, store, forReset: true);
-                      } else if (await confirmGitHubReset(
+                      if (await confirmGitHubReset(
                         context,
-                        target,
+                        store.connection!,
                         clearLocal: true,
                       )) {
-                        try {
-                          await store.resetRepository();
-                          if (context.mounted) _showResetComplete(context);
-                        } on ArchiveApiException catch (error) {
-                          if (error.status != 401 && error.status != 403) {
-                            rethrow;
-                          }
-                          if (context.mounted) {
-                            await connectDialog(context, store, forReset: true);
-                          }
-                        }
+                        await store.resetRepository();
+                        if (context.mounted) _showResetComplete(context);
                       }
                     }),
               icon: const Icon(Icons.restart_alt),
@@ -407,25 +458,20 @@ Future<BindingChoice?> chooseBinding(
       : null;
 }
 
-Future<void> connectDialog(
-  BuildContext context,
-  AppStore store, {
-  bool forReset = false,
-}) async {
+Future<void> connectDialog(BuildContext context, AppStore store) async {
   final owner = TextEditingController(text: store.connection?.owner ?? ''),
       repo = TextEditingController(text: store.connection?.repository ?? ''),
-      token = TextEditingController(),
-      branch = TextEditingController(text: store.connection?.branch ?? 'main');
+      token = TextEditingController();
   final form = GlobalKey<FormState>();
   var busy = false, error = '';
-  await showDialog(
+  await showAdaptiveDialog<void>(
     context: context,
     barrierDismissible: false,
     builder: (context) => StatefulBuilder(
       builder: (context, update) => PopScope(
         canPop: !busy,
         child: AlertDialog(
-          title: Text(forReset ? '授权重置 GitHub 仓库' : '连接 GitHub 私有仓库'),
+          title: const Text('连接 GitHub 私有仓库'),
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
             child: SingleChildScrollView(
@@ -435,33 +481,30 @@ Future<void> connectDialog(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (forReset && store.connection != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          '${store.connection!.label} · ${store.connection!.branch}',
-                        ),
-                      ),
+                    TextButton.icon(
+                      onPressed: busy ? null : () => _showGitHubSetup(context),
+                      icon: const Icon(Icons.help_outline),
+                      label: const Text('配置仓库与访问令牌'),
+                    ),
                     for (final (controller, label, secret) in [
                       (owner, 'GitHub 用户名', false),
                       (repo, '私人仓库名称', false),
-                      (branch, '分支', false),
                       (token, '访问令牌', true),
                     ])
-                      if (!forReset || store.connection == null || secret)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: TextFormField(
-                            controller: controller,
-                            obscureText: secret,
-                            enableSuggestions: !secret,
-                            autocorrect: !secret,
-                            decoration: InputDecoration(labelText: label),
-                            validator: (value) => (value ?? '').trim().isEmpty
-                                ? '请填写$label'
-                                : null,
-                          ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: ArchiveTextField(
+                          controller: controller,
+                          native: true,
+                          enabled: !busy,
+                          obscureText: secret,
+                          enableSuggestions: !secret,
+                          autocorrect: !secret,
+                          decoration: InputDecoration(labelText: label),
+                          validator: (value) =>
+                              (value ?? '').trim().isEmpty ? '请填写$label' : null,
                         ),
+                      ),
                     if (error.isNotEmpty)
                       Text(
                         error,
@@ -488,64 +531,162 @@ Future<void> connectDialog(
                       final target = GitHubConnection(
                         owner.text.trim(),
                         repo.text.trim(),
-                        branch: branch.text.trim(),
+                        branch: store.connection?.branch ?? 'main',
                       );
-                      if (forReset &&
-                          !await confirmGitHubReset(
-                            context,
-                            target,
-                            clearLocal: store.connection != null,
-                          )) {
-                        return;
-                      }
-                      if (!context.mounted) return;
                       update(() {
                         busy = true;
                         error = '';
                       });
                       try {
-                        if (forReset) {
-                          await store.resetRepository(
-                            target: target,
-                            token: token.text.trim(),
-                          );
-                        } else {
-                          final bound = await store.connect(
-                            target,
-                            token.text.trim(),
-                            choose: (local, cloud) =>
-                                chooseBinding(context, local, cloud),
-                            pick: pickSyncConflicts(context, newEdit: false),
-                          );
-                          if (!bound) return;
-                        }
-                        if (context.mounted) {
-                          if (forReset) _showResetComplete(context);
-                          Navigator.pop(context);
-                        }
-                      } catch (failure) {
-                        update(
-                          () => error = failure.toString().replaceFirst(
-                            'FormatException: ',
-                            '',
-                          ),
+                        final bound = await store.connect(
+                          target,
+                          token.text.trim(),
+                          choose: (local, cloud) =>
+                              chooseBinding(context, local, cloud),
+                          pick: pickSyncConflicts(context, newEdit: false),
                         );
+                        if (bound && context.mounted) Navigator.pop(context);
+                      } catch (failure) {
+                        if (context.mounted) {
+                          update(
+                            () => error = failure.toString().replaceFirst(
+                              'FormatException: ',
+                              '',
+                            ),
+                          );
+                        }
                       } finally {
                         if (context.mounted) update(() => busy = false);
                       }
                     },
-              child: Text(
-                forReset
-                    ? (busy ? '正在重置…' : '核对重置范围')
-                    : (busy ? '正在连接…' : '连接'),
-              ),
+              child: Text(busy ? '正在连接…' : '连接'),
             ),
           ],
         ),
       ),
     ),
   );
-  for (final controller in [owner, repo, token, branch]) {
+  for (final controller in [owner, repo, token]) {
     controller.dispose();
   }
 }
+
+Future<void> _showGitHubSetup(BuildContext context) => showAdaptiveDialog<void>(
+  context: context,
+  builder: (context) => AlertDialog.adaptive(
+    title: const Text('连接 GitHub'),
+    content: SizedBox(
+      width: 460,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '1. 新建私有仓库',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            const Text('在 GitHub 新建仓库，选 Private，勾选添加 README。确认仓库有 main 分支。'),
+            _gitHubSetupLink(
+              context,
+              '新建仓库',
+              'https://github.com/new?visibility=private',
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '2. 创建访问令牌',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '选择 Fine-grained token，将 Repository access 限制为刚建的仓库，并把 Contents 权限设为 Read and write。生成后复制令牌。',
+            ),
+            _gitHubSetupLink(
+              context,
+              '创建令牌',
+              'https://github.com/settings/personal-access-tokens/new',
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '3. 填写连接信息',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '例如仓库地址为 github.com/octocat/xingji-data，用户名填写 octocat，仓库名称填写 xingji-data。粘贴访问令牌后点击连接。',
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('完成'),
+      ),
+    ],
+  ),
+);
+
+Widget _gitHubSetupLink(BuildContext context, String label, String url) =>
+    TextButton.icon(
+      onPressed: () async {
+        if (AppleServices.available &&
+            await AppleServices.openGitHubSetup(url)) {
+          return;
+        }
+        await Clipboard.setData(ClipboardData(text: url));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('已复制链接')));
+        }
+      },
+      icon: Icon(AppleServices.available ? Icons.open_in_new : Icons.link),
+      label: Text(AppleServices.available ? label : '复制$label链接'),
+    );
+
+Future<void> _showSourceGuide(BuildContext context) => showDialog<void>(
+  context: context,
+  builder: (context) => AlertDialog.adaptive(
+    title: const Text('如何导入行程'),
+    content: const SizedBox(
+      width: 480,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '钱包登机牌、PDF 和图片',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            SizedBox(height: 6),
+            Text(
+              '可以先存到「文件」，再点「＋ → 上传」。想从钱包直接送进来，可在快捷指令中创建捷径，开启「在共享表单中显示」，把快捷指令输入传给行迹的「收集票据文件」动作。分享时选择这个捷径，再到「分享收件箱」核对。',
+            ),
+            SizedBox(height: 16),
+            Text('12306 或航司短信', style: TextStyle(fontWeight: FontWeight.w700)),
+            SizedBox(height: 6),
+            Text(
+              '在快捷指令的「自动化」中新建「信息」触发条件，按发件人或正文筛选。添加行迹的「导入行程短信」，将收到的信息正文传进去。打开行迹时，信息完整的订单会自动录入，其余在「行程短信」里核对。',
+            ),
+            SizedBox(height: 16),
+            Text('飞常准行程', style: TextStyle(fontWeight: FontWeight.w700)),
+            SizedBox(height: 6),
+            Text(
+              '在飞常准 MCP 平台开通个人行程授权并获取 MCP Key。点「飞常准行程」输入 Key，查询未来行程或选年份查历史行程，核对后导入。',
+            ),
+            SelectableText('cmcp.variflight.com'),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('知道了'),
+      ),
+    ],
+  ),
+);

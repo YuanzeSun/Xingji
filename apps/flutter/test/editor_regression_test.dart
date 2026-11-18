@@ -11,11 +11,24 @@ void main() {
   Future<(AppStore, TicketRecord)> open(
     WidgetTester tester, {
     bool withCode = true,
+    bool recognized = false,
+    bool withYear = true,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final app = (await tester.runAsync(AppStore.load))!;
     addTearDown(app.dispose);
-    final existing = app.examples.firstWhere((record) => record.isFlight);
+    var existing = app.examples.firstWhere((record) => record.isFlight);
+    if (recognized) {
+      existing = boardingRecords(
+        base64Decode(existing['boardingCode']['rawBytes']),
+        app.catalog,
+        supplement: {
+          if (withYear) 'departureDate': existing['departureDate'],
+          'identity': existing.text('identity'),
+          'departureTime': existing.text('departureTime'),
+        },
+      ).single;
+    }
     final sample = withCode
         ? existing
         : existing.withChanges({
@@ -28,7 +41,12 @@ void main() {
         home: Scaffold(
           body: Builder(
             builder: (context) => TextButton(
-              onPressed: () => openEditor(context, app, record: sample),
+              onPressed: () => openEditor(
+                context,
+                app,
+                record: recognized ? null : sample,
+                recognized: recognized ? sample : null,
+              ),
               child: const Text('打开示例编辑'),
             ),
           ),
@@ -139,20 +157,11 @@ void main() {
   });
 
   testWidgets(
-    'rescanning preserves the year and other locally entered fields',
+    'prefilled boarding pass keeps its locked and supplemental fields',
     (tester) async {
-      final (app, sample) = await open(tester);
-      final field = find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.labelText == '粘贴解码后的条码内容',
-      );
-      await tester.ensureVisible(field);
-      await tester.enterText(
-        field,
-        ascii.decode(base64Decode(sample['boardingCode']['rawBytes'])),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('解码并填入'));
-      await tester.pumpAndSettle();
+      final (app, sample) = await open(tester, recognized: true);
+      expect(find.text('扫描'), findsNothing);
+      expect(find.text('上传'), findsNothing);
       final fields = tester
           .widgetList<TextFormField>(find.byType(TextFormField))
           .map((w) => w.controller?.text)
@@ -176,6 +185,37 @@ void main() {
         app.records.single.text('departureTime'),
         sample.text('departureTime'),
       );
+    },
+  );
+
+  testWidgets(
+    'a scanned ordinal stays blank and locked until the year is valid',
+    (tester) async {
+      final (_, sample) = await open(tester, recognized: true, withYear: false);
+      final monthDay = find.byWidgetPredicate(
+        (w) =>
+            w is InputDecorator &&
+            w.decoration.label is Text &&
+            (w.decoration.label as Text).textSpan?.toPlainText() == '月日 *',
+      );
+      final lockedDay = find.descendant(
+        of: monthDay,
+        matching: find.byIcon(Icons.lock_outline),
+      );
+      Text dayValue() => tester.widget<InputDecorator>(monthDay).child! as Text;
+      final year = find.widgetWithText(TextFormField, '年份').first;
+      await tester.ensureVisible(year);
+      expect(lockedDay, findsOneWidget);
+      expect(dayValue().data, isEmpty);
+      await tester.enterText(year, '2024');
+      await tester.pumpAndSettle();
+      final day = DateTime.utc(2024, 1, sample.departure!.dayOfYear!);
+      expect(dayValue().data, '${day.month}月${day.day}日');
+      expect(lockedDay, findsOneWidget);
+      await tester.enterText(year, '');
+      await tester.pumpAndSettle();
+      expect(dayValue().data, isEmpty);
+      expect(lockedDay, findsOneWidget);
     },
   );
 

@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
+import 'archive_text_field.dart';
 import 'sync_review.dart';
 import 'design.dart';
 
@@ -50,7 +51,7 @@ Future<bool> reviewImport(
                                 '${record.text('service')}  ${record.text('origin')} → ${record.text('destination')}',
                               ),
                               subtitle: Text(
-                                '${record.departure?.label ?? '日期未知'}${record.missingFields.isEmpty ? '' : '\n部分信息待补全，可导入后编辑'}',
+                                '${record.departure?.complete == true ? record.departure!.label : '日期未知'}${record.missingFields.isEmpty ? '' : '\n部分信息待补全，可导入后编辑'}',
                               ),
                             ),
                         ],
@@ -116,9 +117,16 @@ Future<bool> reviewImport(
       false;
 }
 
-Future<void> importTextDialog(BuildContext context, AppStore store) async {
-  final text = TextEditingController();
-  var flight = false;
+Future<bool> importTextDialog(
+  BuildContext context,
+  AppStore store, {
+  String initialText = '',
+}) async {
+  final text = TextEditingController(text: initialText);
+  var flight = RegExp(
+    r'航班|登机|乘机|机场|FLIGHT',
+    caseSensitive: false,
+  ).hasMatch(initialText);
   final result = await showDialog<List<TicketRecord>>(
     context: context,
     builder: (context) => StatefulBuilder(
@@ -140,7 +148,7 @@ Future<void> importTextDialog(BuildContext context, AppStore store) async {
                       update(() => flight = value.single),
                 ),
                 const SizedBox(height: 16),
-                TextField(
+                ArchiveTextField(
                   controller: text,
                   minLines: 6,
                   maxLines: 12,
@@ -174,6 +182,7 @@ Future<void> importTextDialog(BuildContext context, AppStore store) async {
   );
   text.dispose();
   if (result != null && context.mounted) {
-    await reviewImport(context, store, result);
+    return reviewImport(context, store, result);
   }
+  return false;
 }

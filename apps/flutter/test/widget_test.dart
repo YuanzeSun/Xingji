@@ -1,9 +1,14 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, debugDefaultTargetPlatformOverride;
+import 'package:flutter/services.dart' show MethodCall, SystemChannels;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xingji/main.dart';
+import 'package:xingji/apple_navigation_bar.dart';
 import 'package:xingji/app_store.dart';
 import 'package:xingji/editor.dart';
+import 'package:xingji/platform_services.dart';
 import 'package:xingji/ticket_face.dart';
 import 'package:xingji/ticket_detail.dart';
 import 'package:xingji/settings_page.dart';
@@ -29,6 +34,77 @@ void main() {
     }
     await tester.pumpAndSettle();
   }
+
+  testWidgets('welcome guide can swipe to maps and start the demo', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final app = (await tester.runAsync(store))!;
+    addTearDown(app.dispose);
+    await tester.pumpWidget(XingjiApp(store: app));
+    await settle(tester);
+
+    await tester.tap(find.widgetWithText(TextButton, '使用引导'));
+    await tester.pumpAndSettle();
+    expect(find.text('收下第一张票'), findsOneWidget);
+    await tester.drag(find.byType(PageView), const Offset(-320, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('在地图上回看旅程'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pumpAndSettle();
+    expect(find.text('做一本旅行纪念册'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, '浏览示例'));
+    await settle(tester);
+    expect(app.demo, isTrue);
+    expect(app.privateRecords, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('welcome guide advances without motion and can be dismissed', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 560);
+    tester.view.devicePixelRatio = 1;
+    final dispatcher = tester.binding.platformDispatcher;
+    dispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(
+      disableAnimations: true,
+    );
+    dispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(dispatcher.clearAccessibilityFeaturesTestValue);
+    addTearDown(dispatcher.clearTextScaleFactorTestValue);
+    final app = (await tester.runAsync(store))!;
+    addTearDown(app.dispose);
+    await tester.pumpWidget(XingjiApp(store: app));
+    await settle(tester);
+
+    final entry = find.widgetWithText(TextButton, '使用引导');
+    await tester.scrollUntilVisible(
+      entry,
+      96,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(entry);
+    await tester.pumpAndSettle();
+    expect(find.byType(TweenAnimationBuilder<double>), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, '下一步'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('在地图上回看旅程'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('关闭使用引导'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PageView), findsNothing);
+    expect(app.demo, isFalse);
+    expect(app.privateRecords, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'saved train journey shows station names, mileage and ridden interval',
@@ -101,7 +177,7 @@ void main() {
       },
     );
   }
-  testWidgets('ticket selection stays at the top left in both grid sizes', (
+  testWidgets('long pressing a ticket selects it in each layout', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(375, 812);
@@ -113,49 +189,49 @@ void main() {
     addTearDown(app.dispose);
     await tester.pumpWidget(XingjiApp(store: app));
     await settle(tester);
-    await tester.tap(find.text('选择'));
-    await settle(tester);
+    expect(find.text('选择'), findsNothing);
     expect(find.text('导出纪念册'), findsNothing);
+    final scroll = tester
+        .widget<CustomScrollView>(find.byType(CustomScrollView).first)
+        .controller!;
+    final ticketCheckbox = find.byWidgetPredicate(
+      (widget) =>
+          widget is Checkbox && widget.semanticLabel?.startsWith('选择 ') == true,
+    );
 
     for (final compact in [false, true]) {
       if (compact) {
-        tester
-            .widget<CustomScrollView>(find.byType(CustomScrollView).first)
-            .controller!
-            .jumpTo(0);
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('整理'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('紧凑尺寸'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(FilledButton, '完成'));
+        await tester.tap(find.byTooltip('紧凑尺寸'));
         await settle(tester);
       }
       final face = find.byType(TicketFace).first;
       await tester.ensureVisible(face);
       await tester.pumpAndSettle();
-      final checkbox = find
-          .byWidgetPredicate(
-            (widget) =>
-                widget is Checkbox &&
-                widget.semanticLabel?.startsWith('选择 ') == true,
-          )
-          .first;
+      await tester.longPress(face);
+      await tester.pumpAndSettle();
+      final checkbox = ticketCheckbox.first;
       final faceBounds = tester.getRect(face);
       final checkBounds = tester.getRect(checkbox);
       expect(checkBounds.topLeft, faceBounds.topLeft);
       expect(checkBounds.width, greaterThanOrEqualTo(44));
+      expect(tester.widget<Checkbox>(checkbox).value, true);
       await tester.ensureVisible(checkbox);
       await tester.tap(checkbox);
       await tester.pumpAndSettle();
-      expect(tester.widget<Checkbox>(checkbox).value, !compact);
-      tester
-          .widget<CustomScrollView>(find.byType(CustomScrollView).first)
-          .controller!
-          .jumpTo(0);
+      expect(tester.widget<Checkbox>(checkbox).value, false);
+      scroll.jumpTo(0);
       await tester.pumpAndSettle();
-      expect(find.text('导出纪念册'), compact ? findsNothing : findsOneWidget);
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
+      expect(ticketCheckbox, findsNothing);
     }
+
+    await tester.tap(find.byTooltip('网格展示'));
+    await settle(tester);
+    final row = find.textContaining(' → ').hitTestable().first;
+    await tester.longPress(row);
+    await tester.pumpAndSettle();
+    expect(tester.widget<Checkbox>(ticketCheckbox.first).value, true);
   });
 
   testWidgets(
@@ -183,7 +259,7 @@ void main() {
       expect(tester.widget<FilledButton>(add).onPressed, isNull);
       await tester.tap(find.text('查看同步'));
       await tester.pumpAndSettle();
-      for (final label in ['姓名与常用证件', '导入票库', '粘贴行程文字']) {
+      for (final label in ['姓名与常用证件', '导入票库']) {
         final button = find.widgetWithText(OutlinedButton, label);
         expect(tester.widget<OutlinedButton>(button).onPressed, isNull);
       }
@@ -238,38 +314,100 @@ void main() {
     await settle(tester);
     expect(find.text('GitHub 同步（可选）'), findsOneWidget);
     expect(find.text('连接 GitHub'), findsOneWidget);
+    await tester.tap(find.text('连接说明'));
+    await tester.pumpAndSettle();
+    expect(find.text('1. 新建私有仓库'), findsOneWidget);
+    expect(find.textContaining('Contents 权限设为 Read and write'), findsOneWidget);
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
     final reset = find.text('重置 GitHub 仓库');
     await tester.scrollUntilVisible(reset, 200);
     expect(find.text('导出旅行手册'), findsNothing);
-    await tester.tap(reset);
-    await tester.pumpAndSettle();
-    expect(find.text('授权重置 GitHub 仓库'), findsOneWidget);
-    for (final (label, value) in [
-      ('GitHub 用户名', 'user'),
-      ('私人仓库名称', 'private'),
-      ('访问令牌', 'test-token'),
-    ]) {
-      final field = find.widgetWithText(TextField, label);
-      await tester.ensureVisible(field);
-      await tester.enterText(field, value);
-    }
-    await tester.tap(find.widgetWithText(FilledButton, '核对重置范围'));
-    await tester.pumpAndSettle();
-    expect(find.text('重置 GitHub 仓库？'), findsOneWidget);
-    expect(find.textContaining('user/private 的 main 分支'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, '继续'));
-    await tester.pumpAndSettle();
-    expect(find.text('最后确认'), findsOneWidget);
     expect(
       tester
-          .widget<FilledButton>(find.widgetWithText(FilledButton, '确认重置仓库'))
+          .widget<OutlinedButton>(
+            find.widgetWithText(OutlinedButton, '重置 GitHub 仓库'),
+          )
           .onPressed,
       isNull,
     );
-    await tester.tap(find.widgetWithText(TextButton, '取消').last);
-    await tester.pumpAndSettle();
-    expect(find.text('授权重置 GitHub 仓库'), findsOneWidget);
     expect(app.connection, isNull);
+  });
+
+  testWidgets('the iOS tab bar remains visible and inactive under a dialog', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      SystemChannels.platform_views,
+      (_) async => null,
+    );
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      messenger.setMockMethodCallHandler(SystemChannels.platform_views, null);
+    });
+    final app = (await tester.runAsync(store))!;
+    addTearDown(app.dispose);
+    await tester.pumpWidget(XingjiApp(store: app));
+    await tester.pumpAndSettle();
+    final bar = find.byType(AppleNavigationBar);
+    expect(tester.widget<AppleNavigationBar>(bar).interactive, true);
+
+    final shell = tester.element(find.byType(ArchiveShell));
+    final dialog = showDialog<void>(
+      context: shell,
+      builder: (_) => const AlertDialog(title: Text('测试弹窗')),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.widget<AppleNavigationBar>(bar).interactive, false);
+    expect(find.byType(UiKitView), findsOneWidget);
+    Navigator.of(shell).pop();
+    await tester.pumpAndSettle();
+    await dialog;
+    expect(tester.widget<AppleNavigationBar>(bar).interactive, true);
+  });
+
+  testWidgets('plus opens the four entry choices and paste fills the editor', (
+    tester,
+  ) async {
+    final app = (await tester.runAsync(store))!;
+    addTearDown(app.dispose);
+    final messenger = tester.binding.defaultBinaryMessenger;
+    const message = '航班 CA181，12月5日从北京首都飞东京羽田';
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (
+      MethodCall call,
+    ) async {
+      return call.method == 'Clipboard.getData' ? {'text': message} : null;
+    });
+    messenger.setMockMethodCallHandler(SystemRecognition.channel, (call) async {
+      expect(call.method, 'extractTicketText');
+      expect(call.arguments['text'], message);
+      return {
+        'type': 'flight',
+        'service': 'CA181',
+        'origin': 'PEK',
+        'destination': 'HND',
+      };
+    });
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+      messenger.setMockMethodCallHandler(SystemRecognition.channel, null);
+    });
+    await tester.pumpWidget(XingjiApp(store: app));
+    await tester.pumpAndSettle();
+    await tester.tap(addTicket);
+    await tester.pumpAndSettle();
+    for (final title in ['扫描', '上传', '手动填写', '粘贴']) {
+      expect(find.text(title), findsOneWidget);
+    }
+    await tester.tap(find.text('粘贴'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TicketEditor), findsOneWidget);
+    expect(find.text('CA181'), findsOneWidget);
+    expect(find.text('票面样式'), findsNothing);
+    expect(find.text('扫描'), findsNothing);
+    expect(app.privateRecords, isEmpty);
   });
 
   testWidgets(
@@ -294,7 +432,7 @@ void main() {
       await tester.tap(find.text('机票'));
       await tester.pumpAndSettle();
       expect(find.text('票面样式'), findsNothing);
-      expect(find.text('登机牌条码或电子登机牌二维码'), findsOneWidget);
+      expect(find.text('扫描'), findsNothing);
       expect(find.text('G21'), findsNothing);
       expect(tester.takeException(), isNull);
     },

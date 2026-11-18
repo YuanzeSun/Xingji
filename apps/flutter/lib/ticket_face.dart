@@ -18,6 +18,7 @@ Size ticketSize(TicketRecord record) => record.isFlight
     : const Size(856, 540);
 final _cache = <String, Future<String>>{};
 final _ready = <String, String>{};
+final _previews = <String, ({String svg, String? stock})>{};
 Future<void>? _fonts;
 Map<String, dynamic> _renderValues(TicketRecord record) => {
   'id': record.id,
@@ -52,11 +53,16 @@ Future<void> _loadFonts() async {
 
 Future<String> ticketSvg(TicketRecord record) {
   final key = _renderKey(record);
-  if (_cache.containsKey(key)) return _cache[key]!;
+  final cached = _cache.remove(key);
+  if (cached != null) {
+    _cache[key] = cached;
+    return cached;
+  }
   if (_cache.length >= 80) {
     final oldest = _cache.keys.first;
     _cache.remove(oldest);
     _ready.remove(oldest);
+    _previews.remove(oldest);
   }
   final future = runtime
       .renderOriginalTicket(jsonEncode(_renderValues(record)))
@@ -70,6 +76,44 @@ Future<String> ticketSvg(TicketRecord record) {
       });
   _cache[key] = future;
   return future;
+}
+
+({String svg, String? stock}) _preview(
+  TicketRecord record,
+  String source,
+) => _previews.putIfAbsent(_renderKey(record), () {
+  final stock = switch (record.text('template')) {
+    'rail-blue' ||
+    'rail-receipt' ||
+    'rail-refund-receipt' => 'assets/rail-blue-stock.png',
+    'rail-red' || 'rail-red-classic' => 'assets/rail-red-stock.png',
+    _ => null,
+  };
+  if (stock == null) return (svg: source, stock: null);
+  final size = ticketSize(record);
+  final start = source.indexOf(
+    '<image width="${size.width.toInt()}" height="${size.height.toInt()}" href="data:image/png;base64,',
+  );
+  if (start < 0) return (svg: source, stock: null);
+  final end = source.indexOf('"/>', start);
+  if (end < 0) return (svg: source, stock: null);
+  // Treat the stock as a shared image asset so each ticket only parses its own
+  // vector content. The SVG used for exports still contains its embedded stock.
+  return (svg: source.replaceRange(start, end + 3, ''), stock: stock);
+});
+
+Widget _displayFace(TicketRecord record, String source) {
+  final preview = _preview(record, source);
+  final vector = SvgPicture.string(preview.svg, fit: BoxFit.contain);
+  return preview.stock == null
+      ? vector
+      : Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(preview.stock!, fit: BoxFit.fill),
+            vector,
+          ],
+        );
 }
 
 class TicketFace extends StatelessWidget {
@@ -86,10 +130,7 @@ class TicketFace extends StatelessWidget {
         child: AspectRatio(
           aspectRatio: ticketSize(record).aspectRatio,
           child: _ready.containsKey(_renderKey(record))
-              ? SvgPicture.string(
-                  _ready[_renderKey(record)]!,
-                  fit: BoxFit.contain,
-                )
+              ? _displayFace(record, _ready[_renderKey(record)]!)
               : FutureBuilder<String>(
                   future: ticketSvg(record),
                   builder: (context, snapshot) {
@@ -106,10 +147,7 @@ class TicketFace extends StatelessWidget {
                         ),
                       );
                     }
-                    return SvgPicture.string(
-                      snapshot.data!,
-                      fit: BoxFit.contain,
-                    );
+                    return _displayFace(record, snapshot.data!);
                   },
                 ),
         ),

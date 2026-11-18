@@ -1,8 +1,10 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xingji/app_store.dart';
+import 'package:xingji/platform_services.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 void main() {
@@ -55,6 +57,70 @@ void main() {
       app.dispose();
     },
   );
+  test(
+    'iOS restores a bound repository from Keychain and forgets it on reset',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final keychain = <String, String>{};
+      messenger.setMockMethodCallHandler(AppleServices.channel, (call) async {
+        final key = call.arguments['key'] as String;
+        if (call.method == 'readCredential') return keychain[key];
+        if (call.method == 'writeCredential') {
+          keychain[key] = call.arguments['value'] as String;
+        } else if (call.method == 'deleteCredential') {
+          keychain.remove(key);
+        }
+        return null;
+      });
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        messenger.setMockMethodCallHandler(AppleServices.channel, null);
+      });
+
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final remote = _MemoryRemote();
+      final first = AppStore(
+        preferences,
+        catalog,
+        [],
+        {},
+        remoteFactory: (_, _) => remote,
+      );
+      addTearDown(first.dispose);
+      await first.connect(
+        const GitHubConnection('user', 'private'),
+        'test-pat',
+      );
+      expect(keychain['github:user/private:main'], 'test-pat');
+      expect(
+        preferences.getString(AppStore.storageKey),
+        isNot(contains('test-pat')),
+      );
+
+      final reopened = AppStore(
+        preferences,
+        catalog,
+        [],
+        {},
+        remoteFactory: (target, token) {
+          expect(target.repositoryId, first.connection?.repositoryId);
+          expect(token, 'test-pat');
+          return remote;
+        },
+      )..connection = first.connection;
+      addTearDown(reopened.dispose);
+      expect(reopened.canWrite, isFalse);
+      await reopened.restoreConnection();
+      expect(reopened.canWrite, isTrue);
+      await reopened.clearLocalArchive();
+      expect(keychain, isEmpty);
+      expect(reopened.connection, isNull);
+    },
+  );
+
   test(
     'connecting later uploads tickets entered in the local-only library',
     () async {

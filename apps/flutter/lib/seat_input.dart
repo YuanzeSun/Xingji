@@ -1,5 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'archive_choice_field.dart';
+import 'archive_text_field.dart';
+
 class SeatInput extends StatefulWidget {
   final TextEditingController controller;
   final String seatClass;
@@ -71,7 +74,7 @@ class _SeatInputState extends State<SeatInput> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      TextFormField(
+      ArchiveTextField(
         controller: number,
         readOnly: widget.locked,
         decoration: InputDecoration(
@@ -106,23 +109,14 @@ class _SeatInputState extends State<SeatInput> {
       ),
       if (widget.seatClass.contains('卧')) ...[
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          key: ValueKey(berth),
-          initialValue: berth,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: '铺位'),
-          items: ['', '上铺', '中铺', '下铺']
-              .map(
-                (value) => DropdownMenuItem(
-                  value: value,
-                  child: Text(value.isEmpty ? '未收录' : value),
-                ),
-              )
-              .toList(),
+        ArchiveChoiceField<String>(
+          label: '铺位',
+          value: berth,
+          choices: const {'': '未收录', '上铺': '上铺', '中铺': '中铺', '下铺': '下铺'},
           onChanged: widget.locked
               ? null
               : (value) {
-                  setState(() => berth = value!);
+                  setState(() => berth = value);
                   write();
                 },
         ),

@@ -4,13 +4,17 @@ import 'package:material_ui/material_ui.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
+import 'apple_journey_map.dart';
+import 'platform_services.dart';
 import 'sync_review.dart';
 import 'design.dart';
 import 'field_labels.dart';
 import 'ticket_face.dart';
+import 'ticket_face_viewer.dart';
 import 'editor.dart';
 import 'export_service.dart';
 import 'map_page.dart';
+import 'map_projection.dart';
 import 'coach_panel.dart';
 
 void openTicket(
@@ -141,9 +145,12 @@ class _TicketDetailState extends State<TicketDetail> {
           : key == 'gate'
           ? (flight ? '登机口' : '检票口')
           : fieldLabels[key] ?? key;
-      String value(String key) => journeyDateFields.contains(key)
-          ? JourneyDate.fromJson(record[key])?.label ?? ''
-          : record.text(key);
+      String value(String key) {
+        if (!journeyDateFields.contains(key)) return record.text(key);
+        final date = JourneyDate.fromJson(record[key]);
+        return date?.year == null ? '' : date!.label;
+      }
+
       final visible = fields.where((key) => value(key).isNotEmpty).toList();
       return Scaffold(
         appBar: AppBar(
@@ -178,9 +185,24 @@ class _TicketDetailState extends State<TicketDetail> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (exporting) const LinearProgressIndicator(),
-                  Hero(
-                    tag: widget.heroTag ?? record.id,
-                    child: TicketFace(record, store.catalog),
+                  Semantics(
+                    button: true,
+                    label: '查看票面大图',
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => TicketFaceViewer(
+                            record,
+                            store.catalog,
+                            widget.heroTag ?? record.id,
+                          ),
+                        ),
+                      ),
+                      child: Hero(
+                        tag: widget.heroTag ?? record.id,
+                        child: TicketFace(record, store.catalog),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 28),
                   Text(
@@ -243,7 +265,23 @@ class _TicketDetailState extends State<TicketDetail> {
                   if (!flight && record['railJourney'] is Map)
                     ..._railJourney(record),
                   if (flight) ..._boardingJourney(record),
-                  if (matchingRailRoute(record, store.catalog) != null) ...[
+                  if (AppleServices.available &&
+                      AppleJourneyMap.hasRoute(store, record))
+                    AppleJourneyMap(
+                      store,
+                      record,
+                      simpleMapBuilder: () => JourneyCanvas(
+                        store,
+                        [record],
+                        railway: !record.isFlight,
+                        rail:
+                            !record.isFlight &&
+                            matchingRailRoute(record, store.catalog) == null,
+                        airRoutes: record.isFlight,
+                      ),
+                    )
+                  else if (matchingRailRoute(record, store.catalog) !=
+                      null) ...[
                     const SectionTitle('铁路线路'),
                     SizedBox(
                       height: 340,

@@ -2,6 +2,8 @@
 
 核查日期：2026-11-18。Flutter 3.50.0 / Dart 3.14.0。现有网页版及 Pages 保留；Flutter Web 用于共用界面验收。
 
+这份记录对应 iOS 接入前的共用工程验收。当前 iOS 接入状态、签名配置和导入流程见 [Flutter 开发说明](flutter-development.md)。
+
 ## 功能与接口
 
 | 范围 | 本轮结果 |

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xingji_core/xingji_core.dart';
 
+import 'platform_services.dart';
 import 'ticket_face.dart';
 import 'ticket_runtime_native.dart'
     if (dart.library.js_interop) 'ticket_runtime_web.dart'
@@ -100,6 +101,57 @@ class AppStore extends ChangeNotifier {
       }
     }
     return store;
+  }
+
+  bool _restoreTried = false;
+
+  String _credentialKey(GitHubConnection target) =>
+      'github:${target.label.toLowerCase()}:${target.branch}';
+
+  Future<void> restoreConnection() async {
+    final target = connection;
+    if (!AppleServices.available ||
+        target == null ||
+        connected ||
+        busy ||
+        demo ||
+        _restoreTried) {
+      return;
+    }
+    _restoreTried = true;
+    await _run(() async {
+      try {
+        final token = await AppleServices.credential(_credentialKey(target));
+        if (token == null) return;
+        final remote = remoteFactory(target, token);
+        _remote = remote;
+        try {
+          await _sync();
+        } on ArchiveApiException catch (error) {
+          if (error.status == 401) {
+            remote.close();
+            _remote = null;
+            status = 'GitHub 授权已失效 · 只读';
+          }
+        } catch (_) {
+          // The cache is still readable. Connection refresh retries on resume.
+        }
+      } catch (_) {
+        syncError = '暂时无法读取钥匙串中的 GitHub 凭据';
+      }
+    });
+  }
+
+  Future<void> _rememberCredential(
+    GitHubConnection target,
+    String token,
+  ) async {
+    if (!AppleServices.available) return;
+    try {
+      await AppleServices.writeCredential(_credentialKey(target), token);
+    } catch (_) {
+      syncError = 'GitHub 已连接，但无法在钥匙串保留凭据';
+    }
   }
 
   bool get connected => _remote != null;
@@ -401,6 +453,7 @@ class AppStore extends ChangeNotifier {
         _remote = remote;
         connection = binding;
         await _sync(firstSnapshot: snapshot);
+        await _rememberCredential(binding, token);
         return true;
       }
 
@@ -457,6 +510,7 @@ class AppStore extends ChangeNotifier {
         generation: generation,
       );
       await _persistSynced();
+      await _rememberCredential(binding, token);
       return true;
     } finally {
       if (!identical(_remote, remote)) remote.close();
@@ -678,6 +732,10 @@ class AppStore extends ChangeNotifier {
 
   Future<void> clearLocalArchive() => _run(() async {
     if (demo) throw StateError('请先退出示例模式');
+    final target = connection;
+    if (AppleServices.available && target != null) {
+      await AppleServices.deleteCredential(_credentialKey(target));
+    }
     _remote?.close();
     _remote = null;
     connection = null;

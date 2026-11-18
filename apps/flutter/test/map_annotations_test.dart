@@ -1,9 +1,39 @@
+import 'dart:convert';
+
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:xingji/apple_journey_map.dart';
 import 'package:xingji/map_annotations.dart';
+import 'package:xingji_core/xingji_core.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'Apple Maps receives the complete list of railway label anchors',
+    () async {
+      final catalog = ReferenceCatalog.fromJson(
+        jsonDecode(await rootBundle.loadString('assets/reference.json')),
+      );
+      final demo = TicketArchive.fromJson(
+        jsonDecode(await rootBundle.loadString('assets/demo.json')),
+      );
+      final trip = demo.records.firstWhere(
+        (record) => record.text('service') == 'G21',
+      );
+      final labels = appleMapOptions(catalog, [trip])['lineLabels'] as List;
+      final railway =
+          labels.singleWhere((label) => label['name'] == '京沪高速线') as Map;
+      final anchors = railway['coordinates'] as List;
+      expect(anchors.length, greaterThan(1));
+      expect(anchors, everyElement(hasLength(2)));
+      expect(
+        appleMapOptions(catalog, [trip], railway: false)['lineLabels'],
+        isEmpty,
+      );
+    },
+  );
+
   test(
     'dense labels leave room in the overview and reveal stops at higher zoom',
     () {

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:isolate';
 
 import 'package:flutter/services.dart';
@@ -87,7 +88,9 @@ void _ticketWorker(List<dynamic> input) {
 }
 
 Future<String> renderOriginalTicket(String input) async {
+  final elapsed = Stopwatch()..start();
   final worker = await (_worker ??= _TicketWorker.start());
+  final engineMs = elapsed.elapsedMilliseconds;
   await prepareRenderFonts(
     jsonDecode(input)['template'],
     manifest: (template) => worker.evaluate(
@@ -99,7 +102,18 @@ Future<String> renderOriginalTicket(String input) async {
       );
     },
   );
-  return worker.evaluate('XingjiTickets.display(${jsonEncode(input)})');
+  final fontMs = elapsed.elapsedMilliseconds - engineMs;
+  final svg = await worker.evaluate(
+    'XingjiTickets.display(${jsonEncode(input)})',
+  );
+  final svgMs = elapsed.elapsedMilliseconds - fontMs - engineMs;
+  if (elapsed.elapsedMilliseconds >= 180) {
+    developer.log(
+      'worker=${engineMs}ms fonts=${fontMs}ms svg=${svgMs}ms',
+      name: 'Xingji.TicketRender',
+    );
+  }
+  return svg;
 }
 
 Future<String> normalizeArchive(String input) async {

@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'archive_choice_field.dart';
+
 class CoachPanel extends StatefulWidget {
   final Map data;
   final String carriage;
@@ -36,21 +38,14 @@ class _CoachPanelState extends State<CoachPanel> {
       onExpansionChanged: (value) => setState(() => expanded = value),
       children: expanded
           ? [
-              DropdownButtonFormField<int>(
-                key: ValueKey(index),
-                initialValue: index,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: '车厢'),
-                items: [
+              ArchiveChoiceField<int>(
+                label: '车厢',
+                value: index,
+                choices: {
                   for (var i = 0; i < cars.length; i++)
-                    DropdownMenuItem(
-                      value: i,
-                      child: Text(
-                        '${cars[i]['name']}${i == matching ? '（你的车厢）' : ''}',
-                      ),
-                    ),
-                ],
-                onChanged: (value) => setState(() => selected = value!),
+                    i: '${cars[i]['name']}${i == matching ? '（你的车厢）' : ''}',
+                },
+                onChanged: (value) => setState(() => selected = value),
               ),
               const SizedBox(height: 16),
               InteractiveViewer(

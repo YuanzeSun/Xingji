@@ -2,6 +2,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
+import 'archive_choice_field.dart';
+import 'archive_text_field.dart';
 import 'design.dart';
 import 'input_formatters.dart';
 import 'sync_review.dart';
@@ -120,8 +122,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   ])
                     Padding(
                       padding: const EdgeInsets.only(top: 16),
-                      child: TextField(
-                        controller: fields[key],
+                      child: ArchiveTextField(
+                        controller: fields[key]!,
                         inputFormatters: key == 'chineseName'
                             ? null
                             : [UppercaseInput()],
@@ -129,19 +131,12 @@ class _ProfileEditorState extends State<ProfileEditor> {
                       ),
                     ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: profile['gender'],
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: '性别'),
-                    items: ['', '男', '女']
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(value.isEmpty ? '未设置' : value),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => profile['gender'] = value,
+                  ArchiveChoiceField<String>(
+                    label: '性别',
+                    value: profile['gender'],
+                    choices: const {'': '未设置', '男': '男', '女': '女'},
+                    onChanged: (value) =>
+                        setState(() => profile['gender'] = value),
                   ),
                   const SectionTitle('常用证件'),
                   for (final doc in docs)
@@ -178,25 +173,15 @@ class _ProfileEditorState extends State<ProfileEditor> {
                               ),
                             ],
                           ),
-                          DropdownButtonFormField<String>(
-                            initialValue: doc.type,
-                            isExpanded: true,
-                            decoration: const InputDecoration(
-                              labelText: '证件类型',
-                            ),
-                            items: documentTypes.entries
-                                .map(
-                                  (entry) => DropdownMenuItem(
-                                    value: entry.key,
-                                    child: Text(entry.value),
-                                  ),
-                                )
-                                .toList(),
+                          ArchiveChoiceField<String>(
+                            label: '证件类型',
+                            value: doc.type,
+                            choices: documentTypes,
                             onChanged: (value) =>
-                                setState(() => doc.type = value!),
+                                setState(() => doc.type = value),
                           ),
                           const SizedBox(height: 12),
-                          TextField(
+                          ArchiveTextField(
                             controller: doc.number,
                             inputFormatters: [UppercaseInput()],
                             decoration: const InputDecoration(
@@ -204,14 +189,14 @@ class _ProfileEditorState extends State<ProfileEditor> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          TextField(
+                          ArchiveTextField(
                             controller: doc.label,
                             decoration: const InputDecoration(
                               labelText: '证件备注名',
                             ),
                           ),
                           const SizedBox(height: 12),
-                          TextField(
+                          ArchiveTextField(
                             controller: doc.expiry,
                             readOnly: true,
                             decoration: InputDecoration(
@@ -261,32 +246,17 @@ class _ProfileEditorState extends State<ProfileEditor> {
                   ])
                     Padding(
                       padding: const EdgeInsets.only(bottom: 16),
-                      child: DropdownButtonFormField<String>(
-                        key: ValueKey('$key:${profile[key]}:${docs.length}'),
-                        initialValue: profile[key],
-                        isExpanded: true,
-                        decoration: InputDecoration(labelText: label),
-                        items: [
-                          const DropdownMenuItem(
-                            value: '',
-                            child: Text('按证件类型自动选择'),
-                          ),
-                          const DropdownMenuItem(
-                            value: 'none',
-                            child: Text('不自动填写证件'),
-                          ),
+                      child: ArchiveChoiceField<String>(
+                        label: label,
+                        value: profile[key],
+                        choices: {
+                          '': '按证件类型自动选择',
+                          'none': '不自动填写证件',
                           for (final doc in docs)
-                            DropdownMenuItem(
-                              value: doc.id,
-                              child: Text(
-                                doc.label.text.isEmpty
-                                    ? documentTypes[doc.type]!
-                                    : doc.label.text,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                        ],
+                            doc.id: doc.label.text.isEmpty
+                                ? documentTypes[doc.type]!
+                                : doc.label.text,
+                        },
                         onChanged: (value) =>
                             setState(() => profile[key] = value),
                       ),

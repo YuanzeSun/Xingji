@@ -2,10 +2,14 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import 'package:cupertino_ui/cupertino_ui.dart'
+    show CupertinoSearchTextField, CupertinoSliverRefreshControl;
 import 'package:material_ui/material_ui.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
+import 'platform_services.dart';
+import 'welcome_guide.dart';
 import 'sync_review.dart';
 import 'design.dart';
 import 'export_service.dart';
@@ -20,8 +24,11 @@ class ArchivePage extends StatefulWidget {
 }
 
 class _ArchivePageState extends State<ArchivePage> {
-  String filter = 'all', query = '';
-  bool grid = true, small = false, recent = true;
+  String query = '';
+  bool includeRail = true, includeFlight = true, grid = true, small = false;
+  bool searchVisible = false;
+  final searchController = TextEditingController();
+  final searchFocus = FocusNode();
   final scroll = ScrollController();
   final selected = <String>{};
   bool selecting = false, exporting = false;
@@ -220,6 +227,8 @@ class _ArchivePageState extends State<ArchivePage> {
   @override
   void dispose() {
     scroll.dispose();
+    searchController.dispose();
+    searchFocus.dispose();
     super.dispose();
   }
 
@@ -230,9 +239,8 @@ class _ArchivePageState extends State<ArchivePage> {
         .where((s) => s.isNotEmpty)
         .toList();
     final rows = widget.store.records.where((record) {
-      if (filter != 'all' && (filter == 'flight') != record.isFlight) {
-        return false;
-      }
+      if (record.isFlight ? !includeFlight : !includeRail) return false;
+      if (terms.isEmpty) return true;
       final text = placeKey(
         [
           ...[
@@ -259,7 +267,7 @@ class _ArchivePageState extends State<ArchivePage> {
     int datePart(int? a, int? b) {
       if (a == null) return b == null ? 0 : 1;
       if (b == null) return -1;
-      return recent ? b.compareTo(a) : a.compareTo(b);
+      return b.compareTo(a);
     }
 
     rows.sort((a, b) {
@@ -267,8 +275,11 @@ class _ArchivePageState extends State<ArchivePage> {
       if (year != 0) return year;
       final day = datePart(a.departure?.dayOfYear, b.departure?.dayOfYear);
       if (day != 0) return day;
-      final time = a.text('departureTime').compareTo(b.text('departureTime'));
-      return time == 0 ? a.id.compareTo(b.id) : (recent ? -time : time);
+      final aTime = a.text('departureTime'), bTime = b.text('departureTime');
+      if (aTime.isEmpty && bTime.isNotEmpty) return 1;
+      if (bTime.isEmpty && aTime.isNotEmpty) return -1;
+      final time = aTime.compareTo(bTime);
+      return time == 0 ? a.id.compareTo(b.id) : -time;
     });
     return rows;
   }
@@ -280,139 +291,218 @@ class _ArchivePageState extends State<ArchivePage> {
       selecting = false;
       lastDemo = widget.store.demo;
     }
-    final rows = records, width = MediaQuery.sizeOf(context).width;
-    final wide = width >= 900, gutter = archiveGutter(width);
-    final feature =
-        !selecting &&
-        recent &&
-        grid &&
-        !small &&
-        query.isEmpty &&
-        filter == 'all' &&
-        rows.isNotEmpty;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: archiveContentWidth),
-        child: CustomScrollView(
-          controller: scroll,
-          slivers: [
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(gutter, 28, gutter, 0),
-              sliver: SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    final rows = records;
+    final gutter = archiveGutter(MediaQuery.sizeOf(context).width);
+    final canRefresh = !widget.store.demo && widget.store.connected;
+    final apple = AppleServices.available;
+    final content = CustomScrollView(
+      controller: scroll,
+      physics: canRefresh ? const AlwaysScrollableScrollPhysics() : null,
+      slivers: [
+        if (canRefresh && apple)
+          CupertinoSliverRefreshControl(onRefresh: _refresh),
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(gutter, 28, gutter, 0),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '我的票夹',
-                            style: Theme.of(context).textTheme.headlineLarge,
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: '搜索票据',
-                          onPressed: _search,
-                          icon: const Icon(Icons.search, size: 26),
-                        ),
-                      ],
+                    Expanded(
+                      child: Text(
+                        '我的票夹',
+                        style: Theme.of(context).textTheme.headlineLarge,
+                      ),
+                    ),
+                    if (!widget.store.demo)
+                      TextButton(
+                        onPressed: () =>
+                            showWelcomeGuide(context, widget.store),
+                        child: const Text('使用引导'),
+                      ),
+                    IconButton(
+                      tooltip: searchVisible ? '关闭搜索' : '搜索票据',
+                      onPressed: _toggleSearch,
+                      icon: Icon(
+                        searchVisible ? Icons.close : Icons.search,
+                        size: 26,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.store.demo
+                      ? '示例模式 · ${rows.length} 张票据'
+                      : '${rows.length} 张票据，收藏走过的旅程。',
+                  style: const TextStyle(fontSize: 15, color: muted),
+                ),
+                AnimatedSize(
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : const Duration(milliseconds: 220),
+                  alignment: Alignment.topCenter,
+                  curve: Curves.easeOutCubic,
+                  child: searchVisible
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: apple
+                              ? CupertinoSearchTextField(
+                                  backgroundColor: Colors.white,
+                                  controller: searchController,
+                                  focusNode: searchFocus,
+                                  placeholder: '城市、车站、车次或旅客',
+                                  onChanged: _setQuery,
+                                  onSuffixTap: () {
+                                    searchController.clear();
+                                    _setQuery('');
+                                  },
+                                )
+                              : TextField(
+                                  controller: searchController,
+                                  focusNode: searchFocus,
+                                  textInputAction: TextInputAction.done,
+                                  onChanged: _setQuery,
+                                  decoration: InputDecoration(
+                                    hintText: '城市、车站、车次或旅客',
+                                    prefixIcon: const Icon(Icons.search),
+                                    suffixIcon: query.isEmpty
+                                        ? null
+                                        : IconButton(
+                                            tooltip: '清空搜索',
+                                            onPressed: () {
+                                              searchController.clear();
+                                              _setQuery('');
+                                            },
+                                            icon: const Icon(Icons.clear),
+                                          ),
+                                  ),
+                                ),
+                        )
+                      : const SizedBox(width: double.infinity),
+                ),
+                const SizedBox(height: 22),
+                Text(
+                  query.isNotEmpty
+                      ? '搜索结果'
+                      : includeRail != includeFlight
+                      ? (includeRail ? '火车票据' : '机票票据')
+                      : '全部票据',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                Wrap(
+                  spacing: 5,
+                  runSpacing: 4,
+                  children: [
+                    _displayToggle(
+                      '火车票',
+                      Icons.train_outlined,
+                      includeRail,
+                      () {
+                        includeRail = !includeRail;
+                        selected.clear();
+                      },
+                    ),
+                    _displayToggle(
+                      '机票',
+                      Icons.flight_outlined,
+                      includeFlight,
+                      () {
+                        includeFlight = !includeFlight;
+                        selected.clear();
+                      },
+                    ),
+                    _displayToggle(
+                      '紧凑尺寸',
+                      Icons.density_small,
+                      small,
+                      () => small = !small,
+                    ),
+                    _displayToggle(
+                      '网格展示',
+                      Icons.grid_view,
+                      grid,
+                      () => grid = !grid,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (selecting) _selectionBar(rows),
+              ],
+            ),
+          ),
+        ),
+        if (rows.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.confirmation_number_outlined,
+                      size: 48,
+                      color: muted,
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      widget.store.records.isEmpty && query.isEmpty
+                          ? '从第一张票开始'
+                          : '没有找到匹配的票据',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      widget.store.demo
-                          ? '示例模式 · ${rows.length} 张票据'
-                          : '${rows.length} 张票据，收藏走过的旅程。',
-                      style: const TextStyle(fontSize: 15, color: muted),
+                      widget.store.records.isEmpty && query.isEmpty
+                          ? '点击下方 +，收藏自己的旅程。'
+                          : query.isEmpty
+                          ? '可切换火车票和机票筛选。'
+                          : '试试城市名、车次或航班号。',
+                      style: const TextStyle(color: muted),
                     ),
-                    const SizedBox(height: 28),
-                    if (feature) ...[
-                      _featured(rows, wide),
-                      const SizedBox(height: 40),
-                    ],
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            query.isEmpty
-                                ? (feature
-                                      ? '全部票据'
-                                      : '${{'all': '全部', 'rail': '火车', 'flight': '飞机'}[filter]}票据')
-                                : '“$query”的搜索结果',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
+                    if (!widget.store.demo &&
+                        widget.store.records.isEmpty &&
+                        query.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: TextButton.icon(
+                          onPressed: () => widget.store.setDemo(true),
+                          icon: const Icon(Icons.explore_outlined),
+                          label: const Text('先看看示例模式'),
                         ),
-                        if (query.isNotEmpty)
-                          IconButton(
-                            tooltip: '清空搜索',
-                            onPressed: () => setState(() {
-                              query = '';
-                              selected.clear();
-                            }),
-                            icon: const Icon(Icons.close),
-                          ),
-                        if (!selecting)
-                          TextButton(
-                            onPressed: () => setState(() => selecting = true),
-                            child: const Text('选择'),
-                          ),
-                        TextButton.icon(
-                          onPressed: exporting ? null : _options,
-                          icon: const Icon(Icons.tune_outlined, size: 18),
-                          label: const Text('整理'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    if (selecting) _selectionBar(rows),
+                      ),
                   ],
                 ),
               ),
             ),
-            if (rows.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.confirmation_number_outlined,
-                          size: 48,
-                          color: muted,
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          query.isEmpty ? '从第一张票开始' : '没有找到这段旅程',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          query.isEmpty ? '点击下方 +，收藏自己的旅程。' : '试试城市名、车次或航班号。',
-                          style: const TextStyle(color: muted),
-                        ),
-                        if (!widget.store.demo && widget.store.records.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: TextButton.icon(
-                              onPressed: () => widget.store.setDemo(true),
-                              icon: const Icon(Icons.explore_outlined),
-                              label: const Text('先看看示例模式'),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ..._collection(rows, gutter),
-            const SliverToBoxAdapter(child: SizedBox(height: 120)),
-          ],
-        ),
+          ),
+        ..._collection(rows, gutter),
+        const SliverToBoxAdapter(child: SizedBox(height: 120)),
+      ],
+    );
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: archiveContentWidth),
+        child: canRefresh && !apple
+            ? RefreshIndicator.adaptive(onRefresh: _refresh, child: content)
+            : content,
       ),
     );
+  }
+
+  Future<void> _refresh() async {
+    if (widget.store.busy || widget.store.demo || !widget.store.connected) {
+      return;
+    }
+    try {
+      await widget.store.sync();
+    } catch (error) {
+      if (mounted) showError(context, error);
+    }
   }
 
   List<Widget> _collection(List<TicketRecord> rows, double gutter) {
@@ -515,6 +605,12 @@ class _ArchivePageState extends State<ArchivePage> {
 
   Widget _ticketTap(TicketRecord record, Widget child) => InkWell(
     onTap: exporting ? null : () => _open(record),
+    onLongPress: selecting || exporting
+        ? null
+        : () => setState(() {
+            selecting = true;
+            selected.add(record.id);
+          }),
     borderRadius: BorderRadius.circular(12),
     child: child,
   );
@@ -552,7 +648,7 @@ class _ArchivePageState extends State<ArchivePage> {
     final date = record.departure;
     final calendar = date?.date;
     final day = calendar == null
-        ? date?.label ?? '日期未知'
+        ? '日期未知'
         : '${calendar.month.toString().padLeft(2, '0')}.${calendar.day.toString().padLeft(2, '0')}';
     final time = record.text('departureTime');
     final service = record.text('service');
@@ -657,276 +753,44 @@ class _ArchivePageState extends State<ArchivePage> {
     );
   }
 
-  Widget _featured(List<TicketRecord> rows, bool wide) {
-    final record = rows.first;
-    final face = Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 16, 20),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          if (rows.length > 1)
-            Positioned.fill(
-              child: Transform.translate(
-                offset: const Offset(10, 12),
-                child: Transform.rotate(
-                  angle: .025,
-                  child: Opacity(
-                    opacity: .5,
-                    child: TicketFace(rows[1], widget.store.catalog),
-                  ),
-                ),
-              ),
-            ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              boxShadow: [
-                BoxShadow(
-                  color: ink.withValues(alpha: .16),
-                  blurRadius: 32,
-                  offset: const Offset(0, 14),
-                ),
-              ],
-            ),
-            child: Hero(
-              tag: 'featured:${record.id}',
-              child: TicketFace(record, widget.store.catalog),
-            ),
-          ),
-        ],
-      ),
-    );
-    final route = Column(
-      crossAxisAlignment: wide
-          ? CrossAxisAlignment.start
-          : CrossAxisAlignment.center,
-      children: [
-        if (wide) ...[
-          Text(
-            record.departure?.label ?? '',
-            style: const TextStyle(color: muted),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            record.text('origin'),
-            style: Theme.of(context).textTheme.headlineLarge,
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Icon(Icons.south, color: muted, size: 22),
-          ),
-          Text(
-            record.text('destination'),
-            style: Theme.of(context).textTheme.headlineLarge,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            record.text('service'),
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              color: ink,
-            ),
-          ),
-        ] else
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  record.text('origin'),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w600,
-                    color: ink,
-                  ),
-                ),
-              ),
-              const Icon(Icons.east, size: 20, color: muted),
-              Expanded(
-                child: Text(
-                  record.text('destination'),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w600,
-                    color: ink,
-                  ),
-                ),
-              ),
-            ],
-          ),
-      ],
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text('最近一程', style: TextStyle(fontSize: 14, color: muted)),
-            ),
-            if (!wide)
-              Flexible(
-                flex: 3,
-                child: Wrap(
-                  spacing: 12,
-                  alignment: WrapAlignment.end,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (record.text('service').isNotEmpty)
-                      Text(
-                        record.text('service'),
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: ink,
-                        ),
-                      ),
-                    Text(
-                      record.departure?.label ?? '',
-                      style: const TextStyle(fontSize: 14, color: muted),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => openTicket(
-            context,
-            widget.store,
-            record,
-            heroTag: 'featured:${record.id}',
-          ),
-          child: wide
-              ? Row(
-                  children: [
-                    Expanded(flex: 3, child: face),
-                    const SizedBox(width: 56),
-                    Expanded(flex: 2, child: route),
-                  ],
-                )
-              : Column(children: [face, const SizedBox(height: 12), route]),
-        ),
-      ],
-    );
+  Widget _displayToggle(
+    String label,
+    IconData icon,
+    bool value,
+    VoidCallback change,
+  ) => IconButton(
+    tooltip: label,
+    isSelected: value,
+    onPressed: exporting ? null : () => setState(change),
+    icon: Icon(icon, size: 20),
+    style: IconButton.styleFrom(
+      backgroundColor: value ? mist : Colors.transparent,
+      foregroundColor: value ? ink : muted,
+    ),
+  );
+
+  void _setQuery(String value) {
+    if (query == value) return;
+    setState(() {
+      query = value;
+      selected.clear();
+    });
   }
 
-  Future<void> _search() async {
-    final controller = TextEditingController(text: query);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('搜索旅程'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: '城市、车站、车次或旅客',
-            prefixIcon: Icon(Icons.search),
-          ),
-          onSubmitted: (value) => Navigator.pop(context, value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('搜索'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (result != null && mounted) {
+  void _toggleSearch() {
+    if (searchVisible) {
+      searchFocus.unfocus();
+      searchController.clear();
       setState(() {
-        query = result;
+        searchVisible = false;
+        query = '';
         selected.clear();
       });
+    } else {
+      setState(() => searchVisible = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && searchVisible) searchFocus.requestFocus();
+      });
     }
-  }
-
-  Future<void> _options() async {
-    await showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: StatefulBuilder(
-          builder: (context, update) => Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('整理票夹', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 24),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final (id, label) in [
-                      ('all', '全部'),
-                      ('rail', '火车'),
-                      ('flight', '飞机'),
-                    ])
-                      ChoiceChip(
-                        label: Text(label),
-                        selected: filter == id,
-                        onSelected: (_) {
-                          setState(() {
-                            filter = id;
-                            selected.clear();
-                          });
-                          update(() {});
-                        },
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('网格展示'),
-                  value: grid,
-                  onChanged: (value) {
-                    setState(() => grid = value);
-                    update(() {});
-                  },
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('紧凑尺寸'),
-                  value: small,
-                  onChanged: (value) {
-                    setState(() => small = value);
-                    update(() {});
-                  },
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('由近及远'),
-                  value: recent,
-                  onChanged: (value) {
-                    setState(() => recent = value);
-                    update(() {});
-                  },
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('完成'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

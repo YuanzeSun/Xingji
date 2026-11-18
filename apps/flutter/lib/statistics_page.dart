@@ -6,6 +6,7 @@ import 'package:xingji_core/xingji_core.dart';
 import 'app_store.dart';
 import 'design.dart';
 import 'journey_statistics.dart';
+import 'platform_services.dart';
 import 'ride_trend_chart.dart';
 
 class StatisticsPage extends StatefulWidget {
@@ -257,20 +258,32 @@ class _StatisticsPageState extends State<StatisticsPage> {
   }
 
   Future<void> _pickDate({required bool start}) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: start ? from ?? until : until,
-      firstDate: start ? DateTime(1800) : from ?? DateTime(1800),
-      lastDate: DateTime(2200, 12, 31),
-      helpText: start ? '选择起始日期' : '选择截止日期',
-    );
-    if (picked == null || !mounted) return;
+    final initial = start ? from ?? until : until;
+    final first = start ? DateTime(1800) : from ?? DateTime(1800);
+    final last = DateTime(2200, 12, 31);
+    final DateTime? picked;
+    try {
+      picked = AppleServices.available
+          ? await AppleServices.pickDate(initial, first, last)
+          : await showDatePicker(
+              context: context,
+              initialDate: initial,
+              firstDate: first,
+              lastDate: last,
+              helpText: start ? '选择起始日期' : '选择截止日期',
+            );
+    } catch (error) {
+      if (mounted) showError(context, error);
+      return;
+    }
+    if (picked is! DateTime || !mounted) return;
+    final selected = picked;
     setState(() {
       if (start) {
-        from = picked;
-        if (until.isBefore(picked)) until = picked;
+        from = selected;
+        if (until.isBefore(selected)) until = selected;
       } else {
-        until = picked;
+        until = selected;
       }
     });
   }

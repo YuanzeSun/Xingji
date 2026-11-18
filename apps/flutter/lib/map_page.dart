@@ -5,6 +5,8 @@ import 'package:path_drawing/path_drawing.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
+import 'apple_journey_map.dart';
+import 'platform_services.dart';
 import 'design.dart';
 import 'map_page_header.dart';
 import 'map_annotations.dart';
@@ -19,42 +21,85 @@ class MapPage extends StatefulWidget {
 
 class _MapPageState extends State<MapPage> {
   final layers = {'railway', 'routes'};
+  bool fullscreen = false, native = true;
+
+  Future<void> _fullscreen(Widget map) async {
+    setState(() => fullscreen = true);
+    await openJourneyMapFullscreen(context, map);
+    if (mounted) setState(() => fullscreen = false);
+  }
+
   @override
-  Widget build(BuildContext context) => Stack(
-    children: [
-      Positioned.fill(
-        child: JourneyCanvas(
-          widget.store,
-          widget.store.records,
-          railway: layers.contains('railway'),
-          airRoutes: layers.contains('routes'),
-          flights: layers.contains('flight'),
-          rail: layers.contains('rail'),
-          controlBottom: 110,
-          annotationInsets: EdgeInsets.fromLTRB(
-            12,
-            150 * MediaQuery.textScalerOf(context).scale(1),
-            12,
-            110,
-          ),
+  Widget build(BuildContext context) {
+    final records = widget.store.records;
+    final apple = AppleServices.available;
+    final options = apple && native
+        ? appleMapOptions(
+            widget.store.catalog,
+            records,
+            railway: layers.contains('railway'),
+            railOverview: layers.contains('rail'),
+            flightRoutes: layers.contains('routes'),
+            flightFrequency: layers.contains('flight'),
+          )
+        : null;
+    Widget map(bool expanded) => options != null
+        ? AppleMapView(
+            options,
+            key: ValueKey(
+              Object.hashAll([
+                ...layers,
+                for (final record in records)
+                  Object.hash(record.id, record.text('updatedAt')),
+              ]),
+            ),
+          )
+        : JourneyCanvas(
+            widget.store,
+            records,
+            railway: layers.contains('railway'),
+            airRoutes: layers.contains('routes'),
+            flights: layers.contains('flight'),
+            rail: layers.contains('rail'),
+            controlBottom: expanded ? 12 : 110,
+            annotationInsets: expanded
+                ? const EdgeInsets.all(8)
+                : EdgeInsets.fromLTRB(
+                    12,
+                    150 * MediaQuery.textScalerOf(context).scale(1),
+                    12,
+                    110,
+                  ),
+          );
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: fullscreen ? const ColoredBox(color: mist) : map(false),
         ),
-      ),
-      MapOverlay(
-        layers,
-        (id, value) => setState(() {
-          if (value) {
-            layers.add(id);
-            if (id == 'rail') layers.remove('railway');
-            if (id == 'railway') layers.remove('rail');
-            if (id == 'flight') layers.remove('routes');
-            if (id == 'routes') layers.remove('flight');
-          } else {
-            layers.remove(id);
-          }
-        }),
-      ),
-    ],
-  );
+        MapOverlay(
+          layers,
+          (id, value) => setState(() {
+            if (value) {
+              layers.add(id);
+              if (id == 'rail') layers.remove('railway');
+              if (id == 'railway') layers.remove('rail');
+              if (id == 'flight') layers.remove('routes');
+              if (id == 'routes') layers.remove('flight');
+            } else {
+              layers.remove(id);
+            }
+          }),
+          onFullscreen: fullscreen ? null : () => _fullscreen(map(true)),
+          mapStyle: apple
+              ? MapStyleSwitch(
+                  native,
+                  (value) => setState(() => native = value),
+                )
+              : null,
+        ),
+      ],
+    );
+  }
 }
 
 class JourneyCanvas extends StatefulWidget {
@@ -167,22 +212,6 @@ Offset project(List coordinates) => Offset(
   ((coordinates[0] as num).toDouble() + 180) / 360 * mapWorldWidth,
   (90 - (coordinates[1] as num).toDouble()) / 360 * mapWorldWidth,
 );
-
-Map? matchingRailRoute(TicketRecord record, ReferenceCatalog catalog) {
-  final route = record['railRoute'];
-  if (record.isFlight || !record.isJourney || route is! Map) return null;
-  String service(Object? value) =>
-      (value ?? '').toString().trim().toUpperCase().split('/').first;
-  if (service(record['service']) != service(route['service'])) return null;
-  for (final side in ['origin', 'destination']) {
-    final name = catalog.endpoint(record, side)?.name ?? record.text(side);
-    if (placeKey(name).replaceFirst(RegExp(r'站$'), '') !=
-        placeKey('${route[side] ?? ''}')) {
-      return null;
-    }
-  }
-  return route;
-}
 
 class JourneyPainter extends CustomPainter {
   final JourneyCanvas view;

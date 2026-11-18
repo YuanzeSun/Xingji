@@ -1,16 +1,17 @@
 import 'dart:convert';
 
+import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoButton;
 import 'package:material_ui/material_ui.dart';
-import 'package:file_selector/file_selector.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
+import 'archive_choice_field.dart';
+import 'archive_text_field.dart';
 import 'design.dart';
 import 'field_labels.dart';
 import 'platform_services.dart';
 import 'input_formatters.dart';
 import 'seat_input.dart';
-import 'import_review.dart';
 import 'sync_review.dart';
 
 const _barcodeBlue = Color(0xFF32658D);
@@ -23,12 +24,14 @@ Future<void> openEditor(
   BuildContext context,
   AppStore store, {
   TicketRecord? record,
+  TicketRecord? recognized,
 }) async {
   if (!await checkArchiveWrite(context, store) || !context.mounted) return;
   await Navigator.of(context).push(
     MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => TicketEditor(store, record: record),
+      builder: (_) =>
+          TicketEditor(store, record: record, recognized: recognized),
     ),
   );
 }
@@ -36,7 +39,9 @@ Future<void> openEditor(
 class TicketEditor extends StatefulWidget {
   final AppStore store;
   final TicketRecord? record;
-  const TicketEditor(this.store, {super.key, this.record});
+  final TicketRecord? recognized;
+  const TicketEditor(this.store, {super.key, this.record, this.recognized})
+    : assert(record == null || recognized == null);
   @override
   State<TicketEditor> createState() => _TicketEditorState();
 }
@@ -44,15 +49,34 @@ class TicketEditor extends StatefulWidget {
 class _TicketEditorState extends State<TicketEditor> {
   final form = GlobalKey<FormState>();
   final fields = <String, TextEditingController>{};
-  final barcodeText = TextEditingController();
   final scroll = ScrollController();
   final placeFocus = {'origin': FocusNode(), 'destination': FocusNode()};
-  late final scanAvailable = SystemRecognition().available();
+
+  Future<DateTime?> _pickDate(
+    DateTime initial,
+    DateTime first,
+    DateTime last,
+  ) async {
+    if (AppleServices.available) {
+      try {
+        return await AppleServices.pickDate(initial, first, last);
+      } catch (error) {
+        if (mounted) showError(context, error);
+        return null;
+      }
+    }
+    return showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: first,
+      lastDate: last,
+    );
+  }
+
   late Map<String, dynamic> data;
   JourneyDate? railStart;
   bool saving = false,
       querying = false,
-      importing = false,
       submitted = false,
       dirty = false,
       confirmingExit = false;
@@ -68,7 +92,8 @@ class _TicketEditorState extends State<TicketEditor> {
   @override
   void initState() {
     super.initState();
-    _replace(widget.record ?? TicketRecord.create());
+    _replace(widget.record ?? widget.recognized ?? TicketRecord.create());
+    dirty = widget.recognized != null;
   }
 
   void _replace(TicketRecord record) {
@@ -125,7 +150,6 @@ class _TicketEditorState extends State<TicketEditor> {
     for (final node in placeFocus.values) {
       node.dispose();
     }
-    barcodeText.dispose();
     scroll.dispose();
     super.dispose();
   }
@@ -407,11 +431,10 @@ class _TicketEditorState extends State<TicketEditor> {
   Future<void> chooseRailStart() async {
     final boarding = JourneyDate.fromJson(data['departureDate'])?.date;
     if (boarding == null) return;
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: railStart?.date ?? boarding,
-      firstDate: DateTime(1800),
-      lastDate: boarding,
+    final picked = await _pickDate(
+      railStart?.date ?? boarding,
+      DateTime(1800),
+      boarding,
     );
     if (picked != null && mounted) {
       setState(() {
@@ -423,138 +446,7 @@ class _TicketEditorState extends State<TicketEditor> {
     }
   }
 
-  Future<void> scanImage() async {
-    final provider = SystemRecognition();
-    if (!await provider.available()) {
-      if (mounted) showError(context, '此设备尚未接入系统扫描，可先手动录入或粘贴条码内容。');
-      return;
-    }
-    final file = await openFile(
-      acceptedTypeGroups: [
-        const XTypeGroup(
-          label: '票据图片',
-          extensions: ['jpg', 'jpeg', 'png', 'heic'],
-          mimeTypes: ['image/*'],
-        ),
-      ],
-    );
-    if (file == null) return;
-    setState(() => importing = true);
-    try {
-      final records = parseRecognition(
-        await provider.recognize(await file.readAsBytes()),
-        store.catalog,
-        flight: flight,
-      );
-      if (records.length > 1 && mounted) {
-        if (widget.record != null) {
-          throw const FormatException('编辑已有票据时，请扫描单个航段');
-        }
-        if (await reviewImport(context, store, records) && mounted) {
-          Navigator.pop(context);
-        }
-        return;
-      }
-      if (records.isEmpty) throw const FormatException('没有识别到票据');
-      if (widget.record != null &&
-          records.single.isFlight != widget.record!.isFlight) {
-        throw const FormatException('扫描结果的交通方式与当前票据不符，请另行录入');
-      }
-      if (mounted) {
-        setState(() => _applyRecognition(records.single));
-      }
-    } catch (failure) {
-      if (mounted) showError(context, failure);
-    } finally {
-      if (mounted) setState(() => importing = false);
-    }
-  }
-
-  Future<void> decode() async {
-    try {
-      final bytes = utf8.encode(barcodeText.text);
-      final decoded = boardingRecords(bytes, store.catalog);
-      if (decoded.length > 1) {
-        if (widget.record != null) {
-          throw const FormatException('编辑已有票据时，请使用单个航段');
-        }
-        if (await reviewImport(context, store, decoded) && mounted) {
-          Navigator.pop(context);
-        }
-        return;
-      }
-      if (decoded.isEmpty) throw const FormatException('未识别到登机牌条码，请检查完整内容');
-      if (mounted) setState(() => _applyRecognition(decoded.single));
-    } catch (failure) {
-      showError(context, failure);
-    }
-  }
-
-  void _applyRecognition(TicketRecord recognized) {
-    final draft = TicketRecord.fromJson(values());
-    final changes = <String, dynamic>{};
-    final sources = draft.fieldSources;
-    final manualLocks = draft.lockedFields;
-    final lookup = Map<String, dynamic>.from(draft['lookupValues'] as Map);
-    final replacingCode = recognized.text('boardingCodeSource') == 'original';
-    if (replacingCode &&
-        !sameValue(draft['boardingCode'], recognized['boardingCode'])) {
-      sources.removeWhere((_, source) => source == 'barcode');
-    }
-    for (final entry in recognized.fieldSources.entries) {
-      final key = entry.key, source = entry.value;
-      final incoming = recognized[key];
-      if (source == 'barcode' || (draft.text(key).isEmpty && incoming != '')) {
-        changes[key] = incoming;
-        sources[key] = source;
-        manualLocks.remove(key);
-        lookup.remove(key);
-      }
-    }
-    if (replacingCode) {
-      changes.addAll({
-        'boardingCodeSource': 'original',
-        'boardingCodeOperatingFlight': '',
-        'boardingLegIndex': recognized['boardingLegIndex'],
-      });
-      final day = recognized.departure!.dayOfYear!;
-      final savedYear = draft.departure?.year;
-      final retained =
-          savedYear != null && day <= JourneyDate.daysInYear(savedYear);
-      final year = retained ? savedYear : recognized.departure!.year;
-      changes['departureDate'] = JourneyDate(year, day).toJson();
-      if (!retained) {
-        sources.remove('departureDateYear');
-        if (year != null) sources['departureDateYear'] = 'ocr';
-      }
-    } else if (widget.record == null && !dirty && !flight) {
-      changes['template'] = recognized['template'];
-    }
-    final keepBarcodeInputs = flight && !replacingCode;
-    final generationFields = {
-      for (final key in ['barcodeName', 'sequence', 'status']) key: value(key),
-    };
-    _replace(
-      draft.withChanges({
-        ...changes,
-        'fieldSources': sources,
-        'lockedFields': manualLocks.toList(),
-        'lookupValues': lookup,
-      }),
-    );
-    if (keepBarcodeInputs) {
-      for (final entry in generationFields.entries) {
-        if (entry.key == 'barcodeName' &&
-            draft.text('passenger') != value('passenger')) {
-          continue;
-        }
-        fields[entry.key]!.text = entry.value;
-      }
-    }
-    dirty = true;
-  }
-
-  bool get busy => saving || querying || importing;
+  bool get busy => saving || querying;
 
   Future<void> confirmExit(bool didPop, Object? result) async {
     if (didPop || busy || !dirty || confirmingExit) return;
@@ -579,21 +471,6 @@ class _TicketEditorState extends State<TicketEditor> {
     if (mounted && discard == true) Navigator.pop(context);
   }
 
-  Widget _scanControl() => FutureBuilder<bool>(
-    future: scanAvailable,
-    builder: (context, snapshot) => OutlinedButton.icon(
-      onPressed: importing || snapshot.data != true ? null : scanImage,
-      icon: const Icon(Icons.document_scanner_outlined),
-      label: Text(
-        importing
-            ? '正在识别…'
-            : snapshot.data == true
-            ? '扫描票据图片'
-            : '系统扫描待接入',
-      ),
-    ),
-  );
-
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: store,
@@ -609,9 +486,7 @@ class _TicketEditorState extends State<TicketEditor> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
           child: FilledButton.icon(
-            onPressed: !store.canWrite || saving || querying || importing
-                ? null
-                : save,
+            onPressed: !store.canWrite || busy ? null : save,
             icon: saving
                 ? const SizedBox.square(
                     dimension: 20,
@@ -624,7 +499,7 @@ class _TicketEditorState extends State<TicketEditor> {
       ),
       body: ArchiveEditControls(
         enabled: store.canWrite,
-        busy: saving || querying || importing,
+        busy: busy,
         child: Form(
           key: form,
           autovalidateMode: submitted
@@ -666,7 +541,7 @@ class _TicketEditorState extends State<TicketEditor> {
                           ),
                         ),
                       ),
-                    if (widget.record == null)
+                    if (widget.record == null && widget.recognized == null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 24),
                         child: SegmentedButton<String>(
@@ -685,63 +560,39 @@ class _TicketEditorState extends State<TicketEditor> {
                           selected: {data['type']},
                           onSelectionChanged: (selection) => setState(() {
                             dirty = true;
-                            barcodeText.clear();
                             _replace(
                               TicketRecord.create({'type': selection.single}),
                             );
                           }),
                         ),
                       ),
-                    if (flight) ...[
-                      const SectionTitle('登机牌条码或电子登机牌二维码'),
-                      _scanControl(),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: barcodeText,
-                        onChanged: (_) => setState(() => dirty = true),
-                        minLines: 2,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: '粘贴解码后的条码内容',
+                    if (scanned)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 16),
+                        child: Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 6,
+                          children: [
+                            Icon(Icons.lock_outline, size: 16, color: muted),
+                            Text(
+                              '条码内容已填入并锁定。年份可以补充。',
+                              style: TextStyle(color: muted),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: decode,
-                        icon: const Icon(Icons.qr_code_scanner),
-                        label: const Text('解码并填入'),
-                      ),
-                      if (scanned)
-                        const Text(
-                          '条码内容已填入并锁定。年份可以补充。',
-                          style: TextStyle(color: muted),
-                        ),
-                    ] else ...[
-                      _scanControl(),
-                      const SizedBox(height: 16),
-                      const SectionTitle('票面'),
-                      DropdownButtonFormField<String>(
-                        initialValue: data['template'] == 'rail-refund-receipt'
+                    if (!flight) ...[
+                      ArchiveChoiceField<String>(
+                        label: '票面样式',
+                        value: data['template'] == 'rail-refund-receipt'
                             ? 'rail-receipt'
                             : data['template'],
-                        isExpanded: true,
-                        decoration: const InputDecoration(labelText: '票面样式'),
-                        items: ticketTemplates.entries
-                            .where(
-                              (entry) =>
-                                  entry.key.startsWith('rail-') &&
-                                  entry.key != 'rail-refund-receipt',
-                            )
-                            .map(
-                              (entry) => DropdownMenuItem(
-                                value: entry.key,
-                                child: Text(
-                                  entry.value,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
+                        choices: {
+                          for (final entry in ticketTemplates.entries)
+                            if (entry.key.startsWith('rail-') &&
+                                entry.key != 'rail-refund-receipt')
+                              entry.key: entry.value,
+                        },
                         onChanged: (value) => setState(() {
                           dirty = true;
                           data['template'] = value;
@@ -751,7 +602,7 @@ class _TicketEditorState extends State<TicketEditor> {
                         'rail-receipt',
                         'rail-refund-receipt',
                       ].contains(data['template']))
-                        SwitchListTile(
+                        SwitchListTile.adaptive(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('退票费凭证'),
                           value: data['template'] == 'rail-refund-receipt',
@@ -765,21 +616,14 @@ class _TicketEditorState extends State<TicketEditor> {
                     ],
                     const SectionTitle('行程'),
                     if (flight)
-                      DropdownButtonFormField<String>(
-                        initialValue: data['flightStatus'],
-                        isExpanded: true,
-                        decoration: const InputDecoration(labelText: '机票状态'),
-                        items: const [
-                          DropdownMenuItem(value: 'normal', child: Text('正常')),
-                          DropdownMenuItem(
-                            value: 'open',
-                            child: Text('Open 票'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'invalid',
-                            child: Text('无效票'),
-                          ),
-                        ],
+                      ArchiveChoiceField<String>(
+                        label: '机票状态',
+                        value: data['flightStatus'],
+                        choices: const {
+                          'normal': '正常',
+                          'open': 'Open 票',
+                          'invalid': '无效票',
+                        },
                         onChanged: (value) => setState(() {
                           dirty = true;
                           data['flightStatus'] = value;
@@ -1084,7 +928,7 @@ class _TicketEditorState extends State<TicketEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextFormField(
+        ArchiveTextField(
           controller: controller,
           enabled: enabled,
           readOnly: locked(key) || time,
@@ -1104,19 +948,36 @@ class _TicketEditorState extends State<TicketEditor> {
               ? null
               : () async {
                   final parts = controller.text.split(':');
-                  final picked = await showTimePicker(
-                    context: context,
-                    initialTime: TimeOfDay(
-                      hour: int.tryParse(parts.first) ?? 9,
-                      minute: parts.length > 1
-                          ? int.tryParse(parts[1]) ?? 0
-                          : 0,
-                    ),
+                  final initial = TimeOfDay(
+                    hour: int.tryParse(parts.first) ?? 9,
+                    minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
                   );
-                  if (picked != null) {
+                  TimeParts? picked;
+                  try {
+                    if (AppleServices.available) {
+                      FocusScope.of(context).unfocus();
+                      picked = await AppleServices.pickTime(
+                        initial.hour,
+                        initial.minute,
+                      );
+                    } else {
+                      final time = await showTimePicker(
+                        context: context,
+                        initialTime: initial,
+                      );
+                      if (time != null) {
+                        picked = (hour: time.hour, minute: time.minute);
+                      }
+                    }
+                  } catch (error) {
+                    if (mounted) showError(context, error);
+                    return;
+                  }
+                  if (picked != null && mounted) {
+                    final (hour: hour, minute: minute) = picked;
                     setState(() {
                       controller.text =
-                          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+                          '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
                       changed(key);
                     });
                   }
@@ -1147,7 +1008,7 @@ class _TicketEditorState extends State<TicketEditor> {
           data['${side}Code'] = flight ? place.code : place.text('pinyin');
         }),
         fieldViewBuilder: (context, controller, focus, onSubmit) =>
-            TextFormField(
+            ArchiveTextField(
               controller: controller,
               focusNode: focus,
               readOnly: locked(side),
@@ -1186,12 +1047,75 @@ class _TicketEditorState extends State<TicketEditor> {
       _source(side),
     ],
   );
+  Future<(int, int)?> _pickMonthDay(DateTime initial) async {
+    if (AppleServices.available) {
+      try {
+        return await AppleServices.pickMonthDay(initial);
+      } catch (error) {
+        if (mounted) showError(context, error);
+        return null;
+      }
+    }
+    var month = initial.month, day = initial.day;
+    return showDialog<(int, int)>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          title: const Text('选择月日'),
+          content: Wrap(
+            spacing: 20,
+            children: [
+              DropdownButton<int>(
+                value: month,
+                items: [
+                  for (var value = 1; value <= 12; value++)
+                    DropdownMenuItem(value: value, child: Text('$value月')),
+                ],
+                onChanged: (value) => update(() {
+                  month = value!;
+                  final limit = DateTime.utc(initial.year, month + 1, 0).day;
+                  if (day > limit) day = limit;
+                }),
+              ),
+              DropdownButton<int>(
+                value: day,
+                items: [
+                  for (
+                    var value = 1;
+                    value <= DateTime.utc(initial.year, month + 1, 0).day;
+                    value++
+                  )
+                    DropdownMenuItem(value: value, child: Text('$value日')),
+                ],
+                onChanged: (value) => update(() => day = value!),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, (month, day)),
+              child: const Text('完成'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _date(String key, String label, {bool required = false}) {
     final date = JourneyDate.fromJson(data[key]),
         anchor = DateTime.utc(date?.year ?? 2000, 1, date?.dayOfYear ?? 1);
     final dayLocked = key == 'departureDate' && locked(key);
-    final yearField = TextFormField(
-      controller: fields['$key-year'],
+    final showLockedDate =
+        date?.year != null &&
+        int.tryParse(fields['$key-year']!.text) == date?.year;
+    final yearField = ArchiveTextField(
+      controller: fields['$key-year']!,
+      native: true,
       keyboardType: TextInputType.number,
       decoration: const InputDecoration(labelText: '年份'),
       validator: (text) {
@@ -1201,7 +1125,11 @@ class _TicketEditorState extends State<TicketEditor> {
           return '年份无效';
         }
         try {
-          JourneyDate(year, date?.dayOfYear);
+          if (dayLocked || date?.dayOfYear == null) {
+            JourneyDate(year, date?.dayOfYear);
+          } else {
+            JourneyDate.calendar(year ?? 2000, anchor.month, anchor.day);
+          }
         } on FormatException {
           return '该年份没有此日期';
         }
@@ -1213,7 +1141,14 @@ class _TicketEditorState extends State<TicketEditor> {
           dirty = true;
           if (year == null && text.isNotEmpty) return;
           try {
-            data[key] = JourneyDate(year, date?.dayOfYear).toJson();
+            final ordinal = dayLocked || date?.dayOfYear == null
+                ? date?.dayOfYear
+                : JourneyDate.calendar(
+                    year ?? 2000,
+                    anchor.month,
+                    anchor.day,
+                  ).dayOfYear;
+            data[key] = JourneyDate(year, ordinal).toJson();
             (data['fieldSources'] as Map)['${key}Year'] = 'manual';
             if (!dayLocked) changed(key);
           } on FormatException {
@@ -1228,58 +1163,104 @@ class _TicketEditorState extends State<TicketEditor> {
           required && JourneyDate.fromJson(data[key])?.dayOfYear == null
           ? '请选择月日'
           : null,
-      builder: (state) => InkWell(
-        onTap: dayLocked
-            ? null
-            : () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: date?.date ?? DateTime.now(),
-                  firstDate: DateTime(1800),
-                  lastDate: DateTime(2200),
-                );
-                if (picked != null) {
-                  setState(() {
-                    data[key] = JourneyDate.calendar(
-                      picked.year,
-                      picked.month,
-                      picked.day,
-                    ).toJson();
-                    fields['$key-year']!.text = '${picked.year}';
-                    changed(key);
-                    state.didChange(JourneyDate.fromJson(data[key])!.dayOfYear);
-                  });
-                }
-              },
-        child: InputDecorator(
-          decoration: InputDecoration(
-            label: Text.rich(
-              TextSpan(
-                children: [
-                  const TextSpan(text: '月日'),
-                  if (required)
-                    const TextSpan(
-                      text: ' *',
-                      style: TextStyle(color: ticketRed),
-                    ),
-                ],
+      builder: (state) {
+        Future<void> pickDay() async {
+          final today = DateTime.now();
+          final year = date?.year ?? 2000;
+          final initial = date?.dayOfYear == null
+              ? DateTime.utc(year, today.month, today.day)
+              : anchor;
+          final picked = await _pickMonthDay(initial);
+          if (picked == null || !mounted || !state.mounted) return;
+          setState(() {
+            final ordinal = JourneyDate.calendar(
+              year,
+              picked.$1,
+              picked.$2,
+            ).dayOfYear;
+            data[key] = JourneyDate(date?.year, ordinal).toJson();
+            changed(key);
+            state.didChange(ordinal);
+          });
+        }
+
+        final monthDayLabel = Text.rich(
+          TextSpan(
+            children: [
+              const TextSpan(text: '月日'),
+              if (required)
+                const TextSpan(
+                  text: ' *',
+                  style: TextStyle(color: ticketRed),
+                ),
+            ],
+          ),
+        );
+        final value = dayLocked && !showLockedDate
+            ? ''
+            : date?.dayOfYear == null
+            ? '选择月日'
+            : '${anchor.month}月${anchor.day}日';
+        if (AppleServices.available) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              archiveInputLabel(context, monthDayLabel),
+              const SizedBox(height: 5),
+              SizedBox(
+                height: archiveInputHeight(context),
+                child: CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  color: Colors.white,
+                  disabledColor: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  onPressed: dayLocked ? null : pickDay,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          value,
+                          style: TextStyle(
+                            color: value == '选择月日' ? muted : Colors.black,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Icon(
+                        dayLocked
+                            ? Icons.lock_outline
+                            : Icons.calendar_today_outlined,
+                        color: muted,
+                        size: 18,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (state.errorText case final error?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(error, style: const TextStyle(color: ticketRed)),
+                ),
+            ],
+          );
+        }
+        return InkWell(
+          onTap: dayLocked ? null : pickDay,
+          child: InputDecorator(
+            isEmpty: dayLocked && !showLockedDate,
+            decoration: InputDecoration(
+              label: monthDayLabel,
+              errorText: state.errorText,
+              suffixIcon: Icon(
+                dayLocked ? Icons.lock_outline : Icons.calendar_today_outlined,
+                size: 20,
               ),
             ),
-            errorText: state.errorText,
-            suffixIcon: Icon(
-              dayLocked ? Icons.lock_outline : Icons.calendar_today_outlined,
-              size: 20,
-            ),
+            child: Text(value),
           ),
-          child: Text(
-            date?.dayOfYear == null
-                ? '选择月日'
-                : date?.year == null
-                ? '第 ${date?.dayOfYear} 天'
-                : '${anchor.month}月${anchor.day}日',
-          ),
-        ),
-      ),
+        );
+      },
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

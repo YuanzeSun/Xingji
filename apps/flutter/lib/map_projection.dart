@@ -1,5 +1,7 @@
 import 'dart:ui';
 
+import 'package:xingji_core/xingji_core.dart';
+
 const mapWorldWidth = 1000.0;
 
 class MapLongitudeFrame {
@@ -61,4 +63,20 @@ class MapLink {
     }
     return path;
   }
+}
+
+Map? matchingRailRoute(TicketRecord record, ReferenceCatalog catalog) {
+  final route = record['railRoute'];
+  if (record.isFlight || !record.isJourney || route is! Map) return null;
+  String service(Object? value) =>
+      (value ?? '').toString().trim().toUpperCase().split('/').first;
+  if (service(record['service']) != service(route['service'])) return null;
+  for (final side in ['origin', 'destination']) {
+    final name = catalog.endpoint(record, side)?.name ?? record.text(side);
+    if (placeKey(name).replaceFirst(RegExp(r'站$'), '') !=
+        placeKey('${route[side] ?? ''}')) {
+      return null;
+    }
+  }
+  return route;
 }

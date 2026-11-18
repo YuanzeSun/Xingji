@@ -54,6 +54,16 @@ void main() {
       .properties
       .value!;
 
+  void focusChart(WidgetTester tester) {
+    final focus = find
+        .ancestor(
+          of: find.byKey(const ValueKey('ride-trend-reader')),
+          matching: find.byType(Focus),
+        )
+        .first;
+    tester.widget<Focus>(focus).focusNode!.requestFocus();
+  }
+
   testWidgets(
     'selected counts, keyboard navigation and zoom share the same data',
     (tester) async {
@@ -61,11 +71,13 @@ void main() {
       expect(readout(tester), '2026年，火车9次，飞机4次');
       final plot = find.byKey(const ValueKey('ride-trend-plot'));
       final initialWidth = tester.getSize(plot).width;
-      await tester.tap(find.byTooltip('放大折线图'));
+      focusChart(tester);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.equal);
       await tester.pumpAndSettle();
       expect(tester.getSize(plot).width, greaterThan(initialWidth));
       expect(readout(tester), '2026年，火车9次，飞机4次');
-      await tester.tap(find.text('1.5×'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.minus);
       await tester.pumpAndSettle();
       expect(tester.getSize(plot).width, initialWidth);
       final viewport = tester.getRect(
@@ -104,6 +116,8 @@ void main() {
     final rect = tester.getRect(
       find.byKey(const ValueKey('ride-trend-reader')),
     );
+    final plot = find.byKey(const ValueKey('ride-trend-plot'));
+    final initialWidth = tester.getSize(plot).width;
     final a = await tester.startGesture(
       rect.center - const Offset(40, 0),
       pointer: 1,
@@ -119,7 +133,50 @@ void main() {
     await a.up();
     await b.up();
     await tester.pumpAndSettle();
-    expect(find.text('2.0×'), findsOneWidget);
+    expect(tester.getSize(plot).width, closeTo(initialWidth * 2, 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pinching in reaches the full date range in one viewport', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await open(tester);
+    final plot = find.byKey(const ValueKey('ride-trend-plot'));
+    final scrollable = find.byWidgetPredicate(
+      (widget) =>
+          widget is SingleChildScrollView &&
+          widget.scrollDirection == Axis.horizontal,
+    );
+    final viewport = tester.getRect(scrollable);
+    expect(tester.getSize(plot).width, viewport.width);
+    focusChart(tester);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.equal);
+    await tester.pumpAndSettle();
+    expect(tester.getSize(plot).width, greaterThan(viewport.width));
+
+    final first = await tester.startGesture(
+      viewport.center - const Offset(68, 0),
+      pointer: 3,
+    );
+    final second = await tester.startGesture(
+      viewport.center + const Offset(68, 0),
+      pointer: 4,
+    );
+    await tester.pump();
+    await first.moveBy(const Offset(48, 0));
+    await second.moveBy(const Offset(-48, 0));
+    await tester.pump();
+    await first.up();
+    await second.up();
+    await tester.pumpAndSettle();
+
+    expect(tester.getSize(plot).width, viewport.width);
+    expect(readout(tester), '2026年，火车9次，飞机4次');
     expect(tester.takeException(), isNull);
   });
 

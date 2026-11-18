@@ -6,12 +6,15 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'app_store.dart';
+import 'apple_navigation_bar.dart';
 import 'archive_page.dart';
 import 'design.dart';
-import 'editor.dart';
 import 'map_page.dart';
+import 'platform_services.dart';
 import 'settings_page.dart';
 import 'statistics_page.dart';
+import 'ticket_entry.dart';
+import 'travel_message_inbox.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -98,6 +101,7 @@ class ArchiveShell extends StatefulWidget {
 
 class _ArchiveShellState extends State<ArchiveShell>
     with SingleTickerProviderStateMixin {
+  final _openedPages = <int>{};
   int page = 0;
   late final transition = AnimationController(
     vsync: this,
@@ -111,13 +115,33 @@ class _ArchiveShellState extends State<ArchiveShell>
   @override
   void initState() {
     super.initState();
-    lifecycle = AppLifecycleListener(onResume: store.refreshConnection);
+    lifecycle = AppLifecycleListener(onResume: _refreshPlatform);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_refreshPlatform());
+    });
     connectionTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       final state = WidgetsBinding.instance.lifecycleState;
       if (state == null || state == AppLifecycleState.resumed) {
-        unawaited(store.refreshConnection());
+        unawaited(_refreshPlatform());
       }
     });
+  }
+
+  bool _refreshing = false;
+
+  Future<void> _refreshPlatform() async {
+    if (_refreshing) return;
+    _refreshing = true;
+    try {
+      await store.restoreConnection();
+      if (!mounted) return;
+      await store.refreshConnection();
+      if (mounted) await importPendingTravelMessages(store);
+    } catch (_) {
+      // Leave pending messages in the inbox for the next check or review.
+    } finally {
+      _refreshing = false;
+    }
   }
 
   @override
@@ -161,7 +185,21 @@ class _ArchiveShellState extends State<ArchiveShell>
         StatisticsPage(store),
         if (!store.demo) SettingsPage(store),
       ];
+      _openedPages.add(page);
+      final content = [
+        for (final (index, child) in pages.indexed)
+          if (_openedPages.contains(index))
+            TickerMode(enabled: page == index, child: child)
+          else
+            const SizedBox.shrink(),
+      ];
       final motion = transition.drive(CurveTween(curve: Curves.easeOutCubic));
+      const brand = Text(
+        '行迹',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontFamily: 'TicketSong', fontSize: 30, color: ink),
+      );
       return Scaffold(
         extendBody: true,
         body: SafeArea(
@@ -177,14 +215,7 @@ class _ArchiveShellState extends State<ArchiveShell>
                 ),
                 child: Row(
                   children: [
-                    const Text(
-                      '行迹',
-                      style: TextStyle(
-                        fontFamily: 'TicketSong',
-                        fontSize: 30,
-                        color: ink,
-                      ),
-                    ),
+                    if (store.demo) brand else const Expanded(child: brand),
                     if (store.demo)
                       Expanded(
                         child: LayoutBuilder(
@@ -214,23 +245,23 @@ class _ArchiveShellState extends State<ArchiveShell>
                         ),
                       ),
                     if (!store.demo) ...[
-                      const Spacer(),
-                      Icon(
-                        store.connection == null
-                            ? Icons.storage_outlined
-                            : store.readOnlyReason != null
-                            ? Icons.cloud_off_outlined
-                            : Icons.cloud_done_outlined,
-                        size: 16,
-                        color: muted,
-                      ),
-                      const SizedBox(width: 8),
-                      if (wide && store.readOnlyReason == null)
-                        Text(
-                          store.status,
-                          style: Theme.of(context).textTheme.bodySmall,
+                      if (width >= 380 ||
+                          MediaQuery.textScalerOf(context).scale(14) <= 18) ...[
+                        Tooltip(
+                          message: store.readOnlyReason ?? store.status,
+                          child: Text(
+                            store.connection == null
+                                ? '本机票库'
+                                : store.readOnlyReason != null
+                                ? '同步暂停'
+                                : store.busy
+                                ? '同步中'
+                                : '已连接',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         ),
-                      const SizedBox(width: 12),
+                        const SizedBox(width: 12),
+                      ],
                       const ExcludeSemantics(
                         child: Text('示例', style: TextStyle(color: muted)),
                       ),
@@ -269,73 +300,84 @@ class _ArchiveShellState extends State<ArchiveShell>
                       begin: const Offset(0, .015),
                       end: Offset.zero,
                     ).animate(motion),
-                    child: IndexedStack(index: page, children: pages),
+                    child: IndexedStack(index: page, children: content),
                   ),
                 ),
               ),
             ],
           ),
         ),
-        bottomNavigationBar: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-            child: Center(
-              heightFactor: 1,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(32),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .93),
+        bottomNavigationBar: AppleServices.available
+            ? AppleNavigationBar(
+                interactive: ModalRoute.isCurrentOf(context) ?? true,
+                selected: page,
+                demo: store.demo,
+                canWrite: store.canWrite,
+                onSelect: _navigate,
+                onAdd: (choice) =>
+                    openTicketEntry(context, store, choice: choice),
+              )
+            : SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: Center(
+                    heightFactor: 1,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ClipRRect(
                           borderRadius: BorderRadius.circular(32),
-                          border: Border.all(color: Colors.white),
-                        ),
-                        padding: const EdgeInsets.all(6),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            for (final (index, item) in destinations.indexed)
-                              _navigationItem(
-                                index,
-                                item,
-                                wide,
-                                showActiveLabel,
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: .93),
+                                borderRadius: BorderRadius.circular(32),
+                                border: Border.all(color: Colors.white),
                               ),
-                          ],
+                              padding: const EdgeInsets.all(6),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  for (final (index, item)
+                                      in destinations.indexed)
+                                    _navigationItem(
+                                      index,
+                                      item,
+                                      wide,
+                                      showActiveLabel,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                        if (!store.demo) ...[
+                          const SizedBox(width: 12),
+                          SizedBox.square(
+                            dimension: 60,
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                shape: const CircleBorder(),
+                              ),
+                              onPressed: !store.canWrite
+                                  ? null
+                                  : () => openTicketEntry(context, store),
+                              child: const Icon(
+                                Icons.add,
+                                size: 28,
+                                semanticLabel: '录入票据',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  if (!store.demo) ...[
-                    const SizedBox(width: 12),
-                    SizedBox.square(
-                      dimension: 60,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          shape: const CircleBorder(),
-                        ),
-                        onPressed: !store.canWrite
-                            ? null
-                            : () => openEditor(context, store),
-                        child: const Icon(
-                          Icons.add,
-                          size: 28,
-                          semanticLabel: '录入票据',
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
-            ),
-          ),
-        ),
       );
     },
   );
