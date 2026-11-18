@@ -125,6 +125,34 @@ void main() {
     expect(index['generation'], 'reset-id');
     expect(jsonDecode(writes.last.body)['force'], false);
   });
+  test(
+    'replacement changes the archive generation and keeps the existing tree',
+    () async {
+      final api = archive(), snapshot = await api.read();
+      await api.replaceTickets(
+        [],
+        snapshot,
+        snapshot.settings,
+        'replacement-generation',
+      );
+      expect(writes.map((r) => r.method), ['POST', 'POST', 'PATCH']);
+      final tree = jsonDecode(writes.first.body);
+      expect(tree['base_tree'], 'tree');
+      final changes = tree['tree'] as List;
+      final index = jsonDecode(
+        changes.firstWhere((e) => e['path'] == 'archive/index.json')['content'],
+      );
+      expect(index['generation'], 'replacement-generation');
+      expect(index['settings'], snapshot.settings);
+      expect(
+        changes.firstWhere((e) => e['path'] == 'archive/2026.json')['sha'],
+        isNull,
+      );
+      expect(jsonDecode(writes[1].body)['parents'], ['head']);
+      expect(jsonDecode(writes.last.body)['force'], false);
+    },
+  );
+
   test('reset removes the current tree but preserves profile, key and commit history', () async {
     final api = archive(), before = await api.read();
     final after = await api.reset(before, before.settings);

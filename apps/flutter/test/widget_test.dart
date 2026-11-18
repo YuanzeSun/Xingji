@@ -6,6 +6,8 @@ import 'package:xingji/app_store.dart';
 import 'package:xingji/editor.dart';
 import 'package:xingji/ticket_face.dart';
 import 'package:xingji/ticket_detail.dart';
+import 'package:xingji/settings_page.dart';
+import 'package:xingji_core/xingji_core.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -155,6 +157,75 @@ void main() {
       expect(find.text('导出纪念册'), compact ? findsNothing : findsOneWidget);
     }
   });
+
+  testWidgets(
+    'bound read-only library disables editing but keeps backup export',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 740);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final app = (await tester.runAsync(store))!;
+      addTearDown(app.dispose);
+      app.connection = const GitHubConnection(
+        'user',
+        'private',
+        repositoryId: 1,
+      );
+
+      await tester.pumpWidget(XingjiApp(store: app));
+      await tester.pumpAndSettle();
+      expect(find.text('请重新授权 GitHub 后编辑'), findsOneWidget);
+      final add = find.ancestor(
+        of: addTicket,
+        matching: find.byType(FilledButton),
+      );
+      expect(tester.widget<FilledButton>(add).onPressed, isNull);
+      await tester.tap(find.text('查看同步'));
+      await tester.pumpAndSettle();
+      for (final label in ['姓名与常用证件', '导入票库', '粘贴行程文字']) {
+        final button = find.widgetWithText(OutlinedButton, label);
+        expect(tester.widget<OutlinedButton>(button).onPressed, isNull);
+      }
+      final backup = find.widgetWithText(OutlinedButton, '导出备份');
+      expect(tester.widget<OutlinedButton>(backup).onPressed, isNotNull);
+    },
+  );
+
+  testWidgets(
+    'first-binding choices disclose counts and confirm replacements',
+    (tester) async {
+      BindingChoice? selected;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () async =>
+                    selected = await chooseBinding(context, 2, 3),
+                child: const Text('连接'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('连接'));
+      await tester.pumpAndSettle();
+      expect(find.text('本机有 2 张票据，GitHub 有 3 张票据。'), findsOneWidget);
+      expect(find.text('用本机票据替换云端'), findsOneWidget);
+      await tester.tap(find.text('用云端票据替换本机'));
+      await tester.pumpAndSettle();
+      expect(find.text('替换本机票库？'), findsOneWidget);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(selected, isNull);
+      await tester.tap(find.text('连接'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('合并两边的票据'));
+      await tester.pumpAndSettle();
+      expect(selected, BindingChoice.merge);
+    },
+  );
 
   testWidgets('sync is optional and reset is visible before authorization', (
     tester,

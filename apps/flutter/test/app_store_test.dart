@@ -81,7 +81,7 @@ void main() {
   test('demo rejects private writes and deleting a ticket persists a clean tombstone', () async {
     final app = await store(), record = ticket();
     app.setDemo(true);
-    await expectLater(app.save(record), throwsStateError);
+    await expectLater(app.save(record), throwsFormatException);
     expect(app.preferences.getString(AppStore.storageKey), isNull);
     app.setDemo(false);
     await app.save(record);
@@ -114,41 +114,110 @@ void main() {
     expect(saved['pending'], false);
     app.dispose();
   });
-  test('sync rebases resolved profile conflicts and reset adopts a new empty generation', () async {
-    SharedPreferences.setMockInitialValues({});
-    final remote = _MemoryRemote();
-    final app = AppStore(
-      await SharedPreferences.getInstance(),
-      catalog,
-      [],
-      {},
-      remoteFactory: (_, _) => remote,
-    );
-    await app.connect(const GitHubConnection('user', 'private'), 'test');
-    final key = app.settings['flightMcpKey'];
-    remote.update({
-      'profile': personalProfile({'chineseName': '云端姓名'}),
-      'flightMcpKey': key,
-    });
-    await app.saveProfile({'chineseName': '本机姓名'});
-    expect(app.settingsConflicts!.conflicts, hasLength(1));
-    await app.resolveConflicts({'settings:profile': false});
-    expect(remote.snapshot.settings['profile']['chineseName'], '本机姓名');
-    expect(app.settingsConflicts, isNull);
-    await app.save(ticket());
-    expect(app.records, hasLength(1));
-    final generation = remote.snapshot.generation;
-    await app.resetRepository();
-    expect(app.records, isEmpty);
-    expect(remote.snapshot.generation, isNot(generation));
-    expect(app.settings['profile']['chineseName'], '本机姓名');
-    expect(app.settings['flightMcpKey'], key);
-    expect(app.pending, false);
-    app.dispose();
-  });
+  test(
+    'profile conflicts resolve online and reset adopts a new empty generation',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final remote = _MemoryRemote();
+      final app = AppStore(
+        await SharedPreferences.getInstance(),
+        catalog,
+        [],
+        {},
+        remoteFactory: (_, _) => remote,
+      );
+      await app.connect(const GitHubConnection('user', 'private'), 'test');
+      final key = app.settings['flightMcpKey'];
+      remote.update({
+        'profile': personalProfile({'chineseName': '云端姓名'}),
+        'flightMcpKey': key,
+      });
+      await app.saveProfile(
+        {'chineseName': '本机姓名'},
+        pick: (tickets, shared) async {
+          expect(shared.conflicts, hasLength(1));
+          expect(app.settings['profile'], isNull);
+          return {'settings:profile': false};
+        },
+      );
+      expect(remote.snapshot.settings['profile']['chineseName'], '本机姓名');
+      expect(app.settingsConflicts, isNull);
+      await app.save(ticket());
+      expect(app.records, hasLength(1));
+      final generation = remote.snapshot.generation;
+      await app.resetRepository();
+      expect(app.records, isEmpty);
+      expect(remote.snapshot.generation, isNot(generation));
+      expect(app.settings['profile']['chineseName'], '本机姓名');
+      expect(app.settings['flightMcpKey'], key);
+      expect(app.pending, false);
+      app.dispose();
+    },
+  );
 
   test(
-    'a failed refresh cannot apply choices from an outdated conflict review',
+    'bound archive is read-only without a session and when the network fails',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final remote = _MemoryRemote();
+      final app = AppStore(
+        await SharedPreferences.getInstance(),
+        catalog,
+        [],
+        {},
+        remoteFactory: (_, _) => remote,
+      );
+      addTearDown(app.dispose);
+      final record = ticket();
+      await app.connect(const GitHubConnection('user', 'private'), 'test');
+      await app.save(record);
+      final before = app.preferences.getString(AppStore.storageKey);
+      final reopened = await AppStore.load();
+      addTearDown(reopened.dispose);
+      expect(reopened.canWrite, false);
+      expect(reopened.records.single.id, record.id);
+      await expectLater(reopened.save(record), throwsFormatException);
+
+      remote.offline = true;
+      await expectLater(
+        app.save(record.withChanges({'seat': '12F'})),
+        throwsStateError,
+      );
+      expect(app.canWrite, false);
+      expect(app.records.single.text('seat'), '08F');
+      expect(app.preferences.getString(AppStore.storageKey), before);
+      expect(app.pending, false);
+      await expectLater(app.delete(record), throwsFormatException);
+      await expectLater(app.deleteMany({record.id}), throwsFormatException);
+      await expectLater(
+        app.importArchive(TicketArchive([record])),
+        throwsFormatException,
+      );
+      await expectLater(
+        app.saveProfile({'chineseName': '离线'}),
+        throwsFormatException,
+      );
+      await app.refreshConnection();
+      expect(app.canWrite, false);
+
+      remote.offline = false;
+      remote.update(
+        remote.snapshot.settings,
+        records: [
+          record.withChanges({'seat': '16F'}),
+        ],
+      );
+      remote.beforeWrite = () =>
+          fail('Reconnect should only read the confirmed cloud archive');
+      await app.refreshConnection();
+      expect(app.canWrite, true);
+      expect(app.records.single.text('seat'), '16F');
+      expect(remote.snapshot.records.single.text('seat'), '16F');
+    },
+  );
+
+  test(
+    'a rejected cloud write leaves both the cache and the archive unchanged',
     () async {
       SharedPreferences.setMockInitialValues({});
       final remote = _MemoryRemote();
@@ -163,36 +232,162 @@ void main() {
       await app.connect(const GitHubConnection('user', 'private'), 'test');
       final record = ticket();
       await app.save(record);
-      remote.update(
-        remote.snapshot.settings,
-        records: [
-          record.withChanges({'seat': '11F'}),
-        ],
-      );
-      expect(
-        await app.save(record.withChanges({'seat': '12F'})),
-        SaveOutcome.pending,
-      );
-      expect(app.conflicts?.conflicts.single.field, 'seat');
-
-      remote.offline = true;
-      expect(
-        await app.save(record.withChanges({'seat': '13F'})),
-        SaveOutcome.pending,
-      );
-      final saved = jsonDecode(app.preferences.getString(AppStore.storageKey)!);
-      expect(
-        TicketArchive.fromJson(saved['local']).records.single.text('seat'),
-        '13F',
-      );
-      expect(app.syncError, isNotEmpty);
-      await expectLater(app.sync(), throwsStateError);
-      await app.resolveConflicts({'${record.id}:seat': true});
-      expect(app.records.single.text('seat'), '13F');
-      expect(app.pending, true);
-      expect(app.conflicts, isNull);
+      final before = app.preferences.getString(AppStore.storageKey);
+      remote.beforeWrite = () => remote.offline = true;
+      await expectLater(app.delete(record), throwsStateError);
+      expect(app.records.single.id, record.id);
+      expect(remote.snapshot.records.single.deleted, false);
+      expect(app.preferences.getString(AppStore.storageKey), before);
+      expect(app.canWrite, false);
     },
   );
+
+  test(
+    'a racing write retries on the new head and merges independent edits',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final remote = _MemoryRemote();
+      final app = AppStore(
+        await SharedPreferences.getInstance(),
+        catalog,
+        [],
+        {},
+        remoteFactory: (_, _) => remote,
+      );
+      addTearDown(app.dispose);
+      await app.connect(const GitHubConnection('user', 'private'), 'test');
+      await app.save(ticket());
+      final original = app.records.single;
+      remote.beforeWrite = () => remote.update(
+        remote.snapshot.settings,
+        records: [
+          original.withChanges({'gate': '4A'}),
+        ],
+      );
+      await app.save(original.withChanges({'seat': '16F'}), original: original);
+      expect(remote.snapshot.records.single.text('seat'), '16F');
+      expect(remote.snapshot.records.single.text('gate'), '4A');
+
+      final refreshed = app.records.single;
+      remote.beforeWrite = () => remote.update(
+        remote.snapshot.settings,
+        records: [
+          refreshed.withChanges({'seat': '17A'}),
+        ],
+      );
+      await app.save(
+        refreshed.withChanges({'seat': '17F'}),
+        original: refreshed,
+        pick: (tickets, settings) async {
+          final conflict = tickets.conflicts.single;
+          expect(conflict.field, 'seat');
+          expect(conflict.remote, '17A');
+          expect(conflict.local, '17F');
+          expect(app.records.single.text('seat'), '16F');
+          return {'${refreshed.id}:seat': true};
+        },
+      );
+      expect(app.records.single.text('seat'), '17A');
+      expect(app.pending, false);
+    },
+  );
+
+  test('conflict from a stale editor can be canceled or resolved without persisting a draft', () async {
+    SharedPreferences.setMockInitialValues({});
+    final remote = _MemoryRemote();
+    final app = AppStore(
+      await SharedPreferences.getInstance(),
+      catalog,
+      [],
+      {},
+      remoteFactory: (_, _) => remote,
+    );
+    addTearDown(app.dispose);
+    await app.connect(const GitHubConnection('user', 'private'), 'test');
+    await app.save(ticket());
+    final original = app.records.single;
+    remote.update(
+      remote.snapshot.settings,
+      records: [
+        original.withChanges({'seat': '11F'}),
+      ],
+    );
+    await app.refreshConnection();
+    final draft = original.withChanges({'seat': '12F'});
+    final before = app.preferences.getString(AppStore.storageKey);
+    await expectLater(
+      app.save(
+        draft,
+        original: original,
+        pick: (tickets, settings) async {
+          expect(tickets.conflicts.single.field, 'seat');
+          return null;
+        },
+      ),
+      throwsFormatException,
+    );
+    expect(app.preferences.getString(AppStore.storageKey), before);
+    expect(app.records.single.text('seat'), '11F');
+    expect(remote.snapshot.records.single.text('seat'), '11F');
+    await app.save(
+      draft,
+      original: original,
+      pick: (tickets, settings) async {
+        expect(tickets.conflicts.single.remote, '11F');
+        return {'${original.id}:seat': false};
+      },
+    );
+    expect(remote.snapshot.records.single.text('seat'), '12F');
+  });
+
+  for (final choice in <BindingChoice?>[null, ...BindingChoice.values]) {
+    test('first binding with two libraries handles $choice', () async {
+      SharedPreferences.setMockInitialValues({});
+      final remote = _MemoryRemote();
+      final app = AppStore(
+        await SharedPreferences.getInstance(),
+        catalog,
+        [],
+        {},
+        remoteFactory: (_, _) => remote,
+      );
+      addTearDown(app.dispose);
+      final local = ticket(),
+          cloud = ticket().withChanges({'id': 'cloud', 'service': 'G22'});
+      await app.save(local);
+      remote.update(remote.snapshot.settings, records: [cloud]);
+      final before = app.preferences.getString(AppStore.storageKey);
+      final binding = await app.connect(
+        const GitHubConnection('user', 'private'),
+        'test',
+        choose: (localCount, cloudCount) async {
+          expect(localCount, 1);
+          expect(cloudCount, 1);
+          return choice;
+        },
+      );
+      if (choice == null) {
+        expect(binding, false);
+        expect(app.connection, isNull);
+        expect(app.preferences.getString(AppStore.storageKey), before);
+        expect(remote.snapshot.records.single.id, cloud.id);
+        return;
+      }
+      final ids = switch (choice) {
+        BindingChoice.merge => {local.id, cloud.id},
+        BindingChoice.replaceCloud => {local.id},
+        BindingChoice.replaceLocal => {cloud.id},
+      };
+      expect(binding, true);
+      expect(app.records.map((row) => row.id).toSet(), ids);
+      expect(remote.snapshot.records.map((row) => row.id).toSet(), ids);
+      expect(
+        remote.snapshot.generation,
+        choice == BindingChoice.replaceCloud ? isNot('initial') : 'initial',
+      );
+      expect(remote.snapshot.settings['flightMcpKey'], 'preserved-key');
+    });
+  }
 
   test(
     'reset-only authorization preserves an unrelated local ticket library',
@@ -246,7 +441,7 @@ void main() {
               repositoryId: 1,
             );
       addTearDown(app.dispose);
-      expect(await app.save(ticket()), SaveOutcome.pending);
+      await expectLater(app.save(ticket()), throwsFormatException);
       expect(app.connected, false);
       await app.resetRepository(token: 'reset-token');
       expect(app.records, isEmpty);
@@ -293,6 +488,7 @@ class _MemoryRemote extends GitHubArchive {
     generation: 'initial',
   );
   bool offline = false, legacy = false;
+  void Function()? beforeWrite;
   void update(
     Map<String, dynamic> settings, {
     List<TicketRecord>? records,
@@ -310,6 +506,8 @@ class _MemoryRemote extends GitHubArchive {
 
   @override
   Future<Map<String, dynamic>> verify() async => {'id': 1};
+  @override
+  Future<String> head() async => (await read()).head;
   @override
   Future<ArchiveSnapshot> read() async {
     if (offline) throw StateError('offline');
@@ -330,7 +528,24 @@ class _MemoryRemote extends GitHubArchive {
     ArchiveSnapshot before,
     Map<String, dynamic> settings,
   ) async {
+    final race = beforeWrite;
+    beforeWrite = null;
+    race?.call();
+    if (offline) throw StateError('offline');
+    if (before.head != snapshot.head) throw ArchiveApiException('stale', 422);
     update(settings, records: records);
+    return snapshot.head;
+  }
+
+  @override
+  Future<String> replaceTickets(
+    List<TicketRecord> records,
+    ArchiveSnapshot before,
+    Map<String, dynamic> settings,
+    String generation,
+  ) async {
+    if (before.head != snapshot.head) throw ArchiveApiException('stale', 422);
+    update(settings, records: records, generation: generation);
     return snapshot.head;
   }
 

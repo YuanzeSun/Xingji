@@ -91,9 +91,10 @@ class GitHubArchive {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
     }
-    final response = await http.Response.fromStream(
-      await client.send(request).timeout(const Duration(seconds: 30)),
-    );
+    final response = await client
+        .send(request)
+        .then(http.Response.fromStream)
+        .timeout(const Duration(seconds: 30));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final message = switch (response.statusCode) {
         401 => 'GitHub 凭证无效或已过期',
@@ -229,6 +230,21 @@ class GitHubArchive {
     List<TicketRecord> records,
     ArchiveSnapshot snapshot,
     Map<String, dynamic> settings,
+  ) => _write(records, snapshot, settings, snapshot.generation);
+
+  /// Replace only the archive contents, retaining Git history and other files.
+  Future<String> replaceTickets(
+    List<TicketRecord> records,
+    ArchiveSnapshot snapshot,
+    Map<String, dynamic> settings,
+    String generation,
+  ) => _write(records, snapshot, settings, generation);
+
+  Future<String> _write(
+    List<TicketRecord> records,
+    ArchiveSnapshot snapshot,
+    Map<String, dynamic> settings,
+    String generation,
   ) async {
     settings = sharedSettings(settings);
     final verified = await verify();
@@ -280,6 +296,7 @@ class GitHubArchive {
     if (changes.isEmpty &&
         files.length == snapshot.contents.length &&
         !settingsChanged &&
+        generation == snapshot.generation &&
         snapshot.initialized) {
       return snapshot.head;
     }
@@ -291,7 +308,7 @@ class GitHubArchive {
         'format': 'xingji-index',
         'schemaVersion': 1,
         'recordCount': records.length,
-        'generation': snapshot.generation,
+        'generation': generation,
         'files': files,
         'settings': settings,
       }),

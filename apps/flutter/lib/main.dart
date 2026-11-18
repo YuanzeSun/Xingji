@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -104,8 +105,25 @@ class _ArchiveShellState extends State<ArchiveShell>
     value: 1,
   );
   AppStore get store => widget.store;
+  late final AppLifecycleListener lifecycle;
+  late final Timer connectionTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    lifecycle = AppLifecycleListener(onResume: store.refreshConnection);
+    connectionTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      final state = WidgetsBinding.instance.lifecycleState;
+      if (state == null || state == AppLifecycleState.resumed) {
+        unawaited(store.refreshConnection());
+      }
+    });
+  }
+
   @override
   void dispose() {
+    connectionTimer.cancel();
+    lifecycle.dispose();
     transition.dispose();
     super.dispose();
   }
@@ -200,16 +218,14 @@ class _ArchiveShellState extends State<ArchiveShell>
                       Icon(
                         store.connection == null
                             ? Icons.storage_outlined
-                            : !store.connected
+                            : store.readOnlyReason != null
                             ? Icons.cloud_off_outlined
-                            : store.pending
-                            ? Icons.cloud_upload_outlined
                             : Icons.cloud_done_outlined,
                         size: 16,
                         color: muted,
                       ),
                       const SizedBox(width: 8),
-                      if (wide)
+                      if (wide && store.readOnlyReason == null)
                         Text(
                           store.status,
                           style: Theme.of(context).textTheme.bodySmall,
@@ -230,6 +246,20 @@ class _ArchiveShellState extends State<ArchiveShell>
                   ],
                 ),
               ),
+              if (store.readOnlyReason case final reason?
+                  when !store.demo && page != 3)
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: wide ? 40 : 24),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(reason)),
+                      TextButton(
+                        onPressed: () => _navigate(3),
+                        child: const Text('查看同步'),
+                      ),
+                    ],
+                  ),
+                ),
               if (store.busy) const LinearProgressIndicator(minHeight: 2),
               Expanded(
                 child: FadeTransition(
@@ -290,7 +320,7 @@ class _ArchiveShellState extends State<ArchiveShell>
                           padding: EdgeInsets.zero,
                           shape: const CircleBorder(),
                         ),
-                        onPressed: store.busy
+                        onPressed: !store.canWrite
                             ? null
                             : () => openEditor(context, store),
                         child: const Icon(

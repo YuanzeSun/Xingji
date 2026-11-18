@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
+import 'sync_review.dart';
 import 'design.dart';
 
 Future<bool> reviewImport(
@@ -93,6 +94,7 @@ Future<bool> reviewImport(
                                     )
                                     .toList(),
                               ),
+                              pick: pickSyncConflicts(context),
                             );
                             if (context.mounted) Navigator.pop(context, true);
                           } catch (failure) {

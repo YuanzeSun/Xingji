@@ -6,11 +6,12 @@ import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
 import 'design.dart';
+import 'field_labels.dart';
 import 'platform_services.dart';
 import 'input_formatters.dart';
 import 'seat_input.dart';
 import 'import_review.dart';
-import 'ticket_detail.dart';
+import 'sync_review.dart';
 
 const _barcodeBlue = Color(0xFF32658D);
 final _chineseName = RegExp(r'[\u3400-\u9fff]');
@@ -23,6 +24,7 @@ Future<void> openEditor(
   AppStore store, {
   TicketRecord? record,
 }) async {
+  if (!await checkArchiveWrite(context, store) || !context.mounted) return;
   await Navigator.of(context).push(
     MaterialPageRoute(
       fullscreenDialog: true,
@@ -316,14 +318,12 @@ class _TicketEditorState extends State<TicketEditor> {
           '请补全：${record.missingFields.map((key) => fieldLabels[key] ?? key).join('、')}',
         );
       }
-      final result = await store.save(_withAutomaticCode(record));
-      if (mounted) {
-        if (result == SaveOutcome.pending) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('票据已保存到本机，等待同步')));
-        }
-        Navigator.pop(context);
-      }
+      await store.save(
+        _withAutomaticCode(record),
+        original: widget.record,
+        pick: pickSyncConflicts(context),
+      );
+      if (mounted) Navigator.pop(context);
     } catch (failure) {
       if (mounted) {
         setState(
@@ -589,7 +589,12 @@ class _TicketEditorState extends State<TicketEditor> {
   );
 
   @override
-  Widget build(BuildContext context) => PopScope(
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: store,
+    builder: (context, _) => _buildEditor(context),
+  );
+
+  Widget _buildEditor(BuildContext context) => PopScope(
     canPop: !busy && !dirty,
     onPopInvokedWithResult: confirmExit,
     child: Scaffold(
@@ -598,7 +603,9 @@ class _TicketEditorState extends State<TicketEditor> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
           child: FilledButton.icon(
-            onPressed: saving || querying || importing ? null : save,
+            onPressed: !store.canWrite || saving || querying || importing
+                ? null
+                : save,
             icon: saving
                 ? const SizedBox.square(
                     dimension: 20,
@@ -609,8 +616,9 @@ class _TicketEditorState extends State<TicketEditor> {
           ),
         ),
       ),
-      body: AbsorbPointer(
-        absorbing: saving || querying || importing,
+      body: ArchiveEditControls(
+        enabled: store.canWrite,
+        busy: saving || querying || importing,
         child: Form(
           key: form,
           autovalidateMode: submitted
@@ -626,6 +634,11 @@ class _TicketEditorState extends State<TicketEditor> {
                   key: ValueKey(revision),
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (store.readOnlyReason case final reason?)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(reason),
+                      ),
                     if (error.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 20),

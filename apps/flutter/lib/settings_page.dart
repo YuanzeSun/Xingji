@@ -10,6 +10,7 @@ import 'export_service.dart';
 import 'ticket_detail.dart';
 import 'profile_editor.dart';
 import 'import_review.dart';
+import 'sync_review.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppStore store;
@@ -72,7 +73,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          store.status,
+                          store.readOnlyReason ?? store.status,
                           style: const TextStyle(color: muted),
                         ),
                         if (store.syncError case final error?)
@@ -164,7 +165,7 @@ class _SettingsPageState extends State<SettingsPage> {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: OutlinedButton.icon(
-            onPressed: store.busy
+            onPressed: !store.canWrite
                 ? null
                 : () => openProfileEditor(context, store),
             icon: const Icon(Icons.person_outline),
@@ -173,72 +174,18 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         if (store.conflicts != null) ...[
           const SectionTitle('处理同步冲突'),
-          const Text('同一字段在两端均有修改，请选择要保留的内容。'),
-          const SizedBox(height: 16),
-          for (final conflict in store.conflicts!.conflicts)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${conflict.localRecord.text('service')} · ${fieldLabels[conflict.field] ?? conflict.field}',
-                  ),
-                  RadioGroup<bool>(
-                    groupValue: choices['${conflict.id}:${conflict.field}'],
-                    onChanged: (value) => setState(
-                      () =>
-                          choices['${conflict.id}:${conflict.field}'] = value!,
-                    ),
-                    child: Column(
-                      children: [
-                        RadioListTile<bool>(
-                          title: Text('本机：${conflict.local}'),
-                          value: false,
-                        ),
-                        RadioListTile<bool>(
-                          title: Text('云端：${conflict.remote}'),
-                          value: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          for (final conflict
-              in store.settingsConflicts?.conflicts ?? <SettingsConflict>[])
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(conflict.field == 'profile' ? '个人资料' : '飞常准设置'),
-                  RadioGroup<bool>(
-                    groupValue: choices['settings:${conflict.field}'],
-                    onChanged: (value) => setState(
-                      () => choices['settings:${conflict.field}'] = value!,
-                    ),
-                    child: Column(
-                      children: [
-                        for (final (remote, value) in [
-                          (false, conflict.local),
-                          (true, conflict.remote),
-                        ])
-                          RadioListTile<bool>(
-                            value: remote,
-                            title: Text(
-                              '${remote ? '云端' : '本机'}：${conflict.field == 'flightMcpKey' ? '凭证已隐藏' : const JsonEncoder.withIndent('  ').convert(value)}',
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          SyncChoices(
+            tickets: store.conflicts!,
+            settings: store.settingsConflicts,
+            choices: choices,
+            onChoose: (key, value) => setState(() => choices[key] = value),
+          ),
           FilledButton(
-            onPressed: store.busy
+            onPressed:
+                store.busy ||
+                    choices.length !=
+                        store.conflicts!.conflicts.length +
+                            (store.settingsConflicts?.conflicts.length ?? 0)
                 ? null
                 : () => action(() => store.resolveConflicts(choices)),
             child: const Text('保留选择并同步'),
@@ -250,9 +197,13 @@ class _SettingsPageState extends State<SettingsPage> {
           runSpacing: 12,
           children: [
             OutlinedButton.icon(
-              onPressed: store.busy
+              onPressed: !store.canWrite
                   ? null
                   : () => action(() async {
+                      if (!await checkArchiveWrite(context, store) ||
+                          !context.mounted) {
+                        return;
+                      }
                       final file = await openFile(
                         acceptedTypeGroups: [
                           const XTypeGroup(
@@ -288,9 +239,14 @@ class _SettingsPageState extends State<SettingsPage> {
               label: const Text('导入票库'),
             ),
             OutlinedButton.icon(
-              onPressed: store.busy
+              onPressed: !store.canWrite
                   ? null
-                  : () => importTextDialog(context, store),
+                  : () async {
+                      if (await checkArchiveWrite(context, store) &&
+                          context.mounted) {
+                        await importTextDialog(context, store);
+                      }
+                    },
               icon: const Icon(Icons.text_snippet_outlined),
               label: const Text('粘贴行程文字'),
             ),
@@ -364,7 +320,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 24),
         const Text(
-          'GitHub 凭证仅在本次应用会话中使用。票据保存在本机，连接私人票库后可同步到其他设备。',
+          '本机票库可离线编辑。绑定 GitHub 后，修改须在线保存，离线可查看和导出。GitHub 凭证仅在本次应用会话中使用。',
           style: TextStyle(color: muted),
         ),
         const SizedBox(height: 40),
@@ -395,6 +351,61 @@ Future<bool> confirmGitHubReset(
       '保留仓库中的个人资料、飞常准设置和 Git 历史。',
   confirmLabel: '确认重置仓库',
 );
+
+Future<BindingChoice?> chooseBinding(
+  BuildContext context,
+  int localCount,
+  int cloudCount,
+) async {
+  if (!context.mounted) return null;
+  final choice = await showDialog<BindingChoice>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('选择首次同步方式'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('本机有 $localCount 张票据，GitHub 有 $cloudCount 张票据。'),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, BindingChoice.merge),
+            child: const Text('合并两边的票据'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context, BindingChoice.replaceCloud),
+            child: const Text('用本机票据替换云端'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context, BindingChoice.replaceLocal),
+            child: const Text('用云端票据替换本机'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+      ],
+    ),
+  );
+  if (choice == null || choice == BindingChoice.merge) return choice;
+  if (!context.mounted) return null;
+  final replaceCloud = choice == BindingChoice.replaceCloud;
+  return await confirmDeletion(
+        context,
+        title: replaceCloud ? '替换云端票库？' : '替换本机票库？',
+        description: replaceCloud
+            ? '用本机的 $localCount 张票据替换云端的 $cloudCount 张票据，保留 Git 历史。'
+            : '本机的 $localCount 张票据将被云端的 $cloudCount 张票据替换。',
+        confirmLabel: '确认替换',
+      )
+      ? choice
+      : null;
+}
 
 Future<void> connectDialog(
   BuildContext context,
@@ -499,7 +510,14 @@ Future<void> connectDialog(
                             token: token.text.trim(),
                           );
                         } else {
-                          await store.connect(target, token.text.trim());
+                          final bound = await store.connect(
+                            target,
+                            token.text.trim(),
+                            choose: (local, cloud) =>
+                                chooseBinding(context, local, cloud),
+                            pick: pickSyncConflicts(context, newEdit: false),
+                          );
+                          if (!bound) return;
                         }
                         if (context.mounted) {
                           if (forReset) _showResetComplete(context);

@@ -4,59 +4,15 @@ import 'package:material_ui/material_ui.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
+import 'sync_review.dart';
 import 'design.dart';
+import 'field_labels.dart';
 import 'ticket_face.dart';
 import 'editor.dart';
 import 'export_service.dart';
 import 'map_page.dart';
 import 'coach_panel.dart';
 
-const fieldLabels = <String, String>{
-  'origin': '出发站',
-  'destination': '到达站',
-  'service': '车次 / 航班号',
-  'departureDate': '出发日期',
-  'departureTime': '出发时间',
-  'arrivalDate': '到达日期',
-  'arrivalTime': '到达时间',
-  'passenger': '旅客姓名',
-  'identity': '证件号',
-  'seat': '座位 / 铺位',
-  'seatClass': '席别 / 舱位',
-  'carriage': '车厢',
-  'price': '票价（元）',
-  'gate': '检票口 / 登机口',
-  'railPlatform': '上车站台',
-  'railBureau': '担当路局',
-  'railRunner': '担当客运段',
-  'railCarOwner': '车辆归属单位',
-  'railModel': '车型',
-  'railTrainsets': '车组编号',
-  'railPowerSupply': '供电制式',
-  'railMileage': '铁路里程（km）',
-  'airline': '航空公司',
-  'aircraft': '机型',
-  'aircraftRegistration': '飞机注册号',
-  'boardingTime': '计划登机时间',
-  'actualBoardingTime': '实际登机时间',
-  'actualDepartureDate': '实际起飞日期',
-  'actualDepartureTime': '实际起飞时间',
-  'actualArrivalDate': '实际落地日期',
-  'actualArrivalTime': '实际落地时间',
-  'flightDistance': '飞行距离（km）',
-  'terminal': '航站楼',
-  'pnr': '订座编号',
-  'ticketNumber': '票号',
-  'orderNumber': '订单号',
-  'saleCode': '售票编号',
-  'issuer': '售票站',
-  'baggageTagNumbers': '行李编号',
-  'checkedBaggageCount': '托运行李件数',
-  'freeBaggageAllowance': '免费行李额度',
-  'frequentFlyerCarrier': '常旅客航司',
-  'frequentFlyerNumber': '常旅客编号',
-  'marketingCarrier': '营销航司',
-};
 void openTicket(
   BuildContext context,
   AppStore store,
@@ -196,7 +152,7 @@ class _TicketDetailState extends State<TicketDetail> {
             if (!store.demo)
               IconButton(
                 tooltip: '编辑票据',
-                onPressed: store.busy
+                onPressed: !store.canWrite
                     ? null
                     : () => openEditor(context, store, record: record),
                 icon: const Icon(Icons.edit_outlined),
@@ -307,9 +263,13 @@ class _TicketDetailState extends State<TicketDetail> {
                     const Divider(),
                     TextButton.icon(
                       style: TextButton.styleFrom(foregroundColor: ticketRed),
-                      onPressed: store.busy
+                      onPressed: !store.canWrite
                           ? null
                           : () async {
+                              if (!await checkArchiveWrite(context, store) ||
+                                  !context.mounted) {
+                                return;
+                              }
                               if (await confirmDeletion(
                                 context,
                                 description: store.connection == null
@@ -317,7 +277,11 @@ class _TicketDetailState extends State<TicketDetail> {
                                     : '删除记录会同步到已连接的私人票库。',
                               )) {
                                 try {
-                                  await store.delete(record);
+                                  if (!context.mounted) return;
+                                  await store.delete(
+                                    record,
+                                    pick: pickSyncConflicts(context),
+                                  );
                                   if (context.mounted) Navigator.pop(context);
                                 } catch (error) {
                                   if (context.mounted) {

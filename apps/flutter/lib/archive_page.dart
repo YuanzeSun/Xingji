@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
+import 'sync_review.dart';
 import 'design.dart';
 import 'export_service.dart';
 import 'ticket_face.dart';
@@ -109,16 +110,25 @@ class _ArchivePageState extends State<ArchivePage> {
   }
 
   Future<void> _delete() async {
-    final ids = records
+    final originals = records
         .where((row) => selected.contains(row.id))
-        .map((row) => row.id)
-        .toSet();
-    if (ids.isEmpty ||
-        !await confirmDeletion(context, title: '删除选中的 ${ids.length} 张票据？')) {
+        .toList();
+    if (originals.isEmpty ||
+        !await checkArchiveWrite(context, widget.store) ||
+        !mounted ||
+        !await confirmDeletion(
+          context,
+          title: '删除选中的 ${originals.length} 张票据？',
+        )) {
       return;
     }
+    if (!mounted) return;
     try {
-      await widget.store.deleteMany(ids);
+      await widget.store.deleteMany(
+        originals.map((row) => row.id).toSet(),
+        originals: originals,
+        pick: pickSyncConflicts(context),
+      );
       if (mounted) {
         setState(() {
           selected.clear();
@@ -191,11 +201,7 @@ class _ArchivePageState extends State<ArchivePage> {
             ),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(foregroundColor: ticketRed),
-              onPressed:
-                  widget.store.demo ||
-                      selected.isEmpty ||
-                      exporting ||
-                      widget.store.busy
+              onPressed: !widget.store.canWrite || selected.isEmpty || exporting
                   ? null
                   : _delete,
               icon: const Icon(Icons.delete_outline),

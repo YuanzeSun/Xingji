@@ -7,7 +7,14 @@ import 'package:xingji_core/xingji_core.dart';
 
 import 'ticket_face.dart';
 
-enum SaveOutcome { local, synced, pending }
+enum SaveOutcome { local, synced }
+
+enum BindingChoice { merge, replaceCloud, replaceLocal }
+
+typedef PickConflicts = Future<Map<String, bool>?> Function(
+  ArchiveMerge tickets,
+  SettingsMerge settings,
+);
 
 /// Demo data never enters the private archive or the persistence envelope.
 class AppStore extends ChangeNotifier {
@@ -26,6 +33,7 @@ class AppStore extends ChangeNotifier {
   bool resetDetected = false;
   String _head = '', _generation = '';
   bool demo = false, busy = false, pending = false;
+  bool _online = false, _checking = false;
   String status = '本机票库';
   String? syncError;
   AppStore(
@@ -69,13 +77,25 @@ class AppStore extends ChangeNotifier {
       }
       store.pending = store.connection != null && envelope['pending'] == true;
       if (store.connection != null) {
-        store.status = store.pending ? '本机有待同步的修改' : 'GitHub 待重新授权';
+        store.status = 'GitHub 待重新授权 · 只读';
       }
     }
     return store;
   }
 
   bool get connected => _remote != null;
+  String? get readOnlyReason {
+    if (connection == null) return null;
+    if (!connected) return '请重新授权 GitHub 后编辑';
+    if (resetDetected) return '请先处理云端票库重置';
+    if (conflicts != null) return '请先处理同步冲突';
+    if (!_online) return 'GitHub 连接不可用，票库暂时只读';
+    if (pending) return '请先完成之前的同步';
+    return null;
+  }
+
+  bool get canWrite => !demo && !busy && readOnlyReason == null;
+
   List<TicketRecord> get records =>
       (demo ? examples : _records).where((record) => !record.deleted).toList();
   List<TicketRecord> get privateRecords => List.unmodifiable(_records);
@@ -113,88 +133,211 @@ class AppStore extends ChangeNotifier {
     }
   }
 
-  Future<SaveOutcome> _saveLocal(List<TicketRecord> records) async {
-    final previous = _records,
-        previousPending = pending,
-        previousStatus = status;
-    _records = deduplicateTickets(records, catalog);
-    pending = connection != null;
-    status = '正在保存到本机';
-    try {
-      await _persist();
-    } catch (_) {
-      _records = previous;
-      pending = previousPending;
-      status = previousStatus;
-      rethrow;
-    }
-    return _syncSaved('已保存在本机');
+  void _requireWritable() {
+    if (demo) throw const FormatException('请先退出示例模式');
+    if (readOnlyReason case final reason?) throw FormatException(reason);
   }
 
-  Future<SaveOutcome> _syncSaved(String localStatus) async {
-    if (!connected) {
-      status = pending ? '已存本机，等待同步' : localStatus;
-      return pending ? SaveOutcome.pending : SaveOutcome.local;
-    }
-    try {
-      await _sync();
-    } catch (_) {
-      return SaveOutcome.pending;
-    }
-    return pending ? SaveOutcome.pending : SaveOutcome.synced;
+  Future<void> checkWriteAccess() async {
+    _requireWritable();
+    if (connection == null) return;
+    await _run(() async {
+      try {
+        await _remote!.head();
+      } catch (failure) {
+        _syncFailure(failure);
+        throw FormatException(readOnlyReason ?? syncError!);
+      }
+    });
   }
 
-  Future<SaveOutcome> save(TicketRecord record) => _run(() async {
-    if (demo) throw StateError('请退出示例模式后录入票据');
+  Future<void> refreshConnection() async {
+    final remote = _remote;
+    if (remote == null ||
+        demo ||
+        busy ||
+        _checking ||
+        resetDetected ||
+        conflicts != null) {
+      return;
+    }
+    final previous = _head;
+    _checking = true;
+    try {
+      final head = await remote.head();
+      if (!busy &&
+          !demo &&
+          identical(remote, _remote) &&
+          previous == _head &&
+          (!_online || head != _head)) {
+        await sync();
+      }
+    } catch (failure) {
+      if (!busy &&
+          identical(remote, _remote) &&
+          previous == _head &&
+          !resetDetected &&
+          conflicts == null) {
+        _syncFailure(failure);
+        notifyListeners();
+      }
+    } finally {
+      _checking = false;
+    }
+  }
+
+  List<TicketRecord> _replaceRecords(Iterable<TicketRecord> rows) {
+    final byId = {for (final record in _records) record.id: record};
+    for (final record in rows) {
+      byId[record.id] = record;
+    }
+    return byId.values.toList();
+  }
+
+  Future<SaveOutcome> _saveChanges({
+    List<TicketRecord>? records,
+    List<TicketRecord>? baseRecords,
+    Map<String, dynamic>? nextSettings,
+    Map<String, dynamic>? baseSettings,
+    PickConflicts? pick,
+  }) async {
+    _requireWritable();
+    final next = records ?? _records;
+    final preferences = nextSettings ?? settings;
+    final remote = _remote;
+    if (remote == null) {
+      final oldRecords = _records, oldSettings = settings;
+      _records = deduplicateTickets(next, catalog);
+      settings = preferences;
+      try {
+        await _persist();
+      } catch (_) {
+        _records = oldRecords;
+        settings = oldSettings;
+        rethrow;
+      }
+      status = '已保存在本机';
+      return SaveOutcome.local;
+    }
+
+    // Keep the edit in the form until the branch update succeeds. Retry once
+    // if another device advanced the branch between reading and publishing.
+    final previous = baseRecords ?? _records;
+    final previousSettings = baseSettings ?? settings;
+    for (var attempt = 0; ; attempt++) {
+      late final ArchiveSnapshot snapshot;
+      try {
+        snapshot = await _currentSnapshot(remote);
+      } catch (failure) {
+        _syncFailure(failure);
+        rethrow;
+      }
+      final tickets = mergeTickets(previous, next, snapshot.records);
+      final shared = mergeSettings(
+        previousSettings,
+        preferences,
+        snapshot.settings,
+      );
+      var merged = tickets.records, mergedSettings = shared.settings;
+      if (tickets.conflicts.isNotEmpty || shared.conflicts.isNotEmpty) {
+        final choices = await pick?.call(tickets, shared);
+        if (choices == null) {
+          throw const FormatException('修改尚未保存，请核对两端的内容');
+        }
+        merged = tickets.resolve(choices);
+        mergedSettings = shared.resolve(choices);
+      }
+      merged = deduplicateTickets(merged, catalog);
+      try {
+        final head = await remote.write(merged, snapshot, mergedSettings);
+        _adopt(
+          snapshot,
+          records: merged,
+          newSettings: mergedSettings,
+          head: head,
+        );
+        await _persistSynced();
+        return SaveOutcome.synced;
+      } on ArchiveApiException catch (failure) {
+        if (failure.status == 409 || failure.status == 422) {
+          if (attempt == 0) continue;
+          throw const FormatException('云端票库仍在变化，请稍后重新保存');
+        }
+        _syncFailure(failure);
+        rethrow;
+      } catch (failure) {
+        _syncFailure(failure);
+        rethrow;
+      }
+    }
+  }
+
+  Future<SaveOutcome> save(
+    TicketRecord record, {
+    TicketRecord? original,
+    PickConflicts? pick,
+  }) => _run(() async {
+    _requireWritable();
     if (record.missingFields.isNotEmpty) throw const FormatException('请补全必填项');
     final next = catalog.normalize(record.withChanges({'updatedAt': utcNow()}));
-    return _saveLocal([..._records.where((row) => row.id != next.id), next]);
-  });
-  Future<void> delete(TicketRecord record) => _run(() async {
-    if (demo) throw StateError('示例票据不能删除');
-    await _saveLocal(
-      _records
-          .map(
-            (row) => row.id == record.id
-                ? row.withChanges({'deleted': true, 'updatedAt': utcNow()})
-                : row,
-          )
-          .toList(),
+    return _saveChanges(
+      records: _replaceRecords([next]),
+      baseRecords: original == null ? null : _replaceRecords([original]),
+      pick: pick,
     );
   });
-  Future<void> deleteMany(Set<String> ids) => _run(() async {
-    if (demo) throw StateError('示例票据不能删除');
-    await _saveLocal(
-      _records
+
+  Future<void> delete(TicketRecord record, {PickConflicts? pick}) =>
+      deleteMany({record.id}, originals: [record], pick: pick);
+
+  Future<void> deleteMany(
+    Set<String> ids, {
+    Iterable<TicketRecord> originals = const [],
+    PickConflicts? pick,
+  }) => _run(() async {
+    _requireWritable();
+    final base = _replaceRecords(originals);
+    await _saveChanges(
+      baseRecords: base,
+      records: base
           .map(
             (row) => ids.contains(row.id)
                 ? row.withChanges({'deleted': true, 'updatedAt': utcNow()})
                 : row,
           )
           .toList(),
+      pick: pick,
     );
   });
-  Future<void> saveProfile(Map<String, dynamic> profile) => _run(() async {
-    if (demo) throw StateError('请退出示例模式后保存资料');
-    final previous = settings, wasPending = pending;
-    settings = sharedSettings({
-      ...settings,
-      'profile': personalProfile(profile),
-    });
-    pending = connection != null;
-    try {
-      await _persist();
-    } catch (_) {
-      settings = previous;
-      pending = wasPending;
-      rethrow;
-    }
-    await _syncSaved('个人资料已保存在本机');
+
+  Future<void> saveProfile(
+    Map<String, dynamic> profile, {
+    Map<String, dynamic>? original,
+    PickConflicts? pick,
+  }) => _run(() async {
+    await _saveChanges(
+      nextSettings: sharedSettings({
+        ...settings,
+        'profile': personalProfile(profile),
+      }),
+      baseSettings: original == null
+          ? null
+          : {...settings, 'profile': original},
+      pick: pick,
+    );
   });
-  Future<void> importArchive(TicketArchive archive) => _run(() async {
-    if (demo) throw StateError('请退出示例模式后导入');
-    await _saveLocal([..._records, ...archive.records]);
-  });
+
+  Future<void> importArchive(TicketArchive archive, {PickConflicts? pick}) =>
+      _run(() async {
+        await _saveChanges(
+          records: deduplicateTickets([
+            ..._records,
+            ...archive.records,
+          ], catalog),
+          pick: pick,
+        );
+      });
+
   void _checkBinding(GitHubConnection target) {
     final current = connection;
     if (current != null &&
@@ -204,32 +347,82 @@ class AppStore extends ChangeNotifier {
     }
   }
 
-  Future<void> connect(GitHubConnection target, String token) => _run(() async {
+  Future<bool> connect(
+    GitHubConnection target,
+    String token, {
+    Future<BindingChoice?> Function(int localCount, int cloudCount)? choose,
+    PickConflicts? pick,
+  }) => _run(() async {
     if (demo) throw StateError('请退出示例模式后连接票库');
     _checkBinding(target);
     final current = connection;
     final remote = remoteFactory(target, token);
-    late final ArchiveSnapshot snapshot;
     try {
-      snapshot = await remote.read();
+      final snapshot = await remote.read();
       if (current?.repositoryId != null &&
           current!.repositoryId != snapshot.repositoryId) {
         throw const FormatException('仓库身份已改变，已保留本机票库');
       }
-    } catch (_) {
-      remote.close();
-      rethrow;
+      final binding = GitHubConnection(
+        target.owner,
+        target.repository,
+        branch: target.branch,
+        repositoryId: snapshot.repositoryId,
+      );
+      if (current != null) {
+        _remote?.close();
+        _remote = remote;
+        connection = binding;
+        await _sync(firstSnapshot: snapshot);
+        return true;
+      }
+
+      final localCount = _records.where((row) => !row.deleted).length;
+      final cloudCount = snapshot.records.where((row) => !row.deleted).length;
+      final choice = localCount > 0 && cloudCount > 0
+          ? await choose?.call(localCount, cloudCount)
+          : BindingChoice.merge;
+      if (choice == null) return false;
+      final tickets = switch (choice) {
+        BindingChoice.merge => mergeTickets([], _records, snapshot.records),
+        BindingChoice.replaceCloud => ArchiveMerge(List.of(_records), []),
+        BindingChoice.replaceLocal => ArchiveMerge(snapshot.records, []),
+      };
+      final shared = mergeSettings({}, settings, snapshot.settings);
+      var merged = tickets.records, mergedSettings = shared.settings;
+      if (tickets.conflicts.isNotEmpty || shared.conflicts.isNotEmpty) {
+        final choices = await pick?.call(tickets, shared);
+        if (choices == null) return false;
+        merged = tickets.resolve(choices);
+        mergedSettings = shared.resolve(choices);
+      }
+      merged = deduplicateTickets(merged, catalog);
+      final replace = choice == BindingChoice.replaceCloud;
+      final generation = replace ? newTicketId() : snapshot.generation;
+      final head = replace
+          ? await remote.replaceTickets(
+              merged,
+              snapshot,
+              mergedSettings,
+              generation,
+            )
+          : await remote.write(merged, snapshot, mergedSettings);
+      _remote = remote;
+      connection = binding;
+      _adopt(
+        snapshot,
+        records: merged,
+        newSettings: mergedSettings,
+        head: head,
+        generation: generation,
+      );
+      await _persistSynced();
+      return true;
+    } finally {
+      if (!identical(_remote, remote)) remote.close();
     }
-    _remote?.close();
-    _remote = remote;
-    connection = GitHubConnection(
-      target.owner,
-      target.repository,
-      branch: target.branch,
-      repositoryId: snapshot.repositoryId,
-    );
-    await _sync(firstSnapshot: snapshot);
   });
+
   Future<void> sync() => _run(_sync);
 
   Future<ArchiveSnapshot> _readBound(GitHubArchive remote) async {
@@ -246,6 +439,36 @@ class AppStore extends ChangeNotifier {
     _reviewedRemote = null;
   }
 
+  Future<ArchiveSnapshot> _currentSnapshot(
+    GitHubArchive remote, {
+    ArchiveSnapshot? firstSnapshot,
+  }) async {
+    final snapshot = firstSnapshot ?? await _readBound(remote);
+    await remote.assertDescendant(_head, snapshot.head);
+    if (_head.isNotEmpty && _generation != snapshot.generation) {
+      resetDetected = true;
+      throw const FormatException('云端票库已重置，请先导出本机备份，再采用云端票库');
+    }
+    return snapshot;
+  }
+
+  void _syncFailure(Object failure) {
+    _online = false;
+    syncError = failure is FormatException
+        ? failure.message
+        : failure.toString();
+    status = 'GitHub 票库暂时只读';
+  }
+
+  Future<void> _persistSynced() async {
+    status = '已同步';
+    try {
+      await _persist();
+    } catch (_) {
+      syncError = 'GitHub 已保存，本机缓存更新失败';
+    }
+  }
+
   Future<void> _sync({ArchiveSnapshot? firstSnapshot}) async {
     final remote = _remote;
     if (remote == null) return;
@@ -254,11 +477,14 @@ class AppStore extends ChangeNotifier {
     status = '正在同步';
     notifyListeners();
     try {
-      final snapshot = firstSnapshot ?? await _readBound(remote);
-      await remote.assertDescendant(_head, snapshot.head);
-      if (_head.isNotEmpty && _generation != snapshot.generation) {
-        resetDetected = true;
-        throw const FormatException('云端票库已重置，请先导出本机备份，再重新连接');
+      final snapshot = await _currentSnapshot(
+        remote,
+        firstSnapshot: firstSnapshot,
+      );
+      if (!pending) {
+        _adopt(snapshot);
+        await _persistSynced();
+        return;
       }
       final merge = mergeTickets(_base, _records, snapshot.records);
       final settingMerge = mergeSettings(
@@ -270,44 +496,50 @@ class AppStore extends ChangeNotifier {
         conflicts = merge;
         settingsConflicts = settingMerge;
         _reviewedRemote = snapshot;
+        _online = true;
+        pending = true;
         status = '请选择同步冲突的处理方式';
+        await _persist();
         return;
       }
       final mergedSettings = settingMerge.settings;
       final records = deduplicateTickets(merge.records, catalog);
       final head = await remote.write(records, snapshot, mergedSettings);
-      _records = records;
-      _base = List.of(_records);
-      settings = mergedSettings;
-      _baseSettings = sharedSettings(cloneJson(settings));
-      _head = head;
-      _generation = snapshot.generation;
-      resetDetected = false;
-      pending = false;
-      status = '已同步';
-      await _persist();
+      _adopt(
+        snapshot,
+        records: records,
+        newSettings: mergedSettings,
+        head: head,
+      );
+      await _persistSynced();
     } catch (failure) {
-      syncError = failure.toString().replaceFirst('FormatException: ', '');
-      status = pending ? '已存本机，等待同步' : '同步未完成';
+      _syncFailure(failure);
       rethrow;
     }
   }
 
   Future<void> resolveConflicts(Map<String, bool> choices) => _run(() async {
-    final merge = conflicts, reviewed = _reviewedRemote;
-    if (merge == null || reviewed == null) return;
+    final merge = conflicts, reviewed = _reviewedRemote, remote = _remote;
+    if (merge == null || reviewed == null || remote == null) return;
     final nextRecords = merge.resolve(choices);
     final nextSettings = settingsConflicts?.resolve(choices) ?? settings;
-    _records = nextRecords;
-    _base = List.of(reviewed.records);
-    settings = nextSettings;
-    _baseSettings = sharedSettings(reviewed.settings);
-    _head = reviewed.head;
-    _generation = reviewed.generation;
-    _clearReview();
-    pending = true;
-    await _persist();
-    await _sync();
+    try {
+      final snapshot = await _currentSnapshot(remote);
+      if (snapshot.head != reviewed.head) {
+        await _sync(firstSnapshot: snapshot);
+        if (conflicts != null) {
+          throw const FormatException('云端票库已变化，请重新核对冲突');
+        }
+        return;
+      }
+      final records = deduplicateTickets(nextRecords, catalog);
+      final head = await remote.write(records, snapshot, nextSettings);
+      _adopt(snapshot, records: records, newSettings: nextSettings, head: head);
+      await _persistSynced();
+    } catch (failure) {
+      _syncFailure(failure);
+      rethrow;
+    }
   });
 
   Future<void> resetRepository({GitHubConnection? target, String? token}) =>
@@ -372,15 +604,22 @@ class AppStore extends ChangeNotifier {
     status = '已采用云端票库';
     await _persist();
   });
-  void _adopt(ArchiveSnapshot snapshot) {
-    _records = deduplicateTickets(snapshot.records, catalog);
+  void _adopt(
+    ArchiveSnapshot snapshot, {
+    List<TicketRecord>? records,
+    Map<String, dynamic>? newSettings,
+    String? head,
+    String? generation,
+  }) {
+    _records = records ?? deduplicateTickets(snapshot.records, catalog);
     _base = List.of(_records);
-    settings = sharedSettings(snapshot.settings);
+    settings = sharedSettings(newSettings ?? snapshot.settings);
     _baseSettings = sharedSettings(cloneJson(settings));
-    _head = snapshot.head;
-    _generation = snapshot.generation;
+    _head = head ?? snapshot.head;
+    _generation = generation ?? snapshot.generation;
     pending = false;
     resetDetected = false;
+    _online = connected;
     syncError = null;
     _clearReview();
   }
@@ -397,6 +636,7 @@ class AppStore extends ChangeNotifier {
     _generation = '';
     pending = false;
     resetDetected = false;
+    _online = connected;
     syncError = null;
     _clearReview();
     status = '本机票库已清空，个人资料已保留';

@@ -4,10 +4,13 @@ import 'package:xingji_core/xingji_core.dart';
 import 'app_store.dart';
 import 'design.dart';
 import 'input_formatters.dart';
+import 'sync_review.dart';
 
-Future<void> openProfileEditor(BuildContext context, AppStore store) =>
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => ProfileEditor(store)));
+Future<void> openProfileEditor(BuildContext context, AppStore store) async {
+  if (!await checkArchiveWrite(context, store) || !context.mounted) return;
+  await Navigator.of(context)
+      .push(MaterialPageRoute(builder: (_) => ProfileEditor(store)));
+}
 
 class ProfileEditor extends StatefulWidget {
   final AppStore store;
@@ -17,9 +20,10 @@ class ProfileEditor extends StatefulWidget {
 }
 
 class _ProfileEditorState extends State<ProfileEditor> {
-  late final profile = personalProfile(
+  late final original = personalProfile(
     widget.store.settings['profile'] as Map? ?? {},
   );
+  late final profile = personalProfile(original);
   final fields = <String, TextEditingController>{}, docs = <_DocumentDraft>[];
   bool saving = false;
   @override
@@ -47,11 +51,15 @@ class _ProfileEditorState extends State<ProfileEditor> {
   Future<void> save() async {
     setState(() => saving = true);
     try {
-      await widget.store.saveProfile({
-        ...profile,
-        for (final entry in fields.entries) entry.key: entry.value.text,
-        'documents': docs.map((doc) => doc.value).toList(),
-      });
+      await widget.store.saveProfile(
+        {
+          ...profile,
+          for (final entry in fields.entries) entry.key: entry.value.text,
+          'documents': docs.map((doc) => doc.value).toList(),
+        },
+        original: original,
+        pick: pickSyncConflicts(context),
+      );
       if (mounted) Navigator.pop(context);
     } catch (error) {
       if (mounted) showError(context, error);
@@ -61,7 +69,12 @@ class _ProfileEditorState extends State<ProfileEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.store,
+    builder: (context, _) => _buildProfile(context),
+  );
+
+  Widget _buildProfile(BuildContext context) => PopScope(
     canPop: !saving,
     child: Scaffold(
       appBar: AppBar(title: const Text('个人资料')),
@@ -69,7 +82,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: FilledButton.icon(
-            onPressed: saving ? null : save,
+            onPressed: saving || !widget.store.canWrite ? null : save,
             icon: saving
                 ? const SizedBox.square(
                     dimension: 18,
@@ -80,8 +93,9 @@ class _ProfileEditorState extends State<ProfileEditor> {
           ),
         ),
       ),
-      body: AbsorbPointer(
-        absorbing: saving,
+      body: ArchiveEditControls(
+        enabled: widget.store.canWrite,
+        busy: saving,
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
           child: Center(
@@ -90,6 +104,8 @@ class _ProfileEditorState extends State<ProfileEditor> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (widget.store.readOnlyReason case final reason?)
+                    Text(reason),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('录入时自动填写旅客资料'),
