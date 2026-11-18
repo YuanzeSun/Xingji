@@ -7,10 +7,10 @@ import { browser, until, connect, confirm, useServers } from './helpers/d1-app.j
 
 test('D1 first: binding clears the GitHub archive until the user backs up', async () => {
   const window = browser();
-  const github = new MemoryGitHub([createRecord({ id: 'github-ticket', service: 'G21' })], { flightMcpKey: 'github-key' });
+  const github = new MemoryGitHub([createRecord({ id: 'github-ticket', service: 'G21' })], { flightMcpKey: 'github-key', profile: { chineseName: '旧资料' } });
   github.corrupt('README.md', 'keep this');
   const before = github.head;
-  const d1 = memoryD1([createRecord({ id: 'd1-ticket', service: 'G103' })], { flightMcpKey: 'd1-key' });
+  const d1 = memoryD1([createRecord({ id: 'd1-ticket', service: 'G103' })], { flightMcpKey: 'd1-key', profile: { chineseName: '测试旅客' } });
   useServers(github, d1);
   const button = () => document.querySelector('[data-action="backup-github"]');
   try {
@@ -29,6 +29,7 @@ test('D1 first: binding clears the GitHub archive until the user backs up', asyn
     await until(() => button()?.disabled === false);
     assert.deepEqual(github.records(), []);
     assert.equal(github.settings().flightMcpKey, '');
+    assert.equal(github.settings().profile, undefined);
     assert.ok(github.ancestor(before, github.head));
     assert.ok(github.trees.get(github.commits.get(github.head).tree)['README.md']);
 
@@ -44,6 +45,7 @@ test('D1 first: binding clears the GitHub archive until the user backs up', asyn
     await until(() => github.records().length === 1 && button()?.disabled === false);
     assert.equal(github.records()[0].id, 'd1-ticket');
     assert.equal(github.settings().flightMcpKey, 'd1-key');
+    assert.equal(github.settings().profile.chineseName, '测试旅客');
 
     const saved = github.head;
     connect(window, 'github');
