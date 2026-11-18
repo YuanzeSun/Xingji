@@ -111,7 +111,7 @@ void main() {
   });
 
   test(
-    'CSV round-trips dates, snapshots, quotes, newlines and formula-like text',
+    'CSV import preserves dates, snapshots, quotes and formula-like text',
     () {
       final record = TicketRecord.create({
         'id': 'csv-test',
@@ -137,8 +137,20 @@ void main() {
           ],
         },
       });
-      final csv = ticketCsv([record]);
-      expect(csv, contains("'=SUM"));
+      final csv = [
+        'id,mergedIds,service,departureDate,passenger,price,railRoute,railJourney,boardingCode',
+        [
+          record.id,
+          '[]',
+          record.text('service'),
+          jsonEncode(record['departureDate']),
+          "'${record.text('passenger')}",
+          "'${record.text('price')}",
+          jsonEncode(record['railRoute']),
+          jsonEncode(record['railJourney']),
+          '""',
+        ].map((cell) => '"${cell.replaceAll('"', '""')}"').join(','),
+      ].join('\r\n');
       final decoded = parseTicketCsv(csv).single;
       for (final key in [
         'id',

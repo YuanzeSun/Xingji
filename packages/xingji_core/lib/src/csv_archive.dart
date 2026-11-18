@@ -14,35 +14,6 @@ const _jsonFields = {
   'railRoute',
   'railJourney',
 };
-String ticketCsv(Iterable<TicketRecord> records) {
-  final fields = [
-    'id',
-    'mergedIds',
-    ...ticketFields.where(
-      (field) => !['deleted', 'offsetX', 'offsetY'].contains(field),
-    ),
-  ];
-  String cell(dynamic value) {
-    var text = (value ?? '').toString();
-    if (RegExp(r'^[=+\-@\t\r]').hasMatch(text)) text = "'$text";
-    return '"${text.replaceAll('"', '""')}"';
-  }
-
-  return '\uFEFF${[
-    fields.map(cell).join(','),
-    for (final record in records.where((record) => !record.deleted)) fields.map((key) {
-        final value = record[key];
-        return cell(journeyDateFields.contains(key)
-            ? value == '' || value == null
-                  ? ''
-                  : jsonEncode(value)
-            : _jsonFields.contains(key)
-            ? jsonEncode(value ?? (['lookupValues', 'fieldSources'].contains(key) ? {} : ''))
-            : value);
-      }).join(','),
-  ].join('\r\n')}';
-}
-
 List<TicketRecord> parseTicketCsv(String input) {
   final rows = <List<String>>[], row = <String>[];
   var value = StringBuffer(), quoted = false;

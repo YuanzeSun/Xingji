@@ -221,6 +221,7 @@ void main() {
       expect(tester.widget<Checkbox>(checkbox).value, false);
       scroll.jumpTo(0);
       await tester.pumpAndSettle();
+      expect(find.text('导出 CSV'), findsNothing);
       await tester.tap(find.text('完成'));
       await tester.pumpAndSettle();
       expect(ticketCheckbox, findsNothing);

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -69,12 +68,6 @@ class _ArchivePageState extends State<ArchivePage> {
             '行迹旅行手册.pdf',
             await travelBook(chosen, widget.store.catalog),
             'application/pdf',
-          );
-        case 'csv':
-          await saveFile(
-            '行迹票据.csv',
-            utf8.encode(ticketCsv(chosen)),
-            'text/csv',
           );
         case 'images':
           final images = Archive();
@@ -198,13 +191,6 @@ class _ArchivePageState extends State<ArchivePage> {
                   : () => _export('images'),
               icon: const Icon(Icons.image_outlined),
               label: const Text('逐个导出'),
-            ),
-            OutlinedButton.icon(
-              onPressed: selected.isEmpty || exporting
-                  ? null
-                  : () => _export('csv'),
-              icon: const Icon(Icons.table_chart_outlined),
-              label: const Text('导出 CSV'),
             ),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(foregroundColor: ticketRed),
