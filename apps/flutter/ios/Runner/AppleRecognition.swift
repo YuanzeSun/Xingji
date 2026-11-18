@@ -1,4 +1,5 @@
 import Flutter
+import CoreGraphics
 import FoundationModels
 import ImageIO
 import OSLog
@@ -41,7 +42,7 @@ enum AppleRecognition {
     return true
   }
 
-  static let boardingSymbologies: [VNBarcodeSymbology] = [.pdf417, .aztec, .qr, .dataMatrix]
+  static let boardingSymbologies: [VNBarcodeSymbology] = [.pdf417, .microPDF417, .aztec, .qr, .dataMatrix, .code128]
 
   static func recognize(
     _ data: Data, languages: [String], barcodes: Bool,
@@ -87,23 +88,7 @@ enum AppleRecognition {
     let handler = VNImageRequestHandler(cgImage: image)
     var payloads: [Data] = []
     if barcodes {
-      payloads = detectBarcodes(in: image, flight: flight)
-      // A boarding code can occupy a small part of a large photo. Search
-      // overlapping portions at source resolution when the full frame misses it.
-      if flight && !payloads.contains(where: isBoardingPayload) {
-        let width = CGFloat(image.width), height = CGFloat(image.height)
-        for x in [0.0, 0.35] {
-          for y in [0.0, 0.35] {
-            let rect = CGRect(x: width * x, y: height * y,
-                              width: width * 0.65, height: height * 0.65).integral
-            if let cropped = image.cropping(to: rect) {
-              payloads.append(contentsOf: detectBarcodes(in: cropped, flight: true))
-            }
-            if payloads.contains(where: isBoardingPayload) { break }
-          }
-          if payloads.contains(where: isBoardingPayload) { break }
-        }
-      }
+      payloads = flight ? detectBoardingCodes(in: image) : detectBarcodes(in: image, flight: false)
     }
     if readText {
       do {
@@ -133,10 +118,58 @@ enum AppleRecognition {
     return ["lines": lines, "barcodes": barcodes]
   }
 
+  private static func detectBoardingCodes(in image: CGImage) -> [Data] {
+    let original = detectBarcodes(in: image, flight: true)
+    if original.contains(where: isBoardingPayload) { return original }
+
+    for edge in [1800, 1100] where max(image.width, image.height) > edge {
+      guard let frame = resized(image, longestEdge: edge) else { continue }
+      let found = detectBarcodes(in: frame, flight: true)
+      if found.contains(where: isBoardingPayload) { return found }
+    }
+
+    let width = CGFloat(image.width), height = CGFloat(image.height)
+    let stripWidth = width * 0.67, stripHeight = height * 0.67
+    // A side strip can preserve an entire PDF417 that spans two quadrants.
+    let strips = [
+      CGRect(x: 0, y: 0, width: width, height: stripHeight),
+      CGRect(x: 0, y: height - stripHeight, width: width, height: stripHeight),
+      CGRect(x: 0, y: 0, width: stripWidth, height: height),
+      CGRect(x: width - stripWidth, y: 0, width: stripWidth, height: height),
+    ]
+    let corners = [0.0, width - stripWidth].flatMap { x in
+      [0.0, height - stripHeight].map { y in CGRect(x: x, y: y, width: stripWidth, height: stripHeight) }
+    }
+    for rect in strips + corners {
+      guard let cropped = image.cropping(to: rect.integral) else { continue }
+      let found = detectBarcodes(in: cropped, flight: true)
+      if found.contains(where: isBoardingPayload) { return found }
+    }
+    return original
+  }
+
+  private static func resized(_ image: CGImage, longestEdge: Int) -> CGImage? {
+    let scale = Double(longestEdge) / Double(max(image.width, image.height))
+    let width = max(1, Int((Double(image.width) * scale).rounded()))
+    let height = max(1, Int((Double(image.height) * scale).rounded()))
+    guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                  bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+    let rect = CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height))
+    context.setFillColor(CGColor(gray: 1, alpha: 1))
+    context.fill(rect)
+    context.interpolationQuality = .medium
+    context.draw(image, in: rect)
+    return context.makeImage()
+  }
+
   private static func detectBarcodes(in image: CGImage, flight: Bool) -> [Data] {
     let request = VNDetectBarcodesRequest()
-    if flight { request.symbologies = boardingSymbologies }
     do {
+      if flight {
+        let supported = Set(try request.supportedSymbologies())
+        request.symbologies = boardingSymbologies.filter(supported.contains)
+      }
       try VNImageRequestHandler(cgImage: image).perform([request])
       return (request.results ?? []).compactMap { payload(of: $0) }
     } catch {
