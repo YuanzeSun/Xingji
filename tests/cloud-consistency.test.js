@@ -13,6 +13,23 @@ const ticket = (extra = {}) => createRecord({ id: 'ticket', service: 'G103', dep
 const store = server => new GitHubStore(config(), 'test-key', server.fetch);
 async function seed(records, head = 'h0') { await db.setMany([['records', structuredClone(records)], ['base', structuredClone(records)], ['github', config()], ['syncMeta', { head, revision: 1, verified: true, pending: false }], ['lastSync', null]]); }
 
+test('GitHub round-trip keeps ordinal-only and year-only tickets in the shared partitions', async () => {
+  const records = [
+    ticket({ id:'B', departureDate:{year:2026,dayOfYear:null} }),
+    ticket({ id:'a', departureDate:{year:2026,dayOfYear:319} }),
+    ticket({ id:'unknown-year', departureDate:{year:null,dayOfYear:319} }),
+    ticket({ id:'deleted', deleted:true }),
+  ];
+  const server = new MemoryGitHub();
+  const client = store(server), before = await client.read();
+  await client.verify();
+  await client.write(records, before);
+  const result = await client.read();
+  assert.deepEqual(Object.keys(result.contents), ['archive/2026.json', 'archive/unknown.json']);
+  assert.deepEqual(JSON.parse(result.contents['archive/2026.json']).records.map(row=>row.id), ['B','a']);
+  assert.deepEqual(Object.fromEntries(result.records.map(row=>[row.id,row])),Object.fromEntries(records.map(row=>[row.id,row])));
+});
+
 test('two devices concurrently edit separate fields, reject the losing branch update, then converge after retry', async () => {
   const base = ticket(), server = new MemoryGitHub([base]), head = server.head;
   const retry = async records => { for (let i = 0; i < 3; i++) { try { return await synchronize(store(server), [base], records, {}, { baseHead: head }); } catch (error) { if (error.status !== 422 || i === 2) throw error; } } };
