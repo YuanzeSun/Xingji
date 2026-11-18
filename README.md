@@ -34,6 +34,8 @@ Flutter App 正在独立的 [`app` 分支](https://github.com/YuanzeSun/Xingji/t
 
 机票支持扫描**登机牌条码或电子登机牌二维码**录入，自动填写码内可识别的信息。
 
+已有 CSV 表格可在「数据与同步」→「备份与迁移」中导入。
+
 以下截图和票面均为虚构示例。扫描或上传后，核对识别结果再保存。
 
 ### 手动输入
@@ -86,7 +88,7 @@ Flutter App 正在独立的 [`app` 分支](https://github.com/YuanzeSun/Xingji/t
 
 ### 导出与纪念册
 
-勾选票据，即可导出图片、CSV 或纪念册。纪念册支持自定义名称与封面。
+勾选票据，即可导出图片或纪念册。纪念册支持自定义名称与封面。
 
 [查看示例 PDF](docs/examples/journey-album.pdf)
 

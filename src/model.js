@@ -286,9 +286,4 @@ export function partition(records) {
   for (const rs of Object.values(years)) rs.sort((a, b) => wireOrder(a.id, b.id));
   return years;
 }
-export function csv(records) {
-  const fields = ['id', 'mergedIds', ...FIELDS.filter(f => !['deleted', 'offsetX', 'offsetY'].includes(f))];
-  const cell = value => { let s = String(value ?? ''); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replaceAll('"', '""') + '"'; };
-  return '\uFEFF' + [fields, ...records.filter(r => !r.deleted).map(r => fields.map(f => JOURNEY_DATE_FIELDS.includes(f) ? (r[f] ? JSON.stringify(r[f]) : '') : ['lookupValues', 'fieldSources', 'ticketMarks', 'mergedIds', 'ticketCode', 'boardingCode', 'railRoute', 'railJourney'].includes(f) ? JSON.stringify(r[f] || (['lookupValues','fieldSources'].includes(f) ? {} : ['ticketCode', 'boardingCode', 'railRoute', 'railJourney'].includes(f) ? '' : [])) : r[f]))].map(row => row.map(cell).join(',')).join('\r\n');
-}
 export function formatDate(value) { return value ? dateLabel(value) : '日期待补充'; }

@@ -3,10 +3,9 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { indexedDB } from 'fake-indexeddb';
 import { createRecord } from '../src/model.js';
-import { parseCSV } from '../src/importers.js';
 import { prepareCloud } from './helpers/cloud.js';
 
-test('city search UI combines endpoints, preserves input, filters the timeline and exports all matches', async () => {
+test('city search UI combines endpoints, preserves input, filters the timeline and selects all matches for export', async () => {
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost/' });
   const { window } = dom;
   for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData']) Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
@@ -55,17 +54,6 @@ test('city search UI combines endpoints, preserves input, filters the timeline a
   assert.ok(document.querySelector('[name="album-title"]'));
   assert.match(document.querySelector('[data-album-summary]').textContent,/页/);
   click('[data-action="close-modal"]');
-  const originalCreate = URL.createObjectURL, originalRevoke = URL.revokeObjectURL, originalTimeout = globalThis.setTimeout;
-  let exported; const downloadTimers = [];
-  try {
-    URL.createObjectURL = blob => { exported = blob; return 'blob:export'; }; URL.revokeObjectURL = () => {};
-    globalThis.setTimeout = (fn, ms, ...args) => { const timer = originalTimeout(fn, ms, ...args); if (ms === 30000) downloadTimers.push(timer); return timer; };
-    window.HTMLAnchorElement.prototype.click = () => {};
-    click('[data-action="export-selected-csv"]'); await waitFor(() => !!exported);
-    const result = parseCSV(await exported.text());
-    assert.equal(result.length, 60, 'export must include all matches beyond the first page');
-    assert.equal(result[0].originCity, '北京', 'exports include the resolved city, not just a blank override field');
-  } finally { URL.createObjectURL = originalCreate; URL.revokeObjectURL = originalRevoke; globalThis.setTimeout = originalTimeout; downloadTimers.forEach(clearTimeout); }
   click('[data-action="reset-filters"]'); await waitFor(() => count(64));
   document.querySelector('#advanced-search').open = true;
   fill('originCity', 'beijing'); fill('destinationCity', '上海'); await waitFor(() => count(61));

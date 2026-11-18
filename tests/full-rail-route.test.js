@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {createRecord,archive,readArchive,csv} from '../src/model.js';
+import {createRecord,archive,readArchive} from '../src/model.js';
+import { csv } from './helpers/ticket-csv.js';
 import {parseCSV} from '../src/importers.js';
 import {selectRailRoute,loadRailRoute} from '../src/rail-route.js';
 import {normalizeRailRoute,railRouteNeedsSave} from '../src/rail-route-snapshot.js';

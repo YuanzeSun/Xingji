@@ -12,7 +12,7 @@ import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } fro
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
 import { upgradeCodeRecords } from './code-upgrade.js';
 import { renderCodeData } from './barcode-data.js';
-import { createRecord, validateRecord, mergeThreeWay, TEMPLATES, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, readArchive, archive, applyImport, csv, formatDate } from './model.js';
+import { createRecord, validateRecord, mergeThreeWay, TEMPLATES, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, readArchive, archive, applyImport, formatDate } from './model.js';
 import * as db from './db.js';
 import { readSyncState, readResetState, bindRepository, stageRecords, stageSettings, acknowledgeSync, replaceWithRemote } from './sync-state.js';
 import { sharedSettings, maskedKey } from './shared-settings.js';
@@ -185,6 +185,8 @@ function connectionNotice() {
 }
 function applyAccessPolicy() {
   for (const button of document.querySelectorAll('[data-action="new"],[data-action="edit"],[data-action="delete"],[data-action="scan-ticket"]')) button.disabled = !canWrite() || state.saving || state.showDemo;
+  const csvImport = document.querySelector('[data-action="import-csv"]');
+  if (csvImport) csvImport.disabled = !canWrite() || state.saving || state.busy;
   const batchDelete = document.querySelector('[data-action="delete-selected"]'); if (batchDelete) batchDelete.disabled = !canWrite() || state.saving || state.showDemo;
   for (const input of document.querySelectorAll('[data-setting-control]')) input.disabled = !canWrite() || state.saving;
   const refresh = document.querySelector('[data-action="flight-refresh"]'); if (refresh) refresh.disabled = !flightKey() || state.flightChecking || !navigator.onLine || (state.flightKeyDraft !== null && state.flightKeyDraft.trim() !== flightKey());
@@ -311,7 +313,7 @@ function dataPage() {
     <section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h2>GitHub私有同步</h2><p data-cloud-label>${e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<button class="button danger" data-action="reset-repository">重置仓库</button>${state.resetRequest ? '<button class="button danger" data-action="reset-archive">重置票库</button>' : ''}</section>
     <aside class="data-column">${flightSettingsPanel()}
     <section class="panel quiet-panel"><h3>${icon('ticket')}随身票夹</h3><p>在手机浏览器中选择“添加到主屏幕”，即可像应用一样打开。已有票据可离线查看。</p>${installPrompt ? '<button class="button secondary" data-action="install">安装行迹</button>' : ''}</section></aside>
-    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>完整JSON备份</strong><small>完整票据与票面信息</small>${icon('download')}</button><button data-action="csv"><span>${icon('ticket')}</span><strong>导出CSV表格</strong><small>便于整理和其他软件使用</small>${icon('download')}</button></div></section>
+    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>完整JSON备份</strong><small>完整票据与票面信息</small>${icon('download')}</button><button type="button" data-action="import-csv"><span>${icon('ticket')}</span><strong>导入 CSV</strong><small>选择表格并核对票据</small>${icon('upload')}</button></div><input id="import-csv-file" type="file" accept=".csv,text/csv" hidden /><div id="import-status" class="import-status" role="status"></div></section>
   </div>`;
 }
 function render() {
@@ -391,6 +393,17 @@ function bindPage() {
   };
   bindPersonalProfileForm(root.querySelector('#profile-form'),{change:updateProfileDraft,restructure:profile=>{updateProfileDraft(profile);render();},submit:savePersonalProfile});
   for (const id of ['import-files', 'camera-file']) document.querySelector('#' + id)?.addEventListener('change', event => handleFiles([...event.target.files]));
+  const csvFile = root.querySelector('#import-csv-file');
+  if (csvFile) {
+    root.querySelector('[data-action="import-csv"]').addEventListener('click', () => csvFile.click());
+    csvFile.addEventListener('change', () => {
+      const [file] = csvFile.files;
+      csvFile.value = '';
+      if (!file) return;
+      if (!/\.csv$/i.test(file.name)) return importStatus('请选择 CSV 文件');
+      handleFiles([file]);
+    });
+  }
   const drop = document.querySelector('#dropzone');
   if (drop) {
     drop.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); document.querySelector('#import-files').click(); } });
@@ -678,7 +691,8 @@ async function handleFiles(files) {
   if (!canWrite()) return toast('当前仅可查看缓存', true);
   if (state.busy) return toast('上一批资料仍在解析，请稍候', true);
   if (files.length > 20) return toast('每批最多处理20个文件，可以分批导入', true);
-  state.busy = true; const found = []; const failures = [];
+  state.busy = true; applyAccessPolicy();
+  const found = [], failures = [];
   try {
     for (let i = 0; i < files.length; i++) {
       const file = files[i]; importStatus(`正在处理 ${i + 1}/${files.length}：${file.name}`);
@@ -715,7 +729,7 @@ async function handleFiles(files) {
       toast(`${failures.length} 个文件需要手动处理，详情见导入状态`, true);
       if (state.lastOCRText) { const area = document.querySelector('#import-text'); if (area) area.value = state.lastOCRText; }
     } else importStatus(`已识别 ${found.length} 条候选记录，请核对后保存。`);
-  } finally { state.busy = false; }
+  } finally { state.busy = false; applyAccessPolicy(); }
 }
 function reviewCandidates() {
   editor = null;
@@ -919,10 +933,6 @@ const actions = {
   'quick-route': button => { state.filters = searchOptions({ ...state.filters, city: '', originCity: button.dataset.from, destinationCity: button.dataset.to, origin: '', destination: '', bothDirections: true }); state.limit = 48; render(); },
   'export-album': () => exportArchiveSelection('pdf'),
   'export-images': () => exportArchiveSelection('zip'),
-  'export-selected-csv': () => {
-    const records = selectedArchiveRecords();
-    if (records.length) download(csv(records), '行迹所选票据_' + now().slice(0,10) + '.csv', 'text/csv;charset=utf-8');
-  },
   'delete-selected': async () => {
     const selected = selectedArchiveRecords();
     if (!selected.length || state.showDemo || !canWrite() || state.saving) return;
@@ -951,7 +961,6 @@ const actions = {
     if (candidates.length === 1) editRecord(candidates[0], 0); else reviewCandidates();
   },
   backup: () => download(JSON.stringify(archive(state.records), null, 2), `行迹备份_${now().slice(0, 10)}.json`),
-  csv: () => download(csv(state.records), `行迹票据_${now().slice(0, 10)}.csv`, 'text/csv;charset=utf-8'),
   'export-svg': async button => { const r = findRecord(button.dataset.id); button.disabled = true; toast('正在准备包含字体的票面…'); try { download(await exportSVG(r), fileName(r) + '.svg', 'image/svg+xml;charset=utf-8'); } finally { button.disabled = false; } },
   'export-png': async button => { const r = findRecord(button.dataset.id); button.disabled = true; toast('正在生成高清票面…'); try { download(await exportPNG(r), fileName(r) + '.png'); } finally { button.disabled = false; } },
   delete: async button => {

@@ -1,7 +1,8 @@
 import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createRecord,archive,readArchive,csv,mergeThreeWay,resolveRecordConflict,deduplicateRecords} from '../src/model.js';
+import {createRecord,archive,readArchive,mergeThreeWay,resolveRecordConflict,deduplicateRecords} from '../src/model.js';
+import { csv } from './helpers/ticket-csv.js';
 import {parseCSV,parseText} from '../src/importers.js';
 import {parseScanText} from '../src/scan-engine.js';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
