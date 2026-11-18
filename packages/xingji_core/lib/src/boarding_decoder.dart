@@ -314,5 +314,11 @@ String encodeBoardingPass({
       place = field(seat, r'^[A-Z0-9]{1,4}$', '座位须为 1 至 4 位代码', 4);
   final order = field(sequence, r'^[A-Z0-9]{1,5}$', '值机序号须为 1 至 5 位代码', 5),
       state = field(status, r'^\d$', '旅客状态须为一位数字', 1);
-  return 'M1${name.padRight(20)}${electronic ? 'E' : ' '}${locator.padRight(7)}$from$to${airline.padRight(3)}${flight[1]!.padLeft(4, '0')}${flight[2]!.isEmpty ? ' ' : flight[2]}${date.dayOfYear.toString().padLeft(3, '0')}$compartment${place.padLeft(4, '0')}${order.padLeft(5, '0')}${state}00';
+  final seatField = RegExp(r'^\d+[A-Z]?$').hasMatch(place)
+      ? place.padLeft(4, '0')
+      : place.padRight(4);
+  final sequenceField = RegExp(r'^\d+$').hasMatch(order)
+      ? order.padLeft(5, '0')
+      : order.padRight(5);
+  return 'M1${name.padRight(20)}${electronic ? 'E' : ' '}${locator.padRight(7)}$from$to${airline.padRight(3)}${flight[1]!.padLeft(4, '0')}${flight[2]!.isEmpty ? ' ' : flight[2]}${date.dayOfYear.toString().padLeft(3, '0')}$compartment$seatField$sequenceField${state}00';
 }

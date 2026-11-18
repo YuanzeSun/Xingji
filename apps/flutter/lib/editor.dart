@@ -12,6 +12,12 @@ import 'seat_input.dart';
 import 'import_review.dart';
 import 'ticket_detail.dart';
 
+const _barcodeBlue = Color(0xFF32658D);
+final _chineseName = RegExp(r'[\u3400-\u9fff]');
+final _flightNumber = RegExp(
+  r'^([A-Z]{2,3}|[A-Z]\d|\d[A-Z])\s*(\d{1,4}[A-Z]?)$',
+);
+
 Future<void> openEditor(
   BuildContext context,
   AppStore store, {
@@ -45,10 +51,10 @@ class _TicketEditorState extends State<TicketEditor> {
   bool saving = false,
       querying = false,
       importing = false,
-      generate = false,
       submitted = false,
       dirty = false,
       confirmingExit = false;
+  bool electronicMarker = false;
   int revision = 0;
   String error = '';
   AppStore get store => widget.store;
@@ -95,18 +101,16 @@ class _TicketEditorState extends State<TicketEditor> {
       );
     }
     final code = record['boardingCode'];
-    generate =
-        flight &&
-        record.text('boardingCodeSource') == 'generated' &&
-        code is Map;
-    final saved = generate
+    final saved = code is Map && code['rawBytes'] is String
         ? decodeBoardingBytes(base64Decode(code['rawBytes'] as String))
         : null;
+    electronicMarker = saved?['electronic'] == 'E';
     fields['barcodeName'] = TextEditingController(
-      text: flight ? (saved?['passenger'] ?? record.text('passenger')) : '',
+      text:
+          saved?['passenger'] ?? _profileBarcodeName(record.text('passenger')),
     );
     fields['sequence'] = TextEditingController(text: saved?['sequence'] ?? '');
-    fields['status'] = TextEditingController(text: saved?['status'] ?? '1');
+    fields['status'] = TextEditingController(text: saved?['status'] ?? '');
     error = '';
     submitted = false;
   }
@@ -135,6 +139,9 @@ class _TicketEditorState extends State<TicketEditor> {
   void changed(String key) {
     dirty = true;
     if (!fieldLabels.containsKey(key)) return;
+    if (flight && key == 'passenger') {
+      fields['barcodeName']!.text = _profileBarcodeName(value('passenger'));
+    }
     (data['fieldSources'] as Map)[key] = 'manual';
     final lockedFields = Set<String>.from(data['lockedFields']);
     lockedFields.add(key);
@@ -174,7 +181,11 @@ class _TicketEditorState extends State<TicketEditor> {
       store.catalog,
     );
     for (final key in ['passenger', 'identity']) {
-      if (next.text(key) != value(key)) fields[key]!.text = next.text(key);
+      if (next.text(key) == value(key)) continue;
+      fields[key]!.text = next.text(key);
+      if (flight && key == 'passenger') {
+        fields['barcodeName']!.text = _profileBarcodeName(next.text(key));
+      }
     }
     data['fieldSources'] = next.fieldSources;
   }
@@ -195,6 +206,94 @@ class _TicketEditorState extends State<TicketEditor> {
           'seatClass',
           if (!flight) 'carriage',
         };
+  String _profileBarcodeName(String passenger) {
+    final profile = personalProfile(store.settings['profile'] as Map? ?? {});
+    if (profile['autoFill'] == false ||
+        !_chineseName.hasMatch(passenger) ||
+        profile['chineseName'] != passenger) {
+      return '';
+    }
+    return [profile['lastName'], profile['firstName']].join('/');
+  }
+
+  Map<String, dynamic>? _generatedCode(TicketRecord record) {
+    final date = record.departure;
+    if (date?.dayOfYear == null) return null;
+    final operating = record.text('boardingCodeOperatingFlight');
+    final flight = _flightNumber.firstMatch(
+      operating.isEmpty ? record.text('service') : operating,
+    );
+    if (flight == null) return null;
+    final passenger = record.text('passenger'),
+        cabin = record.text('seatClass');
+    try {
+      final payload = encodeBoardingPass(
+        passenger: _chineseName.hasMatch(passenger)
+            ? value('barcodeName')
+            : passenger,
+        pnr: record.text('pnr'),
+        origin: record.text('originCode'),
+        destination: record.text('destinationCode'),
+        carrier: flight[1]!,
+        flightNumber: flight[2]!,
+        date: date!,
+        cabin:
+            const {
+              '': 'Y',
+              '经济舱': 'Y',
+              '超级经济舱': 'W',
+              '公务舱': 'C',
+              '头等舱': 'F',
+            }[cabin] ??
+            cabin,
+        seat: record.text('seat'),
+        sequence: value('sequence'),
+        status: value('status'),
+        electronic: electronicMarker,
+      );
+      final code = pdf417BoardingCode(ascii.encode(payload));
+      final saved = record.text('boardingCodeSource') == 'generated'
+          ? record['boardingCode'] as Map?
+          : null;
+      return {...code, ...?saved, 'rawBytes': code['rawBytes']};
+    } on FormatException {
+      return null;
+    }
+  }
+
+  TicketRecord _withAutomaticCode(TicketRecord record) {
+    if (!record.isFlight || scanned) return record;
+    final code = _generatedCode(record);
+    final sources = record.fieldSources;
+    if (code != null) {
+      sources['boardingCode'] = 'generated';
+      return record.withChanges({
+        'boardingCode': code,
+        'boardingCodeSource': 'generated',
+        'boardingLegIndex': '0',
+        'fieldSources': sources,
+      });
+    }
+    if (record.text('boardingCodeSource') != 'generated') return record;
+    sources.remove('boardingCode');
+    return record.withChanges({
+      'boardingCode': '',
+      'boardingCodeSource': '',
+      'boardingCodeOperatingFlight': '',
+      'boardingLegIndex': '',
+      'fieldSources': sources,
+    });
+  }
+
+  bool get _barcodeReady =>
+      !scanned &&
+      value('sequence').trim().isNotEmpty &&
+      value('status').trim().isNotEmpty &&
+      _generatedCode(
+            store.catalog.normalize(TicketRecord.fromJson(values())),
+          ) !=
+          null;
+
   Future<void> save() async {
     setState(() {
       submitted = true;
@@ -211,60 +310,13 @@ class _TicketEditorState extends State<TicketEditor> {
     }
     setState(() => saving = true);
     try {
-      var record = store.catalog.normalize(TicketRecord.fromJson(values()));
+      final record = store.catalog.normalize(TicketRecord.fromJson(values()));
       if (record.missingFields.isNotEmpty) {
         throw FormatException(
           '请补全：${record.missingFields.map((key) => fieldLabels[key] ?? key).join('、')}',
         );
       }
-      if (generate) {
-        if (record.departure?.dayOfYear == null) {
-          throw const FormatException('生成条码前，请填写出发月日');
-        }
-        final operating = record.text('boardingCodeOperatingFlight');
-        final service = RegExp(r'^([A-Z]{2,3}|[A-Z]\d|\d[A-Z])(\d{1,4}[A-Z]?)$')
-            .firstMatch(operating.isEmpty ? record.text('service') : operating);
-        if (service == null) throw const FormatException('请检查航班号');
-        final saved = record.text('boardingCodeSource') == 'generated'
-            ? record['boardingCode'] as Map?
-            : null;
-        final raw = saved?['rawBytes'];
-        final electronic =
-            raw is String &&
-            decodeBoardingBytes(base64Decode(raw))?['electronic'] == 'E';
-        final payload = encodeBoardingPass(
-          passenger: RegExp(r'[\u3400-\u9fff]').hasMatch(value('passenger'))
-              ? value('barcodeName')
-              : value('passenger'),
-          pnr: record.text('pnr'),
-          origin: record.text('originCode'),
-          destination: record.text('destinationCode'),
-          carrier: service[1]!,
-          flightNumber: service[2]!,
-          date: record.departure!,
-          cabin: record.text('seatClass'),
-          seat: record.text('seat'),
-          sequence: value('sequence'),
-          status: value('status'),
-          electronic: electronic,
-        );
-        final code = pdf417BoardingCode(ascii.encode(payload));
-        record = record.withChanges({
-          'boardingCode': {...code, ...?saved, 'rawBytes': code['rawBytes']},
-          'boardingCodeSource': 'generated',
-        });
-      } else if (record.text('boardingCodeSource') == 'generated') {
-        record = record.withChanges({
-          for (final key in [
-            'boardingCode',
-            'boardingCodeSource',
-            'boardingCodeOperatingFlight',
-            'boardingLegIndex',
-          ])
-            key: '',
-        });
-      }
-      final result = await store.save(record);
+      final result = await store.save(_withAutomaticCode(record));
       if (mounted) {
         if (result == SaveOutcome.pending) {
           ScaffoldMessenger.of(context)
@@ -472,7 +524,7 @@ class _TicketEditorState extends State<TicketEditor> {
     } else if (widget.record == null && !dirty && !flight) {
       changes['template'] = recognized['template'];
     }
-    final generation = generate && !replacingCode;
+    final keepBarcodeInputs = flight && !replacingCode;
     final generationFields = {
       for (final key in ['barcodeName', 'sequence', 'status']) key: value(key),
     };
@@ -484,9 +536,12 @@ class _TicketEditorState extends State<TicketEditor> {
         'lookupValues': lookup,
       }),
     );
-    if (generation) {
-      generate = true;
+    if (keepBarcodeInputs) {
       for (final entry in generationFields.entries) {
+        if (entry.key == 'barcodeName' &&
+            draft.text('passenger') != value('passenger')) {
+          continue;
+        }
         fields[entry.key]!.text = entry.value;
       }
     }
@@ -854,11 +909,11 @@ class _TicketEditorState extends State<TicketEditor> {
                         child: _pair(
                           _field(
                             pair[0],
-                            barcodeRequired: generate && pair[0] == 'pnr',
+                            barcodeRequired: flight && pair[0] == 'pnr',
                           ),
                           _field(
                             pair[1],
-                            barcodeRequired: generate && pair[1] == 'pnr',
+                            barcodeRequired: flight && pair[1] == 'pnr',
                           ),
                         ),
                       ),
@@ -874,48 +929,51 @@ class _TicketEditorState extends State<TicketEditor> {
                       _date('actualArrivalDate', '实际落地日期'),
                       const SizedBox(height: 16),
                       _field('actualBoardingTime', time: true),
-                      const SectionTitle('填写信息生成条码'),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('生成 PDF417 条码'),
-                        subtitle: scanned ? const Text('已扫描原码，无需重新填写') : null,
-                        value: generate,
-                        onChanged: scanned
-                            ? null
-                            : (value) => setState(() {
-                                dirty = true;
-                                generate = value!;
-                              }),
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-                      if (generate) ...[
+                      const SectionTitle('登机牌条码信息'),
+                      if (scanned)
+                        const Text('已使用原条码', style: TextStyle(color: muted))
+                      else
                         const Text(
-                          '橙色 * 为生成条码所需。',
-                          style: TextStyle(color: Color(0xFF955A0A)),
+                          '填齐蓝色 * 后自动生成',
+                          style: TextStyle(color: _barcodeBlue),
+                        ),
+                      const SizedBox(height: 16),
+                      if (_chineseName.hasMatch(value('passenger'))) ...[
+                        _field(
+                          'barcodeName',
+                          label: '英文姓名（姓/名）',
+                          barcodeRequired: true,
+                          uppercase: true,
+                          enabled: !scanned,
                         ),
                         const SizedBox(height: 16),
-                        if (RegExp(r'[\u3400-\u9fff]')
-                            .hasMatch(value('passenger')))
-                          _field(
-                            'barcodeName',
-                            label: '英文姓名（姓/名）',
-                            barcodeRequired: true,
-                            uppercase: true,
-                          ),
-                        const SizedBox(height: 16),
-                        _pair(
-                          _field(
-                            'sequence',
-                            label: '值机序号',
-                            barcodeRequired: true,
-                          ),
-                          _field(
-                            'status',
-                            label: '旅客状态代码',
-                            barcodeRequired: true,
-                          ),
-                        ),
                       ],
+                      _pair(
+                        _field(
+                          'sequence',
+                          label: '值机序号',
+                          barcodeRequired: true,
+                          uppercase: true,
+                          enabled: !scanned,
+                        ),
+                        _field(
+                          'status',
+                          label: '旅客状态代码',
+                          barcodeRequired: true,
+                          enabled: !scanned,
+                        ),
+                      ),
+                      if (_barcodeReady)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Semantics(
+                            liveRegion: true,
+                            child: const Text(
+                              '条码已自动生成',
+                              style: TextStyle(color: muted),
+                            ),
+                          ),
+                        ),
                     ],
                   ],
                 ),
@@ -964,7 +1022,7 @@ class _TicketEditorState extends State<TicketEditor> {
                         'variflight': '飞常准',
                         'profile': '个人资料',
                         'database': '地点数据库',
-                        'generated': '手动生成',
+                        'generated': '自动生成',
                         'default': '默认值',
                         'import': '文件导入',
                         'pdf': 'PDF 导入',
@@ -989,7 +1047,7 @@ class _TicketEditorState extends State<TicketEditor> {
           TextSpan(
             text: ' *',
             style: TextStyle(
-              color: barcodeRequired ? const Color(0xFF955A0A) : ticketRed,
+              color: requiredFields.contains(key) ? ticketRed : _barcodeBlue,
             ),
           ),
       ],
@@ -1001,6 +1059,7 @@ class _TicketEditorState extends State<TicketEditor> {
     bool uppercase = false,
     bool time = false,
     bool barcodeRequired = false,
+    bool enabled = true,
   }) {
     final controller = fields.putIfAbsent(key, () => TextEditingController());
     return Column(
@@ -1008,6 +1067,7 @@ class _TicketEditorState extends State<TicketEditor> {
       children: [
         TextFormField(
           controller: controller,
+          enabled: enabled,
           readOnly: locked(key) || time,
           inputFormatters: uppercase ? [UppercaseInput()] : null,
           decoration: InputDecoration(
@@ -1043,8 +1103,7 @@ class _TicketEditorState extends State<TicketEditor> {
                   }
                 },
           validator: (value) =>
-              (requiredFields.contains(key) || barcodeRequired) &&
-                  (value ?? '').trim().isEmpty
+              requiredFields.contains(key) && (value ?? '').trim().isEmpty
               ? '请填写${label ?? fieldLabels[key] ?? key}'
               : null,
         ),
@@ -1063,11 +1122,11 @@ class _TicketEditorState extends State<TicketEditor> {
             ? const Iterable<Place>.empty()
             : store.catalog.search(text.text, flight: flight),
         displayStringForOption: (place) => place.name,
-        onSelected: (place) {
+        onSelected: (place) => setState(() {
           fields[side]!.text = place.name;
           changed(side);
           data['${side}Code'] = flight ? place.code : place.text('pinyin');
-        },
+        }),
         fieldViewBuilder: (context, controller, focus, onSubmit) =>
             TextFormField(
               controller: controller,
