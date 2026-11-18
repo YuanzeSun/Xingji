@@ -110,32 +110,37 @@ class _ArchiveShellState extends State<ArchiveShell>
   );
   AppStore get store => widget.store;
   late final AppLifecycleListener lifecycle;
-  late final Timer connectionTimer;
+  Timer? travelInboxTimer;
 
   @override
   void initState() {
     super.initState();
-    lifecycle = AppLifecycleListener(onResume: _refreshPlatform);
+    lifecycle = AppLifecycleListener(onResume: _activatePlatform);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_refreshPlatform());
+      if (mounted) _activatePlatform();
     });
-    connectionTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      final state = WidgetsBinding.instance.lifecycleState;
-      if (state == null || state == AppLifecycleState.resumed) {
-        unawaited(_refreshPlatform());
-      }
-    });
+    if (AppleServices.available) {
+      travelInboxTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        final state = WidgetsBinding.instance.lifecycleState;
+        if (state == null || state == AppLifecycleState.resumed) {
+          unawaited(_refreshPlatform());
+        }
+      });
+    }
   }
 
   bool _refreshing = false;
 
-  Future<void> _refreshPlatform() async {
+  void _activatePlatform() => unawaited(_refreshPlatform(restoreGitHub: true));
+
+  Future<void> _refreshPlatform({bool restoreGitHub = false}) async {
     if (_refreshing) return;
     _refreshing = true;
     try {
-      await store.restoreConnection();
-      if (!mounted) return;
-      await store.refreshConnection();
+      if (restoreGitHub) {
+        await store.restoreConnection();
+        if (mounted && store.pending) await store.refreshConnection();
+      }
       if (mounted) await importPendingTravelMessages(store);
     } catch (_) {
       // Leave pending messages in the inbox for the next check or review.
@@ -146,7 +151,7 @@ class _ArchiveShellState extends State<ArchiveShell>
 
   @override
   void dispose() {
-    connectionTimer.cancel();
+    travelInboxTimer?.cancel();
     lifecycle.dispose();
     transition.dispose();
     super.dispose();
