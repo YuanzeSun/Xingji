@@ -1,11 +1,11 @@
 name: Check Flutter common app
 on:
   push:
-    branches: [main]
+    branches: [app]
     paths: ['apps/**', 'packages/**', 'specs/**', 'scripts/*flutter*', 'tests/flutter*', '.github/workflows/flutter.yml']
   pull_request:
+    branches: [app]
     paths: ['apps/**', 'packages/**', 'specs/**', 'scripts/*flutter*', 'tests/flutter*', '.github/workflows/flutter.yml']
-  workflow_dispatch:
 permissions:
   contents: read
 jobs:

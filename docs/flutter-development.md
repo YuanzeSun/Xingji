@@ -1,6 +1,8 @@
 # Flutter 共用工程与平台接入
 
-Flutter 3.50.0 / Dart 3.14.0。与网页版保留在同一仓库，现有 `src/`、浏览器 OCR、连接扩展和 Pages 部署继续使用。Flutter Web 目前用于预览，不替换在线网页版。
+Flutter 3.50.0 / Dart 3.14.0。App 在 `app` 分支开发，原网页版在 `main`。网页版和共享改动先提交到 `main`，再合入 `app`。仅影响 Flutter 的改动单独提交到 `app`。
+
+Pages 通过 GitHub Actions 中的 **Publish Xingji Pages** 手动发布。从 `main` 运行，选择 `web` 发布原版，选择 `flutter` 发布 `app` 分支的浏览器预览。两个版本共用同一个地址。
 
 ## 工程结构
 
