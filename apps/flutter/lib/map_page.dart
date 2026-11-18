@@ -7,6 +7,7 @@ import 'package:xingji_core/xingji_core.dart';
 import 'app_store.dart';
 import 'design.dart';
 import 'map_page_header.dart';
+import 'map_annotations.dart';
 
 class MapPage extends StatefulWidget {
   final AppStore store;
@@ -29,6 +30,12 @@ class _MapPageState extends State<MapPage> {
           flights: layers.contains('flight'),
           rail: layers.contains('rail'),
           controlBottom: 110,
+          annotationInsets: EdgeInsets.fromLTRB(
+            12,
+            150 * MediaQuery.textScalerOf(context).scale(1),
+            12,
+            110,
+          ),
         ),
       ),
       MapOverlay(
@@ -54,6 +61,7 @@ class JourneyCanvas extends StatefulWidget {
   final List<TicketRecord> records;
   final bool railway, airRoutes, flights, rail;
   final double controlBottom;
+  final EdgeInsets annotationInsets;
   const JourneyCanvas(
     this.store,
     this.records, {
@@ -63,6 +71,7 @@ class JourneyCanvas extends StatefulWidget {
     this.flights = false,
     this.rail = false,
     this.controlBottom = 12,
+    this.annotationInsets = const EdgeInsets.all(8),
   });
   @override
   State<JourneyCanvas> createState() => _JourneyCanvasState();
@@ -99,7 +108,14 @@ class _JourneyCanvasState extends State<JourneyCanvas> {
             trackpadScrollCausesScale: true,
             child: CustomPaint(
               size: Size.infinite,
-              painter: JourneyPainter(widget, land, countries, provinces),
+              painter: JourneyPainter(
+                widget,
+                land,
+                countries,
+                provinces,
+                transform,
+                MediaQuery.textScalerOf(context).scale(12) / 12,
+              ),
             ),
           ),
         ),
@@ -144,22 +160,34 @@ Offset project(List coordinates) => Offset(
 class JourneyPainter extends CustomPainter {
   final JourneyCanvas view;
   final Path land, countries, provinces;
-  JourneyPainter(this.view, this.land, this.countries, this.provinces);
+  final TransformationController transform;
+  final double textScale;
+  JourneyPainter(
+    this.view,
+    this.land,
+    this.countries,
+    this.provinces,
+    this.transform,
+    this.textScale,
+  ) : super(repaint: transform);
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty || !size.width.isFinite || !size.height.isFinite) return;
     final tracks = <List<Offset>>[],
         full = <List<Offset>>[],
         links = <(Offset, Offset, bool)>[],
-        labels = <String, Offset>{},
+        labels = <String, List<Offset>>{},
         nodes = <String, Offset>{},
+        endpoints = <String>{},
         all = <Offset>[];
     final seen = <String>{};
     void addSegments(dynamic segments, List<List<Offset>> target) {
       if (segments is! List) return;
       for (final raw in segments) {
         if (raw is! List || raw.length < 2) continue;
-        final points = raw.map((point) => project(point)).toList();
+        final points = raw
+            .map((point) => project(railWgs84Point(point)))
+            .toList();
         final key = canonicalJson(raw),
             reverse = canonicalJson(raw.reversed.toList());
         if (identical(target, tracks) &&
@@ -180,17 +208,17 @@ class JourneyPainter extends CustomPainter {
         }
         for (final item in route['lineLabels'] as List? ?? []) {
           if (item['coordinates'] is List) {
-            labels.putIfAbsent(
-              item['name'],
-              () => project(item['coordinates']),
-            );
+            labels
+                .putIfAbsent(item['name'], () => [])
+                .add(project(railWgs84Point(item['coordinates'])));
           }
         }
         for (final stop in route['stops'] as List? ?? []) {
           if (stop['coordinates'] is List) {
-            nodes[stop['name']] = project(stop['coordinates']);
+            nodes[stop['name']] = project(railWgs84Point(stop['coordinates']));
           }
         }
+        endpoints.addAll([record.text('origin'), record.text('destination')]);
       }
       if (record.isFlight && (view.airRoutes || view.flights) ||
           !record.isFlight && view.rail) {
@@ -207,6 +235,7 @@ class JourneyPainter extends CustomPainter {
         all.addAll([from, to]);
         nodes[a.name] = from;
         nodes[b.name] = to;
+        endpoints.addAll([a.name, b.name]);
       }
     }
     if (all.isEmpty) {
@@ -221,6 +250,7 @@ class JourneyPainter extends CustomPainter {
           size.height / math.max(25, bottom - top + 25),
         ),
         center = Offset((left + right) / 2, (top + bottom) / 2);
+    final pixelScale = scale * transform.value.getMaxScaleOnAxis();
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.scale(scale);
@@ -229,13 +259,13 @@ class JourneyPainter extends CustomPainter {
     final boundaries = Paint()
       ..color = const Color(0xFFBBCBC5)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = .7 / scale;
+      ..strokeWidth = .7 / pixelScale;
     canvas.drawPath(countries, boundaries);
     canvas.drawPath(
       provinces,
       boundaries
         ..color = const Color(0xFFD8E1DA)
-        ..strokeWidth = .4 / scale,
+        ..strokeWidth = .4 / pixelScale,
     );
     Path path(List<Offset> points) {
       final result = Path()..moveTo(points.first.dx, points.first.dy);
@@ -249,12 +279,12 @@ class JourneyPainter extends CustomPainter {
       ..color = ink
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = 2 / scale;
+      ..strokeWidth = 2 / pixelScale;
     for (final line in full) {
       canvas.drawPath(
         dashPath(
           path(line),
-          dashArray: CircularIntervalList([6 / scale, 5 / scale]),
+          dashArray: CircularIntervalList([6 / pixelScale, 5 / pixelScale]),
         ),
         trackPaint,
       );
@@ -282,41 +312,50 @@ class JourneyPainter extends CustomPainter {
         Paint()
           ..color = flight ? ticketRed : ink
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5 / scale,
+          ..strokeWidth = 1.5 / pixelScale,
       );
     }
     for (final point in nodes.values) {
-      canvas.drawCircle(point, 3 / scale, Paint()..color = Colors.white);
-      canvas.drawCircle(point, 2 / scale, Paint()..color = ink);
+      canvas.drawCircle(point, 3 / pixelScale, Paint()..color = Colors.white);
+      canvas.drawCircle(point, 2 / pixelScale, Paint()..color = ink);
     }
-    final occupied = <Offset>[];
-    void label(String name, Offset point, Color color) {
-      if (occupied.any((old) => (old - point).distance < 48 / scale)) return;
-      occupied.add(point);
-      final text = TextPainter(
-        text: TextSpan(
-          text: name,
-          style: TextStyle(
-            fontFamily: 'UiSans',
-            fontSize: 12 / scale,
-            color: color,
-            backgroundColor: Colors.white.withValues(alpha: .9),
-          ),
+    canvas.restore();
+    Offset screen(Offset point) => MatrixUtils.transformPoint(
+      transform.value,
+      (point - center) * scale + size.center(Offset.zero),
+    );
+    final inset = view.annotationInsets;
+    final annotations = layoutMapAnnotations(
+      stations: nodes.map((name, point) => MapEntry(name, screen(point))),
+      lines: labels.map(
+        (name, anchors) => MapEntry(name, anchors.map(screen).toList()),
+      ),
+      endpoints: endpoints,
+      bounds: Rect.fromLTRB(
+        inset.left,
+        inset.top,
+        size.width - inset.right,
+        size.height - inset.bottom,
+      ),
+      textScale: textScale,
+      reserved: [
+        Rect.fromLTWH(
+          size.width - 170,
+          size.height - view.controlBottom - 52,
+          162,
+          52,
         ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      text.paint(canvas, point + Offset(6 / scale, -18 / scale));
-    }
-
-    for (final entry in nodes.entries) {
-      label(entry.key, entry.value, ink);
-    }
-    for (final entry in labels.entries) {
-      label(entry.key, entry.value, muted);
-    }
+      ],
+    );
+    // InteractiveViewer transforms the geography. Cancel that transform only
+    // for viewport labels so their text stays readable and collisions are rechecked.
+    canvas.save();
+    canvas.transform(Matrix4.inverted(transform.value).storage);
+    paintMapAnnotations(canvas, annotations);
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(JourneyPainter old) => old.view != view;
+  bool shouldRepaint(JourneyPainter old) =>
+      old.view != view || old.textScale != textScale;
 }

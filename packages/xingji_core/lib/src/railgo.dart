@@ -6,10 +6,12 @@ import 'package:http/http.dart' as http;
 import 'journey_date.dart';
 import 'ticket_record.dart';
 import 'reference_catalog.dart';
+import 'rail_line_names.dart';
 
 class RailGoClient {
   final http.Client client;
   final ReferenceCatalog catalog;
+  late final _lineNames = RailLineNameClient(client);
   RailGoClient(this.catalog, {http.Client? client})
     : client = client ?? http.Client();
   Future<dynamic> _get(
@@ -231,7 +233,24 @@ class RailGoClient {
         origin.name,
         destination.name,
       );
-      if (selected != null) values['railRoute'] = selected;
+      if (selected == null) return;
+      final named = await _lineNames.load(selected),
+          saved = record['railRoute'];
+      for (final key in ['', 'fullRoute']) {
+        final current = key.isEmpty ? named : named[key];
+        final previous = saved is Map
+            ? (key.isEmpty ? saved : saved[key])
+            : null;
+        if (current is Map &&
+            previous is Map &&
+            (current['lineLabels'] as List? ?? []).isEmpty &&
+            previous['lineLabels'] is List &&
+            canonicalJson(current['segments']) ==
+                canonicalJson(previous['segments'])) {
+          current['lineLabels'] = cloneJson(previous['lineLabels']);
+        }
+      }
+      values['railRoute'] = named;
     }
 
     Future<void> stock() async {
