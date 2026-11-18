@@ -4,9 +4,13 @@ import {readFile} from 'node:fs/promises';
 import {calendarDate,dateLabel} from '../src/journey-date.js';
 import {deduplicateRecords,mergeThreeWay,FIELDS,SCHEMA_VERSION} from '../src/model.js';
 import {readBCBP} from '../src/bcbp-reader.js';
+import {railLineFixtures} from './helpers/rail-line-fixtures.js';
 
 const fixture=JSON.parse(await readFile(new URL('../specs/fixtures/conformance.json',import.meta.url),'utf8'));
 const fields=JSON.parse(await readFile(new URL('../specs/archive-format/fields.json',import.meta.url),'utf8'));
+test('shared rail line fixtures track the verified browser geometry matcher',async()=>{
+  assert.deepEqual(JSON.parse(await readFile(new URL('../specs/fixtures/rail-line-names.json',import.meta.url),'utf8')),railLineFixtures);
+});
 test('shared Flutter archive fields track the browser protocol',()=>{
   assert.deepEqual(fields.fields,FIELDS);assert.equal(fields.schemaVersion,SCHEMA_VERSION);
 });

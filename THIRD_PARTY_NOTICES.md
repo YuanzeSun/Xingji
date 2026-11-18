@@ -63,4 +63,6 @@ The demo code records in `src/demo-code.js` and `src/demo-boarding-code.js` cont
 
 ## RailGo 在线线路服务
 
-火车票详情中的现行铁路轨迹由 [RailGo 数据服务](https://api.railgo.dev/)按需提供，数据不随本项目分发，也不写入私人票库。该服务仅允许非商业调用，并要求标注来源；商业使用前须另行取得服务方许可。本项目自有源码采用 NCMF 1.0，第三方材料遵循各自许可。
+现行铁路轨迹由 [RailGo 数据服务](https://api.railgo.dev/)在录入或编辑时按需提供，行程轨迹与全程上下文随票据保存至个人票库，地图直接读取快照。该服务仅允许非商业调用，并要求标注来源；商业使用前须另行取得服务方许可。本项目自有源码采用 NCMF 1.0，第三方材料遵循各自许可。
+
+铁路线名称匹配使用 [fog.vicc.wang 的铁路线路图](https://fog.vicc.wang/rails)提供的线路目录和 GeoJSON，与所乘轨迹进行几何比对；只在票据快照中保存匹配名称及标注点，打开地图时不请求该服务。
