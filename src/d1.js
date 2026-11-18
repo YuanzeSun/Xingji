@@ -25,13 +25,13 @@ export class D1Store {
     if (head) headers['If-None-Match'] = `"${this.config.id}:${head}"`;
     const timeout = AbortSignal.timeout(30000);
     const response = await this.fetcher(workerURL(this.config.url) + '/v1/archive', {
-      method: body ? 'POST' : 'GET', headers, body: body && JSON.stringify(body), redirect: 'error', cache: 'no-store',
+      method: body ? 'POST' : 'GET', headers, body: body && JSON.stringify(body), redirect: 'error', cache: 'no-store', credentials: 'omit',
       signal: this.signal ? AbortSignal.any([this.signal, timeout]) : timeout
     });
     if (response.status === 304 && head) return null;
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const messages = { 401: 'D1 访问凭证无效，请重新授权', 403: 'Worker 未允许当前网页地址访问，请检查 ALLOWED_ORIGINS', 409: '另一台设备刚更新了 D1 票库，请重新核对', 413: 'D1 票据或设置超过大小限制', 429: 'D1 免费额度已用尽，请稍后再试' };
+      const messages = { 401: 'D1 访问凭证无效，请重新授权', 409: '另一台设备刚更新了 D1 票库，请重新核对', 413: 'D1 票据或设置超过大小限制', 429: 'D1 免费额度已用尽，请稍后再试' };
       throw Object.assign(new Error(messages[response.status] || `D1 请求失败（${response.status}）`), { status: response.status });
     }
     if (typeof result.id !== 'string' || !/^[0-9a-f]{32}$/.test(result.id) || typeof result.head !== 'string' || !result.head) throw new Error('Worker 票库接口返回无效');
