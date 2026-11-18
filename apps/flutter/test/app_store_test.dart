@@ -520,6 +520,39 @@ void main() {
     },
   );
 
+  test(
+    'signing out clears account data locally and leaves GitHub intact',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final remote = _MemoryRemote();
+      final preferences = await SharedPreferences.getInstance();
+      final app = AppStore(
+        preferences,
+        catalog,
+        [],
+        {},
+        remoteFactory: (_, _) => remote,
+      );
+      addTearDown(app.dispose);
+      const target = GitHubConnection('user', 'private');
+      await app.connect(target, 'test');
+      final head = remote.snapshot.head;
+      expect(app.settings['flightMcpKey'], 'preserved-key');
+      await expectLater(
+        app.connect(target, 'another-token'),
+        throwsFormatException,
+      );
+      await app.clearLocalArchive(signOut: true);
+      expect(app.connected, false);
+      expect(app.connection, isNull);
+      expect(app.records, isEmpty);
+      expect(app.settings['flightMcpKey'], '');
+      expect(app.canWrite, true);
+      expect(remote.snapshot.head, head);
+      expect(remote.snapshot.settings['flightMcpKey'], 'preserved-key');
+    },
+  );
+
   test('a bound archive cannot silently connect to another branch', () async {
     SharedPreferences.setMockInitialValues({});
     final remote = _MemoryRemote();

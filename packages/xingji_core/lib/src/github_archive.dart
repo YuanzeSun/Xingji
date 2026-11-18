@@ -409,7 +409,7 @@ class GitHubArchive {
       }
       final saved = manifest['settings'] as Map? ?? {};
       settings = sharedSettings({
-        for (final key in ['profile', 'flightMcpKey'])
+        for (final key in ['profile', 'flightMcpKey', 'connections'])
           if (saved.containsKey(key)) key: saved[key],
       });
     }

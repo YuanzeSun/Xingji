@@ -135,13 +135,13 @@ class SyncChoices extends StatelessWidget {
       for (final conflict in settings?.conflicts ?? <SettingsConflict>[])
         _choice(
           'settings:${conflict.field}',
-          conflict.field == 'profile' ? '个人资料' : '飞常准设置',
-          conflict.field == 'flightMcpKey'
-              ? '凭证已隐藏'
-              : jsonEncode(conflict.local),
-          conflict.field == 'flightMcpKey'
-              ? '凭证已隐藏'
-              : jsonEncode(conflict.remote),
+          switch (conflict.field) {
+            'profile' => '个人资料',
+            'connections' => '云端账号设置',
+            _ => '飞常准设置',
+          },
+          conflict.field == 'profile' ? jsonEncode(conflict.local) : '凭证已隐藏',
+          conflict.field == 'profile' ? jsonEncode(conflict.remote) : '凭证已隐藏',
         ),
     ],
   );

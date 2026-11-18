@@ -221,7 +221,6 @@ void main() {
       expect(tester.widget<Checkbox>(checkbox).value, false);
       scroll.jumpTo(0);
       await tester.pumpAndSettle();
-      expect(find.text('导出 CSV'), findsNothing);
       await tester.tap(find.text('完成'));
       await tester.pumpAndSettle();
       expect(ticketCheckbox, findsNothing);
@@ -252,7 +251,7 @@ void main() {
 
       await tester.pumpWidget(XingjiApp(store: app));
       await tester.pumpAndSettle();
-      expect(find.text('请重新授权 GitHub 后编辑'), findsOneWidget);
+      expect(find.text('请重新登录 GitHub 后编辑'), findsOneWidget);
       final add = find.ancestor(
         of: addTicket,
         matching: find.byType(FilledButton),

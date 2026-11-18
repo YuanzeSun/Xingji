@@ -5,11 +5,17 @@ import 'ticket_record.dart';
 typedef GitHubBackupConnection = ({GitHubConnection target, String token});
 
 class FullArchiveBackup {
-  const FullArchiveBackup(this.archive, this.settings, {this.github});
+  const FullArchiveBackup(
+    this.archive,
+    this.settings, {
+    this.github,
+    this.connections = const {},
+  });
 
   final TicketArchive archive;
   final Map<String, dynamic> settings;
   final GitHubBackupConnection? github;
+  final Map<String, dynamic> connections;
 
   factory FullArchiveBackup.fromJson(Object? json) {
     if (json is! Map ||
@@ -22,10 +28,12 @@ class FullArchiveBackup {
       ...json,
       'format': 'xingji-archive',
     });
-    final github = (json['connections'] as Map)['github'];
+    final connections = archiveConnections(json['connections']);
+    final github = connections['github'];
     return FullArchiveBackup(
       archive,
-      sharedSettings(json['settings'] as Map),
+      sharedSettings(json['settings'] as Map)..remove('connections'),
+      connections: connections,
       github: github == null
           ? null
           : (
@@ -37,13 +45,19 @@ class FullArchiveBackup {
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    ...archive.toJson(),
-    'format': 'xingji-backup',
-    'settings': sharedSettings(settings),
-    'connections': {
-      if (github case final value?)
-        'github': {...value.target.toJson(), 'token': value.token},
-    },
-  };
+  Map<String, dynamic> toJson() {
+    final preferences = sharedSettings(settings);
+    final savedConnections = preferences.remove('connections');
+    return {
+      ...archive.toJson(),
+      'format': 'xingji-backup',
+      'settings': preferences,
+      'connections': archiveConnections({
+        ...?savedConnections as Map?,
+        ...connections,
+        if (github case final value?)
+          'github': {...value.target.toJson(), 'token': value.token},
+      }),
+    };
+  }
 }

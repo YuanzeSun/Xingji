@@ -97,7 +97,7 @@ class AppStore extends ChangeNotifier {
       }
       store.pending = store.connection != null && envelope['pending'] == true;
       if (store.connection != null) {
-        store.status = 'GitHub 待重新授权 · 只读';
+        store.status = 'GitHub 待重新登录 · 只读';
       }
     }
     return store;
@@ -157,7 +157,7 @@ class AppStore extends ChangeNotifier {
   bool get connected => _remote != null;
   String? get readOnlyReason {
     if (connection == null) return null;
-    if (!connected) return '请重新授权 GitHub 后编辑';
+    if (!connected) return '请重新登录 GitHub 后编辑';
     if (resetDetected) return '请先处理云端票库重置';
     if (conflicts != null) return '请先处理同步冲突';
     if (!_online) return 'GitHub 连接不可用，票库暂时只读';
@@ -430,7 +430,10 @@ class AppStore extends ChangeNotifier {
       records: deduplicateTickets([..._records, ...archive.records], catalog),
       nextSettings: backupSettings == null
           ? null
-          : sharedSettings(backupSettings),
+          : sharedSettings({
+              ...backupSettings,
+              'connections': settings['connections'],
+            }),
       pick: pick,
     );
   });
@@ -452,6 +455,7 @@ class AppStore extends ChangeNotifier {
   }) => _run(() async {
     if (demo) throw StateError('请退出示例模式后连接票库');
     _checkBinding(target);
+    if (connected) throw const FormatException('请先退出 GitHub');
     final current = connection;
     final remote = remoteFactory(target, token);
     try {
@@ -748,7 +752,7 @@ class AppStore extends ChangeNotifier {
     _clearReview();
   }
 
-  Future<void> clearLocalArchive() => _run(() async {
+  Future<void> clearLocalArchive({bool signOut = false}) => _run(() async {
     if (demo) throw StateError('请先退出示例模式');
     final target = connection;
     if (AppleServices.available && target != null) {
@@ -760,6 +764,7 @@ class AppStore extends ChangeNotifier {
     _records = [];
     _base = [];
     _baseSettings = {};
+    if (signOut) settings = sharedSettings();
     _head = '';
     _generation = '';
     pending = false;
@@ -767,7 +772,7 @@ class AppStore extends ChangeNotifier {
     _online = connected;
     syncError = null;
     _clearReview();
-    status = '本机票库已清空，个人资料已保留';
+    status = signOut ? '已退出 GitHub，本机票库已清空' : '本机票库已清空，个人资料已保留';
     await _persist();
   });
   @override

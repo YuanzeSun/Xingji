@@ -42,6 +42,18 @@ void main() {
     final output = backup.toJson();
     expect(output['settings'], settings);
     expect(output['connections']['github'], gitHub);
+    expect(output['connections']['d1'], {
+      'id': '0' * 32,
+      'url': 'https://archive.example',
+      'token': 'test-d1-key',
+    });
+    final cloud = sharedSettings({
+      ...settings,
+      'connections': output['connections'],
+    });
+    final forwarded = FullArchiveBackup(archive, cloud).toJson();
+    expect(forwarded['settings'], settings);
+    expect(forwarded['connections'], output['connections']);
     expect(output['format'], 'xingji-backup');
   });
 }

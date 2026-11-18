@@ -891,7 +891,6 @@ class _TicketEditorState extends State<TicketEditor> {
                         'pdf': 'PDF 导入',
                         'text': '文字导入',
                         'email': '邮件导入',
-                        'csv': 'CSV 导入',
                         'lookup': '查询补全',
                       }[source] ??
                       source.toString(),

@@ -81,8 +81,69 @@ Map<String, dynamic> personalProfile([Map value = const {}]) {
   };
 }
 
+Map<String, dynamic> archiveConnections([Object? value = const {}]) {
+  if (value is! Map) {
+    throw const FormatException('备份中的账号信息无效');
+  }
+  String secret(Map connection) {
+    final token = connection['token'];
+    if (token is! String || RegExp(r'\s').hasMatch(token)) {
+      throw const FormatException('备份中的访问凭证格式无效');
+    }
+    return token;
+  }
+
+  final connections = <String, dynamic>{};
+  final github = value['github'], d1 = value['d1'];
+  if (github != null) {
+    final slug = RegExp(r'^[A-Za-z0-9_.-]+$');
+    if (github is! Map ||
+        github['owner'] is! String ||
+        !slug.hasMatch(github['owner']) ||
+        github['repo'] is! String ||
+        !slug.hasMatch(github['repo']) ||
+        github['id'] is! int ||
+        github['branch'] is! String ||
+        (github['branch'] as String).isEmpty) {
+      throw const FormatException('备份中的 GitHub 仓库信息无效');
+    }
+    connections['github'] = {
+      for (final key in ['owner', 'repo', 'branch', 'id']) key: github[key],
+      'token': secret(github),
+    };
+  }
+  if (d1 != null) {
+    if (d1 is! Map ||
+        d1['id'] is! String ||
+        !RegExp(r'^[0-9a-f]{32}$').hasMatch(d1['id']) ||
+        d1['url'] is! String) {
+      throw const FormatException('备份中的 D1 数据库信息无效');
+    }
+    final url = Uri.tryParse(d1['url']);
+    if (url == null ||
+        url.host.isEmpty ||
+        (url.scheme != 'https' &&
+            !(url.scheme == 'http' &&
+                ['localhost', '127.0.0.1', '::1'].contains(url.host))) ||
+        url.userInfo.isNotEmpty ||
+        url.hasQuery ||
+        url.hasFragment ||
+        (url.path.isNotEmpty && url.path != '/')) {
+      throw const FormatException('请输入 Worker 的根地址');
+    }
+    connections['d1'] = {
+      'id': d1['id'],
+      'url': url.origin,
+      'token': secret(d1),
+    };
+  }
+  return connections;
+}
+
 Map<String, dynamic> sharedSettings([Map value = const {}]) {
-  if (value.keys.any((key) => !['profile', 'flightMcpKey'].contains(key))) {
+  if (value.keys.any(
+    (key) => !['profile', 'flightMcpKey', 'connections'].contains(key),
+  )) {
     throw const FormatException('云端设置字段无效');
   }
   final key = value['flightMcpKey'] ?? '';
@@ -95,9 +156,11 @@ Map<String, dynamic> sharedSettings([Map value = const {}]) {
     throw const FormatException('个人资料格式无效');
   }
   final profile = personalProfile(value['profile'] as Map? ?? {});
+  final connections = archiveConnections(value['connections'] ?? {});
   return {
     'flightMcpKey': key,
     if (!sameValue(profile, personalProfile())) 'profile': profile,
+    if (connections.isNotEmpty) 'connections': connections,
   };
 }
 

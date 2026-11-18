@@ -105,19 +105,25 @@ class _SettingsPageState extends State<SettingsPage> {
                 spacing: 12,
                 runSpacing: 8,
                 children: [
-                  FilledButton.icon(
-                    onPressed: store.busy
-                        ? null
-                        : () => connectDialog(context, store),
-                    icon: const Icon(Icons.link),
-                    label: Text(
-                      store.connected
-                          ? '更新连接凭证'
-                          : store.connection == null
-                          ? '连接 GitHub'
-                          : '重新授权',
+                  if (store.connected)
+                    OutlinedButton(
+                      onPressed: store.busy
+                          ? null
+                          : () => action(
+                              () => store.clearLocalArchive(signOut: true),
+                            ),
+                      child: const Text('退出 GitHub'),
+                    )
+                  else
+                    FilledButton.icon(
+                      onPressed: store.busy
+                          ? null
+                          : () => connectDialog(context, store),
+                      icon: const Icon(Icons.link),
+                      label: Text(
+                        store.connection == null ? '连接 GitHub' : '重新登录 GitHub',
+                      ),
                     ),
-                  ),
                   if (store.connected)
                     OutlinedButton.icon(
                       onPressed: store.busy ? null : () => action(store.sync),
@@ -269,7 +275,6 @@ class _SettingsPageState extends State<SettingsPage> {
                               label: '行迹票库与票据文件',
                               extensions: [
                                 'json',
-                                'csv',
                                 'txt',
                                 'pdf',
                                 'pkpass',
@@ -281,7 +286,6 @@ class _SettingsPageState extends State<SettingsPage> {
                               ],
                               uniformTypeIdentifiers: [
                                 'public.json',
-                                'public.comma-separated-values-text',
                                 'public.plain-text',
                                 'com.adobe.pdf',
                                 'com.apple.pkpass',
@@ -291,7 +295,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           else
                             const XTypeGroup(
                               label: '行迹票库',
-                              extensions: ['json', 'csv', 'txt', 'pkpass'],
+                              extensions: ['json', 'txt', 'pkpass'],
                             ),
                         ],
                       );

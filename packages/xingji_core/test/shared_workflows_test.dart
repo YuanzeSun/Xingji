@@ -110,67 +110,6 @@ void main() {
     expect(catalog.aircraft('A320-200', family: true), 'A320');
   });
 
-  test(
-    'CSV import preserves dates, snapshots, quotes and formula-like text',
-    () {
-      final record = TicketRecord.create({
-        'id': 'csv-test',
-        'service': 'G21',
-        'origin': '北京南',
-        'destination': '南京南',
-        'departureDate': JourneyDate.calendar(2026, 11, 16).toJson(),
-        'passenger': '=SUM(1,2)\n"名字"',
-        'price': '-25',
-        'railJourney': {
-          'query': {'trainNum': 'G21'},
-          'stops': [],
-        },
-        'railRoute': {
-          'segments': [
-            [
-              [116, 39],
-              [118, 32],
-            ],
-          ],
-          'lineLabels': [
-            {'name': '京沪高速线'},
-          ],
-        },
-      });
-      final csv = [
-        'id,mergedIds,service,departureDate,passenger,price,railRoute,railJourney,boardingCode',
-        [
-          record.id,
-          '[]',
-          record.text('service'),
-          jsonEncode(record['departureDate']),
-          "'${record.text('passenger')}",
-          "'${record.text('price')}",
-          jsonEncode(record['railRoute']),
-          jsonEncode(record['railJourney']),
-          '""',
-        ].map((cell) => '"${cell.replaceAll('"', '""')}"').join(','),
-      ].join('\r\n');
-      final decoded = parseTicketCsv(csv).single;
-      for (final key in [
-        'id',
-        'service',
-        'passenger',
-        'price',
-        'departureDate',
-        'railRoute',
-        'railJourney',
-      ]) {
-        expect(decoded[key], record[key], reason: key);
-      }
-      expect(
-        () => parseTicketCsv('车次,出发日期\nG21,2026-02-30'),
-        throwsFormatException,
-      );
-      expect(() => parseTicketCsv('车次\n"G21'), throwsFormatException);
-    },
-  );
-
   test('combined rail OCR retains QR bytes and berth without confusing actual flight times', () {
     final raw = base64Encode(utf8.encode('铁路原始数据'));
     final code = normalizeCodeData({

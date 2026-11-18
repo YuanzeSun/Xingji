@@ -222,7 +222,6 @@ Future<List<TicketRecord>> readLocalImport(
   }
   final text = utf8.decode(bytes);
   return switch (extension) {
-    'csv' => parseTicketCsv(text),
     'txt' => parseTicketText(
       text,
       catalog,
