@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createRecord,archive,readArchive,csv,mergeThreeWay,deduplicateRecords,resolveRecordConflict} from '../src/model.js';
+import {createRecord,archive,readArchive,mergeThreeWay,deduplicateRecords,resolveRecordConflict} from '../src/model.js';
+import { csv } from './helpers/ticket-csv.js';
 import {parseCSV} from '../src/importers.js';
 import {createBoardingCode,readBoardingCode} from '../src/bcbp.js';
 import {refreshGeneratedCode,boardingCodeDifferences} from '../src/boarding-code-state.js';

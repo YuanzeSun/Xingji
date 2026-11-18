@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRecord, archive, readArchive, csv } from '../src/model.js';
+import { createRecord, archive, readArchive } from '../src/model.js';
+import { csv } from './helpers/ticket-csv.js';
 import { parseCSV, parseText } from '../src/importers.js';
 import { normalizeSeatClass } from '../src/seat-classes.js';
 

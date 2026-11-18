@@ -5,7 +5,8 @@ import {createRecognizer} from '../src/ocr.js';
 import {createBoardingCode,readBoardingCode} from '../src/bcbp.js';
 import {parseScanText,scanCandidate,createScanConsensus} from '../src/scan-engine.js';
 import {barcodeFieldLocked} from '../src/barcode-fields.js';
-import {archive,readArchive,csv} from '../src/model.js';
+import {archive,readArchive} from '../src/model.js';
+import { csv } from './helpers/ticket-csv.js';
 import {parseCSV} from '../src/importers.js';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
 

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRecord, archive, readArchive, csv, applyImport, mergeThreeWay } from '../src/model.js';
+import { createRecord, archive, readArchive, applyImport, mergeThreeWay } from '../src/model.js';
+import { csv } from './helpers/ticket-csv.js';
 import { parseCSV } from '../src/importers.js';
 import { resolveCity, cityOverview, placesInCity, sameCity, LOCATION_REFERENCE } from '../src/locations.js';
 import { searchTickets } from '../src/search.js';

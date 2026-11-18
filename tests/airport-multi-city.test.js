@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {createRecord,archive,readArchive,csv} from '../src/model.js';
+import {createRecord,archive,readArchive} from '../src/model.js';
+import { csv } from './helpers/ticket-csv.js';
 import {parseCSV} from '../src/importers.js';
 import {resolveCities,cityLabel,cityOverview,placesInCity} from '../src/locations.js';
 import {searchAirports,resolvePlace} from '../src/places.js';

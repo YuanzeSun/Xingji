@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { maskIdentity } from '../src/identity.js';
-import { createRecord, archive, readArchive, csv } from '../src/model.js';
+import { createRecord, archive, readArchive } from '../src/model.js';
+import { csv } from './helpers/ticket-csv.js';
 import { ticketSVG, exportSVG } from '../src/tickets.js';
 import { DEMO_TICKET_CODE } from '../src/demo-code.js';
 

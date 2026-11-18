@@ -25,7 +25,7 @@ test('archive selection supports direct actions and confirmed deletion, while ma
     assert.equal(document.querySelector('[data-action="export-tickets"]'),null);
     assert.equal(document.querySelector('[data-action="export-album"]'),null);
     click('[data-archive-select="a"]');
-    assert.deepEqual([...document.querySelectorAll('.archive-selection-actions button')].map(button=>button.textContent),['导出纪念册','逐个导出','导出 CSV','删除']);
+    assert.deepEqual([...document.querySelectorAll('.archive-selection-actions button')].map(button=>button.textContent),['导出纪念册','逐个导出','删除']);
     assert.equal(document.querySelector('[data-archive-select-all]').indeterminate,true);
     click('[data-action="export-images"]');await wait(()=>document.querySelector('[data-export-format="zip"]'));
     assert.match(document.querySelector('[data-export-count]').textContent,/1/);assert.equal(document.querySelector('[data-export-index]'),null);

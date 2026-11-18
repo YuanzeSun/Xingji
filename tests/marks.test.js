@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { createRecord, archive, readArchive, csv, applyImport, mergeThreeWay } from '../src/model.js';
+import { createRecord, archive, readArchive, applyImport, mergeThreeWay } from '../src/model.js';
+import { csv } from './helpers/ticket-csv.js';
 import { parseText, parseCSV } from '../src/importers.js';
 import { ticketSVG } from '../src/tickets.js';
 import { normalizeMarks, describeMarks, marksFromText } from '../src/ticket-marks.js';

@@ -1,7 +1,8 @@
 import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRecord, archive, readArchive, mergeThreeWay, applyImport, validDate, csv, partition } from '../src/model.js';
+import { createRecord, archive, readArchive, mergeThreeWay, applyImport, validDate, partition } from '../src/model.js';
+import { csv } from './helpers/ticket-csv.js';
 import { parseText, decodeMail, parseCSV, mapFlightResult } from '../src/importers.js';
 import { ticketSVG } from '../src/tickets.js';
 const sample = (values = {}) => createRecord({ id: 'test-1', origin: '北京南', destination: '上海虹桥', service: 'G103', departureDate: '2026-11-15', departureTime: '08:00', passenger: '张三', ...values });
