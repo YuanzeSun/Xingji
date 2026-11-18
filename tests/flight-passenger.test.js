@@ -49,7 +49,7 @@ test('a domestic Chinese ticket can generate an English-name BCBP without changi
   const cleanup=bindTicketCodeEditor(form,draft,()=>{},{profile});
   try{
     assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'ZHANG/SAN');assert.ok(form.querySelector('[data-bcbp-passenger-field] .barcode-required-mark'));
-    form.querySelector('[data-bcbp="sequence"]').value='42';form.querySelector('[data-bcbp="status"]').value='1';form.querySelector('[data-bcbp-generate]').click();
+    form.querySelector('[data-bcbp="sequence"]').value='42';form.querySelector('[data-bcbp="status"]').value='1';form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
     assert.equal(form.querySelector('#code-error').textContent,'');assert.equal(draft.passenger,'张三');assert.equal(readBoardingCode(draft.boardingCode).passenger,'ZHANG/SAN');
     assert.equal(boardingPresentation(draft).passenger,'张三');assert.equal(boardingPresentation({...draft,destination:'LHR',destinationCode:'LHR'}).passenger,'ZHANG/SAN');
     draft.seat='20C';assert.equal(refreshGeneratedCode(draft),true);assert.equal(readBoardingCode(draft.boardingCode).seat,'20C');assert.equal(readBoardingCode(draft.boardingCode).passenger,'ZHANG/SAN');

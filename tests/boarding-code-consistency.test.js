@@ -43,7 +43,7 @@ test('original barcode reading replaces conflicting input with decoded facts and
 test('generated codes update after edits, preserve adopted settings, and synchronously flush before saving',async()=>{
   const draft=flight({boardingCode:createBoardingCode(values),boardingCodeSource:'generated'}),page=editor(draft);
   try{
-    page.set('seat','20C');assert.match(page.form.querySelector('#code-consistency').textContent,/待更新/);
+    page.set('seat','20C');
     await new Promise(resolve=>setTimeout(resolve,180));assert.equal(readBoardingCode(draft.boardingCode).seat,'20C');assert.equal(page.form.querySelector('#code-consistency').hidden,true);
     page.set('service','CA5678');page.set('departureDate','2024-12-31');page.set('pnr','XYZ789');page.submit();assert.equal(page.saves,1);
     const read=readBoardingCode(draft.boardingCode);assert.equal(read.service,'CA5678');assert.equal(read.dayOfYear,366);assert.equal(read.pnr,'XYZ789');assert.equal(read.status,'3');assert.equal(read.cabin,'S');assert.equal(read.sequence,'00025');
@@ -51,14 +51,13 @@ test('generated codes update after edits, preserve adopted settings, and synchro
   }finally{page.dispose();}
 });
 
-test('an incomplete generated code blocks submission, keeps its previous bytes, locates the field and recovers after correction',()=>{
-  const draft=flight({boardingCode:createBoardingCode(values),boardingCodeSource:'generated'}),page=editor(draft),before=structuredClone(draft.boardingCode);
+test('missing or invalid barcode data allow saving without a stale code, and correcting them regenerates it',()=>{
+  const draft=flight({boardingCode:createBoardingCode(values),boardingCodeSource:'generated'}),page=editor(draft);
   try{
-    page.set('pnr','');page.submit();assert.equal(page.saves,0);assert.deepEqual(draft.boardingCode,before);assert.equal(page.dom.window.document.activeElement.name,'pnr');assert.equal(page.form.querySelector('#editor-error').hidden,false);
-    page.set('pnr','TOOLONGPNR');page.submit();assert.equal(page.saves,0);assert.equal(page.dom.window.document.activeElement.name,'pnr');
-    page.set('pnr','XYZ789');page.submit();assert.equal(page.saves,1);assert.equal(page.form.querySelector('#editor-error').hidden,true);assert.equal(readBoardingCode(draft.boardingCode).pnr,'XYZ789');
-    page.form.querySelector('#code-remove').click();assert.equal(draft.boardingCodeSource,'');assert.equal(draft.boardingCodeOperatingFlight,'');assert.equal(draft.boardingCode,'');
-    page.set('pnr','');page.submit();assert.equal(page.saves,2,'removing the generated code restores ordinary ticket saving');
+    page.set('pnr','');page.submit();assert.equal(page.saves,1);assert.equal(draft.boardingCode,'');assert.equal(draft.boardingCodeSource,'');
+    assert.equal(page.form.querySelector('#editor-error').hidden,true);assert.equal(page.form.querySelector('[data-bcbp="sequence"]').value,'00025');
+    page.set('pnr','TOOLONGPNR');page.submit();assert.equal(page.saves,2);assert.equal(draft.boardingCode,'');
+    page.set('pnr','XYZ789');page.submit();assert.equal(page.saves,3);assert.equal(readBoardingCode(draft.boardingCode).pnr,'XYZ789');
   }finally{page.dispose();}
 });
 
@@ -72,11 +71,12 @@ test('scanning fills and locks decoded facts and enables manual editing and gene
   const code=createBoardingCode(values),draft=flight({passenger:'默认姓名',pnr:'MYPNR',seatClass:'M',airline:'手动航司',lockedFields:['pnr','seatClass','airline']}),page=editor(draft,{replaceDefaults:true,loadRebuilder:async()=>async()=>({codes:[{data:code,format:code.format}],issues:[]})});
   try{
     const photo=page.form.querySelector('#code-photo');Object.defineProperty(photo,'files',{value:[new Blob(['fixture'])]});photo.dispatchEvent(new page.dom.window.Event('change',{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,0));
-    assert.equal(draft.passenger,'DOE/JANE');assert.equal(draft.pnr,'ABC123');assert.equal(page.form.querySelector('[data-bcbp-generate]').disabled,true);
+    assert.equal(draft.passenger,'DOE/JANE');assert.equal(draft.pnr,'ABC123');assert.equal(page.form.querySelector('[data-bcbp-fields]').disabled,true);
     assert.equal(draft.seatClass,'Y');assert.equal(draft.airline,'中国国际航空');assert.equal(page.form.elements.passenger.readOnly,true);assert.equal(page.form.elements.pnr.readOnly,true);
-    const before=structuredClone(draft.boardingCode);page.form.querySelector('[data-bcbp-generate]').dispatchEvent(new page.dom.window.Event('click',{bubbles:true}));assert.deepEqual(draft.boardingCode,before);
-    page.form.querySelector('#code-remove').click();assert.equal(page.form.querySelector('[data-bcbp-fields]').disabled,false);assert.equal(page.form.querySelector('[data-bcbp-generate]').disabled,false);
+    const before=structuredClone(draft.boardingCode);page.submit();assert.deepEqual(draft.boardingCode,before);
+    page.form.querySelector('#code-remove').click();assert.equal(page.form.querySelector('[data-bcbp-fields]').disabled,false);
     assert.equal(page.form.elements.passenger.readOnly,false);assert.equal(page.form.elements.pnr.readOnly,false);
-    assert.equal(page.form.querySelector('[data-bcbp="sequence"]').value,'00025');
+    assert.equal(page.form.querySelector('[data-bcbp="sequence"]').value,'');
+    page.submit();assert.equal(draft.boardingCode,'');
   }finally{page.dispose();}
 });

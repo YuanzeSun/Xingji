@@ -18,15 +18,25 @@ export function generatedCodeSettings(record) {
   if(!saved)throw new Error('生成条码的基础数据无效，请重新生成或移除条码');
   return {sequence:saved.sequence,status:saved.status,electronic:saved.electronic,format:saved.format,operatingFlight:record.boardingCodeOperatingFlight || ''};
 }
+export function clearGeneratedCode(record) {
+  if(record.boardingCodeSource!=='generated')return false;
+  for(const key of BOARDING_FIELDS)record[key]='';
+  markFieldSources(record,['boardingCode'],'generated');
+  return true;
+}
 export function refreshGeneratedCode(record) {
+  if(record.type!=='flight')return false;
   const settings=generatedCodeSettings(record);
-  if(record.type!=='flight' || !settings)return false;
-  const values={...boardingCodeDefaults(record,{useSaved:false}),...settings,...operatingFlight(settings.operatingFlight)};
-  const required={passenger:values.passenger,pnr:values.pnr,origin:values.origin,destination:values.destination,service:values.carrier && values.flightNumber,departureDate:values.date,seat:values.seat};
-  for(const [key,value] of Object.entries(required))if(!value){const error=new Error('请补全票据信息后更新条码');error.fields=[key];throw error;}
-  const bytes=btoa(encodeBCBP(values));
-  if(bytes===record.boardingCode.rawBytes)return false;
-  record.boardingCode=createBoardingCode(values,settings.format);markFieldSources(record,['boardingCode'],'generated');return true;
+  if(!settings)return false;
+  try {
+    const values={...boardingCodeDefaults(record,{useSaved:false}),...settings,...operatingFlight(settings.operatingFlight)};
+    if(btoa(encodeBCBP(values))===record.boardingCode.rawBytes)return false;
+    record.boardingCode=createBoardingCode(values,settings.format);
+    markFieldSources(record,['boardingCode'],'generated');
+    return true;
+  } catch {
+    return clearGeneratedCode(record);
+  }
 }
 const upper=value=>String(value || '').normalize('NFKC').replace(/\s/g,'').toUpperCase();
 const seat=value=>upper(value).replace(/^0+/,'') || upper(value);

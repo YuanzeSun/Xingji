@@ -33,7 +33,7 @@ test('scanning then querying fills only missing schedule data and preserves the 
     assert.equal(page.applies,1);assert.equal(page.draft.departureTime,'18:00');assert.equal(page.draft.arrivalTime,'20:00');assert.equal(page.draft.terminal,'T3');
     for(const key of ['passenger','seat','seatClass','airline','pnr','ticketNumber','gate','boardingCode','boardingCodeSource','boardingTime'])assert.deepEqual(page.draft[key],before[key],key);
     assert.equal(page.draft.seatClass,'Z');assert.equal(page.draft.airline,'中国国际航空');
-    assert.equal(page.draft.passenger,'张三');assert.equal(page.draft.gate,'A101');assert.equal(page.draft.boardingTime,'');assert.equal(page.form.querySelector('[data-bcbp-generate]').disabled,true);
+    assert.equal(page.draft.passenger,'张三');assert.equal(page.draft.gate,'A101');assert.equal(page.draft.boardingTime,'');assert.equal(page.form.querySelector('[data-bcbp-fields]').disabled,true);
   }finally{page.dispose();}
 });
 

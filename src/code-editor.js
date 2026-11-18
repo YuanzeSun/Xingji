@@ -1,4 +1,4 @@
-import {BOARDING_SHARED_FIELDS,refreshGeneratedCode,boardingCodeDifferences} from './boarding-code-state.js';
+import {BOARDING_FIELDS,BOARDING_SHARED_FIELDS,boardingCodeDifferences,clearGeneratedCode} from './boarding-code-state.js';
 import {JOURNEY_DATE_FIELDS,journeyDate,daysInYear} from './journey-date.js';
 import {readTicketDate,writeTicketDate} from './date-field.js';
 import {readBoardingCode} from './bcbp.js';
@@ -12,23 +12,24 @@ import { codeCameraMarkup, bindCodeCamera } from './code-camera.js';
 import { renderCodeData } from './barcode-data.js';
 import { normalizeTicketCode } from './ticket-code.js';
 import { normalizeBoardingCode } from './boarding-code.js';
-import {boardingGeneratorMarkup,bindBoardingGenerator,refreshBoardingGenerator,setBoardingGeneratorAvailability} from './boarding-code-generator.js';
+import {boardingGeneratorMarkup,automaticBoardingCode,editBoardingGeneratorField,readBoardingGenerator,refreshBoardingGenerator,setBoardingGeneratorAvailability} from './boarding-code-generator.js';
 
 const configuration = record => record.type === 'flight' ? { field: 'boardingCode', title: '登机牌条码或电子登机牌二维码', normalize: normalizeBoardingCode } : { field: 'ticketCode', title: '二维码', normalize: normalizeTicketCode };
+const removable = (record,field) => !!record[field] && record.boardingCodeSource!=='generated';
 const thumbnail = (code, title) => code ? `${renderCodeData(code)}<span>已收录</span>` : `<span class="fine-print">尚未收录${title}</span>`;
 export function ticketCodeEditor(record, fromScan = false, prefix = '', {generator=true} = {}) {
   const { field, title, normalize } = configuration(record);
-  const markup = `<section data-code-editor data-code-prefix="${prefix}" class="editor-extra" id="code-editor"><h3>${title}${fieldSourceBadge(field,record)}</h3><div class="saved-code" id="saved-code">${thumbnail(normalize(record[field]), title)}</div><div class="code-actions">${fromScan ? '<button type="button" class="button small secondary" id="code-use-scan">读取本次图片中的码</button>' : ''}<button type="button" class="button small secondary" data-code-start>相机扫描</button><label class="button small secondary">上传图片<input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden /></label><button type="button" class="button small secondary" id="code-remove" ${record[field] ? '' : 'hidden'}>移除</button></div>${codeCameraMarkup()}${generator ? boardingGeneratorMarkup(record) : ''}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
+  const markup = `<section data-code-editor data-code-prefix="${prefix}" class="editor-extra" id="code-editor"><h3>${title}${fieldSourceBadge(field,record)}</h3><div class="saved-code" id="saved-code">${thumbnail(normalize(record[field]), title)}</div><div class="code-actions">${fromScan ? '<button type="button" class="button small secondary" id="code-use-scan">读取本次图片中的码</button>' : ''}<button type="button" class="button small secondary" data-code-start>相机扫描</button><label class="button small secondary">上传图片<input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden /></label><button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>${codeCameraMarkup()}${generator ? boardingGeneratorMarkup(record) : ''}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
   return markup.replace(/id="([^"]+)"/g, (_, id) => `id="${prefix}${id}"`);
 }
-export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', autoRead = false, profile, onMultiple, loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {} } = {}) {
+export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', autoRead = false, profile, preserveGenerator = false, onMultiple, loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {} } = {}) {
   const section = form.querySelector('[data-code-editor]'); if (!section) return () => {};
   const find = id => section.querySelector('#' + section.dataset.codePrefix + id);
   const { field, title, normalize } = configuration(draft), photo = find('code-photo'), status = find('code-status'), error = find('code-error'), choices = find('code-choices'), cancel = find('code-cancel');
   let generation = 0, disposed = false, loading = false, pending = false, updateTimer;
   const consistency=find('code-consistency');
   function reset() { generation++; loading = false; pending = false; choices.replaceChildren(); choices.hidden = true; cancel.hidden = true; photo.value = ''; }
-  function showSaved() { find('saved-code').innerHTML = thumbnail(draft[field], title); find('code-remove').hidden = !draft[field]; }
+  function showSaved() { find('saved-code').innerHTML = thumbnail(draft[field], title); find('code-remove').hidden = !removable(draft,field); }
   function currentRecord() {
     const record={...draft};
     for(const key of BOARDING_SHARED_FIELDS)if(form.elements[key] && !barcodeFieldLocked(draft,key))record[key]=JOURNEY_DATE_FIELDS.includes(key)?readTicketDate(form,key,draft):form.elements[key].value;
@@ -39,42 +40,44 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     consistency.textContent=differences.length ? '原码与票面信息不同：'+differences.join('、')+'。原码已保留，请核对。' : '';
     consistency.hidden=!consistency.textContent;
   }
-  function clearGeneratedError() {
-    if(error.dataset.generatedError){error.textContent='';delete error.dataset.generatedError;}
-    const alert=form.querySelector('#editor-error');if(alert?.dataset.codeError){alert.textContent='';alert.hidden=true;delete alert.dataset.codeError;}
-  }
-  function updateGenerated(force=false) {
+  function updateGenerated() {
     clearTimeout(updateTimer);
-    if(disposed || draft.type!=='flight')return true;
-    if(draft.boardingCodeSource!=='generated'){showDifferences();return true;}
-    try {
-      const record=currentRecord(),updated=refreshGeneratedCode(record);
-      if(updated){draft.boardingCode=record.boardingCode;showSaved();status.textContent='已随票面更新条码';changed({automatic:true});}
-      consistency.hidden=true;
-      clearGeneratedError();
-      return true;
-    }catch(failure){
-      consistency.textContent='条码待更新，请补全或修正票据信息';consistency.hidden=false;
-      if(force){
-        error.textContent=failure.message;error.dataset.generatedError='true';
-        const alert=form.querySelector('#editor-error');if(alert){alert.textContent=failure.message;alert.hidden=false;alert.dataset.codeError='true';}
-        const input=form.elements[failure.fields?.[0]] || form.querySelector('[data-bcbp="operatingFlight"]');
-        input?.scrollIntoView?.({block:'center'});input?.focus();
-      }
-      return false;
+    if(disposed || draft.type!=='flight' || loading || pending)return;
+    if(draft.boardingCode && draft.boardingCodeSource!=='generated'){
+      showDifferences();
+      return;
     }
+    if(!form.querySelector('[data-bcbp-fields]'))return;
+    let result;
+    try { result=automaticBoardingCode(currentRecord(),readBoardingGenerator(form),{profile}); }
+    catch { result=null; }
+    const previous=draft.boardingCodeSource==='generated' ? draft.boardingCode : null;
+    if(result && (previous?.rawBytes!==result.code.rawBytes || previous?.format!==result.code.format || draft.boardingCodeOperatingFlight!==result.operatingFlight)){
+      draft.boardingCode=result.code;
+      draft.boardingCodeSource='generated';
+      draft.boardingLegIndex='0';
+      draft.boardingCodeOperatingFlight=result.operatingFlight;
+      markFieldSources(draft,[field],'generated');
+    } else if(!result && previous){
+      clearGeneratedCode(draft);
+    } else {
+      return;
+    }
+    showSaved();
+    status.textContent=result ? '条码已自动生成' : '';
+    changed({automatic:true});
   }
-  function use(code,generated=false,settings={}) {
+  function use(code) {
     const previousRecord={...draft};
     draft[field] = normalize(code.data);
     const filled=[];
     markManualFields(draft,[field]);
-    markFieldSources(draft,[field],generated ? 'generated' : 'barcode');
+    markFieldSources(draft,[field],'barcode');
     if(draft.type==='flight'){
-      draft.boardingCodeSource=generated ? 'generated' : 'original';
+      draft.boardingCodeSource='original';
       draft.boardingLegIndex=String(code.legIndex ?? 0);
-      draft.boardingCodeOperatingFlight=generated ? settings.operatingFlight || '' : '';
-      const read=!generated && readBoardingCode(draft.boardingCode,draft.boardingLegIndex);
+      draft.boardingCodeOperatingFlight='';
+      const read=readBoardingCode(draft.boardingCode,draft.boardingLegIndex);
       if(read){
         const year=read.legCount===1||previousRecord.service===read.service ? journeyDate(previousRecord.departureDate)?.year : null;
         draft.departureDate={year:year&&read.dayOfYear<=daysInYear(year)?year:null,dayOfYear:read.dayOfYear};
@@ -96,7 +99,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     }
     refreshFieldSources(form,draft);
     refreshBarcodeFieldLocks(form,draft);
-    reset();clearGeneratedError();showSaved();showDifferences();status.textContent=generated ? '已生成并使用 '+code.format+' 基础 BCBP' : '已读取并重建 '+code.format+'，重新编码后信息已核对';error.textContent='';const generatorError=form.querySelector('[data-bcbp-error]');if(generatorError)generatorError.textContent='';changed({filled,previousRecord});
+    reset();showSaved();showDifferences();status.textContent='已读取并重建 '+code.format+'，重新编码后信息已核对';error.textContent='';changed({filled,previousRecord});
   }
   async function read(file, automatic = false) {
     reset(); const request = generation; loading = true; status.textContent = '正在读取并重建条码…'; error.textContent = '';
@@ -127,28 +130,49 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     catch (failure) { if (!disposed && request === generation) { loading = false; status.textContent = ''; error.textContent = failure.message;  } }
   }
   const camera = bindCodeCamera(section, file => read(file, true), { ...cameraOptions, onCancel: () => { reset(); status.textContent = ''; } });
-  const generator=bindBoardingGenerator(form,draft,use,message=>{error.textContent=message;const target=form.querySelector('[data-bcbp-error]');if(target)target.textContent=message;},()=>{camera.stop();reset();},{profile});
   photo.addEventListener('change', () => { const file = photo.files?.[0]; if (file) { camera.stop(); read(file); } });
   find('code-use-scan')?.addEventListener('click', () => readReference());
-  find('code-remove').addEventListener('click', () => { reset(); draft[field] = ''; if(draft.type==='flight'){draft.boardingCodeSource='';draft.boardingCodeOperatingFlight='';draft.boardingLegIndex='';}markManualFields(draft,[field]);consistency.hidden=true; clearGeneratedError();setBoardingGeneratorAvailability(form,draft); refreshFieldSources(form,draft);refreshBarcodeFieldLocks(form,draft); status.textContent = ''; error.textContent = ''; showSaved(); changed(); });
-  cancel.addEventListener('click', () => { reset(); status.textContent = ''; error.textContent = ''; });
-  const inputChanged=event=>{
-    if(event.target.closest('[data-code-editor]'))return;
-    if(barcodeFieldLocked(draft,event.target.name)){refreshBarcodeFieldLocks(form,draft);return;}
-    if(BOARDING_SHARED_FIELDS.includes(event.target.closest('[data-journey-date]')?.dataset.journeyDate || event.target.name) || event.target.matches('[data-seat-number]')){
-      clearTimeout(updateTimer);
-      if(draft.boardingCodeSource==='generated'){consistency.textContent='条码待更新…';consistency.hidden=false;}
-      updateTimer=setTimeout(()=>{if(section.isConnected)updateGenerated();},150);
+  find('code-remove').addEventListener('click', () => {
+    if(!removable(draft,field))return;
+    reset();
+    draft[field]='';
+    if(draft.type==='flight'){
+      for(const key of BOARDING_FIELDS)draft[key]='';
+      refreshBoardingGenerator(form,draft,{profile});
     }
+    markManualFields(draft,[field]);
+    consistency.hidden=true;
+    refreshFieldSources(form,draft);refreshBarcodeFieldLocks(form,draft);
+    status.textContent='';error.textContent='';showSaved();changed();
+  });
+  cancel.addEventListener('click', () => { reset(); status.textContent = ''; error.textContent = ''; updateGenerated(); });
+  const inputChanged=event=>{
+    if(draft.type!=='flight')return;
+    const input=event.target, extra=input.matches('[data-bcbp]');
+    if(extra){
+      if(input.disabled)return;
+      editBoardingGeneratorField(input);
+    } else {
+      if(input.closest('[data-code-editor]'))return;
+      if(barcodeFieldLocked(draft,input.name)){refreshBarcodeFieldLocks(form,draft);return;}
+      if(!BOARDING_SHARED_FIELDS.includes(input.closest('[data-journey-date]')?.dataset.journeyDate || input.name) && !input.matches('[data-seat-preset]'))return;
+    }
+    clearTimeout(updateTimer);
+    updateTimer=setTimeout(()=>{if(section.isConnected)updateGenerated();},150);
   };
   const submit=event=>{
     if(disposed)return;
     if(loading || pending){event.preventDefault();event.stopImmediatePropagation();error.textContent=loading ? '正在读取条码，请稍候' : '请先选择对应的码，或取消选择';}
-    else if(!updateGenerated(true)){event.preventDefault();event.stopImmediatePropagation();}
+    else updateGenerated();
   };
-  form.addEventListener('input',inputChanged);form.addEventListener('submit',submit,true);
-  if(draft.type==='flight'){refreshBoardingGenerator(form,draft,{profile});showDifferences();}
+  form.addEventListener('input',inputChanged);form.addEventListener('change',inputChanged);form.addEventListener('submit',submit,true);
+  if(draft.type==='flight'){
+    if(preserveGenerator)setBoardingGeneratorAvailability(form,draft);
+    else refreshBoardingGenerator(form,draft,{profile});
+    if(draft.boardingCode && draft.boardingCodeSource!=='generated')showDifferences();
+    else updateGenerated();
+  }
   refreshBarcodeFieldLocks(form,draft);
   if (autoRead && referenceURL && !draft[field]) readReference(true);
-  return () => { disposed = true; clearTimeout(updateTimer);form.removeEventListener('input',inputChanged);form.removeEventListener('submit',submit,true);generator(); camera.dispose(); reset(); };
+  return () => { disposed = true; clearTimeout(updateTimer);form.removeEventListener('input',inputChanged);form.removeEventListener('change',inputChanged);form.removeEventListener('submit',submit,true); camera.dispose(); reset(); };
 }

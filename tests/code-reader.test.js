@@ -69,7 +69,7 @@ test('boarding QR codes preserve Chinese or binary extensions and autofill field
       }
       assert.equal(calendarDate(draft.departureDate),'');assert.equal(draft.seatClass,'Z');assert.equal(draft.airline,'英国航空');assert.equal(draft.boardingCodeSource,'original');
       assert.equal(form.querySelector('[data-bcbp="cabin"]'),null);assert.equal(draft.seatClass,'Z');assert.equal(form.querySelector('[data-bcbp="electronic"]').value,'');
-      assert.equal(form.querySelector('[data-bcbp-generate]').disabled,true);assert.deepEqual(codeBytes(draft.boardingCode.rawBytes),expected);
+      assert.equal(form.querySelector('[data-bcbp-fields]').disabled,true);assert.deepEqual(codeBytes(draft.boardingCode.rawBytes),expected);
     }finally{cleanup();dom.window.close();}
   }
 });
@@ -104,7 +104,7 @@ test('tagged Chinese names, ticket numbers and gates autofill from QR while reco
     assert.equal(draft.seatClass,'Z');assert.equal(form.elements.seatClass.value,'Z');assert.equal(form.querySelector('[data-seat-preset]').value,'Z');assert.equal(form.elements.seatClass.hidden,true);
     assert.equal(draft.airline,'中国国际航空');assert.equal(form.elements.airline.value,'中国国际航空');
     assert.equal(draft.boardingTime,'17:30');assert.equal(calendarDate(draft.departureDate),'');assert.equal(readBoardingCode(draft.boardingCode).recordedBoardingTime,'18:21');
-    assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'ZHANG/SAN');assert.equal(form.querySelector('[data-bcbp="electronic"]').value,'');assert.equal(form.querySelector('[data-bcbp-generate]').disabled,true);
+    assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'ZHANG/SAN');assert.equal(form.querySelector('[data-bcbp="electronic"]').value,'');assert.equal(form.querySelector('[data-bcbp-fields]').disabled,true);
     for(const origin of ['PEK','LHR']){const presentation=boardingPresentation({...draft,origin,originCode:origin});assert.equal(presentation.language,origin==='PEK'?'zh':'en');assert.equal(presentation.passenger,'张三');}
     const expected=bytes.slice();expected[22]=32;assert.deepEqual(codeBytes(draft.boardingCode.rawBytes),expected);
     const payloads=await readBoardingPayloads(image),[scanned]=parseScanText('BOARDING PASS','synthetic',{boardingPayloads:payloads});

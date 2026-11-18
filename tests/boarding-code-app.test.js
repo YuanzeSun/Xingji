@@ -18,6 +18,7 @@ test('the app saves generated code edits immediately, persists provenance, and k
   const wait=async predicate=>{for(let i=0;i<300;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('Boarding editor did not settle');};
   const open=async id=>{document.querySelector(`[data-action="view"][data-id="${id}"]`).click();await wait(()=>document.querySelector('[data-action="edit"]:not(:disabled)'));document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));};
   const fill=(key,value)=>{const input=document.querySelector(`[name="${key}"]`);input.value=value;input.dispatchEvent(new window.Event('input',{bubbles:true}));};
+  const fillExtra=(key,value)=>{const input=document.querySelector(`[data-bcbp="${key}"]`);input.value=value;input.dispatchEvent(new window.Event('input',{bubbles:true}));};
   const submit=()=>document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
   try{
     await import('../src/app.js');await wait(()=>document.querySelector('[data-action="view"][data-id="generated"]'));
@@ -32,10 +33,18 @@ test('the app saves generated code edits immediately, persists provenance, and k
     let saved=server.records().find(record=>record.id==='generated');assert.equal(saved.seat,'20C');assert.equal(saved.boardingCodeSource,'generated');assert.equal(readBoardingCode(saved.boardingCode).seat,'20C');
     assert.equal(saved.fieldSources.seat,'manual');assert.equal(saved.fieldSources.boardingCode,'generated');
     await open('generated');assert.equal(document.querySelector('[data-bcbp="sequence"]').value,'00025');assert.equal(document.querySelector('[data-bcbp="status"]').value,'1');
-    fill('pnr','');submit();assert.ok(document.querySelector('#editor-form'));assert.equal(document.querySelector('#editor-error').hidden,false);assert.equal(document.activeElement.name,'pnr');
-    fill('pnr','XYZ789');submit();await wait(()=>!document.querySelector('dialog'));saved=server.records().find(record=>record.id==='generated');assert.equal(readBoardingCode(saved.boardingCode).pnr,'XYZ789');
+    assert.equal(document.querySelector('[data-bcbp-generate]'),null);
+    assert.ok(document.querySelector('[name="pnr"]').closest('.field').querySelector('.barcode-required-mark'));
+    fill('pnr','');submit();await wait(()=>!document.querySelector('dialog'));
+    saved=server.records().find(record=>record.id==='generated');assert.equal(saved.boardingCode,'');
+    await open('generated');
+    fill('pnr','XYZ789');fillExtra('sequence','25');
+    fill('flightStatus','open');
+    assert.equal(document.querySelector('[data-bcbp="sequence"]').value,'25');
+    fillExtra('status','1');await wait(()=>/自动生成/.test(document.querySelector('#code-status').textContent));
+    submit();await wait(()=>!document.querySelector('dialog'));saved=server.records().find(record=>record.id==='generated');assert.equal(readBoardingCode(saved.boardingCode).pnr,'XYZ789');
     await open('original');
-    assert.equal(document.querySelector('[data-bcbp-fields]').disabled,true);assert.equal(document.querySelector('[data-bcbp-generate]').disabled,true);
+    assert.equal(document.querySelector('[data-bcbp-fields]').disabled,true);
     fill('seat','30C');submit();await wait(()=>!document.querySelector('dialog'));
     saved=server.records().find(record=>record.id==='original');assert.equal(saved.seat,'12A');assert.deepEqual(saved.boardingCode,original.boardingCode);assert.equal(saved.boardingCodeSource,'original');
     await open('original');assert.equal(document.querySelector('[name="type"]').disabled,true);assert.equal(document.querySelector('[name="service"]').readOnly,true);assert.equal(document.querySelector('[data-seat-preset]').disabled,true);assert.equal(document.querySelector('[name="departureDate"]').readOnly,false);

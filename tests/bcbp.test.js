@@ -48,35 +48,44 @@ test('all generated symbologies decode to the complete BCBP and survive metadata
   }
 });
 
-test('expanded generator reuses the current ticket fields and keeps additional required fields separate',()=>{
+test('the generator gets shared fields from the ticket and creates or updates the preview automatically',async()=>{
   const draft=flight({boardingCode:DEMO_BOARDING_CODE});
   const shared=['passenger','pnr','origin','destination','service','departureDate','seat','seatClass'];
-  const dom=new JSDOM(`<form>${shared.map(key=>`<input name="${key}" value="${key.endsWith('Date')?calendarDate(draft[key]):draft[key]}">`).join('')}${ticketCodeEditor(draft)}</form>`),form=dom.window.document.querySelector('form');let changes=0;
-  const cleanup=bindTicketCodeEditor(form,draft,()=>changes++);
-  const set=(key,value)=>{const input=form.querySelector(`[data-bcbp="${key}"]`);input.value=value;input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));};
+  const dom=new JSDOM(`<form>${shared.map(key=>`<input name="${key}" value="${key.endsWith('Date')?calendarDate(draft[key]):draft[key]}">`).join('')}${ticketCodeEditor(draft)}</form>`),form=dom.window.document.querySelector('form');
+  const cleanup=bindTicketCodeEditor(form,draft,()=>{});
+  const set=(key,value)=>{const input=form.querySelector(`[data-bcbp="${key}"]`) || form.elements[key];input.value=value;input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));};
+  const submit=()=>form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
+  const waitForPreview=()=>new Promise(resolve=>setTimeout(resolve,200));
   try{
-    assert.equal(form.querySelector('[data-bcbp="cabin"]'),null);assert.equal(form.querySelector('[data-bcbp="status"]').value,'');
-    assert.equal(form.querySelector('[data-bcbp="electronic"]').value,'');assert.equal(form.querySelector('[data-bcbp="electronic"] option:checked').textContent,'无');
-    assert.equal(form.querySelector('[data-bcbp-generate]').disabled,true);
-    form.querySelector('[data-bcbp-generate]').click();assert.deepEqual(draft.boardingCode,DEMO_BOARDING_CODE);
-    form.querySelector('#code-remove').click();changes=0;assert.equal(form.querySelector('[data-bcbp-generate]').disabled,false);
-    form.querySelector('[data-bcbp-generate]').click();assert.equal(draft.boardingCode,'');assert.ok(form.querySelector('#code-error').textContent);
-    assert.equal(form.querySelector('details[data-bcbp-generator]'),null);
+    assert.equal(form.querySelector('[data-bcbp="cabin"]'),null);
+    assert.equal(form.querySelector('[data-bcbp="electronic"] option:checked').textContent,'无');
+    assert.equal(form.querySelector('[data-bcbp-generate]'),null);
+    assert.equal(form.querySelector('[data-bcbp-fields]').disabled,true);
+    submit();assert.deepEqual(draft.boardingCode,DEMO_BOARDING_CODE);
+    form.querySelector('#code-remove').click();
+    assert.equal(form.querySelector('[data-bcbp-fields]').disabled,false);
+    assert.equal(draft.boardingCode,'');
     for(const key of ['passenger','pnr','origin','destination','flightNumber','date','seat'])assert.equal(form.querySelector(`[data-bcbp="${key}"]`),null);
-    for(const key of ['status','sequence','format']){const mark=form.querySelector(`[data-bcbp="${key}"]`).closest('.field').querySelector('.barcode-required-mark');assert.ok(mark);assert.equal(mark.getAttribute('aria-label'),'生成条码必填');}
-    assert.match(form.querySelector('.barcode-required-legend').textContent,/生成条码必填/);
-    form.elements.seatClass.value='F';set('status','1');set('sequence','25');set('electronic','E');form.elements.passenger.value='desmarais/luc';
-    form.querySelector('[data-bcbp-generate]').click();
-    assert.equal(changes,1);assert.equal(String.fromCharCode(...codeBytes(draft.boardingCode.rawBytes)),encodeBCBP(values()));assert.match(form.querySelector('#code-status').textContent,/已生成/);
-    const defaults=boardingCodeDefaults(draft);assert.equal(defaults.cabin,'F');assert.equal(defaults.sequence,'00025');assert.equal(defaults.status,'1');
-    form.elements.seatClass.value='Z';form.elements.seatClass.dispatchEvent(new dom.window.Event('input',{bubbles:true}));form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
-    assert.equal(String.fromCharCode(...codeBytes(draft.boardingCode.rawBytes))[47],'Z');
-    form.elements.seatClass.value='F';form.elements.seatClass.dispatchEvent(new dom.window.Event('input',{bubbles:true}));form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
-    const saved=draft.boardingCode,beforeFailure=changes;form.elements.pnr.value='';form.querySelector('[data-bcbp-generate]').click();assert.deepEqual(draft.boardingCode,saved);assert.equal(changes,beforeFailure);
-    form.elements.pnr.value='ABC123';form.elements.service.value='AC835';form.querySelector('[data-bcbp-generate]').click();
-    assert.equal(String.fromCharCode(...codeBytes(draft.boardingCode.rawBytes)),encodeBCBP({...values(),flightNumber:'835'}));
-    set('operatingFlight','ua34a');assert.equal(form.querySelector('[data-bcbp="operatingFlight"]').value,'UA34A');form.querySelector('[data-bcbp-generate]').click();
-    assert.equal(String.fromCharCode(...codeBytes(draft.boardingCode.rawBytes)).slice(36,44),'UA 0034A');assert.equal(form.elements.service.value,'AC835');
+    for(const key of ['status','sequence','format']){
+      const input=form.querySelector(`[data-bcbp="${key}"]`);
+      assert.equal(input.closest('.field').querySelector('.barcode-required-mark').getAttribute('aria-label'),'生成条码必填');
+      assert.equal(input.required,false);
+    }
+    assert.match(form.querySelector('.barcode-required-legend').textContent,/自动生成/);
+    set('sequence','25');submit();assert.equal(draft.boardingCode,'');
+    set('electronic','E');set('passenger','desmarais/luc');set('status','1');
+    await waitForPreview();
+    const payload=()=>String.fromCharCode(...codeBytes(draft.boardingCode.rawBytes));
+    assert.equal(payload(),encodeBCBP(values()));
+    assert.match(form.querySelector('#code-status').textContent,/自动生成/);
+    assert.equal(form.querySelector('#code-remove').hidden,true);
+    set('seatClass','Z');submit();assert.equal(payload()[47],'Z');
+    set('seatClass','F');set('pnr','');await waitForPreview();assert.equal(draft.boardingCode,'');
+    set('pnr','ABC123');set('service','AC835');submit();
+    assert.equal(payload(),encodeBCBP({...values(),flightNumber:'835'}));
+    set('operatingFlight','ua34a');submit();
+    assert.equal(form.querySelector('[data-bcbp="operatingFlight"]').value,'UA34A');
+    assert.equal(payload().slice(36,44),'UA 0034A');assert.equal(form.elements.service.value,'AC835');
     assert.doesNotMatch(ticketCodeEditor(createRecord()),/data-bcbp-generator/);
   }finally{cleanup();dom.window.close();}
 });
