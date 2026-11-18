@@ -1,36 +1,80 @@
-name: Deploy ticket archive
+name: Publish Xingji Pages
+run-name: Publish Xingji Pages (${{ inputs.version }})
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: '选择上线版本'
+        type: choice
+        required: true
+        default: web
+        options:
+          - web
+          - flutter
 permissions:
   contents: read
-  pages: write
-  id-token: write
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
-  deploy:
+  build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.version == 'flutter' && 'refs/heads/app' || github.sha }}
+      - uses: actions/configure-pages@v5
+        id: pages
+
+      - uses: pnpm/action-setup@v4
+        if: inputs.version == 'web'
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        if: inputs.version == 'web'
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Build original website
+        if: inputs.version == 'web'
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+          pnpm build
+
+      - uses: subosito/flutter-action@v2
+        if: inputs.version == 'flutter'
+        with:
+          flutter-version: '3.50.0'
+          channel: stable
+          cache: true
+      - name: Build Flutter preview
+        if: inputs.version == 'flutter'
+        working-directory: apps/flutter
+        env:
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: |
+          flutter pub get
+          flutter build web --release --base-href "${PAGES_BASE_PATH%/}/"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ inputs.version == 'flutter' && 'apps/flutter/build/web' || 'dist' }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm test
-      - run: pnpm build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
       - uses: actions/deploy-pages@v4
         id: deployment

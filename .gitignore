@@ -5,3 +5,12 @@ dist/
 .env*
 !.env.example
 coverage/
+
+# Flutter / Dart generated files
+.dart_tool/
+.flutter-plugins-dependencies
+packages/*/coverage/
+packages/*/build/
+
+# App files build in the app branch.
+/apps/flutter/

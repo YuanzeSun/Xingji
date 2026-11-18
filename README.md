@@ -24,6 +24,12 @@
 
 航班补全需在电脑端配置飞常准连接，使用个人账户额度。
 
+## App
+
+Flutter App 正在独立的 [`app` 分支](https://github.com/YuanzeSun/Xingji/tree/app) 开发，支持在本机离线管理票据，也可连接 GitHub 私有仓库同步。
+
+维护者可在 [Actions](https://github.com/YuanzeSun/Xingji/actions/workflows/pages.yml) 的 **Publish Xingji Pages** 中从 `main` 手动运行，选 `web` 发布原网页版，选 `flutter` 发布 App 预览。两个版本共用同一个在线地址。
+
 ## 导入方式
 
 机票支持扫描**登机牌条码或电子登机牌二维码**录入，自动填写码内可识别的信息。
@@ -51,8 +57,6 @@
 保留不同时期的火车票样式，也支持退票费凭证和带航司标识的登机牌。
 
 ![蓝色磁介质票、经典红票、2015 红票与报销凭证](docs/images/rail-ticket-matrix.png)
-
-![退票费报销凭证](docs/images/refund-receipt.png)
 
 ![登机牌](docs/images/boarding-pass.png)
 
