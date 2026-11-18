@@ -5,6 +5,7 @@ import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
 import 'design.dart';
+import 'ride_trend_chart.dart';
 
 class StatisticsPage extends StatefulWidget {
   final AppStore store;
@@ -21,7 +22,6 @@ class _StatisticsPageState extends State<StatisticsPage> {
       subtype = true,
       owner = false,
       mergeDirections = true;
-  double zoom = 1;
   @override
   Widget build(BuildContext context) {
     final catalog = widget.store.catalog;
@@ -114,7 +114,9 @@ class _StatisticsPageState extends State<StatisticsPage> {
             : records.map((r) => r.departure!.year!).reduce(math.max);
     final buckets = <String, (int, int)>{};
     for (var y = first; y <= last; y++) {
-      for (var m = 1; m <= (monthly ? 12 : 1); m++) {
+      final firstMonth = monthly && from?.year == y ? from!.month : 1;
+      final lastMonth = monthly ? (until.year == y ? until.month : 12) : 1;
+      for (var m = firstMonth; m <= lastMonth; m++) {
         buckets[monthly ? '$y-${m.toString().padLeft(2, '0')}' : '$y'] = (0, 0);
       }
     }
@@ -230,67 +232,10 @@ class _StatisticsPageState extends State<StatisticsPage> {
             ],
           ),
         ),
-        SectionTitle(
-          '乘坐次数',
-          trailing: SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: false, label: Text('按年')),
-              ButtonSegment(value: true, label: Text('按月')),
-            ],
-            selected: {monthly},
-            onSelectionChanged: (value) =>
-                setState(() => monthly = value.single),
-          ),
-        ),
-        Wrap(
-          spacing: 20,
-          children: const [
-            Text('━ 火车', style: TextStyle(color: ink)),
-            Text('┄ 飞机', style: TextStyle(color: ticketRed)),
-          ],
-        ),
-        Row(
-          children: [
-            const Icon(Icons.zoom_out, size: 20),
-            Expanded(
-              child: Slider(
-                value: zoom,
-                min: 1,
-                max: 4,
-                label: '${zoom.toStringAsFixed(1)}×',
-                onChanged: (value) => setState(() => zoom = value),
-              ),
-            ),
-            const Icon(Icons.zoom_in, size: 20),
-          ],
-        ),
-        SizedBox(
-          height: 270,
-          child: LayoutBuilder(
-            builder: (context, constraints) => Scrollbar(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Semantics(
-                  label: buckets.entries
-                      .map((e) => '${e.key}年 火车${e.value.$1}次 飞机${e.value.$2}次')
-                      .join('，'),
-                  child: CustomPaint(
-                    size: Size(
-                      math.max(
-                        constraints.maxWidth,
-                        buckets.length * 64 * zoom,
-                      ),
-                      270,
-                    ),
-                    painter: RideChart(
-                      buckets,
-                      MediaQuery.disableAnimationsOf(context),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+        RideTrendChart(
+          data: records.isEmpty ? {} : buckets,
+          monthly: monthly,
+          onMonthlyChanged: (value) => setState(() => monthly = value),
         ),
         _bars(
           '乘坐车型',
@@ -461,99 +406,4 @@ class _StatisticsPageState extends State<StatisticsPage> {
       ],
     );
   }
-}
-
-class RideChart extends CustomPainter {
-  final Map<String, (int, int)> data;
-  final bool reducedMotion;
-  RideChart(this.data, this.reducedMotion);
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rows = data.entries.toList();
-    if (rows.isEmpty) return;
-    final max = math.max(
-      1,
-      rows.map((e) => math.max(e.value.$1, e.value.$2)).reduce(math.max),
-    );
-    const top = 20.0, bottom = 40.0, left = 32.0;
-    final width = size.width - left - 24, height = size.height - top - bottom;
-    for (var i = 0; i <= 4; i++) {
-      final y = top + height * i / 4;
-      canvas.drawLine(
-        Offset(left, y),
-        Offset(size.width - 16, y),
-        Paint()
-          ..color = mist
-          ..strokeWidth = 1,
-      );
-    }
-    for (var series = 0; series < 2; series++) {
-      final points = <Offset>[];
-      for (final (index, row) in rows.indexed) {
-        final x =
-                left +
-                width * (rows.length == 1 ? .5 : index / (rows.length - 1)),
-            value = series == 0 ? row.value.$1 : row.value.$2,
-            y = top + height * (1 - value / max);
-        points.add(Offset(x, y));
-      }
-      final path = Path()..moveTo(points.first.dx, points.first.dy);
-      for (final point in points.skip(1)) {
-        path.lineTo(point.dx, point.dy);
-      }
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = series == 0 ? ink : ticketRed
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.5,
-      );
-      for (final (index, point) in points.indexed) {
-        canvas.drawCircle(point, 4, Paint()..color = Colors.white);
-        canvas.drawCircle(
-          point,
-          3,
-          Paint()..color = series == 0 ? ink : ticketRed,
-        );
-        final value = series == 0 ? rows[index].value.$1 : rows[index].value.$2;
-        final text = TextPainter(
-          text: TextSpan(
-            text: '$value',
-            style: TextStyle(
-              color: series == 0 ? ink : ticketRed,
-              fontFamily: 'UiSans',
-              fontSize: 12,
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-        text.paint(
-          canvas,
-          point + Offset(-text.width / 2, series == 0 ? -22 : 10),
-        );
-      }
-    }
-    for (final (index, row) in rows.indexed) {
-      final text = TextPainter(
-        text: TextSpan(
-          text: row.key,
-          style: const TextStyle(
-            color: muted,
-            fontFamily: 'UiSans',
-            fontSize: 12,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      final x =
-          left + width * (rows.length == 1 ? .5 : index / (rows.length - 1));
-      text.paint(canvas, Offset(x - text.width / 2, size.height - 24));
-    }
-  }
-
-  @override
-  bool shouldRepaint(RideChart old) => !sameValue(
-    old.data.map((key, value) => MapEntry(key, [value.$1, value.$2])),
-    data.map((key, value) => MapEntry(key, [value.$1, value.$2])),
-  );
 }
