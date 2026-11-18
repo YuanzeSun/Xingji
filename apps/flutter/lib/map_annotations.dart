@@ -6,8 +6,9 @@ class MapAnnotation {
   final String name;
   final Rect box;
   final TextPainter text;
+  final TextPainter halo;
   final bool railway;
-  MapAnnotation(this.name, this.box, this.text, this.railway);
+  MapAnnotation(this.name, this.box, this.text, this.halo, this.railway);
 }
 
 /// Place in viewport pixels, retaining every verified anchor until one fits.
@@ -36,6 +37,18 @@ List<MapAnnotation> layoutMapAnnotations({
       ),
       textDirection: TextDirection.ltr,
     )..layout();
+    final halo = TextPainter(
+      text: TextSpan(
+        text: name,
+        style: (text.text! as TextSpan).style!.copyWith(
+          foreground: Paint()
+            ..color = Colors.white.withValues(alpha: .85)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
     final width = text.width + (railway ? 12 : 6),
         height = text.height + (railway ? 8 : 4),
         gap = railway ? 10.0 : 6.0;
@@ -54,7 +67,7 @@ List<MapAnnotation> layoutMapAnnotations({
         continue;
       }
       occupied.add(box);
-      placed.add(MapAnnotation(name, box, text, railway));
+      placed.add(MapAnnotation(name, box, text, halo, railway));
       return true;
     }
     return false;
@@ -85,24 +98,10 @@ List<MapAnnotation> layoutMapAnnotations({
 
 void paintMapAnnotations(Canvas canvas, List<MapAnnotation> annotations) {
   for (final annotation in annotations) {
-    final box = RRect.fromRectAndRadius(
-      annotation.box,
-      const Radius.circular(5),
-    );
-    canvas.drawRRect(box, Paint()..color = Colors.white.withValues(alpha: .94));
-    if (annotation.railway) {
-      canvas.drawRRect(
-        box,
-        Paint()
-          ..color = ink.withValues(alpha: .18)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = .7,
-      );
-    }
-    annotation.text.paint(
-      canvas,
-      annotation.box.topLeft +
-          (annotation.railway ? const Offset(6, 4) : const Offset(3, 2)),
-    );
+    final position =
+        annotation.box.topLeft +
+        (annotation.railway ? const Offset(6, 4) : const Offset(3, 2));
+    annotation.halo.paint(canvas, position);
+    annotation.text.paint(canvas, position);
   }
 }
