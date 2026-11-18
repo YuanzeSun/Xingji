@@ -183,9 +183,13 @@ class ReferenceCatalog {
         : 'CRJ-${['701', '702', '705'].contains(crj[1]) ? '700' : crj[1]}';
   }
 
-  TicketRecord normalize(TicketRecord record) {
+  TicketRecord normalize(TicketRecord record, {TicketRecord? original}) {
     final changes = <String, dynamic>{};
     for (final side in ['origin', 'destination']) {
+      if (original != null &&
+          original[side] == record[side] &&
+          original[side + 'Code'] == record[side + 'Code'])
+        continue;
       final place = endpoint(record, side);
       if (place == null) continue;
       changes[side] = place.name;
@@ -194,7 +198,9 @@ class ReferenceCatalog {
       changes[side == 'origin' ? 'departureZone' : 'arrivalZone'] =
           place.text('zone').isEmpty ? 'Asia/Shanghai' : place.text('zone');
     }
-    if (record.isFlight && record.text('aircraft').isNotEmpty) {
+    if (record.isFlight &&
+        record.text('aircraft').isNotEmpty &&
+        record['aircraft'] != original?['aircraft']) {
       changes['aircraft'] = aircraft(record.text('aircraft'));
     }
     return record.withChanges(changes);

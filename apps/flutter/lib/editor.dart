@@ -292,7 +292,10 @@ class _TicketEditorState extends State<TicketEditor> {
       value('sequence').trim().isNotEmpty &&
       value('status').trim().isNotEmpty &&
       _generatedCode(
-            store.catalog.normalize(TicketRecord.fromJson(values())),
+            store.catalog.normalize(
+              TicketRecord.fromJson(values()),
+              original: widget.record,
+            ),
           ) !=
           null;
 
@@ -312,7 +315,10 @@ class _TicketEditorState extends State<TicketEditor> {
     }
     setState(() => saving = true);
     try {
-      final record = store.catalog.normalize(TicketRecord.fromJson(values()));
+      final record = store.catalog.normalize(
+        TicketRecord.fromJson(values()),
+        original: widget.record,
+      );
       if (record.missingFields.isNotEmpty) {
         throw FormatException(
           '请补全：${record.missingFields.map((key) => fieldLabels[key] ?? key).join('、')}',

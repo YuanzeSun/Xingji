@@ -6,6 +6,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'ticket_face.dart';
+import 'ticket_runtime_native.dart'
+    if (dart.library.js_interop) 'ticket_runtime_web.dart'
+    as runtime;
+
+Future<List<TicketRecord>> _normalizeCloudRecords(
+  List<TicketRecord> records,
+) async {
+  final archive = TicketArchive(records).toJson();
+  final result =
+      jsonDecode(await runtime.normalizeArchive(jsonEncode(archive))) as Map;
+  if (result['error'] case final String message) throw FormatException(message);
+  return TicketArchive.fromJson({...archive, 'records': result['records']})
+      .records;
+}
 
 enum SaveOutcome { local, synced }
 
@@ -59,6 +73,11 @@ class AppStore extends ChangeNotifier {
       ReferenceCatalog.fromJson(jsonDecode(assets[0])),
       TicketArchive.fromJson(jsonDecode(assets[1])).records,
       jsonDecode(assets[2]),
+      remoteFactory: (target, token) => GitHubArchive(
+        target,
+        token,
+        normalizeRecords: _normalizeCloudRecords,
+      ),
     );
     final saved = preferences.getString(storageKey);
     await prepareTicketFaces(store.examples);
@@ -222,6 +241,7 @@ class AppStore extends ChangeNotifier {
 
     // Keep the edit in the form until the branch update succeeds. Retry once
     // if another device advanced the branch between reading and publishing.
+    final canonicalNext = await remote.canonicalRecords(next);
     final previous = baseRecords ?? _records;
     final previousSettings = baseSettings ?? settings;
     for (var attempt = 0; ; attempt++) {
@@ -232,7 +252,12 @@ class AppStore extends ChangeNotifier {
         _syncFailure(failure);
         rethrow;
       }
-      final tickets = mergeTickets(previous, next, snapshot.records);
+      final tickets = mergeTickets(
+        previous,
+        canonicalNext,
+        snapshot.records,
+        catalog: catalog,
+      );
       final shared = mergeSettings(
         previousSettings,
         preferences,
@@ -247,7 +272,9 @@ class AppStore extends ChangeNotifier {
         merged = tickets.resolve(choices);
         mergedSettings = shared.resolve(choices);
       }
-      merged = deduplicateTickets(merged, catalog);
+      merged = await remote.canonicalRecords(
+        deduplicateTickets(merged, catalog),
+      );
       try {
         final head = await remote.write(merged, snapshot, mergedSettings);
         _adopt(
@@ -384,7 +411,16 @@ class AppStore extends ChangeNotifier {
           : BindingChoice.merge;
       if (choice == null) return false;
       final tickets = switch (choice) {
-        BindingChoice.merge => mergeTickets([], _records, snapshot.records),
+        BindingChoice.merge when _records.isEmpty => ArchiveMerge(
+          snapshot.records,
+          [],
+        ),
+        BindingChoice.merge => mergeTickets(
+          [],
+          await remote.canonicalRecords(_records),
+          snapshot.records,
+          catalog: catalog,
+        ),
         BindingChoice.replaceCloud => ArchiveMerge(List.of(_records), []),
         BindingChoice.replaceLocal => ArchiveMerge(snapshot.records, []),
       };
@@ -396,7 +432,11 @@ class AppStore extends ChangeNotifier {
         merged = tickets.resolve(choices);
         mergedSettings = shared.resolve(choices);
       }
-      merged = deduplicateTickets(merged, catalog);
+      merged = await remote.canonicalRecords(
+        choice == BindingChoice.replaceLocal || _records.isEmpty
+            ? merged
+            : deduplicateTickets(merged, catalog),
+      );
       final replace = choice == BindingChoice.replaceCloud;
       final generation = replace ? newTicketId() : snapshot.generation;
       final head = replace
@@ -444,6 +484,9 @@ class AppStore extends ChangeNotifier {
     ArchiveSnapshot? firstSnapshot,
   }) async {
     final snapshot = firstSnapshot ?? await _readBound(remote);
+    if (_head.isNotEmpty && !snapshot.initialized) {
+      throw const FormatException('云端票库索引已删除，已停止同步并保留本机票库');
+    }
     await remote.assertDescendant(_head, snapshot.head);
     if (_head.isNotEmpty && _generation != snapshot.generation) {
       resetDetected = true;
@@ -486,7 +529,12 @@ class AppStore extends ChangeNotifier {
         await _persistSynced();
         return;
       }
-      final merge = mergeTickets(_base, _records, snapshot.records);
+      final merge = mergeTickets(
+        _base,
+        await remote.canonicalRecords(_records),
+        snapshot.records,
+        catalog: catalog,
+      );
       final settingMerge = mergeSettings(
         _baseSettings,
         settings,
@@ -503,7 +551,9 @@ class AppStore extends ChangeNotifier {
         return;
       }
       final mergedSettings = settingMerge.settings;
-      final records = deduplicateTickets(merge.records, catalog);
+      final records = await remote.canonicalRecords(
+        deduplicateTickets(merge.records, catalog),
+      );
       final head = await remote.write(records, snapshot, mergedSettings);
       _adopt(
         snapshot,
@@ -532,7 +582,9 @@ class AppStore extends ChangeNotifier {
         }
         return;
       }
-      final records = deduplicateTickets(nextRecords, catalog);
+      final records = await remote.canonicalRecords(
+        deduplicateTickets(nextRecords, catalog),
+      );
       final head = await remote.write(records, snapshot, nextSettings);
       _adopt(snapshot, records: records, newSettings: nextSettings, head: head);
       await _persistSynced();
@@ -611,7 +663,7 @@ class AppStore extends ChangeNotifier {
     String? head,
     String? generation,
   }) {
-    _records = records ?? deduplicateTickets(snapshot.records, catalog);
+    _records = records ?? List.of(snapshot.records);
     _base = List.of(_records);
     settings = sharedSettings(newSettings ?? snapshot.settings);
     _baseSettings = sharedSettings(cloneJson(settings));

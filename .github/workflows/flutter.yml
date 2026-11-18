@@ -2,10 +2,10 @@ name: Check Flutter common app
 on:
   push:
     branches: [app]
-    paths: ['apps/**', 'packages/**', 'specs/**', 'scripts/*flutter*', 'tests/flutter*', '.github/workflows/flutter.yml']
+    paths: ['apps/**', 'packages/**', 'specs/**', 'src/**', 'scripts/*flutter*', 'tests/flutter*', 'tests/helpers/**', 'package.json', 'pnpm-lock.yaml', '.github/workflows/flutter.yml']
   pull_request:
     branches: [app]
-    paths: ['apps/**', 'packages/**', 'specs/**', 'scripts/*flutter*', 'tests/flutter*', '.github/workflows/flutter.yml']
+    paths: ['apps/**', 'packages/**', 'specs/**', 'src/**', 'scripts/*flutter*', 'tests/flutter*', 'tests/helpers/**', 'package.json', 'pnpm-lock.yaml', '.github/workflows/flutter.yml']
 permissions:
   contents: read
 jobs:
@@ -20,6 +20,16 @@ jobs:
           cache: true
       - run: dart pub get && dart analyze && dart test
         working-directory: packages/xingji_core
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/prepare-flutter-renderer.mjs --check
+      - run: node --test tests/flutter-github-interop.mjs
       - run: flutter pub get
         working-directory: apps/flutter
       - run: flutter analyze

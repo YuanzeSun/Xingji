@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'boarding_decoder.dart';
 import 'ticket_record.dart';
 import 'record_fields.dart';
 import 'reference_catalog.dart';
@@ -47,6 +50,14 @@ void _takeField(Map<String, dynamic> target, TicketRecord source, String key) {
   } else {
     origins.remove(key);
   }
+  if (journeyDateFields.contains(key)) {
+    final year = '${key}Year';
+    if (source.fieldSources.containsKey(year)) {
+      origins[year] = source.fieldSources[year];
+    } else {
+      origins.remove(year);
+    }
+  }
   if (!lookupFields.contains(key)) return;
   final lookup = target['lookupValues'] as Map;
   if (source.isAutomatic(key)) {
@@ -57,6 +68,33 @@ void _takeField(Map<String, dynamic> target, TicketRecord source, String key) {
   final locked = Set<String>.from(target['lockedFields'])..remove(key);
   if (source.lockedFields.contains(key)) locked.add(key);
   target['lockedFields'] = locked.toList()..sort();
+}
+
+Object? _boardingState(TicketRecord? record) {
+  if (record == null) return null;
+  final code = record['boardingCode'];
+  if (record.text('boardingCodeSource') == 'generated' && code is Map) {
+    final raw = code['rawBytes'];
+    if (raw is String) {
+      final bytes = Base64Decoder().convert(raw);
+      final decoded = decodeBoardingBytes(bytes);
+      final legs = decoded?['legs'] as List?;
+      final index = int.tryParse(record.text('boardingLegIndex')) ?? 0;
+      if (legs != null && index >= 0 && index < legs.length) {
+        final leg = legs[index] as Map;
+        // The payload is regenerated from the merged ticket. Only the
+        // generation settings can actually conflict between editors.
+        return {
+          'sequence': leg['sequence'],
+          'status': leg['status'],
+          'electronic': decoded!['electronic'],
+          'format': code['format'],
+          'operatingFlight': record.text('boardingCodeOperatingFlight'),
+        };
+      }
+    }
+  }
+  return {'original': code, 'legIndex': record.text('boardingLegIndex')};
 }
 
 void _takeBoarding(Map<String, dynamic> target, TicketRecord source) {
@@ -294,9 +332,33 @@ dynamic _state(TicketRecord? record, String key) => record == null
 ArchiveMerge mergeTickets(
   List<TicketRecord> baseRows,
   List<TicketRecord> localRows,
-  List<TicketRecord> remoteRows,
-) {
-  final aligned = _align([baseRows, localRows, remoteRows]);
+  List<TicketRecord> remoteRows, {
+  ReferenceCatalog? catalog,
+}) {
+  final collections = [baseRows, localRows, remoteRows];
+  if (catalog != null) {
+    final grouped = deduplicateTickets([
+      ...baseRows,
+      ...localRows,
+      ...remoteRows,
+    ], catalog);
+    final aliases = {
+      for (final record in grouped)
+        for (final id in record.ids) id: record,
+    };
+    for (var i = 0; i < collections.length; i++) {
+      collections[i] = deduplicateTickets(collections[i], catalog).map((
+        record,
+      ) {
+        final group = aliases[record.id] ?? record;
+        return record.withChanges({
+          'id': group.id,
+          'mergedIds': group.ids.where((id) => id != group.id).toList(),
+        });
+      }).toList();
+    }
+  }
+  final aligned = _align(collections);
   final base = {for (final row in aligned[0]) row.id: row},
       local = {for (final row in aligned[1]) row.id: row},
       remote = {for (final row in aligned[2]) row.id: row};
@@ -395,10 +457,9 @@ ArchiveMerge mergeTickets(
         conflict(key);
       }
     }
-    dynamic boardingState(TicketRecord? record) => record == null
-        ? null
-        : {for (final key in boardingFields) key: record[key]};
-    final lb = boardingState(l), rb = boardingState(r), bb = boardingState(b);
+    final lb = _boardingState(l),
+        rb = _boardingState(r),
+        bb = _boardingState(b);
     if (sameValue(lb, rb) || sameValue(rb, bb)) {
       _takeBoarding(row, l);
     } else if (sameValue(lb, bb) ||

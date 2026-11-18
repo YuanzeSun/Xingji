@@ -13,6 +13,9 @@ void main() {
       final archive = jsonDecode(
         await rootBundle.loadString('assets/demo.json'),
       );
+      expect(jsonDecode(await normalizeArchive(jsonEncode(archive))), {
+        'records': archive['records'],
+      });
       for (final record in archive['records']) {
         final expected = await rootBundle.loadString(
           'assets/tickets/${record['id']}.display.svg',

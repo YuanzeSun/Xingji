@@ -18,3 +18,9 @@ Future<String> renderOriginalTicket(String input) async {
   );
   return _render(input.toJS).toDart;
 }
+
+@JS('XingjiTickets.normalizeArchive')
+external JSString _normalizeArchive(JSString input);
+
+Future<String> normalizeArchive(String input) async =>
+    _normalizeArchive(input.toJS).toDart;

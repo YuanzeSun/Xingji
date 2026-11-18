@@ -11,6 +11,17 @@ import {Resvg} from '@resvg/resvg-js';
 import {createRecord} from '../src/model.js';
 import {writeRendererNotices} from './prepare-flutter-notices.mjs';
 process.chdir(fileURLToPath(new URL('..',import.meta.url)));
+const bundleRenderer=()=>build({entryPoints:['scripts/flutter-ticket-entry.js'],bundle:true,format:'iife',globalName:'XingjiTickets',platform:'browser',target:'es2022',minify:true,write:false,metafile:true});
+const rendererPaths=['apps/flutter/assets/renderer.js','apps/flutter/web/renderer.js'];
+if(process.argv.includes('--check')){
+  const expected=(await bundleRenderer()).outputFiles[0].text;
+  for(const path of rendererPaths)if((await readFile(path,'utf8')).replaceAll('\r\n','\n')!==expected){
+    throw new Error(path+' is stale; run node scripts/prepare-flutter-renderer.mjs');
+  }
+  console.log('Flutter renderer and shared archive validator are up to date.');
+  process.exit(0);
+}
+
 
 await mkdir('apps/flutter/assets/tickets',{recursive:true});
 for(const [family,file]of new Map(demoRecords('2026-11-18').flatMap(record=>layoutFontFiles(record.template)).map(([family,file])=>[family,[family,file]])).values()){
@@ -31,11 +42,10 @@ for(const template of ['rail-blue','rail-red']){
 const stockImages=[...new Set(Object.values(stocks))];
 const stockAliases=Object.entries(stocks).map(([template,image])=>`${JSON.stringify(template)}:images[${stockImages.indexOf(image)}]`);
 await writeFile('apps/flutter/assets/ticket-stock-data.js','// Generated from the original stock artwork at the original 2x export size.\nconst images='+JSON.stringify(stockImages)+';\nexport default {'+stockAliases.join(',')+'};\n');
-const result=await build({entryPoints:['scripts/flutter-ticket-entry.js'],bundle:true,format:'iife',globalName:'XingjiTickets',platform:'browser',target:'es2022',minify:true,write:false,metafile:true});
+const result=await bundleRenderer();
 await writeRendererNotices(result.metafile.inputs);
 const source=result.outputFiles[0].text;
-await writeFile('apps/flutter/assets/renderer.js',source);
-await writeFile('apps/flutter/web/renderer.js',source);
+for(const path of rendererPaths)await writeFile(path,source);
 for(const record of demoRecords('2026-11-18')){
   await writeFile(`apps/flutter/assets/tickets/${record.id}.svg`,ticketSVG(record));
   await writeFile(`apps/flutter/assets/tickets/${record.id}.display.svg`,flutterSVG(outlineTicketText(ticketSVG(record),record.template)));

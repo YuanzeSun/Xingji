@@ -101,3 +101,10 @@ Future<String> renderOriginalTicket(String input) async {
   );
   return worker.evaluate('XingjiTickets.display(${jsonEncode(input)})');
 }
+
+Future<String> normalizeArchive(String input) async {
+  final worker = await (_worker ??= _TicketWorker.start());
+  return worker.evaluate(
+    'XingjiTickets.normalizeArchive(${jsonEncode(input)})',
+  );
+}

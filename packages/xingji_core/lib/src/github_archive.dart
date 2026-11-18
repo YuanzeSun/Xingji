@@ -58,12 +58,27 @@ class ArchiveSnapshot {
   });
 }
 
+typedef NormalizeArchiveRecords = Future<List<TicketRecord>> Function(
+  List<TicketRecord>,
+);
+
 class GitHubArchive {
   final GitHubConnection connection;
   final String token;
   final http.Client client;
-  GitHubArchive(this.connection, this.token, {http.Client? client})
-    : client = client ?? http.Client();
+  final NormalizeArchiveRecords? normalizeRecords;
+  GitHubArchive(
+    this.connection,
+    this.token, {
+    http.Client? client,
+    this.normalizeRecords,
+  }) : client = client ?? http.Client();
+
+  Future<List<TicketRecord>> canonicalRecords(
+    List<TicketRecord> records,
+  ) async =>
+      normalizeRecords == null ? records : await normalizeRecords!(records);
+
   Future<dynamic> _request(
     String path, {
     String method = 'GET',
@@ -175,12 +190,24 @@ class GitHubArchive {
       );
     }
     final manifest = jsonDecode(await _blob(index.single['sha']));
-    if (manifest['format'] != 'xingji-index' ||
+    if (manifest is! Map ||
+        manifest['format'] != 'xingji-index' ||
         manifest['schemaVersion'] != 1 ||
         manifest['files'] is! Map ||
         manifest['recordCount'] is! int) {
       throw const FormatException('云端票库索引无效');
     }
+    final generation = manifest.containsKey('generation')
+        ? manifest['generation']
+        : '';
+    if (generation is! String ||
+        !RegExp(r'^[A-Za-z0-9-]{0,100}$').hasMatch(generation)) {
+      throw const FormatException('云端票库重置标识无效');
+    }
+    final settings = manifest.containsKey('settings')
+        ? manifest['settings']
+        : const {};
+    if (settings is! Map) throw const FormatException('云端设置格式无效');
     final files = Map<String, dynamic>.from(manifest['files']);
     if (files.length != paths.length ||
         paths.any((row) => !files.containsKey(row['path']))) {
@@ -216,11 +243,11 @@ class GitHubArchive {
       throw const FormatException('云端票库数量或 ID 不一致');
     }
     return ArchiveSnapshot(
-      records: records,
-      settings: sharedSettings(manifest['settings'] ?? {}),
+      records: await canonicalRecords(records),
+      settings: sharedSettings(settings),
       head: current,
       tree: commit['tree']['sha'],
-      generation: manifest['generation'] as String? ?? '',
+      generation: generation,
       contents: contents,
       repositoryId: repository['id'],
     );
@@ -247,6 +274,7 @@ class GitHubArchive {
     String generation,
   ) async {
     settings = sharedSettings(settings);
+    records = await canonicalRecords(records);
     final verified = await verify();
     if (verified['id'] != snapshot.repositoryId) {
       throw const FormatException('仓库身份已改变，已停止写入');
