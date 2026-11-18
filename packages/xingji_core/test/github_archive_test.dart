@@ -143,6 +143,24 @@ void main() {
     expect(jsonDecode(writes[1].body)['parents'], ['head']);
     expect(jsonDecode(writes[2].body)['force'], false);
   });
+  test(
+    'reset reads preserved settings even when the ticket schema is outdated',
+    () async {
+      final api = archive();
+      manifest['schemaVersion'] = 0;
+      (manifest['settings'] as Map)['obsoleteSetting'] = 'ignored';
+      await expectLater(api.read(), throwsFormatException);
+      final target = await api.resetTarget();
+      expect(writes, isEmpty);
+      final reset = await api.reset(target, target.settings);
+      expect(reset.settings['flightMcpKey'], 'secret-key');
+      expect(reset.settings['profile']['chineseName'], '张三');
+      expect(reset.settings.containsKey('obsoleteSetting'), false);
+      expect(reset.records, isEmpty);
+      expect(jsonDecode(writes[1].body)['parents'], ['head']);
+      expect(jsonDecode(writes[2].body)['force'], false);
+    },
+  );
   test('checksum mismatch aborts without any write', () async {
     manifest['files']['archive/2026.json'] = 'bad';
     await expectLater(archive().read(), throwsFormatException);

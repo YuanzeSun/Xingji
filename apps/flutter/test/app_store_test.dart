@@ -32,11 +32,11 @@ void main() {
   }
 
   test(
-    'offline save persists a pending private archive without copying examples',
+    'local-only tickets reload from storage without a sync requirement',
     () async {
       final app = await store(), record = ticket();
       expect(await app.save(record), SaveOutcome.local);
-      expect(app.pending, true);
+      expect(app.pending, false);
       expect(app.records.single.id, record.id);
       final saved = jsonDecode(app.preferences.getString(AppStore.storageKey)!);
       expect(
@@ -47,9 +47,37 @@ void main() {
       expect(app.records.single.id, app.examples.single.id);
       app.setDemo(false);
       expect(app.records.single.id, record.id);
+      final reopened = await AppStore.load();
+      addTearDown(reopened.dispose);
+      expect(reopened.records.single.id, record.id);
+      expect(reopened.connection, isNull);
+      expect(reopened.pending, false);
       app.dispose();
     },
   );
+  test(
+    'connecting later uploads tickets entered in the local-only library',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final remote = _MemoryRemote();
+      final app = AppStore(
+        await SharedPreferences.getInstance(),
+        catalog,
+        [],
+        {},
+        remoteFactory: (_, _) => remote,
+      );
+      addTearDown(app.dispose);
+      final record = ticket();
+      expect(await app.save(record), SaveOutcome.local);
+      expect(remote.snapshot.records, isEmpty);
+
+      await app.connect(const GitHubConnection('user', 'private'), 'test');
+      expect(remote.snapshot.records.single.id, record.id);
+      expect(app.pending, false);
+    },
+  );
+
   test('demo rejects private writes and deleting a ticket persists a clean tombstone', () async {
     final app = await store(), record = ticket();
     app.setDemo(true);
@@ -166,6 +194,71 @@ void main() {
     },
   );
 
+  test(
+    'reset-only authorization preserves an unrelated local ticket library',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final remote = _MemoryRemote()..legacy = true;
+      final app = AppStore(
+        await SharedPreferences.getInstance(),
+        catalog,
+        [],
+        {},
+        remoteFactory: (target, token) {
+          expect(target.label, 'user/private');
+          expect(token, 'reset-token');
+          return remote;
+        },
+      );
+      addTearDown(app.dispose);
+      final record = ticket();
+      await app.save(record);
+      remote.update(remote.snapshot.settings, records: [ticket()]);
+
+      await app.resetRepository(
+        target: const GitHubConnection('user', 'private'),
+        token: 'reset-token',
+      );
+      expect(remote.snapshot.records, isEmpty);
+      expect(remote.snapshot.settings['flightMcpKey'], 'preserved-key');
+      expect(app.records.single.id, record.id);
+      expect(app.connection, isNull);
+      expect(app.connected, false);
+    },
+  );
+
+  test(
+    'a saved binding can reset after the session credentials are gone',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final remote = _MemoryRemote();
+      final app =
+          AppStore(
+              await SharedPreferences.getInstance(),
+              catalog,
+              [],
+              {},
+              remoteFactory: (_, _) => remote,
+            )
+            ..connection = const GitHubConnection(
+              'user',
+              'private',
+              repositoryId: 1,
+            );
+      addTearDown(app.dispose);
+      expect(await app.save(ticket()), SaveOutcome.pending);
+      expect(app.connected, false);
+      await app.resetRepository(token: 'reset-token');
+      expect(app.records, isEmpty);
+      expect(app.connection?.label, 'user/private');
+      expect(app.connected, false);
+      expect(app.pending, false);
+      final saved = jsonDecode(app.preferences.getString(AppStore.storageKey)!);
+      expect(saved['generation'], 'reset');
+      expect(saved['settings']['flightMcpKey'], 'preserved-key');
+    },
+  );
+
   test('a bound archive cannot silently connect to another branch', () async {
     SharedPreferences.setMockInitialValues({});
     final remote = _MemoryRemote();
@@ -199,7 +292,7 @@ class _MemoryRemote extends GitHubArchive {
     repositoryId: 1,
     generation: 'initial',
   );
-  bool offline = false;
+  bool offline = false, legacy = false;
   void update(
     Map<String, dynamic> settings, {
     List<TicketRecord>? records,
@@ -220,8 +313,14 @@ class _MemoryRemote extends GitHubArchive {
   @override
   Future<ArchiveSnapshot> read() async {
     if (offline) throw StateError('offline');
+    if (legacy) throw const FormatException('unsupported ticket format');
     return snapshot;
   }
+
+  @override
+  Future<ArchiveSnapshot> resetTarget({
+    Map<String, dynamic> fallbackSettings = const {},
+  }) async => snapshot;
 
   @override
   Future<void> assertDescendant(String previous, String current) async {}

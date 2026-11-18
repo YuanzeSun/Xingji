@@ -64,11 +64,13 @@ class AppStore extends ChangeNotifier {
       );
       store._head = envelope['head'];
       store._generation = envelope['generation'];
-      store.pending = envelope['pending'];
       if (envelope['connection'] != null) {
         store.connection = GitHubConnection.fromJson(envelope['connection']);
       }
-      store.status = store.pending ? '本机有待同步的修改' : '本机票库';
+      store.pending = store.connection != null && envelope['pending'] == true;
+      if (store.connection != null) {
+        store.status = store.pending ? '本机有待同步的修改' : 'GitHub 待重新授权';
+      }
     }
     return store;
   }
@@ -116,7 +118,7 @@ class AppStore extends ChangeNotifier {
         previousPending = pending,
         previousStatus = status;
     _records = deduplicateTickets(records, catalog);
-    pending = true;
+    pending = connection != null;
     status = '正在保存到本机';
     try {
       await _persist();
@@ -131,8 +133,8 @@ class AppStore extends ChangeNotifier {
 
   Future<SaveOutcome> _syncSaved(String localStatus) async {
     if (!connected) {
-      status = localStatus;
-      return connection == null ? SaveOutcome.local : SaveOutcome.pending;
+      status = pending ? '已存本机，等待同步' : localStatus;
+      return pending ? SaveOutcome.pending : SaveOutcome.local;
     }
     try {
       await _sync();
@@ -179,7 +181,7 @@ class AppStore extends ChangeNotifier {
       ...settings,
       'profile': personalProfile(profile),
     });
-    pending = true;
+    pending = connection != null;
     try {
       await _persist();
     } catch (_) {
@@ -193,14 +195,19 @@ class AppStore extends ChangeNotifier {
     if (demo) throw StateError('请退出示例模式后导入');
     await _saveLocal([..._records, ...archive.records]);
   });
-  Future<void> connect(GitHubConnection target, String token) => _run(() async {
-    if (demo) throw StateError('请退出示例模式后连接票库');
+  void _checkBinding(GitHubConnection target) {
     final current = connection;
     if (current != null &&
         (current.label.toLowerCase() != target.label.toLowerCase() ||
             current.branch != target.branch)) {
       throw const FormatException('请先导出并清空本机票库，再切换仓库或分支');
     }
+  }
+
+  Future<void> connect(GitHubConnection target, String token) => _run(() async {
+    if (demo) throw StateError('请退出示例模式后连接票库');
+    _checkBinding(target);
+    final current = connection;
     final remote = remoteFactory(target, token);
     late final ArchiveSnapshot snapshot;
     try {
@@ -303,21 +310,54 @@ class AppStore extends ChangeNotifier {
     await _sync();
   });
 
-  Future<void> resetRepository() => _run(() async {
-    if (demo || _remote == null) throw StateError('请先连接私人票库');
-    status = '正在重置仓库…';
-    notifyListeners();
-    final snapshot = await _readBound(_remote!);
-    await _remote!.assertDescendant(_head, snapshot.head);
-    final merge = mergeSettings(_baseSettings, settings, snapshot.settings);
-    if (merge.conflicts.isNotEmpty) {
-      throw const FormatException('个人资料存在同步冲突，请先同步并处理后再重置');
-    }
-    final empty = await _remote!.reset(snapshot, merge.settings);
-    _adopt(empty);
-    status = '仓库已重置，个人资料和飞常准设置已保留';
-    await _persist();
-  });
+  Future<void> resetRepository({GitHubConnection? target, String? token}) =>
+      _run(() async {
+        final binding = connection;
+        final selected = target ?? binding;
+        if (demo || selected == null || (token == null && _remote == null)) {
+          throw StateError('请先授权要重置的 GitHub 私有仓库');
+        }
+        _checkBinding(selected);
+        final remote = token == null
+            ? _remote!
+            : remoteFactory(selected, token);
+        final previousStatus = status;
+        status = '正在重置 GitHub 仓库…';
+        notifyListeners();
+        try {
+          final snapshot = await remote.resetTarget(
+            fallbackSettings: binding == null ? const {} : settings,
+          );
+          if (binding?.repositoryId != null &&
+              binding!.repositoryId != snapshot.repositoryId) {
+            throw const FormatException('仓库身份已改变，已停止重置');
+          }
+          await remote.assertDescendant(_head, snapshot.head);
+          var keptSettings = snapshot.settings;
+          if (binding != null) {
+            final merged = mergeSettings(
+              _baseSettings,
+              settings,
+              snapshot.settings,
+            );
+            if (merged.conflicts.isNotEmpty) {
+              throw const FormatException('个人资料存在同步冲突，请先同步并处理后再重置');
+            }
+            keptSettings = merged.settings;
+          }
+          final empty = await remote.reset(snapshot, keptSettings);
+          status = 'GitHub 仓库已重置，个人资料和飞常准设置已保留';
+          if (binding != null) {
+            _adopt(empty);
+            await _persist();
+          }
+        } catch (_) {
+          if (status == '正在重置 GitHub 仓库…') status = previousStatus;
+          rethrow;
+        } finally {
+          if (token != null) remote.close();
+        }
+      });
   Future<void> acceptRemoteReset() => _run(() async {
     if (demo || _remote == null || !resetDetected) {
       throw StateError('没有待采用的云端重置');

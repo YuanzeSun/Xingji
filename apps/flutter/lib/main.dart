@@ -98,7 +98,6 @@ class ArchiveShell extends StatefulWidget {
 class _ArchiveShellState extends State<ArchiveShell>
     with SingleTickerProviderStateMixin {
   int page = 0;
-  bool localAccess = false;
   late final transition = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 320),
@@ -112,7 +111,7 @@ class _ArchiveShellState extends State<ArchiveShell>
   }
 
   void _demo(bool value) {
-    if (page == 3) page = 0;
+    if (page == 3 || !value) page = 0;
     store.setDemo(value);
   }
 
@@ -126,13 +125,11 @@ class _ArchiveShellState extends State<ArchiveShell>
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: store,
     builder: (context, _) {
-      if (!store.demo && !store.connected && !localAccess) {
-        return WelcomePage(
-          store,
-          onLocal: () => setState(() => localAccess = true),
-        );
-      }
-      final wide = MediaQuery.sizeOf(context).width >= 900;
+      final width = MediaQuery.sizeOf(context).width, wide = width >= 900;
+      final showActiveLabel =
+          store.demo ||
+          width >=
+              (MediaQuery.textScalerOf(context).scale(14) > 18 ? 430 : 360);
       final destinations = [
         (Icons.confirmation_number_outlined, '票夹'),
         (Icons.map_outlined, '地图'),
@@ -170,8 +167,7 @@ class _ArchiveShellState extends State<ArchiveShell>
                         color: ink,
                       ),
                     ),
-                    if (!store.demo || store.connected) const Spacer(),
-                    if (store.demo && !store.connected)
+                    if (store.demo)
                       Expanded(
                         child: LayoutBuilder(
                           builder: (context, constraints) {
@@ -190,8 +186,8 @@ class _ArchiveShellState extends State<ArchiveShell>
                               ),
                               label: Text(
                                 constraints.maxWidth >= 164 * textScale
-                                    ? '示例票库 · 开始使用'
-                                    : '开始使用',
+                                    ? '示例票库 · 返回票夹'
+                                    : '返回票夹',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -200,8 +196,13 @@ class _ArchiveShellState extends State<ArchiveShell>
                         ),
                       ),
                     if (!store.demo) ...[
+                      const Spacer(),
                       Icon(
-                        store.pending
+                        store.connection == null
+                            ? Icons.storage_outlined
+                            : !store.connected
+                            ? Icons.cloud_off_outlined
+                            : store.pending
                             ? Icons.cloud_upload_outlined
                             : Icons.cloud_done_outlined,
                         size: 16,
@@ -213,7 +214,11 @@ class _ArchiveShellState extends State<ArchiveShell>
                           store.status,
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 12),
+                      const ExcludeSemantics(
+                        child: Text('示例', style: TextStyle(color: muted)),
+                      ),
+                      const SizedBox(width: 4),
                     ],
                     Semantics(
                       label: '示例模式',
@@ -265,7 +270,12 @@ class _ArchiveShellState extends State<ArchiveShell>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             for (final (index, item) in destinations.indexed)
-                              _navigationItem(index, item, wide),
+                              _navigationItem(
+                                index,
+                                item,
+                                wide,
+                                showActiveLabel,
+                              ),
                           ],
                         ),
                       ),
@@ -299,7 +309,12 @@ class _ArchiveShellState extends State<ArchiveShell>
       );
     },
   );
-  Widget _navigationItem(int index, (IconData, String) item, bool wide) {
+  Widget _navigationItem(
+    int index,
+    (IconData, String) item,
+    bool wide,
+    bool showActiveLabel,
+  ) {
     final active = page == index;
     return Semantics(
       selected: active,
@@ -330,7 +345,7 @@ class _ArchiveShellState extends State<ArchiveShell>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(item.$1, size: 22, color: active ? Colors.white : muted),
-                  if (active || wide) ...[
+                  if (wide || active && showActiveLabel) ...[
                     const SizedBox(width: 8),
                     Text(
                       item.$2,
@@ -348,71 +363,4 @@ class _ArchiveShellState extends State<ArchiveShell>
       ),
     );
   }
-}
-
-class WelcomePage extends StatelessWidget {
-  final AppStore store;
-  final VoidCallback onLocal;
-  const WelcomePage(this.store, {super.key, required this.onLocal});
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(28),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '行迹',
-                  style: TextStyle(
-                    fontFamily: 'TicketSong',
-                    fontSize: 54,
-                    color: ink,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  '把走过的路，留在票里。',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  '收藏火车票与登机牌，在地图中重看旅程。',
-                  style: TextStyle(color: muted, fontSize: 16),
-                ),
-                const SizedBox(height: 40),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () => connectDialog(context, store),
-                    icon: const Icon(Icons.cloud_outlined),
-                    label: const Text('连接私人票库'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => store.setDemo(true),
-                    icon: const Icon(Icons.explore_outlined),
-                    label: const Text('先看看示例模式'),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextButton(onPressed: onLocal, child: const Text('先在本机使用')),
-                const SizedBox(height: 56),
-                const Text(
-                  'by @YuanzeSun',
-                  style: TextStyle(color: muted, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
 }

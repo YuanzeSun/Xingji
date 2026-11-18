@@ -338,6 +338,46 @@ class GitHubArchive {
     }
   }
 
+  /// Read the index settings independently of the version of the ticket files.
+  Future<ArchiveSnapshot> resetTarget({
+    Map<String, dynamic> fallbackSettings = const {},
+  }) async {
+    final repository = await verify(), current = await head();
+    final commit = await _request('/git/commits/$current');
+    final tree = await _request(
+      '/git/trees/${commit['tree']['sha']}?recursive=1',
+    );
+    if (tree['truncated'] == true) {
+      throw const FormatException('仓库目录不完整，无法安全重置');
+    }
+    final index = (tree['tree'] as List)
+        .where(
+          (row) => row['type'] == 'blob' && row['path'] == 'archive/index.json',
+        )
+        .firstOrNull;
+    var settings = sharedSettings(fallbackSettings);
+    if (index != null) {
+      final manifest = jsonDecode(await _blob(index['sha']));
+      if (manifest is! Map ||
+          (manifest['settings'] != null && manifest['settings'] is! Map)) {
+        throw const FormatException('无法读取要保留的个人资料和飞常准设置');
+      }
+      final saved = manifest['settings'] as Map? ?? {};
+      settings = sharedSettings({
+        for (final key in ['profile', 'flightMcpKey'])
+          if (saved.containsKey(key)) key: saved[key],
+      });
+    }
+    return ArchiveSnapshot(
+      records: [],
+      settings: settings,
+      head: current,
+      tree: commit['tree']['sha'],
+      repositoryId: repository['id'],
+      initialized: index != null,
+    );
+  }
+
   /// Replace the current tree atomically, preserving commit history and settings.
   Future<ArchiveSnapshot> reset(
     ArchiveSnapshot snapshot,

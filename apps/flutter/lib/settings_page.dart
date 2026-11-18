@@ -19,7 +19,6 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool exporting = false;
   final choices = <String, bool>{};
   ArchiveMerge? reviewed;
   @override
@@ -41,7 +40,7 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: archivePagePadding(context),
       children: [
         Text('数据与同步', style: Theme.of(context).textTheme.headlineLarge),
-        const SectionTitle('私人票库'),
+        const SectionTitle('GitHub 同步（可选）'),
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -68,7 +67,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          store.connection?.label ?? '尚未连接 GitHub',
+                          store.connection?.label ?? '同步到其他设备',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 4),
@@ -97,7 +96,13 @@ class _SettingsPageState extends State<SettingsPage> {
                         ? null
                         : () => connectDialog(context, store),
                     icon: const Icon(Icons.link),
-                    label: Text(store.connected ? '更新连接凭证' : '连接私人票库'),
+                    label: Text(
+                      store.connected
+                          ? '更新连接凭证'
+                          : store.connection == null
+                          ? '连接 GitHub'
+                          : '重新授权',
+                    ),
                   ),
                   if (store.connected)
                     OutlinedButton.icon(
@@ -303,24 +308,6 @@ class _SettingsPageState extends State<SettingsPage> {
               icon: const Icon(Icons.save_alt),
               label: const Text('导出备份'),
             ),
-            OutlinedButton.icon(
-              onPressed: exporting || store.records.isEmpty
-                  ? null
-                  : () => action(() async {
-                      setState(() => exporting = true);
-                      try {
-                        await saveFile(
-                          '行迹旅行手册.pdf',
-                          await travelBook(store.records, store.catalog),
-                          'application/pdf',
-                        );
-                      } finally {
-                        if (mounted) setState(() => exporting = false);
-                      }
-                    }),
-              icon: const Icon(Icons.menu_book_outlined),
-              label: Text(exporting ? '正在生成手册…' : '导出旅行手册'),
-            ),
           ],
         ),
         const SizedBox(height: 24),
@@ -329,24 +316,35 @@ class _SettingsPageState extends State<SettingsPage> {
           spacing: 12,
           runSpacing: 12,
           children: [
-            if (store.connected)
-              OutlinedButton.icon(
-                onPressed: store.busy
-                    ? null
-                    : () => action(() async {
-                        if (await confirmDeletion(
-                          context,
-                          title: '重置私人仓库？',
-                          description:
-                              '清空 ${store.connection!.label} 当前分支的票据、线路、时刻表、删除标记和其他文件。保留个人资料、飞常准设置及 Git 历史。',
-                          confirmLabel: '确认重置仓库',
-                        )) {
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(foregroundColor: ticketRed),
+              onPressed: store.busy
+                  ? null
+                  : () => action(() async {
+                      final target = store.connection;
+                      if (!store.connected || target == null) {
+                        await connectDialog(context, store, forReset: true);
+                      } else if (await confirmGitHubReset(
+                        context,
+                        target,
+                        clearLocal: true,
+                      )) {
+                        try {
                           await store.resetRepository();
+                          if (context.mounted) _showResetComplete(context);
+                        } on ArchiveApiException catch (error) {
+                          if (error.status != 401 && error.status != 403) {
+                            rethrow;
+                          }
+                          if (context.mounted) {
+                            await connectDialog(context, store, forReset: true);
+                          }
                         }
-                      }),
-                icon: const Icon(Icons.restart_alt),
-                label: Text(store.busy ? '正在处理…' : '重置仓库'),
-              ),
+                      }
+                    }),
+              icon: const Icon(Icons.restart_alt),
+              label: Text(store.busy ? '正在处理…' : '重置 GitHub 仓库'),
+            ),
             OutlinedButton(
               onPressed: store.busy
                   ? null
@@ -379,7 +377,30 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
-Future<void> connectDialog(BuildContext context, AppStore store) async {
+void _showResetComplete(BuildContext context) {
+  ScaffoldMessenger.of(context)
+      .showSnackBar(const SnackBar(content: Text('GitHub 仓库已重置')));
+}
+
+Future<bool> confirmGitHubReset(
+  BuildContext context,
+  GitHubConnection target, {
+  required bool clearLocal,
+}) => confirmDeletion(
+  context,
+  title: '重置 GitHub 仓库？',
+  description:
+      '清空 ${target.label} 的 ${target.branch} 分支中的票据及其他文件'
+      '${clearLocal ? '，同时清空当前设备中与该仓库绑定的票库' : ''}。'
+      '保留仓库中的个人资料、飞常准设置和 Git 历史。',
+  confirmLabel: '确认重置仓库',
+);
+
+Future<void> connectDialog(
+  BuildContext context,
+  AppStore store, {
+  bool forReset = false,
+}) async {
   final owner = TextEditingController(text: store.connection?.owner ?? ''),
       repo = TextEditingController(text: store.connection?.repository ?? ''),
       token = TextEditingController(),
@@ -393,7 +414,7 @@ Future<void> connectDialog(BuildContext context, AppStore store) async {
       builder: (context, update) => PopScope(
         canPop: !busy,
         child: AlertDialog(
-          title: const Text('连接私人票库'),
+          title: Text(forReset ? '授权重置 GitHub 仓库' : '连接 GitHub 私有仓库'),
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
             child: SingleChildScrollView(
@@ -401,25 +422,35 @@ Future<void> connectDialog(BuildContext context, AppStore store) async {
                 key: form,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (forReset && store.connection != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          '${store.connection!.label} · ${store.connection!.branch}',
+                        ),
+                      ),
                     for (final (controller, label, secret) in [
                       (owner, 'GitHub 用户名', false),
                       (repo, '私人仓库名称', false),
                       (branch, '分支', false),
                       (token, '访问令牌', true),
                     ])
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: TextFormField(
-                          controller: controller,
-                          obscureText: secret,
-                          enableSuggestions: !secret,
-                          autocorrect: !secret,
-                          decoration: InputDecoration(labelText: label),
-                          validator: (value) =>
-                              (value ?? '').trim().isEmpty ? '请填写$label' : null,
+                      if (!forReset || store.connection == null || secret)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: TextFormField(
+                            controller: controller,
+                            obscureText: secret,
+                            enableSuggestions: !secret,
+                            autocorrect: !secret,
+                            decoration: InputDecoration(labelText: label),
+                            validator: (value) => (value ?? '').trim().isEmpty
+                                ? '请填写$label'
+                                : null,
+                          ),
                         ),
-                      ),
                     if (error.isNotEmpty)
                       Text(
                         error,
@@ -443,20 +474,37 @@ Future<void> connectDialog(BuildContext context, AppStore store) async {
                   ? null
                   : () async {
                       if (!form.currentState!.validate()) return;
+                      final target = GitHubConnection(
+                        owner.text.trim(),
+                        repo.text.trim(),
+                        branch: branch.text.trim(),
+                      );
+                      if (forReset &&
+                          !await confirmGitHubReset(
+                            context,
+                            target,
+                            clearLocal: store.connection != null,
+                          )) {
+                        return;
+                      }
+                      if (!context.mounted) return;
                       update(() {
                         busy = true;
                         error = '';
                       });
                       try {
-                        await store.connect(
-                          GitHubConnection(
-                            owner.text.trim(),
-                            repo.text.trim(),
-                            branch: branch.text.trim(),
-                          ),
-                          token.text.trim(),
-                        );
-                        if (context.mounted) Navigator.pop(context);
+                        if (forReset) {
+                          await store.resetRepository(
+                            target: target,
+                            token: token.text.trim(),
+                          );
+                        } else {
+                          await store.connect(target, token.text.trim());
+                        }
+                        if (context.mounted) {
+                          if (forReset) _showResetComplete(context);
+                          Navigator.pop(context);
+                        }
                       } catch (failure) {
                         update(
                           () => error = failure.toString().replaceFirst(
@@ -468,7 +516,11 @@ Future<void> connectDialog(BuildContext context, AppStore store) async {
                         if (context.mounted) update(() => busy = false);
                       }
                     },
-              child: Text(busy ? '正在连接…' : '连接'),
+              child: Text(
+                forReset
+                    ? (busy ? '正在重置…' : '核对重置范围')
+                    : (busy ? '正在连接…' : '连接'),
+              ),
             ),
           ],
         ),

@@ -14,6 +14,9 @@ void main() {
     return AppStore.load();
   }
 
+  final addTicket = find.byWidgetPredicate(
+    (widget) => widget is Icon && widget.semanticLabel == '录入票据',
+  );
   Future<void> settle(WidgetTester tester) async {
     // SVG decoding uses a real worker; let its result reach the fake test clock.
     for (var i = 0; i < 6; i++) {
@@ -61,12 +64,15 @@ void main() {
         addTearDown(app.dispose);
         await tester.pumpWidget(XingjiApp(store: app));
         await settle(tester);
+        expect(find.text('我的票夹'), findsOneWidget);
+        expect(addTicket, findsOneWidget);
+        expect(find.byKey(const ValueKey('nav-同步')), findsOneWidget);
         expect(find.text('先看看示例模式'), findsOneWidget);
-        await tester.ensureVisible(find.text('先看看示例模式'));
-        await tester.tap(find.text('先看看示例模式'));
+        await tester.tap(find.byType(Switch));
         await settle(tester);
         expect(find.text('我的票夹'), findsOneWidget);
-        expect(find.text('录入票据'), findsNothing);
+        expect(addTicket, findsNothing);
+        expect(find.byKey(const ValueKey('nav-同步')), findsNothing);
         expect(app.privateRecords, isEmpty);
         if (size.height > 500) expect(find.byType(TicketFace), findsWidgets);
         for (final label in ['地图', '统计', '票夹']) {
@@ -86,7 +92,9 @@ void main() {
         }
         await tester.tap(find.byType(Switch));
         await settle(tester);
+        expect(find.text('我的票夹'), findsOneWidget);
         expect(find.text('先看看示例模式'), findsOneWidget);
+        expect(addTicket, findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
@@ -105,6 +113,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.text('选择'));
     await settle(tester);
+    expect(find.text('导出纪念册'), findsNothing);
 
     for (final compact in [false, true]) {
       if (compact) {
@@ -138,7 +147,58 @@ void main() {
       await tester.tap(checkbox);
       await tester.pumpAndSettle();
       expect(tester.widget<Checkbox>(checkbox).value, !compact);
+      tester
+          .widget<CustomScrollView>(find.byType(CustomScrollView).first)
+          .controller!
+          .jumpTo(0);
+      await tester.pumpAndSettle();
+      expect(find.text('导出纪念册'), compact ? findsNothing : findsOneWidget);
     }
+  });
+
+  testWidgets('sync is optional and reset is visible before authorization', (
+    tester,
+  ) async {
+    final app = (await tester.runAsync(store))!;
+    addTearDown(app.dispose);
+    await tester.pumpWidget(XingjiApp(store: app));
+    await settle(tester);
+    await tester.tap(find.byKey(const ValueKey('nav-同步')));
+    await settle(tester);
+    expect(find.text('GitHub 同步（可选）'), findsOneWidget);
+    expect(find.text('连接 GitHub'), findsOneWidget);
+    final reset = find.text('重置 GitHub 仓库');
+    await tester.scrollUntilVisible(reset, 200);
+    expect(find.text('导出旅行手册'), findsNothing);
+    await tester.tap(reset);
+    await tester.pumpAndSettle();
+    expect(find.text('授权重置 GitHub 仓库'), findsOneWidget);
+    for (final (label, value) in [
+      ('GitHub 用户名', 'user'),
+      ('私人仓库名称', 'private'),
+      ('访问令牌', 'test-token'),
+    ]) {
+      final field = find.widgetWithText(TextField, label);
+      await tester.ensureVisible(field);
+      await tester.enterText(field, value);
+    }
+    await tester.tap(find.widgetWithText(FilledButton, '核对重置范围'));
+    await tester.pumpAndSettle();
+    expect(find.text('重置 GitHub 仓库？'), findsOneWidget);
+    expect(find.textContaining('user/private 的 main 分支'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '继续'));
+    await tester.pumpAndSettle();
+    expect(find.text('最后确认'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '确认重置仓库'))
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.widgetWithText(TextButton, '取消').last);
+    await tester.pumpAndSettle();
+    expect(find.text('授权重置 GitHub 仓库'), findsOneWidget);
+    expect(app.connection, isNull);
   });
 
   testWidgets(

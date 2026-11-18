@@ -169,13 +169,12 @@ class _ArchivePageState extends State<ArchivePage> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            OutlinedButton.icon(
-              onPressed: selected.isEmpty || exporting
-                  ? null
-                  : () => _export('book'),
-              icon: const Icon(Icons.menu_book_outlined),
-              label: const Text('导出纪念册'),
-            ),
+            if (selected.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: exporting ? null : () => _export('book'),
+                icon: const Icon(Icons.menu_book_outlined),
+                label: const Text('导出纪念册'),
+              ),
             OutlinedButton.icon(
               onPressed: selected.isEmpty || exporting
                   ? null
@@ -388,6 +387,15 @@ class _ArchivePageState extends State<ArchivePage> {
                           query.isEmpty ? '点击下方 +，收藏自己的旅程。' : '试试城市名、车次或航班号。',
                           style: const TextStyle(color: muted),
                         ),
+                        if (!widget.store.demo && widget.store.records.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: TextButton.icon(
+                              onPressed: () => widget.store.setDemo(true),
+                              icon: const Icon(Icons.explore_outlined),
+                              label: const Text('先看看示例模式'),
+                            ),
+                          ),
                       ],
                     ),
                   ),

@@ -310,7 +310,12 @@ class _TicketDetailState extends State<TicketDetail> {
                       onPressed: store.busy
                           ? null
                           : () async {
-                              if (await confirmDeletion(context)) {
+                              if (await confirmDeletion(
+                                context,
+                                description: store.connection == null
+                                    ? '从本机票夹移除这张票据。'
+                                    : '删除记录会同步到已连接的私人票库。',
+                              )) {
                                 try {
                                   await store.delete(record);
                                   if (context.mounted) Navigator.pop(context);
@@ -485,7 +490,7 @@ class _TicketDetailState extends State<TicketDetail> {
 Future<bool> confirmDeletion(
   BuildContext context, {
   String title = '删除这张票据？',
-  String description = '删除后会同步到私人票库。',
+  String description = '从票夹移除选中的票据。',
   String confirmLabel = '确认删除',
 }) async {
   final first = await showDialog<bool>(
@@ -506,8 +511,7 @@ Future<bool> confirmDeletion(
     ),
   );
   if (first != true || !context.mounted) return false;
-  final answer = TextEditingController();
-  var correct = false;
+  var answer = '', correct = false;
   final seed = DateTime.now().millisecond, a = seed % 8 + 2, b = seed % 6 + 2;
   final confirmed = await showDialog<bool>(
     context: context,
@@ -515,15 +519,16 @@ Future<bool> confirmDeletion(
       builder: (context, update) => AlertDialog(
         title: const Text('最后确认'),
         content: TextField(
-          controller: answer,
           autofocus: true,
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
             labelText: '$a × $b = ?',
-            errorText: answer.text.isNotEmpty && !correct ? '计算结果不正确' : null,
+            errorText: answer.isNotEmpty && !correct ? '计算结果不正确' : null,
           ),
-          onChanged: (value) =>
-              update(() => correct = int.tryParse(value) == a * b),
+          onChanged: (value) => update(() {
+            answer = value;
+            correct = int.tryParse(value) == a * b;
+          }),
         ),
         actions: [
           TextButton(
@@ -541,6 +546,5 @@ Future<bool> confirmDeletion(
       ),
     ),
   );
-  answer.dispose();
   return confirmed == true;
 }
