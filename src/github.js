@@ -1,6 +1,5 @@
 import { archive, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings } from './shared-settings.js';
-import { upgradeCodeRecords, hasLegacyCodes } from './code-upgrade.js';
 
 export class GitHubError extends Error { constructor(message, status, retryAt = 0) { super(message); this.status = status; this.retryAt = retryAt; } }
 export class ArchiveResetError extends Error {
@@ -66,17 +65,13 @@ export class GitHubStore {
     if (Object.keys(manifest.files).some(path => !empty.paths.includes(path))) throw new ArchiveResetError(empty);
     if (JSON.stringify(Object.keys(manifest.files).sort()) !== JSON.stringify(empty.paths.sort())) throw new Error('云端票库文件不完整，已停止同步');
     if (manifest.generation !== undefined && (typeof manifest.generation !== 'string' || !/^[A-Za-z0-9-]{0,100}$/.test(manifest.generation))) throw new Error('云端票库重置标识无效');
-    const records = [], contents = {}, rewritePaths = [];
+    const records = [], contents = {};
     // Bound API concurrency to avoid burst throttling on decades of history.
     for (let i = 0; i < paths.length; i += 4) {
       const groups = await Promise.all(paths.slice(i, i + 4).map(async item => {
         const content = await textOf(item);
         if (await digest(content) !== manifest.files[item.path]) throw new Error('云端票库文件校验失败，保留本机缓存');
-        const parsed = JSON.parse(content);
-        if (Array.isArray(parsed.records) && hasLegacyCodes(parsed.records)) {
-          parsed.records = await upgradeCodeRecords(parsed.records); rewritePaths.push(item.path);
-        }
-        const rows = readArchive(parsed);
+        const rows = readArchive(JSON.parse(content));
         if (rows.some(record => yearOf(record) !== item.path.slice(8, -5))) throw new Error('云端票据年份与文件不匹配');
         contents[item.path] = content;
         return rows;
@@ -85,7 +80,7 @@ export class GitHubStore {
     }
     if (new Set(records.map(r => r.id)).size !== records.length) throw new Error('远端票库包含重复ID，请先导出检查');
     if (records.length !== manifest.recordCount) throw new Error('云端票据数量与索引不匹配');
-    return { records, settings, head, tree: commit.tree.sha, paths: paths.map(p => p.path), contents, initialized: true, rewritePaths, generation: manifest.generation || '' };
+    return { records, settings, head, tree: commit.tree.sha, paths: paths.map(p => p.path), contents, initialized: true, generation: manifest.generation || '' };
   }
   async resetTarget(fallbackSettings = {}) {
     await this.verify();
@@ -117,7 +112,7 @@ export class GitHubStore {
     const previous = partition(snapshot.records || []);
     const contents = {}, files = {}, tree = [];
     for (const year of Object.keys(groups).sort()) {
-      const path = `archive/${year}.json`, unchanged = !snapshot.rewritePaths?.includes(path) && JSON.stringify(groups[year]) === JSON.stringify(previous[year]);
+      const path = `archive/${year}.json`, unchanged = JSON.stringify(groups[year]) === JSON.stringify(previous[year]);
       const content = unchanged && snapshot.contents?.[path] ? snapshot.contents[path] : JSON.stringify(archive(groups[year]), null, 2);
       contents[path] = content; files[path] = await digest(content);
       if (content !== snapshot.contents?.[path]) tree.push({ path, mode: '100644', type: 'blob', content });
@@ -151,6 +146,6 @@ export async function synchronize(store, base, local, resolutions = {}, { baseHe
   if (unresolved.length) return { ...merge, settings: settingMerge.settings, conflicts: unresolved, snapshot };
   merge.records = deduplicateRecords(merge.records);
   let head = snapshot.head;
-  if (snapshot.initialized === false || snapshot.rewritePaths?.length || !sameRecords(merge.records, snapshot.records) || !sameSettings(settingMerge.settings, snapshot.settings)) head = await store.write(merge.records, snapshot, settingMerge.settings) || head;
+  if (snapshot.initialized === false || !sameRecords(merge.records, snapshot.records) || !sameSettings(settingMerge.settings, snapshot.settings)) head = await store.write(merge.records, snapshot, settingMerge.settings) || head;
   return { records: merge.records, settings: settingMerge.settings, conflicts: [], head, generation: snapshot.generation || '' };
 }

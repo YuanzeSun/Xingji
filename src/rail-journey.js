@@ -11,7 +11,12 @@ const timestamp = value => typeof value === 'string' && /^\d{4}-\d\d-\d\dT/.test
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const texts = (value, keys) => Object.fromEntries(keys.map(key => [key, railText(value[key])]));
 function picture(value) {
-  try { const url = new URL(value); return url.protocol === 'https:' && url.hostname === 'res.railgo.zenglingkun.cn' && !url.username && !url.password ? url.href.slice(0, 1500) : ''; } catch { return ''; }
+  if (typeof value !== 'string') return '';
+  // The stored URL is also checked by the native renderer, where URL is unavailable.
+  const match = value.trim().match(/^https:\/\/res\.railgo\.zenglingkun\.cn(?::443)?([/?#][^\x00-\x20\x7f\\]*)?$/i);
+  if (!match) return '';
+  const path = match[1] || '/';
+  return ('https://res.railgo.zenglingkun.cn' + (path.startsWith('/') ? '' : '/') + path).slice(0, 1500);
 }
 
 // Persist a bounded, explicit snapshot rather than arbitrary provider responses.
