@@ -5,21 +5,40 @@ import { createRecord } from '../src/model.js';
 import { sharedSettings } from '../src/shared-settings.js';
 import { endpoint, token, memoryD1 } from './helpers/d1.js';
 
-test('D1 worker restricts origins and access, and supports conditional reads', async () => {
+test('D1 worker accepts any origin but requires the bearer token for reads and writes', async () => {
   const db = memoryD1();
-  const api = endpoint + '/v1/archive', headers = { Authorization: 'Bearer ' + token };
-  assert.equal((await db.fetch(api)).status, 401);
-  assert.equal((await db.fetch(api, { headers: { ...headers, Origin: 'https://other.example' } })).status, 403);
-  const cors = await db.fetch(api, { method: 'OPTIONS', headers: { Origin: 'https://yuanzesun.github.io' } });
+  const api = endpoint + '/v1/archive', origin = 'https://other.example';
+  const headers = { Authorization: 'Bearer ' + token, Origin: origin };
+  assert.equal((await db.fetch(api, { headers: { Origin: origin } })).status, 401);
+  const cors = await db.fetch(api, { method: 'OPTIONS', headers: {
+    Origin: origin, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'authorization,content-type'
+  } });
   assert.equal(cors.status, 204);
-  assert.equal(cors.headers.get('Access-Control-Allow-Origin'), 'https://yuanzesun.github.io');
-  assert.match(cors.headers.get('Access-Control-Allow-Headers'), /If-None-Match/);
+  assert.equal(cors.headers.get('Access-Control-Allow-Origin'), '*');
+  assert.match(cors.headers.get('Access-Control-Allow-Methods'), /POST/);
+  assert.match(cors.headers.get('Access-Control-Allow-Headers'), /Authorization.*Content-Type.*If-None-Match/);
   const first = await db.fetch(api, { headers });
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get('Access-Control-Allow-Origin'), '*');
   const archive = await first.json();
   assert.equal(first.headers.get('Cache-Control'), 'no-store');
   assert.deepEqual(archive.records, []);
-  headers['If-None-Match'] = `"${archive.id}:${archive.head}"`;
-  assert.equal((await db.fetch(api, { headers })).status, 304);
+  const unchanged = await db.fetch(api, { headers: { ...headers, 'If-None-Match': `"${archive.id}:${archive.head}"` } });
+  assert.equal(unchanged.status, 304);
+  assert.equal(unchanged.headers.get('Access-Control-Allow-Origin'), '*');
+
+  const post = { method: 'POST', body: JSON.stringify({
+    id: archive.id, head: archive.head, records: [createRecord({ id: 'cross-origin-ticket' })], removed: []
+  }) };
+  const denied = await db.fetch(api, { ...post, headers: { ...headers, Authorization: 'Bearer invalid' } });
+  assert.equal(denied.status, 401);
+  assert.equal(denied.headers.get('Access-Control-Allow-Origin'), '*');
+  assert.equal((await db.fetch(api, { ...post, headers: { ...headers, 'Content-Type': 'application/json' } })).status, 200);
+  const second = await db.fetch(api, { headers: { ...headers, Origin: 'https://another.example' } });
+  assert.deepEqual((await second.json()).records.map(record => record.id), ['cross-origin-ticket']);
+});
+
+test('D1 connection requires a Worker root URL', () => {
   assert.throws(() => workerURL('https://user:secret@example.com'));
   assert.throws(() => workerURL('http://example.com'));
   assert.throws(() => workerURL('https://example.com/api'));

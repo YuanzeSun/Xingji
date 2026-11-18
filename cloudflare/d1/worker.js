@@ -60,12 +60,8 @@ async function writeArchive(request, db, respond) {
 
 export default {
   async fetch(request, env) {
-    const origin = request.headers.get('Origin');
-    const allowed = (env.ALLOWED_ORIGINS || '').split(',').map(value => value.trim());
-    const headers = { 'Cache-Control': 'no-store', Vary: 'Origin', 'Content-Type': 'application/json; charset=utf-8' };
+    const headers = { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store', 'Content-Type': 'application/json; charset=utf-8' };
     const respond = (body, status = 200) => new Response(body === null ? null : JSON.stringify(body), { status, headers });
-    if (origin && !allowed.includes(origin)) return respond({ error: '站点未获授权访问 D1' }, 403);
-    if (origin) headers['Access-Control-Allow-Origin'] = origin;
     if (new URL(request.url).pathname !== '/v1/archive') return respond({ error: '接口不存在' }, 404);
     if (request.method === 'OPTIONS') {
       headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';

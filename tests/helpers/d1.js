@@ -38,7 +38,7 @@ export function memoryD1(records = [], settings = {}) {
     async fetch(url, options) {
       calls.push({ url, method: options?.method || 'GET', body: options?.body && JSON.parse(options.body) });
       if (!this.available) throw new TypeError('Network error');
-      return worker.fetch(new Request(url, options), { ARCHIVE, ARCHIVE_TOKEN: token, ALLOWED_ORIGINS: 'http://localhost,https://yuanzesun.github.io' });
+      return worker.fetch(new Request(url, options), { ARCHIVE, ARCHIVE_TOKEN: token });
     }
   };
 }

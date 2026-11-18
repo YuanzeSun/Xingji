@@ -5,10 +5,12 @@
 ## 部署
 
 1. 安装 Node.js，进入项目的 `cloudflare/d1` 目录，运行 `npx wrangler login` 登录 Cloudflare。
-2. 运行 `npx wrangler d1 create xingji-archive --update-config=false`，将数据库 ID 写入 `wrangler.jsonc` 的 `database_id`。为行迹单独创建一个数据库。若自行托管网页，将网页的源地址（例如 `https://archive.example.com`，不含路径）填入 `ALLOWED_ORIGINS`。多个地址用逗号分隔。
+2. 运行 `npx wrangler d1 create xingji-archive --update-config=false`，将数据库 ID 写入 `wrangler.jsonc` 的 `database_id`。为行迹单独创建一个数据库。
 3. 运行 `npx wrangler d1 migrations apply xingji-archive --remote`，然后运行 `npx wrangler deploy`。
 4. 运行 `npx wrangler secret put ARCHIVE_TOKEN`，粘贴随机生成的访问凭证。可以用 `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` 生成。下次更新 Worker 时继续使用同一个 D1 数据库。
 5. 在网页「Cloudflare D1」卡片中填写部署结果里的 Worker 根地址和 `ARCHIVE_TOKEN`。Cloudflare 账户 API Token 用于部署授权，网页只需要 Worker 的访问凭证。
+
+可从任意域名访问同一个 Worker。读取和写入票库都需要在请求的 `Authorization` 标头中传入 `Bearer <ARCHIVE_TOKEN>`。
 
 ## 连接和备份
 
