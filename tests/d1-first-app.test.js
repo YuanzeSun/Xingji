@@ -18,9 +18,15 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
     await import('../src/app.js');
     await until(() => document.querySelector('#d1-form'));
     assert.equal(document.querySelectorAll('details.setup-help').length, 0);
+    assert.equal(document.querySelector('#d1-form [name="remember"]'), null);
+    const db = await import('../src/db.js');
+    connect(window, 'd1', 'invalid-worker-credential');
+    await until(() => document.querySelector('#d1-form .form-error')?.textContent.includes('凭证无效'));
+    assert.equal(await db.get('d1Token', ''), '');
     connect(window, 'd1');
     await until(() => document.querySelector('[data-d1-cloud-label]')?.textContent === '已同步');
     assert.equal(github.calls.length, 0);
+    assert.equal(await db.get('d1Token'), token);
     assert.equal(d1.calls.filter(call => call.method === 'POST').length, 0);
 
     connect(window, 'github');
@@ -48,6 +54,12 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
       { ...snapshot.settings, flightMcpKey: 'new-d1-key' });
     const d1Calls = d1.calls.length;
     window.dispatchEvent(new window.Event('online'));
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    document.dispatchEvent(new window.Event('visibilitychange'));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(button()?.disabled, false);
+    assert.equal(d1.calls.length, d1Calls, 'idle network recovery and foregrounding must not read D1');
+    document.querySelector('[data-action="sync"]').click();
     await until(() => d1.calls.length > d1Calls && button()?.disabled === false);
     assert.equal(github.calls.length, calls);
     assert.equal(github.head, bindingHead);

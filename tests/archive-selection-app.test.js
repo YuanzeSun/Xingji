@@ -47,7 +47,9 @@ test('archive selection supports direct actions and confirmed deletion, while ma
     await wait(()=>server.records().find(row=>row.id==='a')?.deleted);await wait(()=>document.querySelector('[data-archive-select="a"]')===null);
     await wait(()=>document.querySelector('#toast-root').textContent.includes('所选票据已删除'));
     assert.equal(server.records().filter(row=>!row.deleted).length,2);assert.match(document.querySelector('.archive-selection-count').textContent,/0/);
-    click('[data-archive-select="b"]');window.dispatchEvent(new window.Event('offline'));
+    click('[data-archive-select="b"]');
+    Object.defineProperty(navigator,'onLine',{value:false,configurable:true});
+    window.dispatchEvent(new window.Event('offline'));
     assert.equal(document.querySelector('[data-action="delete-selected"]').disabled,true);
   }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();globalThis.fetch=cloudFetch;}
 });

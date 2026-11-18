@@ -29,17 +29,16 @@ export async function until(check) {
   assert.fail('Page operation did not complete: ' + [...document.querySelectorAll('.form-error,.toast')].map(el => el.textContent).filter(Boolean).join(' · '));
 }
 
-export function connect(window, provider) {
+export function connect(window, provider, secret = provider === 'd1' ? token : 'github-credential') {
   const form = document.querySelector('#' + provider + '-form');
   if (provider === 'd1') {
     form.elements.url.value = endpoint;
-    form.elements.token.value = token;
+    form.elements.token.value = secret;
   } else {
     form.elements.owner.value = 'user';
     form.elements.repo.value = 'data';
-    form.elements.token.value = 'github-credential';
+    form.elements.token.value = secret;
   }
-  form.elements.remember.checked = true;
   form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
 }
 
@@ -50,5 +49,8 @@ export async function confirm(title) {
 }
 
 export function useServers(github, d1) {
-  globalThis.fetch = (url, options) => (new URL(url).hostname === 'api.github.com' ? github.fetch(url, options) : d1.fetch(url, options));
+  globalThis.fetch = function (url, options) {
+    assert.equal(this, globalThis, 'browser fetch must receive Window');
+    return new URL(url).hostname === 'api.github.com' ? github.fetch(url, options) : d1.fetch(url, options);
+  };
 }

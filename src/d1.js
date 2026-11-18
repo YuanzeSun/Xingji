@@ -7,7 +7,7 @@ export class D1Store {
   constructor(config, token, fetcher = fetch, { signal, cached } = {}) {
     this.config = config;
     this.token = token;
-    this.fetcher = fetcher;
+    this.fetcher = fetcher.bind(globalThis);
     this.signal = signal;
     this.cached = cached;
   }
