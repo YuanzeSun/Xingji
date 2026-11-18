@@ -1,0 +1,16 @@
+{
+  "name": "xingji-archive",
+  "main": "worker.js",
+  "compatibility_date": "2026-05-01",
+  "vars": {
+    "ALLOWED_ORIGINS": "https://yuanzesun.github.io"
+  },
+  "d1_databases": [
+    {
+      "binding": "ARCHIVE",
+      "database_name": "xingji-archive",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

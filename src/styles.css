@@ -305,6 +305,7 @@ dialog.scanner-modal::backdrop{background:#20242a80;backdrop-filter:blur(5px)}
 .cloud-setup-brand{display:flex;align-items:center;gap:9px;font-size:25px;color:var(--green);margin-bottom:30px}
 .cloud-setup-brand .icon{width:27px;height:27px}.cloud-setup>.panel{padding:32px;background:#fffefa}
 .cloud-setup h1{font-size:28px;margin-bottom:14px}.cloud-setup-description{font-size:16px;line-height:1.8;color:#6c7c71;margin-bottom:27px}
+.cloud-setup>.panel+.panel{margin-top:20px}.setup-help p:first-child{margin-top:0}.github-backup{margin-top:14px}
 .connection-notice{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 18px;border:1px solid #dce2db;border-radius:9px;background:#fffefa;margin-bottom:25px}
 .connection-notice>div{display:flex;flex-direction:column;gap:6px;min-width:0}.connection-notice strong{font-size:15px;font-weight:550;color:#495b50}
 .connection-notice span{font-size:14px;color:#7a837a;overflow-wrap:anywhere}.connection-notice>.button{flex-shrink:0}
