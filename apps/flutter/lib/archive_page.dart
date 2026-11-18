@@ -1,8 +1,13 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:archive/archive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
 import 'design.dart';
+import 'export_service.dart';
 import 'ticket_face.dart';
 import 'ticket_detail.dart';
 
@@ -17,42 +22,263 @@ class _ArchivePageState extends State<ArchivePage> {
   String filter = 'all', query = '';
   bool grid = true, small = false, recent = true;
   final scroll = ScrollController();
+  final selected = <String>{};
+  bool selecting = false, exporting = false;
+  String progress = '';
+  bool? lastDemo;
+
+  void _toggle(TicketRecord record) => setState(() {
+    if (!selected.add(record.id)) selected.remove(record.id);
+  });
+
+  void _open(TicketRecord record) {
+    if (selecting) {
+      _toggle(record);
+    } else {
+      openTicket(context, widget.store, record);
+    }
+  }
+
+  Widget _checkbox(TicketRecord record) => Material(
+    color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
+    borderRadius: BorderRadius.circular(10),
+    child: Checkbox(
+      semanticLabel: '选择 ${record.text('service')}',
+      value: selected.contains(record.id),
+      onChanged: exporting ? null : (_) => _toggle(record),
+    ),
+  );
+
+  Future<void> _export(String kind) async {
+    final chosen = records.where((row) => selected.contains(row.id)).toList();
+    if (chosen.isEmpty || exporting) return;
+    setState(() {
+      exporting = true;
+      progress = '正在准备导出…';
+    });
+    try {
+      switch (kind) {
+        case 'book':
+          await saveFile(
+            '行迹旅行手册.pdf',
+            await travelBook(chosen, widget.store.catalog),
+            'application/pdf',
+          );
+        case 'csv':
+          await saveFile(
+            '行迹票据.csv',
+            utf8.encode(ticketCsv(chosen)),
+            'text/csv',
+          );
+        case 'images':
+          final images = Archive();
+          for (var i = 0; i < chosen.length; i++) {
+            if (mounted) {
+              setState(() => progress = '正在导出 ${i + 1} / ${chosen.length}');
+            }
+            final record = chosen[i];
+            final name =
+                '${record.departure?.calendarText ?? '日期未知'}-${record.text('service')}-${i + 1}'
+                    .replaceAll(RegExp(r'[^\w\u3400-\u9fff.-]'), '_');
+            final png = await ticketPng(record, widget.store.catalog);
+            if (chosen.length == 1) {
+              await saveFile('$name.png', png, 'image/png');
+            } else {
+              images.addFile(ArchiveFile.bytes('$name.png', png));
+            }
+          }
+          if (chosen.length > 1) {
+            await saveFile(
+              '行迹票据图片.zip',
+              Uint8List.fromList(ZipEncoder().encode(images, level: 0)),
+              'application/zip',
+            );
+          }
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          exporting = false;
+          progress = '';
+        });
+      }
+    }
+  }
+
+  Future<void> _delete() async {
+    final ids = records
+        .where((row) => selected.contains(row.id))
+        .map((row) => row.id)
+        .toSet();
+    if (ids.isEmpty ||
+        !await confirmDeletion(context, title: '删除选中的 ${ids.length} 张票据？')) {
+      return;
+    }
+    try {
+      await widget.store.deleteMany(ids);
+      if (mounted) {
+        setState(() {
+          selected.clear();
+          selecting = false;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
+  }
+
+  Widget _selectionBar(List<TicketRecord> rows) => Padding(
+    padding: const EdgeInsets.only(bottom: 20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Checkbox(
+              value:
+                  rows.isNotEmpty && rows.every((r) => selected.contains(r.id)),
+              onChanged: exporting
+                  ? null
+                  : (value) => setState(() {
+                      selected.clear();
+                      if (value == true) selected.addAll(rows.map((r) => r.id));
+                    }),
+            ),
+            Text('全选 · 已选 ${selected.length}'),
+            TextButton(
+              onPressed: exporting
+                  ? null
+                  : () => setState(() {
+                      selecting = false;
+                      selected.clear();
+                    }),
+              child: const Text('完成'),
+            ),
+          ],
+        ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: selected.isEmpty || exporting
+                  ? null
+                  : () => _export('book'),
+              icon: const Icon(Icons.menu_book_outlined),
+              label: const Text('导出纪念册'),
+            ),
+            OutlinedButton.icon(
+              onPressed: selected.isEmpty || exporting
+                  ? null
+                  : () => _export('images'),
+              icon: const Icon(Icons.image_outlined),
+              label: const Text('逐个导出'),
+            ),
+            OutlinedButton.icon(
+              onPressed: selected.isEmpty || exporting
+                  ? null
+                  : () => _export('csv'),
+              icon: const Icon(Icons.table_chart_outlined),
+              label: const Text('导出 CSV'),
+            ),
+            if (!widget.store.demo)
+              TextButton.icon(
+                onPressed: selected.isEmpty || exporting || widget.store.busy
+                    ? null
+                    : _delete,
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('删除'),
+              ),
+          ],
+        ),
+        if (exporting) ...[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+          Text(progress),
+        ],
+      ],
+    ),
+  );
   @override
   void dispose() {
     scroll.dispose();
     super.dispose();
   }
 
-  List<TicketRecord> get records =>
-      widget.store.records
-          .where(
-            (record) =>
-                (filter == 'all' || (filter == 'flight') == record.isFlight) &&
-                placeKey(
-                  [
-                    record.text('origin'),
-                    record.text('destination'),
-                    record.text('originCity'),
-                    record.text('destinationCity'),
-                    record.text('service'),
-                    record.text('passenger'),
-                    record.departure?.calendarText ?? '',
-                  ].join(' '),
-                ).contains(placeKey(query)),
-          )
-          .toList()
-        ..sort(
-          (a, b) =>
-              (recent ? -1 : 1) *
-              (a.departure?.calendarText ?? '').compareTo(
-                b.departure?.calendarText ?? '',
-              ),
-        );
+  List<TicketRecord> get records {
+    final terms = query
+        .split(RegExp(r'\s+'))
+        .map(placeKey)
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final rows = widget.store.records.where((record) {
+      if (filter != 'all' && (filter == 'flight') != record.isFlight) {
+        return false;
+      }
+      final text = placeKey(
+        [
+          ...[
+            'origin',
+            'destination',
+            'originCity',
+            'destinationCity',
+            'service',
+            'passenger',
+            'identity',
+            'seatClass',
+            'airline',
+            'ticketNumber',
+            'railModel',
+            'railTrainsets',
+          ].map(record.text),
+          record.departure?.calendarText ?? '',
+          for (final side in ['origin', 'destination'])
+            ...?widget.store.catalog.endpoint(record, side)?.aliases,
+        ].join(' '),
+      );
+      return terms.every(text.contains);
+    }).toList();
+    rows.sort((a, b) {
+      if (a.departure?.complete != true || b.departure?.complete != true) {
+        if ((a.departure?.complete == true) == (b.departure?.complete == true)) {
+          return a.id.compareTo(b.id);
+        }
+        return a.departure?.complete != true ? 1 : -1;
+      }
+      final order = '${a.departure!.calendarText} ${a.text('departureTime')}'
+          .compareTo('${b.departure!.calendarText} ${b.text('departureTime')}');
+      return order == 0 ? a.id.compareTo(b.id) : (recent ? -order : order);
+    });
+    return rows;
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (lastDemo != widget.store.demo) {
+      selected.clear();
+      selecting = false;
+      lastDemo = widget.store.demo;
+    }
     final rows = records, wide = MediaQuery.sizeOf(context).width >= 900;
     final gutter = wide ? 48.0 : 24.0;
-    final feature = grid && query.isEmpty && filter == 'all' && rows.isNotEmpty;
+    final feature =
+        !selecting &&
+        recent &&
+        grid &&
+        query.isEmpty &&
+        filter == 'all' &&
+        rows.isNotEmpty;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1240),
@@ -108,17 +334,26 @@ class _ArchivePageState extends State<ArchivePage> {
                         if (query.isNotEmpty)
                           IconButton(
                             tooltip: '清空搜索',
-                            onPressed: () => setState(() => query = ''),
+                            onPressed: () => setState(() {
+                              query = '';
+                              selected.clear();
+                            }),
                             icon: const Icon(Icons.close),
                           ),
+                        if (!selecting)
+                          TextButton(
+                            onPressed: () => setState(() => selecting = true),
+                            child: const Text('选择'),
+                          ),
                         TextButton.icon(
-                          onPressed: _options,
+                          onPressed: exporting ? null : _options,
                           icon: const Icon(Icons.tune_outlined, size: 18),
                           label: const Text('整理'),
                         ),
                       ],
                     ),
                     const SizedBox(height: 20),
+                    if (selecting) _selectionBar(rows),
                   ],
                 ),
               ),
@@ -204,8 +439,7 @@ class _ArchivePageState extends State<ArchivePage> {
                             Material(
                               color: Colors.transparent,
                               child: InkWell(
-                                onTap: () =>
-                                    openTicket(context, widget.store, record),
+                                onTap: () => _open(record),
                                 borderRadius: BorderRadius.circular(16),
                                 child: Padding(
                                   padding: EdgeInsets.symmetric(
@@ -213,6 +447,10 @@ class _ArchivePageState extends State<ArchivePage> {
                                   ),
                                   child: Row(
                                     children: [
+                                      if (selecting) ...[
+                                        _checkbox(record),
+                                        const SizedBox(width: 12),
+                                      ],
                                       if (!small) ...[
                                         SizedBox(
                                           width: 110,
@@ -404,7 +642,7 @@ class _ArchivePageState extends State<ArchivePage> {
   }
 
   Widget _tile(TicketRecord record) => InkWell(
-    onTap: () => openTicket(context, widget.store, record),
+    onTap: () => _open(record),
     borderRadius: BorderRadius.circular(16),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -412,20 +650,26 @@ class _ArchivePageState extends State<ArchivePage> {
         Expanded(
           child: Align(
             alignment: Alignment.center,
-            child: Hero(
-              tag: record.id,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(
-                      color: ink.withValues(alpha: .07),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
+            child: Stack(
+              children: [
+                Hero(
+                  tag: record.id,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      boxShadow: [
+                        BoxShadow(
+                          color: ink.withValues(alpha: .07),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
                     ),
-                  ],
+                    child: TicketFace(record, widget.store.catalog),
+                  ),
                 ),
-                child: TicketFace(record, widget.store.catalog),
-              ),
+                if (selecting)
+                  Positioned(top: 6, left: 6, child: _checkbox(record)),
+              ],
             ),
           ),
         ),
@@ -490,7 +734,12 @@ class _ArchivePageState extends State<ArchivePage> {
       ),
     );
     controller.dispose();
-    if (result != null) setState(() => query = result);
+    if (result != null && mounted) {
+      setState(() {
+        query = result;
+        selected.clear();
+      });
+    }
   }
 
   Future<void> _options() async {
@@ -520,7 +769,10 @@ class _ArchivePageState extends State<ArchivePage> {
                         label: Text(label),
                         selected: filter == id,
                         onSelected: (_) {
-                          setState(() => filter = id);
+                          setState(() {
+                            filter = id;
+                            selected.clear();
+                          });
                           update(() {});
                         },
                       ),

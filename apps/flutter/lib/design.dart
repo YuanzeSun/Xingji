@@ -39,6 +39,7 @@ ThemeData archiveTheme() {
       bodySmall: TextStyle(fontSize: 13, height: 1.4, color: muted),
     ),
     inputDecorationTheme: InputDecorationTheme(
+      floatingLabelBehavior: FloatingLabelBehavior.always,
       filled: true,
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),

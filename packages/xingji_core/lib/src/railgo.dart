@@ -22,12 +22,15 @@ class RailGoClient {
     final response = await client
         .get(Uri.https(host, path, query))
         .timeout(const Duration(seconds: 18));
-    if (response.statusCode == 429)
+    if (response.statusCode == 429) {
       throw const FormatException('RailGo 请求较频繁，请稍后再试');
-    if (response.statusCode != 200)
+    }
+    if (response.statusCode != 200) {
       throw const FormatException('暂未取得列车资料，可手动填写');
-    if (response.bodyBytes.length > 5000000)
+    }
+    if (response.bodyBytes.length > 5000000) {
       throw const FormatException('列车资料过大，未填入');
+    }
     return jsonDecode(utf8.decode(response.bodyBytes));
   }
 
@@ -43,8 +46,9 @@ class RailGoClient {
         !RegExp(r'^[A-Z]?\d{1,5}$').hasMatch(service) ||
         origin == null ||
         destination == null ||
-        boarding?.complete != true)
+        boarding?.complete != true) {
       throw const FormatException('请先填写车次、完整日期和起终站');
+    }
     var start = startDate ?? boarding!;
     Future<Map<String, dynamic>> main() async {
       final payload = await _get(
@@ -52,14 +56,16 @@ class RailGoClient {
         '/api/v2/getTrainMain',
         {'trainNum': service, 'date': start.calendarText.replaceAll('-', '')},
       );
-      if (payload['success'] != true || payload['data'] is! Map)
+      if (payload['success'] != true || payload['data'] is! Map) {
         throw const FormatException('未查到该日期的列车资料');
+      }
       final data = Map<String, dynamic>.from(payload['data']);
       if (!(data['numberFull'] as List? ?? []).contains(service) ||
           !(data['rundays'] as List? ?? []).contains(
             start.calendarText.replaceAll('-', ''),
-          ))
+          )) {
         throw const FormatException('返回车次或运行日期不匹配');
+      }
       return data;
     }
 
@@ -70,14 +76,21 @@ class RailGoClient {
         .replaceFirst(RegExp(r'站$'), '');
     List<Map<String, dynamic>> timetable() {
       final rows = data['timetable'];
-      if (rows is! List || rows.length < 2 || rows.length > 300)
+      if (rows is! List || rows.length < 2 || rows.length > 300) {
         throw const FormatException('列车时刻表无效');
+      }
       return rows.map((raw) {
         final item = Map<String, dynamic>.from(raw), day = item['day'];
-        if (day is! int || day < 0 || day > 7)
+        if (day is! int || day < 0 || day > 7) {
           throw const FormatException('列车跨日资料无效');
-        final arrival = (item['arrive'] ?? '').toString(),
-            departure = (item['depart'] ?? '').toString();
+        }
+        String clock(dynamic raw) =>
+            raw is String &&
+                RegExp(r'^(?:[01]\d|2[0-3]):[0-5]\d$').hasMatch(raw)
+            ? raw
+            : '';
+        final arrival = clock(item['arrive']),
+            departure = clock(item['depart']);
         Object shifted(int days) =>
             JourneyDate.fromDateTime(start.date!.add(Duration(days: days)))
                 .toJson();
@@ -120,16 +133,18 @@ class RailGoClient {
     if (from() < 0 ||
         to() <= from() ||
         JourneyDate.fromJson(stops[from()]['departureDate'])?.calendarText !=
-            boarding.calendarText)
+            boarding.calendarText) {
       throw const FormatException('本站发车日期不匹配，请核对列车始发日');
+    }
     var previous = '';
     for (final stop in stops)
       for (final side in ['arrival', 'departure']) {
         final date = JourneyDate.fromJson(stop['${side}Date']);
         if (date == null) continue;
         final time = '${date.calendarText}T${stop['${side}Time']}';
-        if (time.compareTo(previous) < 0)
+        if (time.compareTo(previous) < 0) {
           throw const FormatException('时刻表顺序异常，未填入');
+        }
         previous = time;
       }
     const bureaus = {
@@ -276,8 +291,9 @@ class RailGoClient {
           .toSet();
       if (ids.length != 1) return;
       final codes = ids.single.split('/');
-      if (codes.length > 1 && matching.any((row) => row['coupling'] != true))
+      if (codes.length > 1 && matching.any((row) => row['coupling'] != true)) {
         return;
+      }
       final stocks = <Map<String, dynamic>>[];
       for (final id in codes) {
         if (!RegExp(r'^CR[A-Z\d-]{3,35}$').hasMatch(id)) continue;
@@ -308,12 +324,144 @@ class RailGoClient {
         });
       }
       values['railTrainsets'] = stocks.map((row) => row['id']).join(' / ');
+      if (stocks.isNotEmpty &&
+          stocks.every((row) => (row['model'] ?? '') != '')) {
+        values['railModel'] = stocks
+            .map((row) => row['model'])
+            .toSet()
+            .join(' / ');
+      }
       journey['trainsets'] = stocks;
       journey['coupling'] = codes.length > 1;
     }
 
+    Future<void> mileage() async {
+      final payload = await _get(
+        'data.railgo.zenglingkun.cn',
+        '/api/train/query',
+        {'train': service},
+      );
+      final row = payload['data'] ?? payload, rows = row['timetable'];
+      if (row is! Map ||
+          !(row['numberFull'] as List? ?? []).contains(service) ||
+          !(row['rundays'] as List? ?? []).contains(
+            start.calendarText.replaceAll('-', ''),
+          ) ||
+          rows is! List ||
+          rows.length != stops.length) {
+        return;
+      }
+      num previous = -1;
+      for (var i = 0; i < rows.length; i++) {
+        final raw = rows[i],
+            stop = stops[i],
+            distance = raw['distance'],
+            day = raw['day'];
+        if (station(raw['station']) != stop['station'] ||
+            day is! int ||
+            day < 0 ||
+            day > 7 ||
+            distance is! num ||
+            !distance.isFinite ||
+            distance < 0 ||
+            distance > 100000 ||
+            distance <= previous ||
+            i == 0 && distance != 0) {
+          return;
+        }
+        for (final (source, side) in [
+          ('arrive', 'arrival'),
+          ('depart', 'departure'),
+        ]) {
+          final time =
+              raw[source] is String &&
+                  RegExp(r'^(?:[01]\d|2[0-3]):[0-5]\d$').hasMatch(raw[source])
+              ? raw[source] as String
+              : '';
+          if (time != stop['${side}Time']) return;
+          if (time.isNotEmpty) {
+            final extra =
+                side == 'departure' &&
+                    (stop['arrivalTime'] as String).isNotEmpty &&
+                    time.compareTo(stop['arrivalTime']) < 0
+                ? 1
+                : 0;
+            final date = JourneyDate.fromDateTime(
+              start.date!.add(Duration(days: day + extra)),
+            );
+            if (date.calendarText !=
+                JourneyDate.fromJson(stop['${side}Date'])?.calendarText) {
+              return;
+            }
+          }
+        }
+        previous = distance;
+      }
+      for (var i = 0; i < rows.length; i++) {
+        stops[i]['distanceKm'] = rows[i]['distance'];
+      }
+      final distance =
+          (rows[to()]['distance'] as num) - (rows[from()]['distance'] as num);
+      final km = (distance * 1000).round() / 1000;
+      values['railMileage'] = km == km.roundToDouble()
+          ? km.toInt().toString()
+          : km.toString();
+      journey['distanceQueriedAt'] = at;
+    }
+
+    Future<void> coaches() async {
+      final payload = await _get(
+            'rg-api.zenglingkun.cn',
+            '/api/v2/getCoachPic',
+            {'train': service},
+          ),
+          row = payload['data'];
+      if (payload['success'] != true || row is! Map) return;
+      String text(dynamic value) => value is String ? value.trim() : '';
+      final cars = <Map<String, String>>[];
+      for (final car in (row['coachPicList'] as List? ?? []).take(32)) {
+        final uri = Uri.tryParse(text(car['pictureUrl']));
+        if (uri == null ||
+            uri.scheme != 'https' ||
+            uri.host != 'res.railgo.zenglingkun.cn' ||
+            uri.userInfo.isNotEmpty) {
+          continue;
+        }
+        final name = text(car['pictureName']);
+        cars.add({
+          'name': name,
+          'url': uri.toString(),
+          'number': RegExp(r'^(\d{1,2})车').firstMatch(name)?[1] ?? '',
+        });
+      }
+      journey['coaches'] = {
+        'model': text(row['trainStyle']),
+        'code': text(row['carCode']),
+        'type': text(row['carType']),
+        'queriedAt': at,
+        'cars': cars,
+        'info': [
+          for (final item in (row['carInfo'] as List? ?? []).take(20))
+            if (text(item['pictureName']).isNotEmpty &&
+                text(item['pictureValue']).isNotEmpty &&
+                !RegExp(r'婴儿|护理台|办公席|无障碍|卫生间|商务座')
+                    .hasMatch(text(item['pictureName'])))
+              {
+                'name': text(item['pictureName']),
+                'value': text(item['pictureValue']),
+              },
+        ],
+      };
+    }
+
     await Future.wait(
-      [gate(), route(), stock()].map((future) => future.catchError((_) {})),
+      [
+        gate(),
+        route(),
+        stock(),
+        mileage(),
+        coaches(),
+      ].map((future) => future.catchError((_) {})),
     );
     return values;
   }
@@ -327,8 +475,11 @@ Map<String, dynamic>? selectRoute(
   String origin,
   String destination,
 ) {
-  if (payload is! Map || payload['success'] != true || payload['data'] is! Map)
+  if (payload is! Map ||
+      payload['success'] != true ||
+      payload['data'] is! Map) {
     return null;
+  }
   final data = payload['data'];
   if (data['stations'] is! List || data['train'] is! Map) return null;
   String name(dynamic value) => value
@@ -348,8 +499,9 @@ Map<String, dynamic>? selectRoute(
   }
   if (stops.length < 2 ||
       stops.length > 300 ||
-      stops.map((row) => row['name']).toSet().length != stops.length)
+      stops.map((row) => row['name']).toSet().length != stops.length) {
     return null;
+  }
   final segments = <Map<String, dynamic>>[];
   for (final entry in (data['train'] as Map).entries) {
     final row = entry.value;
@@ -357,8 +509,9 @@ Map<String, dynamic>? selectRoute(
         row['line'] is! List ||
         (row['line'] as List).length < 2 ||
         !(row['line'] as List).every(point) ||
-        row['index'] is! int)
+        row['index'] is! int) {
       return null;
+    }
     segments.add({
       'names': entry.key.toString().split('-').map(name).toList(),
       'line': row['line'],
@@ -370,8 +523,9 @@ Map<String, dynamic>? selectRoute(
             0,
             (total, row) => total + (row['line'] as List).length,
           ) >
-          50000)
+          50000) {
     return null;
+  }
   segments.sort((a, b) => (a['index'] as int).compareTo(b['index'] as int));
   double distance(List a, List b) =>
       math.sqrt(
@@ -412,8 +566,9 @@ Map<String, dynamic>? selectRoute(
           (row) =>
               nodes[row['name']] == null ||
               distance(nodes[row['name']]!, row['coordinates']) > 2,
-        ))
+        )) {
           break;
+        }
         return {
           'segments': selected,
           'stops': matched

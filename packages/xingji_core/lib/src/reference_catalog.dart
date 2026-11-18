@@ -61,9 +61,11 @@ class Place {
 class ReferenceCatalog {
   final List<Place> stations, airports;
   final List<Map<String, dynamic>> airlines;
+  final Map<String, String> aircraftAliases;
   final Map<String, List<Place>> _rail = {}, _air = {};
   ReferenceCatalog.fromJson(Map<String, dynamic> json)
-    : stations = (json['stations'] as List)
+    : aircraftAliases = Map<String, String>.from(json['aircraftAliases'] ?? {}),
+      stations = (json['stations'] as List)
           .map((row) => Place(Map<String, dynamic>.from(row), false))
           .toList(),
       airports = (json['airports'] as List)
@@ -83,13 +85,20 @@ class ReferenceCatalog {
   Place? resolve(String name, String code, {required bool flight}) {
     final index = flight ? _air : _rail;
     var matches = index[placeKey(name)] ?? index[placeKey(code)] ?? [];
+    if (!flight && name.isNotEmpty) {
+      final exact = matches
+          .where((place) => placeKey(place.name) == placeKey(name))
+          .toList();
+      if (exact.isNotEmpty) matches = exact;
+    }
     if (name.isNotEmpty &&
         code.isNotEmpty &&
         index.containsKey(placeKey(name)) &&
-        index.containsKey(placeKey(code)))
+        index.containsKey(placeKey(code))) {
       matches = matches
           .where((place) => index[placeKey(code)]!.contains(place))
           .toList();
+    }
     return matches.length == 1 ? matches.single : null;
   }
 
@@ -141,6 +150,39 @@ class ReferenceCatalog {
     return matches.length == 1 ? matches.single['name'] as String : code;
   }
 
+  String aircraft(String value, {bool family = false}) {
+    final cleaned = value.trim().toUpperCase().replaceFirst(
+      RegExp(r'^(?:AIRBUS|BOEING|空客|波音)\s*'),
+      '',
+    );
+    final key = cleaned.replaceAll(RegExp(r'[\s.\-]'), '');
+    var model = aircraftAliases[key];
+    final dhc = RegExp(r'^(?:DHC|DASH)([678])(?:Q?([1-4]\d{2}))?$')
+        .firstMatch(key);
+    if (model == null && dhc != null) {
+      model = 'DHC-${dhc[1]}${dhc[2] == null ? '' : '-${dhc[2]}'}';
+    }
+    model ??= value.trim();
+    if (!family) return model;
+    for (final pattern in [
+      r'^(A\d{3}|7\d{2})',
+      r'^(DHC-[678])',
+      r'^(ATR (?:42|72))',
+      r'^(E(?:170|175|190|195))',
+      r'^(ERJ-(?:135|140|145))',
+      r'^(SAAB (?:340|2000))',
+      r'^(BAe 146)',
+      r'^((?:MD|DC|IL|TU|AN|YAK)-\d{1,3})(?:-|$)',
+    ]) {
+      final match = RegExp(pattern).firstMatch(model);
+      if (match != null) return match[1]!;
+    }
+    final crj = RegExp(r'^CRJ-(\d{3,4})').firstMatch(model);
+    return crj == null
+        ? model
+        : 'CRJ-${['701', '702', '705'].contains(crj[1]) ? '700' : crj[1]}';
+  }
+
   TicketRecord normalize(TicketRecord record) {
     final changes = <String, dynamic>{};
     for (final side in ['origin', 'destination']) {
@@ -151,6 +193,9 @@ class ReferenceCatalog {
       changes[side + 'City'] = place.city;
       changes[side == 'origin' ? 'departureZone' : 'arrivalZone'] =
           place.text('zone').isEmpty ? 'Asia/Shanghai' : place.text('zone');
+    }
+    if (record.isFlight && record.text('aircraft').isNotEmpty) {
+      changes['aircraft'] = aircraft(record.text('aircraft'));
     }
     return record.withChanges(changes);
   }

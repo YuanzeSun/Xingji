@@ -26,7 +26,7 @@ void main() {
       'recordCount': 1,
       'settings': {
         'flightMcpKey': 'secret-key',
-        'profile': {'name': '张三'},
+        'profile': personalProfile({'chineseName': '张三'}),
       },
       'files': {
         'archive/2026.json': sha256.convert(utf8.encode(content)).toString(),
@@ -124,6 +124,24 @@ void main() {
     expect(index['settings'], manifest['settings']);
     expect(index['generation'], 'reset-id');
     expect(jsonDecode(writes.last.body)['force'], false);
+  });
+  test('reset removes the current tree but preserves profile, key and commit history', () async {
+    final api = archive(), before = await api.read();
+    final after = await api.reset(before, before.settings);
+    expect(after.records, isEmpty);
+    expect(after.generation, isNot(before.generation));
+    expect(after.settings, before.settings);
+    expect(writes, hasLength(3));
+    final tree = jsonDecode(writes[0].body);
+    expect(tree.containsKey('base_tree'), false);
+    expect(tree['tree'], hasLength(1));
+    expect(tree['tree'][0]['path'], 'archive/index.json');
+    final index = jsonDecode(tree['tree'][0]['content']);
+    expect(index['recordCount'], 0);
+    expect(index['files'], isEmpty);
+    expect(index['settings'], before.settings);
+    expect(jsonDecode(writes[1].body)['parents'], ['head']);
+    expect(jsonDecode(writes[2].body)['force'], false);
   });
   test('checksum mismatch aborts without any write', () async {
     manifest['files']['archive/2026.json'] = 'bad';

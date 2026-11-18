@@ -1,0 +1,177 @@
+import 'package:material_ui/material_ui.dart';
+import 'package:xingji_core/xingji_core.dart';
+
+import 'app_store.dart';
+import 'design.dart';
+
+Future<bool> reviewImport(
+  BuildContext context,
+  AppStore store,
+  List<TicketRecord> records,
+) async {
+  if (records.isEmpty) {
+    showError(context, '没有识别到可导入的票据');
+    return false;
+  }
+  final selected = records.map((record) => record.id).toSet();
+  var saving = false;
+  String error = '';
+  return await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => StatefulBuilder(
+          builder: (context, update) => PopScope(
+            canPop: !saving,
+            child: AlertDialog(
+              title: Text('核对 ${records.length} 张票据'),
+              content: SizedBox(
+                width: 600,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final record in records)
+                            CheckboxListTile(
+                              value: selected.contains(record.id),
+                              onChanged: saving
+                                  ? null
+                                  : (value) => update(() {
+                                      if (value == true) {
+                                        selected.add(record.id);
+                                      } else {
+                                        selected.remove(record.id);
+                                      }
+                                    }),
+                              title: Text(
+                                '${record.text('service')}  ${record.text('origin')} → ${record.text('destination')}',
+                              ),
+                              subtitle: Text(
+                                '${record.departure?.label ?? '日期未知'}${record.missingFields.isEmpty ? '' : '\n部分信息待补全，可导入后编辑'}',
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (error.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(
+                          error,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    if (saving) const LinearProgressIndicator(),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.pop(context, false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: saving || selected.isEmpty
+                      ? null
+                      : () async {
+                          update(() {
+                            saving = true;
+                            error = '';
+                          });
+                          try {
+                            await store.importArchive(
+                              TicketArchive(
+                                records
+                                    .where(
+                                      (record) => selected.contains(record.id),
+                                    )
+                                    .toList(),
+                              ),
+                            );
+                            if (context.mounted) Navigator.pop(context, true);
+                          } catch (failure) {
+                            if (context.mounted) {
+                              update(() {
+                                saving = false;
+                                error = failure.toString();
+                              });
+                            }
+                          }
+                        },
+                  child: Text(saving ? '正在导入…' : '导入 ${selected.length} 张'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ) ??
+      false;
+}
+
+Future<void> importTextDialog(BuildContext context, AppStore store) async {
+  final text = TextEditingController();
+  var flight = false;
+  final result = await showDialog<List<TicketRecord>>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, update) => AlertDialog(
+        title: const Text('粘贴行程文字'),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(value: false, label: Text('火车票')),
+                    ButtonSegment(value: true, label: Text('机票')),
+                  ],
+                  selected: {flight},
+                  onSelectionChanged: (value) =>
+                      update(() => flight = value.single),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: text,
+                  minLines: 6,
+                  maxLines: 12,
+                  decoration: const InputDecoration(labelText: '行程、订单或邮件正文'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              try {
+                Navigator.pop(
+                  context,
+                  parseTicketText(text.text, store.catalog, flight: flight),
+                );
+              } catch (error) {
+                showError(context, error);
+              }
+            },
+            child: const Text('识别并核对'),
+          ),
+        ],
+      ),
+    ),
+  );
+  text.dispose();
+  if (result != null && context.mounted) {
+    await reviewImport(context, store, result);
+  }
+}

@@ -17,6 +17,7 @@ dependencies:
   path_drawing: ^1.0.1
   pdf: ^3.13.1
   quickjs_engine: ^0.1.7
+  archive: ^4.7.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -8,6 +8,8 @@ import 'app_store.dart';
 import 'design.dart';
 import 'export_service.dart';
 import 'ticket_detail.dart';
+import 'profile_editor.dart';
+import 'import_review.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppStore store;
@@ -52,6 +54,11 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 8),
               Text(store.status, style: const TextStyle(color: muted)),
+              if (store.busy)
+                const Padding(
+                  padding: EdgeInsets.only(top: 16),
+                  child: LinearProgressIndicator(),
+                ),
               const SizedBox(height: 20),
               Wrap(
                 spacing: 12,
@@ -74,6 +81,33 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
           ),
+        ),
+        if (store.resetDetected)
+          Padding(
+            padding: const EdgeInsets.only(top: 20),
+            child: OutlinedButton(
+              onPressed: store.busy
+                  ? null
+                  : () => action(() async {
+                      if (await confirmDeletion(
+                        context,
+                        title: '采用云端重置后的票库？',
+                        description: '清除本机旧票据，保留 Git 历史，并使用云端最新个人资料和设置。',
+                        confirmLabel: '清理并采用',
+                      )) {
+                        await store.acceptRemoteReset();
+                      }
+                    }),
+              child: const Text('采用云端重置后的票库'),
+            ),
+          ),
+        const SectionTitle('个人资料'),
+        OutlinedButton.icon(
+          onPressed: store.busy
+              ? null
+              : () => openProfileEditor(context, store),
+          icon: const Icon(Icons.person_outline),
+          label: const Text('姓名与常用证件'),
         ),
         if (store.conflicts != null) ...[
           const SectionTitle('处理同步冲突'),
@@ -110,6 +144,37 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
             ),
+          for (final conflict
+              in store.settingsConflicts?.conflicts ?? <SettingsConflict>[])
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(conflict.field == 'profile' ? '个人资料' : '飞常准设置'),
+                  RadioGroup<bool>(
+                    groupValue: choices['settings:${conflict.field}'],
+                    onChanged: (value) => setState(
+                      () => choices['settings:${conflict.field}'] = value!,
+                    ),
+                    child: Column(
+                      children: [
+                        for (final (remote, value) in [
+                          (false, conflict.local),
+                          (true, conflict.remote),
+                        ])
+                          RadioListTile<bool>(
+                            value: remote,
+                            title: Text(
+                              '${remote ? '云端' : '本机'}：${conflict.field == 'flightMcpKey' ? '凭证已隐藏' : const JsonEncoder.withIndent('  ').convert(value)}',
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           FilledButton(
             onPressed: store.busy
                 ? null
@@ -128,19 +193,44 @@ class _SettingsPageState extends State<SettingsPage> {
                   : () => action(() async {
                       final file = await openFile(
                         acceptedTypeGroups: [
-                          const XTypeGroup(label: '行迹票库', extensions: ['json']),
+                          const XTypeGroup(
+                            label: '行迹票库',
+                            extensions: ['json', 'csv', 'txt'],
+                          ),
                         ],
                       );
                       if (file != null) {
-                        await store.importArchive(
-                          TicketArchive.fromJson(
-                            jsonDecode(await file.readAsString()),
-                          ),
-                        );
+                        final text = await file.readAsString();
+                        final extension = file.name
+                            .split('.')
+                            .last
+                            .toLowerCase();
+                        final records = extension == 'csv'
+                            ? parseTicketCsv(text)
+                            : extension == 'txt'
+                            ? parseTicketText(
+                                text,
+                                store.catalog,
+                                flight: RegExp(
+                                  r'航班|登机|FLIGHT',
+                                  caseSensitive: false,
+                                ).hasMatch(text),
+                              )
+                            : TicketArchive.fromJson(jsonDecode(text)).records;
+                        if (context.mounted) {
+                          await reviewImport(context, store, records);
+                        }
                       }
                     }),
               icon: const Icon(Icons.file_open_outlined),
               label: const Text('导入票库'),
+            ),
+            OutlinedButton.icon(
+              onPressed: store.busy
+                  ? null
+                  : () => importTextDialog(context, store),
+              icon: const Icon(Icons.text_snippet_outlined),
+              label: const Text('粘贴行程文字'),
             ),
             OutlinedButton.icon(
               onPressed: () => action(
@@ -173,6 +263,47 @@ class _SettingsPageState extends State<SettingsPage> {
                     }),
               icon: const Icon(Icons.menu_book_outlined),
               label: Text(exporting ? '正在生成手册…' : '导出旅行手册'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        const SectionTitle('重置与清理'),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            if (store.connected)
+              OutlinedButton.icon(
+                onPressed: store.busy
+                    ? null
+                    : () => action(() async {
+                        if (await confirmDeletion(
+                          context,
+                          title: '重置私人仓库？',
+                          description:
+                              '清空 ${store.connection!.label} 当前分支的票据、线路、时刻表、删除标记和其他文件。保留个人资料、飞常准设置及 Git 历史。',
+                          confirmLabel: '确认重置仓库',
+                        )) {
+                          await store.resetRepository();
+                        }
+                      }),
+                icon: const Icon(Icons.restart_alt),
+                label: Text(store.busy ? '正在处理…' : '重置仓库'),
+              ),
+            OutlinedButton(
+              onPressed: store.busy
+                  ? null
+                  : () => action(() async {
+                      if (await confirmDeletion(
+                        context,
+                        title: '清空本机票库？',
+                        description: '仅清除本机票据并断开仓库连接，保留本机个人资料和飞常准设置。云端文件保持不变。',
+                        confirmLabel: '清空本机',
+                      )) {
+                        await store.clearLocalArchive();
+                      }
+                    }),
+              child: const Text('清空本机票库'),
             ),
           ],
         ),

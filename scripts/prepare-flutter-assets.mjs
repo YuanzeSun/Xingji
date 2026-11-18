@@ -5,6 +5,7 @@ import {LOOKUP_FIELDS} from '../src/lookup-values.js';
 import {demoRecords} from '../src/demo.js';
 import {STATIONS,AIRPORTS} from '../src/data/location-reference.js';
 import {AIRLINES} from '../src/data/airline-reference.js';
+import {AIRCRAFT_ALIASES} from '../src/data/aircraft-reference.js';
 import {AIRPORT_TIMEZONES} from '../src/data/airport-timezones.js';
 import {CONTINENT_AIRPORT_CODES} from '../src/data/airport-geography.js';
 import {LAND_PATH,COUNTRY_PATH,PROVINCE_PATH} from '../src/data/map-reference.js';
@@ -21,7 +22,8 @@ for(const folder of [output,'specs/archive-format','specs/fixtures','packages/xi
 const json=(name,value)=>writeFile(name,JSON.stringify(value,null,2)+'\n');
 await json('specs/fixtures/rail-line-names.json',railLineFixtures);
 const continents=new Map(Object.entries(CONTINENT_AIRPORT_CODES).flatMap(([code,values])=>values.split(' ').map(value=>[value,code])));
-const reference={stations:STATIONS.map(([name])=>{const record={type:'rail',origin:name},place=resolvePlace(record,'origin');return {...place,aliases:placeWords(record,'origin'),coordinates:mapPoint(record,'origin')?.coordinates||null,country:['YTM','VBM','VJM','VFM','VCM','VOM'].includes(place.code)?'LA':'CN',continent:'AS',zone:'Asia/Shanghai'};}),airports:AIRPORTS.map(([code])=>{const record={type:'flight',originCode:code},place=resolvePlace(record,'origin');return {...place,aliases:placeWords(record,'origin'),coordinates:mapPoint(record,'origin')?.coordinates||null,zone:AIRPORT_TIMEZONES[code]||'',continent:continents.get(code)||''};}),airlines:AIRLINES.map(([id,name,english,codes,aliases])=>({id,name:name||english,english,codes,aliases,logo:airlineLogo(name||english)?.image||null}))};
+const reference={stations:STATIONS.map(([name,city,code,pinyin,abbr])=>{const record={type:'rail',origin:name},place=resolvePlace(record,'origin');return {...place,aliases:[name,city,code,pinyin,abbr].filter(Boolean),coordinates:mapPoint(record,'origin')?.coordinates||null,country:['YTM','VBM','VJM','VFM','VCM','VOM'].includes(place.code)?'LA':'CN',continent:'AS',zone:'Asia/Shanghai'};}),airports:AIRPORTS.map(([code])=>{const record={type:'flight',originCode:code},place=resolvePlace(record,'origin');return {...place,aliases:placeWords(record,'origin'),coordinates:mapPoint(record,'origin')?.coordinates||null,zone:AIRPORT_TIMEZONES[code]||'',continent:continents.get(code)||''};}),airlines:AIRLINES.map(([id,name,english,codes,aliases])=>({id,name:name||english,english,codes,aliases,logo:airlineLogo(name||english)?.image||null}))};
+reference.aircraftAliases=Object.fromEntries(Object.entries(AIRCRAFT_ALIASES).flatMap(([model,aliases])=>[model,...aliases].map(alias=>[alias.toUpperCase().replace(/[\s.-]/g,''),model])));
 await json(output+'/reference.json',reference);
 await json(output+'/map.json',{land:LAND_PATH,countries:COUNTRY_PATH,provinces:PROVINCE_PATH});
 await json(output+'/demo.json',{format:'xingji-archive',schemaVersion:SCHEMA_VERSION,exportedAt:'2026-11-18T00:00:00.000Z',records:demoRecords('2026-11-18')});

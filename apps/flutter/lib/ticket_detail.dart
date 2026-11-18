@@ -7,6 +7,7 @@ import 'ticket_face.dart';
 import 'editor.dart';
 import 'export_service.dart';
 import 'map_page.dart';
+import 'coach_panel.dart';
 
 const fieldLabels = <String, String>{
   'origin': '出发站',
@@ -347,6 +348,8 @@ class _TicketDetailState extends State<TicketDetail> {
         SectionTitle(stock['id']?.toString() ?? '乘坐车组'),
         for (final key in [
           'manufacturer',
+          'manufactureMonth',
+          'trailerManufacturer',
           'depot',
           'trainDepot',
           'socket',
@@ -358,20 +361,33 @@ class _TicketDetailState extends State<TicketDetail> {
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(
-                '${{'manufacturer': '制造商', 'depot': '动车所', 'trainDepot': '车辆归属', 'socket': '电源插座', 'customType': '运营配置', 'modelRemark': '车型备注', 'carRemark': '车组备注'}[key]}：${stock[key]}',
+                '${{'manufacturer': '制造商', 'manufactureMonth': '出厂年月', 'trailerManufacturer': '拖车制造商', 'depot': '动车所', 'trainDepot': '车辆归属', 'socket': '电源插座', 'customType': '运营配置', 'modelRemark': '车型备注', 'carRemark': '车组备注'}[key]}：${stock[key]}',
               ),
             ),
+      ],
+      if (journey['coaches'] is Map) ...[
+        for (final info in (journey['coaches']['info'] as List? ?? []))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text('${info['name']}：${info['value']}'),
+          ),
+        CoachPanel(journey['coaches']),
       ],
     ];
   }
 }
 
-Future<bool> confirmDeletion(BuildContext context) async {
+Future<bool> confirmDeletion(
+  BuildContext context, {
+  String title = '删除这张票据？',
+  String description = '删除后会同步到私人票库。',
+  String confirmLabel = '确认删除',
+}) async {
   final first = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('删除这张票据？'),
-      content: const Text('删除后会同步到私人票库。'),
+      title: Text(title),
+      content: Text(description),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
@@ -414,7 +430,7 @@ Future<bool> confirmDeletion(BuildContext context) async {
           ),
           FilledButton(
             onPressed: correct ? () => Navigator.pop(context, true) : null,
-            child: const Text('确认删除'),
+            child: Text(confirmLabel),
           ),
         ],
       ),

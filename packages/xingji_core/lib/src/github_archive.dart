@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
 import 'ticket_record.dart';
+import 'shared_settings.dart';
 
 class GitHubConnection {
   final String owner, repository, branch;
@@ -71,8 +72,9 @@ class GitHubArchive {
     if (![
       connection.owner,
       connection.repository,
-    ].every((value) => RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(value)))
+    ].every((value) => RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(value))) {
       throw const FormatException('仓库名称格式无效');
+    }
     final request = http.Request(
       method,
       Uri.parse(
@@ -109,14 +111,17 @@ class GitHubArchive {
 
   Future<Map<String, dynamic>> verify() async {
     final repository = Map<String, dynamic>.from(await _request(''));
-    if (repository['private'] != true)
+    if (repository['private'] != true) {
       throw const FormatException('请连接私人票库，避免将个人行程保存到公开仓库');
-    if (repository['permissions']?['push'] != true)
+    }
+    if (repository['permissions']?['push'] != true) {
       throw const FormatException('此凭证没有仓库写入权限');
+    }
     if (repository['id'] is! int ||
         connection.repositoryId != null &&
-            repository['id'] != connection.repositoryId)
+            repository['id'] != connection.repositoryId) {
       throw const FormatException('仓库身份已改变，已停止同步');
+    }
     return repository;
   }
 
@@ -127,8 +132,9 @@ class GitHubArchive {
           as String;
   Future<String> _blob(String sha) async {
     final blob = await _request('/git/blobs/$sha');
-    if (blob['encoding'] != 'base64' || blob['content'] is! String)
+    if (blob['encoding'] != 'base64' || blob['content'] is! String) {
       throw const FormatException('云端文件内容不完整');
+    }
     return utf8.decode(
       base64Decode((blob['content'] as String).replaceAll(RegExp(r'\s'), '')),
     );
@@ -140,8 +146,9 @@ class GitHubArchive {
     final tree = await _request(
       '/git/trees/${commit['tree']['sha']}?recursive=1',
     );
-    if (tree['truncated'] == true)
+    if (tree['truncated'] == true) {
       throw const FormatException('仓库目录过大，请使用独立的私人票库');
+    }
     final entries = (tree['tree'] as List).cast<Map<String, dynamic>>();
     final paths = entries
         .where(
@@ -154,8 +161,9 @@ class GitHubArchive {
       (row) => row['type'] == 'blob' && row['path'] == 'archive/index.json',
     );
     if (index.isEmpty) {
-      if (paths.isNotEmpty)
+      if (paths.isNotEmpty) {
         throw const FormatException('云端票库索引已删除，请先检查仓库，原有本机数据已保留');
+      }
       return ArchiveSnapshot(
         records: [],
         settings: {'flightMcpKey': ''},
@@ -169,12 +177,14 @@ class GitHubArchive {
     if (manifest['format'] != 'xingji-index' ||
         manifest['schemaVersion'] != 1 ||
         manifest['files'] is! Map ||
-        manifest['recordCount'] is! int)
+        manifest['recordCount'] is! int) {
       throw const FormatException('云端票库索引无效');
+    }
     final files = Map<String, dynamic>.from(manifest['files']);
     if (files.length != paths.length ||
-        paths.any((row) => !files.containsKey(row['path'])))
+        paths.any((row) => !files.containsKey(row['path']))) {
       throw const FormatException('云端票库文件缺失，已停止同步并保留本机内容');
+    }
     final contents = <String, String>{}, records = <TicketRecord>[];
     for (var offset = 0; offset < paths.length; offset += 4) {
       final batch = paths.skip(offset).take(4);
@@ -182,16 +192,18 @@ class GitHubArchive {
         batch.map((entry) async {
           final text = await _blob(entry['sha']);
           if (sha256.convert(utf8.encode(text)).toString() !=
-              files[entry['path']])
+              files[entry['path']]) {
             throw const FormatException('云端票库校验失败，原有数据未改变');
+          }
           contents[entry['path']] = text;
           final rows = TicketArchive.fromJson(jsonDecode(text)).records;
           for (final record in rows) {
             if ((record.departure?.year?.toString() ?? 'unknown') !=
                 (entry['path'] as String)
                     .substring(8)
-                    .replaceFirst('.json', ''))
+                    .replaceFirst('.json', '')) {
               throw const FormatException('票据年份与文件不一致');
+            }
           }
           return rows;
         }),
@@ -199,11 +211,12 @@ class GitHubArchive {
       records.addAll(decoded.expand((rows) => rows));
     }
     if (records.length != manifest['recordCount'] ||
-        records.map((record) => record.id).toSet().length != records.length)
+        records.map((record) => record.id).toSet().length != records.length) {
       throw const FormatException('云端票库数量或 ID 不一致');
+    }
     return ArchiveSnapshot(
       records: records,
-      settings: Map<String, dynamic>.from(manifest['settings'] ?? {}),
+      settings: sharedSettings(manifest['settings'] ?? {}),
       head: current,
       tree: commit['tree']['sha'],
       generation: manifest['generation'] as String? ?? '',
@@ -217,25 +230,29 @@ class GitHubArchive {
     ArchiveSnapshot snapshot,
     Map<String, dynamic> settings,
   ) async {
+    settings = sharedSettings(settings);
     final verified = await verify();
-    if (verified['id'] != snapshot.repositoryId)
+    if (verified['id'] != snapshot.repositoryId) {
       throw const FormatException('仓库身份已改变，已停止写入');
+    }
     final groups = <String, List<TicketRecord>>{};
-    for (final record in records)
+    for (final record in records) {
       groups
           .putIfAbsent(
             record.departure?.year?.toString() ?? 'unknown',
             () => [],
           )
           .add(record);
+    }
     final previous = <String, List<TicketRecord>>{};
-    for (final record in snapshot.records)
+    for (final record in snapshot.records) {
       previous
           .putIfAbsent(
             record.departure?.year?.toString() ?? 'unknown',
             () => [],
           )
           .add(record);
+    }
     final files = <String, String>{}, changes = <Map<String, dynamic>>[];
     for (final year in groups.keys.toList()..sort()) {
       final rows = groups[year]!..sort((a, b) => a.id.compareTo(b.id));
@@ -250,20 +267,22 @@ class GitHubArchive {
           : const JsonEncoder.withIndent('  ')
                 .convert(TicketArchive(rows).toJson());
       files[path] = sha256.convert(utf8.encode(content)).toString();
-      if (content != snapshot.contents[path])
+      if (content != snapshot.contents[path]) {
         changes.add({
           'path': path,
           'mode': '100644',
           'type': 'blob',
           'content': content,
         });
+      }
     }
     final settingsChanged = !sameValue(settings, snapshot.settings);
     if (changes.isEmpty &&
         files.length == snapshot.contents.length &&
         !settingsChanged &&
-        snapshot.initialized)
+        snapshot.initialized) {
       return snapshot.head;
+    }
     changes.add({
       'path': 'archive/index.json',
       'mode': '100644',
@@ -277,14 +296,16 @@ class GitHubArchive {
         'settings': settings,
       }),
     });
-    for (final path in snapshot.contents.keys)
-      if (!files.containsKey(path))
+    for (final path in snapshot.contents.keys) {
+      if (!files.containsKey(path)) {
         changes.add({
           'path': path,
           'mode': '100644',
           'type': 'blob',
           'sha': null,
         });
+      }
+    }
     final tree = await _request(
       '/git/trees',
       method: 'POST',
@@ -312,8 +333,64 @@ class GitHubArchive {
     final compared = await _request(
       '/compare/${Uri.encodeComponent(previous)}...${Uri.encodeComponent(current)}',
     );
-    if (!['ahead', 'identical'].contains(compared['status']))
+    if (!['ahead', 'identical'].contains(compared['status'])) {
       throw const FormatException('云端历史被重置或分叉，已保留本机内容并停止写入');
+    }
+  }
+
+  /// Replace the current tree atomically, preserving commit history and settings.
+  Future<ArchiveSnapshot> reset(
+    ArchiveSnapshot snapshot,
+    Map<String, dynamic> settings,
+  ) async {
+    final verified = await verify();
+    if (verified['id'] != snapshot.repositoryId) {
+      throw const FormatException('仓库身份已改变，已停止重置');
+    }
+    final preserved = sharedSettings(settings), generation = newTicketId();
+    final tree = await _request(
+      '/git/trees',
+      method: 'POST',
+      body: {
+        'tree': [
+          {
+            'path': 'archive/index.json',
+            'mode': '100644',
+            'type': 'blob',
+            'content': const JsonEncoder.withIndent('  ').convert({
+              'format': 'xingji-index',
+              'schemaVersion': 1,
+              'recordCount': 0,
+              'generation': generation,
+              'files': <String, String>{},
+              'settings': preserved,
+            }),
+          },
+        ],
+      },
+    );
+    final commit = await _request(
+      '/git/commits',
+      method: 'POST',
+      body: {
+        'message': 'Reset private ticket archive, preserving personal settings',
+        'tree': tree['sha'],
+        'parents': [snapshot.head],
+      },
+    );
+    await _request(
+      '/git/refs/heads/${Uri.encodeComponent(connection.branch)}',
+      method: 'PATCH',
+      body: {'sha': commit['sha'], 'force': false},
+    );
+    return ArchiveSnapshot(
+      records: [],
+      settings: preserved,
+      head: commit['sha'],
+      tree: tree['sha'],
+      generation: generation,
+      repositoryId: snapshot.repositoryId,
+    );
   }
 
   void close() => client.close();

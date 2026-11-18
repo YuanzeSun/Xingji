@@ -10,7 +10,7 @@ class SystemRecognition implements RecognitionService {
       final value = await channel.invokeMapMethod<String, dynamic>(
         'capabilities',
       );
-      return value?['ocr'] == true && value?['barcode'] == true;
+      return value?['ocr'] == true || value?['barcode'] == true;
     } on MissingPluginException {
       return false;
     }

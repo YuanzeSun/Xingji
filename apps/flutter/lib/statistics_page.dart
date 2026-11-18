@@ -69,11 +69,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
     final aircraft = count(
       flights.map(
-        (r) => subtype
-            ? r.text('aircraft')
-            : r
-                  .text('aircraft')
-                  .replaceFirst(RegExp(r'(?<=\d)-(?:\d{2,3}|[A-Z])$'), ''),
+        (r) => catalog.aircraft(r.text('aircraft'), family: !subtype),
       ),
     );
     final routes = count(

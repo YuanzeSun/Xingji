@@ -1,13 +1,15 @@
 import 'dart:convert';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/services.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 import 'app_store.dart';
 import 'design.dart';
 import 'platform_services.dart';
+import 'input_formatters.dart';
+import 'seat_input.dart';
+import 'import_review.dart';
 import 'ticket_detail.dart';
 
 Future<void> openEditor(
@@ -20,17 +22,6 @@ Future<void> openEditor(
       fullscreenDialog: true,
       builder: (_) => TicketEditor(store, record: record),
     ),
-  );
-}
-
-class UppercaseInput extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) => newValue.copyWith(
-    text: newValue.text.toUpperCase(),
-    composing: TextRange.empty,
   );
 }
 
@@ -48,6 +39,7 @@ class _TicketEditorState extends State<TicketEditor> {
   final barcodeText = TextEditingController();
   final scroll = ScrollController();
   final placeFocus = {'origin': FocusNode(), 'destination': FocusNode()};
+  late final scanAvailable = SystemRecognition().available();
   late Map<String, dynamic> data;
   bool saving = false,
       querying = false,
@@ -69,6 +61,13 @@ class _TicketEditorState extends State<TicketEditor> {
   }
 
   void _replace(TicketRecord record) {
+    if (widget.record == null) {
+      record = applyProfileDefaults(
+        record,
+        store.settings['profile'] as Map? ?? {},
+        store.catalog,
+      );
+    }
     for (final controller in fields.values) {
       controller.dispose();
     }
@@ -140,11 +139,24 @@ class _TicketEditorState extends State<TicketEditor> {
       // Route snapshots describe the previous endpoints until explicitly refreshed.
       data['railRoute'] = '';
       data['railJourney'] = '';
+      _refreshProfile();
     }
     if (!flight && ['service', 'departureDate'].contains(key)) {
       data['railRoute'] = '';
       data['railJourney'] = '';
     }
+  }
+
+  void _refreshProfile() {
+    final next = applyProfileDefaults(
+      TicketRecord.fromJson(values()),
+      store.settings['profile'] as Map? ?? {},
+      store.catalog,
+    );
+    for (final key in ['passenger', 'identity']) {
+      if (next.text(key) != value(key)) fields[key]!.text = next.text(key);
+    }
+    data['fieldSources'] = next.fieldSources;
   }
 
   Set<String> get requiredFields =>
@@ -289,7 +301,20 @@ class _TicketEditorState extends State<TicketEditor> {
         store.catalog,
         flight: flight,
       );
-      if (records.length != 1) throw const FormatException('请一次导入一个航段');
+      if (records.length > 1 && mounted) {
+        if (widget.record != null) {
+          throw const FormatException('编辑已有票据时，请扫描单个航段');
+        }
+        if (await reviewImport(context, store, records) && mounted) {
+          Navigator.pop(context);
+        }
+        return;
+      }
+      if (records.isEmpty) throw const FormatException('没有识别到票据');
+      if (widget.record != null &&
+          records.single.isFlight != widget.record!.isFlight) {
+        throw const FormatException('扫描结果的交通方式与当前票据不符，请另行录入');
+      }
       if (mounted) {
         setState(
           () => _replace(
@@ -307,13 +332,20 @@ class _TicketEditorState extends State<TicketEditor> {
     }
   }
 
-  void decode() {
+  Future<void> decode() async {
     try {
       final bytes = utf8.encode(barcodeText.text);
       final decoded = boardingRecords(bytes, store.catalog);
-      if (decoded.length != 1) {
-        throw const FormatException('未识别到单航段登机牌条码，请检查完整内容');
+      if (decoded.length > 1) {
+        if (widget.record != null) {
+          throw const FormatException('编辑已有票据时，请使用单个航段');
+        }
+        if (await reviewImport(context, store, decoded) && mounted) {
+          Navigator.pop(context);
+        }
+        return;
       }
+      if (decoded.isEmpty) throw const FormatException('未识别到登机牌条码，请检查完整内容');
       setState(
         () => _replace(
           decoded.single.withChanges({
@@ -326,6 +358,21 @@ class _TicketEditorState extends State<TicketEditor> {
       showError(context, failure);
     }
   }
+
+  Widget _scanControl() => FutureBuilder<bool>(
+    future: scanAvailable,
+    builder: (context, snapshot) => OutlinedButton.icon(
+      onPressed: importing || snapshot.data != true ? null : scanImage,
+      icon: const Icon(Icons.document_scanner_outlined),
+      label: Text(
+        importing
+            ? '正在识别…'
+            : snapshot.data == true
+            ? '扫描票据图片'
+            : '系统扫描待接入',
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => PopScope(
@@ -402,20 +449,17 @@ class _TicketEditorState extends State<TicketEditor> {
                             ),
                           ],
                           selected: {data['type']},
-                          onSelectionChanged: (selection) => setState(
-                            () => _replace(
+                          onSelectionChanged: (selection) => setState(() {
+                            barcodeText.clear();
+                            _replace(
                               TicketRecord.create({'type': selection.single}),
-                            ),
-                          ),
+                            );
+                          }),
                         ),
                       ),
                     if (flight) ...[
                       const SectionTitle('登机牌条码或电子登机牌二维码'),
-                      OutlinedButton.icon(
-                        onPressed: importing ? null : scanImage,
-                        icon: const Icon(Icons.document_scanner_outlined),
-                        label: Text(importing ? '正在识别…' : '扫描票据图片'),
-                      ),
+                      _scanControl(),
                       const SizedBox(height: 12),
                       TextField(
                         controller: barcodeText,
@@ -437,6 +481,8 @@ class _TicketEditorState extends State<TicketEditor> {
                           style: TextStyle(color: muted),
                         ),
                     ] else ...[
+                      _scanControl(),
+                      const SizedBox(height: 16),
                       const SectionTitle('票面'),
                       DropdownButtonFormField<String>(
                         initialValue: data['template'] == 'rail-refund-receipt'
@@ -561,7 +607,22 @@ class _TicketEditorState extends State<TicketEditor> {
                     ),
                     const SizedBox(height: 16),
                     if (!flight)
-                      _pair(_field('carriage'), _field('seat'))
+                      _pair(
+                        _field('carriage'),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SeatInput(
+                              controller: fields['seat']!,
+                              seatClass: value('seatClass'),
+                              required: requiredFields.contains('seat'),
+                              locked: locked('seat'),
+                              onChanged: () => changed('seat'),
+                            ),
+                            _source('seat'),
+                          ],
+                        ),
+                      )
                     else
                       _pair(
                         _field('seat', label: '座位'),
