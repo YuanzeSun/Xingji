@@ -3,6 +3,7 @@ const newHead = 'EXISTS (SELECT 1 FROM archive_state WHERE singleton = 1 AND hea
 const validId = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id);
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const encoder = new TextEncoder();
+const missingSchema = respond => respond({ code: 'D1_SCHEMA_MISSING', error: 'D1 票库尚未初始化' }, 503);
 
 async function authorized(header, secret) {
   if (!secret || !header?.startsWith('Bearer ') || header.length > 1024) return false;
@@ -20,7 +21,9 @@ async function readArchive(db, tag, respond) {
     db.prepare(readState),
     db.prepare('SELECT payload FROM tickets ORDER BY id')
   ]);
-  const { id, head, generation, settings } = metadata.results[0];
+  const state = metadata.results[0];
+  if (!state) return missingSchema(respond);
+  const { id, head, generation, settings } = state;
   return respond({ id, head, generation, settings: JSON.parse(settings), records: rows.results.map(row => JSON.parse(row.payload)) });
 }
 
@@ -70,13 +73,22 @@ export default {
       return respond(null, 204);
     }
     if (!await authorized(request.headers.get('Authorization'), env.ARCHIVE_TOKEN)) return respond({ error: 'D1 访问凭证无效' }, 401);
+    if (request.method !== 'GET' && request.method !== 'POST') return respond({ error: '不支持此请求方式' }, 405);
+    const db = env.ARCHIVE;
+    if (typeof db?.prepare !== 'function' || typeof db.batch !== 'function') {
+      return respond({ code: 'D1_BINDING_MISSING', error: 'Worker 缺少 ARCHIVE 数据库绑定' }, 503);
+    }
     try {
-      if (request.method === 'GET') return await readArchive(env.ARCHIVE, request.headers.get('If-None-Match'), respond);
-      if (request.method === 'POST') return await writeArchive(request, env.ARCHIVE, respond);
-      return respond({ error: '不支持此请求方式' }, 405);
+      if (request.method === 'GET') return await readArchive(db, request.headers.get('If-None-Match'), respond);
+      return await writeArchive(request, db, respond);
     } catch (error) {
-      if (/free tier|limit exceeded|daily row/i.test(error.message)) return respond({ error: 'D1 请求额度已用尽，请稍后再试' }, 429);
-      return respond({ error: 'D1 数据库操作失败，请检查 Worker 绑定和数据库迁移' }, 503);
+      const reason = [error?.message, error?.cause?.message].join(' ');
+      if (/free tier|limit exceeded|daily row/i.test(reason)) return respond({ error: 'D1 请求额度已用尽，请稍后再试' }, 429);
+      if (/no such (?:table|column)/i.test(reason)) return missingSchema(respond);
+      if (/database not found|\b7404\b/i.test(reason)) {
+        return respond({ code: 'D1_DATABASE_NOT_FOUND', error: 'Worker 绑定的 D1 数据库不存在' }, 503);
+      }
+      return respond({ code: 'D1_DATABASE_UNAVAILABLE', error: 'D1 数据库操作暂时失败' }, 503);
     }
   }
 };

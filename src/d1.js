@@ -3,6 +3,16 @@ import { sameSettings, sharedSettings } from './shared-settings.js';
 import { workerURL } from './cloud-connections.js';
 export { workerURL };
 
+function databaseError(code, action) {
+  switch (code) {
+    case 'D1_BINDING_MISSING': return 'Worker 缺少 ARCHIVE 绑定。请在 Bindings 添加 D1 database，变量名填 ARCHIVE。';
+    case 'D1_DATABASE_NOT_FOUND': return 'Worker 找不到绑定的 D1 数据库。请在 Bindings 核对 ARCHIVE 指向的数据库。';
+    case 'D1_SCHEMA_MISSING': return 'D1 票库表或初始化记录缺失。请在 ARCHIVE 所指数据库的 Console 执行行迹的初始化 SQL。';
+    case 'D1_DATABASE_UNAVAILABLE': return action + ' D1 票库失败（503）。请重试或查看 Worker 日志。';
+    default: return action + ' D1 票库失败（503）。请检查 Worker 的 ARCHIVE 绑定，以及绑定的数据库是否已执行初始化 SQL。';
+  }
+}
+
 export class D1Store {
   constructor(config, token, fetcher = fetch, { signal, cached } = {}) {
     this.config = config;
@@ -25,7 +35,8 @@ export class D1Store {
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
       const messages = { 401: 'D1 访问凭证无效，请重新授权', 409: '另一台设备刚更新了 D1 票库，请重新核对', 413: 'D1 票据或设置超过大小限制', 429: 'D1 免费额度已用尽，请稍后再试' };
-      throw Object.assign(new Error(messages[response.status] || `D1 请求失败（${response.status}）`), { status: response.status });
+      const message = response.status === 503 ? databaseError(result?.code, body ? '写入' : '读取') : messages[response.status];
+      throw Object.assign(new Error(message || `D1 请求失败（${response.status}）`), { status: response.status });
     }
     if (typeof result.id !== 'string' || !/^[0-9a-f]{32}$/.test(result.id) || typeof result.head !== 'string' || !result.head) throw new Error('Worker 票库接口返回无效');
     if (this.config.id && this.config.id !== result.id) throw new Error('D1 数据库身份已变化，已保留本机缓存');
