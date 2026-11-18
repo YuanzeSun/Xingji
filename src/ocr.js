@@ -32,7 +32,7 @@ async function refineFlightSchedule(worker, image, data) {
 }
 export async function createRecognizer(progress = () => {}, {
   workerFactory=createWorker,
-  readCodes=async image=>(await import('./code-reader.js')).readBoardingCodes(image)
+  readCodes=async image=>(await import('./code-reader.js')).readBoardingCodesFromImage(image)
 } = {}) {
   const base = new URL('./', location.href);
   const worker = await workerFactory(['chi_sim', 'eng'], 1, {
@@ -45,8 +45,9 @@ export async function createRecognizer(progress = () => {}, {
   await worker.setParameters({ user_defined_dpi: '300', preserve_interword_spaces: '1', tessedit_pageseg_mode: '3' });
   return {
     async recognize(image, { refineRailDate = false, type = '' } = {}) {
-      image=await prepareOCRImage(image);
-      const codeRead=type==='rail' ? Promise.resolve([]) : Promise.resolve().then(()=>readCodes(image.getContext('2d').getImageData(0,0,image.width,image.height))).catch(()=>[]);
+      const source = image;
+      image=await prepareOCRImage(source);
+      const codeRead=type==='rail' ? Promise.resolve([]) : Promise.resolve().then(()=>readCodes(source)).catch(()=>[]);
       let data;
       try { ({data}=await worker.recognize(image, {}, { text: true, tsv: true })); }
       catch(error){if(!(await codeRead).length)throw error;data={text:'',tsv:'',confidence:0};}

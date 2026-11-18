@@ -35,6 +35,20 @@ test('scan-field extraction accepts validated BCBP codes and ignores link codes'
   assert.deepEqual(await readBoardingPayloads(symbolImage(link.symbol,'flight')),[]);
 });
 
+test('compact and MicroPDF417 boarding passes rebuild into verified standard PDF417', async () => {
+  const text = encodeBCBP({ passenger: 'EXAMPLE/TRAVELER', pnr: 'ABC123', origin: 'JFK', destination: 'LHR', carrier: 'BA', flightNumber: '321', date: '2026-05-18', cabin: 'Y', seat: '12A', sequence: '42', status: '1' });
+  for (const bcid of ['pdf417compact', 'micropdf417']) {
+    const [raw] = bwip.raw({ bcid, text });
+    const width = raw.pixx, height = raw.pixy, rowScale = width * height / raw.pixs.length;
+    const image = symbolImage({ width, height, data: Uint8ClampedArray.from({ length: width * height },
+      (_, i) => raw.pixs[Math.floor(Math.floor(i / width) / rowScale) * width + i % width] ? 0 : 255) }, 'flight');
+    const [restored] = await readBoardingCodes(image);
+    assert.equal(restored?.format, 'PDF417', bcid);
+    assert.equal(atob(restored.rawBytes), text);
+    assert.equal(readBoardingCode(restored).seat, '12A');
+  }
+});
+
 test('boarding QR codes preserve Chinese or binary extensions and autofill fields while clearing only the electronic marker',async()=>{
   const header=encodeBCBP({passenger:'EXAMPLE/TRAVELER',pnr:'ABC123',origin:'JFK',destination:'LHR',carrier:'BA',flightNumber:'321',date:'2026-05-18',cabin:'Y',seat:'12A',sequence:'42',status:'1',electronic:'E'});
   const utf8=text=>new TextEncoder().encode(text);

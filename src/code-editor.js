@@ -129,7 +129,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     try { const response = await fetch(referenceURL); if (!response.ok) throw new Error('本次图片无法读取'); const file = await response.blob(); if (!disposed && request === generation) await read(file, automatic); }
     catch (failure) { if (!disposed && request === generation) { loading = false; status.textContent = ''; error.textContent = failure.message;  } }
   }
-  const camera = bindCodeCamera(section, file => read(file, true), { ...cameraOptions, onCancel: () => { reset(); status.textContent = ''; } });
+  const camera = bindCodeCamera(section, image => read(image, true), { asCanvas: draft.type === 'flight', ...cameraOptions, onCancel: () => { reset(); status.textContent = ''; } });
   photo.addEventListener('change', () => { const file = photo.files?.[0]; if (file) { camera.stop(); read(file); } });
   find('code-use-scan')?.addEventListener('click', () => readReference());
   find('code-remove').addEventListener('click', () => {

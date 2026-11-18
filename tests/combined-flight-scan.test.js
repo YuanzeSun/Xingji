@@ -23,7 +23,7 @@ async function withImage(run){
 
 test('OCR and barcode recognition start together and produce one locked barcode record with editable OCR supplements',async()=>withImage(async image=>{
   let finishOCR,finishCode,reads=0,terminated=false,settled=false;const started=[];
-  const engine=await createRecognizer(()=>{},{workerFactory:async()=>({setParameters:async()=>{},recognize:async()=>{started.push('ocr');if(++reads===1)return new Promise(resolve=>{finishOCR=resolve;});return {data:{text,confidence:95,tsv:''}};},terminate:async()=>{terminated=true;}}),readCodes:async pixels=>{assert.equal(pixels.width,40);started.push('barcode');return new Promise(resolve=>{finishCode=resolve;});}});
+  const engine=await createRecognizer(()=>{},{workerFactory:async()=>({setParameters:async()=>{},recognize:async()=>{started.push('ocr');if(++reads===1)return new Promise(resolve=>{finishOCR=resolve;});return {data:{text,confidence:95,tsv:''}};},terminate:async()=>{terminated=true;}}),readCodes:async source=>{assert.equal(source,image);started.push('barcode');return new Promise(resolve=>{finishCode=resolve;});}});
   try{
     const pending=engine.recognize(image,{type:'flight'}).then(value=>{settled=true;return value;});
     await new Promise(resolve=>setImmediate(resolve));assert.ok(started.includes('ocr'));assert.ok(started.includes('barcode'));
