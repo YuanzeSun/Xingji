@@ -406,16 +406,34 @@ class AppStore extends ChangeNotifier {
     );
   });
 
-  Future<void> importArchive(TicketArchive archive, {PickConflicts? pick}) =>
-      _run(() async {
-        await _saveChanges(
-          records: deduplicateTickets([
-            ..._records,
-            ...archive.records,
-          ], catalog),
-          pick: pick,
-        );
-      });
+  Future<FullArchiveBackup> exportBackup() async {
+    final target = connection;
+    final archive = TicketArchive(List.of(_records));
+    final savedSettings = sharedSettings(settings);
+    var token = _remote?.token ?? '';
+    if (token.isEmpty && target != null && AppleServices.available) {
+      token = await AppleServices.credential(_credentialKey(target)) ?? '';
+    }
+    return FullArchiveBackup(
+      archive,
+      savedSettings,
+      github: target == null ? null : (target: target, token: token),
+    );
+  }
+
+  Future<void> importArchive(
+    TicketArchive archive, {
+    Map<String, dynamic>? backupSettings,
+    PickConflicts? pick,
+  }) => _run(() async {
+    await _saveChanges(
+      records: deduplicateTickets([..._records, ...archive.records], catalog),
+      nextSettings: backupSettings == null
+          ? null
+          : sharedSettings(backupSettings),
+      pick: pick,
+    );
+  });
 
   void _checkBinding(GitHubConnection target) {
     final current = connection;

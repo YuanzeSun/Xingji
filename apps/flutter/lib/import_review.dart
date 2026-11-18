@@ -9,9 +9,10 @@ import 'design.dart';
 Future<bool> reviewImport(
   BuildContext context,
   AppStore store,
-  List<TicketRecord> records,
-) async {
-  if (records.isEmpty) {
+  List<TicketRecord> records, {
+  Map<String, dynamic>? backupSettings,
+}) async {
+  if (records.isEmpty && backupSettings == null) {
     showError(context, '没有识别到可导入的票据');
     return false;
   }
@@ -31,32 +32,38 @@ Future<bool> reviewImport(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Flexible(
-                      child: ListView(
-                        shrinkWrap: true,
-                        children: [
-                          for (final record in records)
-                            CheckboxListTile(
-                              value: selected.contains(record.id),
-                              onChanged: saving
-                                  ? null
-                                  : (value) => update(() {
-                                      if (value == true) {
-                                        selected.add(record.id);
-                                      } else {
-                                        selected.remove(record.id);
-                                      }
-                                    }),
-                              title: Text(
-                                '${record.text('service')}  ${record.text('origin')} → ${record.text('destination')}',
-                              ),
-                              subtitle: Text(
-                                '${record.departure?.complete == true ? record.departure!.label : '日期未知'}${record.missingFields.isEmpty ? '' : '\n部分信息待补全，可导入后编辑'}',
-                              ),
-                            ),
-                        ],
+                    if (backupSettings != null)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: Text('个人资料和飞常准 MCP 设置将以备份为准。'),
                       ),
-                    ),
+                    if (records.isNotEmpty)
+                      Flexible(
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: [
+                            for (final record in records)
+                              CheckboxListTile(
+                                value: selected.contains(record.id),
+                                onChanged: saving
+                                    ? null
+                                    : (value) => update(() {
+                                        if (value == true) {
+                                          selected.add(record.id);
+                                        } else {
+                                          selected.remove(record.id);
+                                        }
+                                      }),
+                                title: Text(
+                                  '${record.text('service')}  ${record.text('origin')} → ${record.text('destination')}',
+                                ),
+                                subtitle: Text(
+                                  '${record.departure?.complete == true ? record.departure!.label : '日期未知'}${record.missingFields.isEmpty ? '' : '\n部分信息待补全，可导入后编辑'}',
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     if (error.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 12),
@@ -79,7 +86,8 @@ Future<bool> reviewImport(
                   child: const Text('取消'),
                 ),
                 FilledButton(
-                  onPressed: saving || selected.isEmpty
+                  onPressed:
+                      saving || (selected.isEmpty && backupSettings == null)
                       ? null
                       : () async {
                           update(() {
@@ -95,6 +103,7 @@ Future<bool> reviewImport(
                                     )
                                     .toList(),
                               ),
+                              backupSettings: backupSettings,
                               pick: pickSyncConflicts(context),
                             );
                             if (context.mounted) Navigator.pop(context, true);
@@ -107,7 +116,13 @@ Future<bool> reviewImport(
                             }
                           }
                         },
-                  child: Text(saving ? '正在导入…' : '导入 ${selected.length} 张'),
+                  child: Text(
+                    saving
+                        ? '正在导入…'
+                        : backupSettings == null
+                        ? '导入 ${selected.length} 张'
+                        : '恢复票库和设置',
+                  ),
                 ),
               ],
             ),

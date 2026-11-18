@@ -228,7 +228,6 @@ Future<List<TicketRecord>> readLocalImport(
       catalog,
       flight: RegExp(r'航班|登机|FLIGHT', caseSensitive: false).hasMatch(text),
     ),
-    'json' => TicketArchive.fromJson(jsonDecode(text)).records,
     _ => throw const FormatException('不支持这个文件格式'),
   };
 }

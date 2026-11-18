@@ -248,7 +248,7 @@ class _SettingsPageState extends State<SettingsPage> {
         const SectionTitle('导入与导出'),
         const Padding(
           padding: EdgeInsets.only(bottom: 12),
-          child: Text('备份将当前全部票据存为一个 JSON 文件，可重新导入。GitHub 同步会按年份分文件保存。'),
+          child: Text('JSON 备份包含票据、个人资料和访问凭证。'),
         ),
         Wrap(
           spacing: 12,
@@ -299,9 +299,30 @@ class _SettingsPageState extends State<SettingsPage> {
                         if (await file.length() > 40_000_000) {
                           throw const FormatException('请选择 40 MB 以内的文件');
                         }
+                        final bytes = await file.readAsBytes();
+                        if (file.name.toLowerCase().endsWith('.json')) {
+                          final backup = FullArchiveBackup.fromJson(
+                            jsonDecode(utf8.decode(bytes)),
+                          );
+                          if (!context.mounted) return;
+                          final restored = await reviewImport(
+                            context,
+                            store,
+                            backup.archive.records,
+                            backupSettings: backup.settings,
+                          );
+                          if (restored && context.mounted) {
+                            await _offerGitHubBackupConnection(
+                              context,
+                              store,
+                              backup.github,
+                            );
+                          }
+                          return;
+                        }
                         final records = await readLocalImport(
                           file.name,
-                          await file.readAsBytes(),
+                          bytes,
                           store.catalog,
                         );
                         if (context.mounted) {
@@ -314,11 +335,11 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             OutlinedButton.icon(
               onPressed: () => action(
-                () => saveFile(
-                  'xingji-archive.json',
+                () async => saveFile(
+                  'xingji-backup.json',
                   utf8.encode(
                     const JsonEncoder.withIndent('  ')
-                        .convert(TicketArchive(store.privateRecords).toJson()),
+                        .convert((await store.exportBackup()).toJson()),
                   ),
                   'application/json',
                 ),
@@ -382,6 +403,42 @@ class _SettingsPageState extends State<SettingsPage> {
       ],
     );
   }
+}
+
+Future<void> _offerGitHubBackupConnection(
+  BuildContext context,
+  AppStore store,
+  GitHubBackupConnection? connection,
+) async {
+  if (connection == null ||
+      connection.token.isEmpty ||
+      store.connection != null) {
+    return;
+  }
+  final add = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('是否添加 GitHub 连接'),
+      content: Text(connection.target.label),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('跳过'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('继续连接'),
+        ),
+      ],
+    ),
+  );
+  if (add != true || !context.mounted || store.connection != null) return;
+  await store.connect(
+    connection.target,
+    connection.token,
+    choose: (local, cloud) => chooseBinding(context, local, cloud),
+    pick: pickSyncConflicts(context),
+  );
 }
 
 void _showResetComplete(BuildContext context) {
