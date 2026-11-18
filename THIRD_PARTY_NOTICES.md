@@ -1,5 +1,7 @@
 # Third-party assets and libraries
 
+- **Flutter ticket renderer** — bundled JavaScript font and XML handling includes fontkit (MIT), xmldom (MIT), text-encoding (Unlicense / Apache-2.0), and their dependencies. Full package versions and license texts are preserved in `apps/flutter/assets/renderer-notices.txt` and registered with Flutter's license registry. Font notices remain in `apps/flutter/assets/fonts/`; Flutter dependencies retain their package license records.
+
 - **Noto Serif SC / Noto Sans SC** — The Noto Project Authors, SIL Open Font License 1.1. Locally instantiated static font files are bundled in `public/fonts`. Copyright and license text are preserved in `public/fonts/OFL.txt` and `public/fonts/OFL-NotoSansSC.txt`.
   - https://github.com/google/fonts/tree/main/ofl/notoserifsc
   - https://github.com/google/fonts/tree/main/ofl/notosanssc

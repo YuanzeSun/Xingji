@@ -26,9 +26,7 @@
 
 ## App
 
-Flutter App 正在独立的 [`app` 分支](https://github.com/YuanzeSun/Xingji/tree/app) 开发，支持在本机离线管理票据，也可连接 GitHub 私有仓库同步。
-
-维护者可在 [Actions](https://github.com/YuanzeSun/Xingji/actions/workflows/pages.yml) 的 **Publish Xingji Pages** 中从 `main` 手动运行，选 `web` 发布原网页版，选 `flutter` 发布 App 预览。两个版本共用同一个在线地址。
+Flutter App 正在开发。App 可在本机离线录入和管理票据。也可选择绑定 GitHub 私有仓库同步，绑定后在线修改，离线可查看和导出。共用工程和各平台接入说明见 [App 开发说明](docs/flutter-development.md)。
 
 ## 导入方式
 
