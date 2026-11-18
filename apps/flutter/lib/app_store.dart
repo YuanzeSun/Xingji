@@ -15,7 +15,7 @@ class AppStore extends ChangeNotifier {
   final Map<String, dynamic> mapData;
   final GitHubArchive Function(GitHubConnection, String) remoteFactory;
   List<TicketRecord> _records = [], _base = [];
-  List<TicketRecord> _reviewedRemote = [];
+  ArchiveSnapshot? _reviewedRemote;
   Map<String, dynamic> settings = {}, _baseSettings = {};
   GitHubConnection? connection;
   GitHubArchive? _remote;
@@ -187,17 +187,23 @@ class AppStore extends ChangeNotifier {
   });
   Future<void> connect(GitHubConnection target, String token) => _run(() async {
     if (demo) throw StateError('请退出示例模式后连接票库');
-    if (connection != null &&
-        connection!.label != target.label &&
-        _records.isNotEmpty) {
-      throw const FormatException('请先导出并清空本机票库，再切换仓库');
+    final current = connection;
+    if (current != null &&
+        (current.label.toLowerCase() != target.label.toLowerCase() ||
+            current.branch != target.branch)) {
+      throw const FormatException('请先导出并清空本机票库，再切换仓库或分支');
     }
     final remote = remoteFactory(target, token);
-    final verified = await remote.verify();
-    if (connection?.repositoryId != null &&
-        connection!.repositoryId != verified['id']) {
+    late final ArchiveSnapshot snapshot;
+    try {
+      snapshot = await remote.read();
+      if (current?.repositoryId != null &&
+          current!.repositoryId != snapshot.repositoryId) {
+        throw const FormatException('仓库身份已改变，已保留本机票库');
+      }
+    } catch (_) {
       remote.close();
-      throw const FormatException('仓库身份已改变，已保留本机票库');
+      rethrow;
     }
     _remote?.close();
     _remote = remote;
@@ -205,18 +211,34 @@ class AppStore extends ChangeNotifier {
       target.owner,
       target.repository,
       branch: target.branch,
-      repositoryId: verified['id'],
+      repositoryId: snapshot.repositoryId,
     );
-    await _sync();
+    await _sync(firstSnapshot: snapshot);
   });
   Future<void> sync() => _run(_sync);
-  Future<void> _sync() async {
+
+  Future<ArchiveSnapshot> _readBound(GitHubArchive remote) async {
+    final snapshot = await remote.read();
+    if (snapshot.repositoryId != connection?.repositoryId) {
+      throw const FormatException('仓库身份已改变，已保留本机票库');
+    }
+    return snapshot;
+  }
+
+  void _clearReview() {
+    conflicts = null;
+    settingsConflicts = null;
+    _reviewedRemote = null;
+  }
+
+  Future<void> _sync({ArchiveSnapshot? firstSnapshot}) async {
     final remote = _remote;
     if (remote == null) return;
+    _clearReview();
     status = '正在同步';
     notifyListeners();
     try {
-      final snapshot = await remote.read();
+      final snapshot = firstSnapshot ?? await _readBound(remote);
       await remote.assertDescendant(_head, snapshot.head);
       if (_head.isNotEmpty && _generation != snapshot.generation) {
         resetDetected = true;
@@ -231,21 +253,19 @@ class AppStore extends ChangeNotifier {
       if (merge.conflicts.isNotEmpty || settingMerge.conflicts.isNotEmpty) {
         conflicts = merge;
         settingsConflicts = settingMerge;
-        _reviewedRemote = List.of(snapshot.records);
+        _reviewedRemote = snapshot;
         status = '请选择同步冲突的处理方式';
         return;
       }
       final mergedSettings = settingMerge.settings;
-      final head = await remote.write(merge.records, snapshot, mergedSettings);
-      _records = deduplicateTickets(merge.records, catalog);
+      final records = deduplicateTickets(merge.records, catalog);
+      final head = await remote.write(records, snapshot, mergedSettings);
+      _records = records;
       _base = List.of(_records);
       settings = mergedSettings;
       _baseSettings = sharedSettings(cloneJson(settings));
       _head = head;
       _generation = snapshot.generation;
-      conflicts = null;
-      _reviewedRemote = [];
-      settingsConflicts = null;
       resetDetected = false;
       pending = false;
       status = '已同步';
@@ -257,20 +277,17 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<void> resolveConflicts(Map<String, bool> choices) => _run(() async {
-    final merge = conflicts;
-    if (merge == null) return;
+    final merge = conflicts, reviewed = _reviewedRemote;
+    if (merge == null || reviewed == null) return;
     final nextRecords = merge.resolve(choices);
     final nextSettings = settingsConflicts?.resolve(choices) ?? settings;
     _records = nextRecords;
-    _base = List.of(_reviewedRemote);
+    _base = List.of(reviewed.records);
     settings = nextSettings;
-    if (settingsConflicts != null) {
-      _baseSettings = sharedSettings(cloneJson(settingsConflicts!.remote));
-    }
-    conflicts = null;
-    _reviewedRemote = [];
-    settingsConflicts = null;
-    _reviewedRemote = [];
+    _baseSettings = sharedSettings(reviewed.settings);
+    _head = reviewed.head;
+    _generation = reviewed.generation;
+    _clearReview();
     pending = true;
     await _persist();
     await _sync();
@@ -280,7 +297,7 @@ class AppStore extends ChangeNotifier {
     if (demo || _remote == null) throw StateError('请先连接私人票库');
     status = '正在重置仓库…';
     notifyListeners();
-    final snapshot = await _remote!.read();
+    final snapshot = await _readBound(_remote!);
     await _remote!.assertDescendant(_head, snapshot.head);
     final merge = mergeSettings(_baseSettings, settings, snapshot.settings);
     if (merge.conflicts.isNotEmpty) {
@@ -292,8 +309,16 @@ class AppStore extends ChangeNotifier {
     await _persist();
   });
   Future<void> acceptRemoteReset() => _run(() async {
-    if (_remote == null || !resetDetected) throw StateError('没有待采用的云端重置');
-    _adopt(await _remote!.read());
+    if (demo || _remote == null || !resetDetected) {
+      throw StateError('没有待采用的云端重置');
+    }
+    final snapshot = await _readBound(_remote!);
+    await _remote!.assertDescendant(_head, snapshot.head);
+    if (snapshot.generation == _generation) {
+      resetDetected = false;
+      throw const FormatException('云端重置状态已变化，请重新同步');
+    }
+    _adopt(snapshot);
     status = '已采用云端票库';
     await _persist();
   });
@@ -306,9 +331,7 @@ class AppStore extends ChangeNotifier {
     _generation = snapshot.generation;
     pending = false;
     resetDetected = false;
-    conflicts = null;
-    _reviewedRemote = [];
-    settingsConflicts = null;
+    _clearReview();
   }
 
   Future<void> clearLocalArchive() => _run(() async {
@@ -323,9 +346,7 @@ class AppStore extends ChangeNotifier {
     _generation = '';
     pending = false;
     resetDetected = false;
-    conflicts = null;
-    _reviewedRemote = [];
-    settingsConflicts = null;
+    _clearReview();
     status = '本机票库已清空，个人资料已保留';
     await _persist();
   });

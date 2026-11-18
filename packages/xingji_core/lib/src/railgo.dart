@@ -43,13 +43,18 @@ class RailGoClient {
         boarding = record.departure;
     final service = record.text('service').toUpperCase().split('/').first;
     if (record.isFlight ||
+        record.text('template') == 'rail-refund-receipt' ||
         !RegExp(r'^[A-Z]?\d{1,5}$').hasMatch(service) ||
         origin == null ||
         destination == null ||
+        origin.identity == destination.identity ||
         boarding?.complete != true) {
       throw const FormatException('请先填写车次、完整日期和起终站');
     }
     var start = startDate ?? boarding!;
+    if (!start.complete || start.date!.isAfter(boarding!.date!)) {
+      throw const FormatException('列车始发日期须完整，且不能晚于乘车日期');
+    }
     Future<Map<String, dynamic>> main() async {
       final payload = await _get(
         'rg-api.zenglingkun.cn',
@@ -121,7 +126,7 @@ class RailGoClient {
     );
     if (from() < 0 || to() <= from()) throw const FormatException('未匹配到所乘区间');
     final actual = JourneyDate.fromJson(stops[from()]['departureDate']);
-    if (actual?.calendarText != boarding!.calendarText &&
+    if (actual?.calendarText != boarding.calendarText &&
         startDate == null &&
         actual?.date != null) {
       start = JourneyDate.fromDateTime(
@@ -135,6 +140,15 @@ class RailGoClient {
         JourneyDate.fromJson(stops[from()]['departureDate'])?.calendarText !=
             boarding.calendarText) {
       throw const FormatException('本站发车日期不匹配，请核对列车始发日');
+    }
+    if (stops.where((stop) => stop['station'] == station(origin.name)).length !=
+            1 ||
+        stops
+                .where((stop) => stop['station'] == station(destination.name))
+                .length !=
+            1 ||
+        stops[to()]['arrivalTime'] == '') {
+      throw const FormatException('无法确认所乘区间的到发时刻');
     }
     var previous = '';
     for (final stop in stops)

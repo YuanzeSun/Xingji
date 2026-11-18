@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:xingji_core/xingji_core.dart';
 
@@ -77,6 +79,34 @@ class TicketDetail extends StatefulWidget {
 
 class _TicketDetailState extends State<TicketDetail> {
   bool exporting = false;
+
+  Future<void> _export(TicketRecord record, String format) async {
+    setState(() => exporting = true);
+    try {
+      final service = record
+          .text('service')
+          .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+      final name = service.isEmpty ? '行迹票据' : service;
+      if (format == 'svg') {
+        await saveFile(
+          '$name.svg',
+          utf8.encode(await ticketSvg(record)),
+          'image/svg+xml',
+        );
+      } else {
+        await saveFile(
+          '$name.png',
+          await ticketPng(record, widget.store.catalog),
+          'image/png',
+        );
+      }
+    } catch (error) {
+      if (mounted) showError(context, error);
+    } finally {
+      if (mounted) setState(() => exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.store,
@@ -122,6 +152,8 @@ class _TicketDetailState extends State<TicketDetail> {
           'frequentFlyerNumber',
           'marketingCarrier',
         ] else ...[
+          'issuer',
+          'saleCode',
           'railPlatform',
           'railBureau',
           'railRunner',
@@ -138,6 +170,10 @@ class _TicketDetailState extends State<TicketDetail> {
           ? '出发城市'
           : key == 'destinationCity'
           ? '到达城市'
+          : flight && key == 'departureDate'
+          ? '计划起飞日期'
+          : flight && key == 'arrivalDate'
+          ? '计划到达日期'
           : flight && key == 'departureTime'
           ? '计划起飞时间'
           : flight && key == 'arrivalTime'
@@ -165,24 +201,14 @@ class _TicketDetailState extends State<TicketDetail> {
                     : () => openEditor(context, store, record: record),
                 icon: const Icon(Icons.edit_outlined),
               ),
-            IconButton(
-              tooltip: '导出票面图片',
-              onPressed: exporting
-                  ? null
-                  : () async {
-                      setState(() => exporting = true);
-                      try {
-                        await saveFile(
-                          '${record.text('service')}.png',
-                          await ticketPng(record, store.catalog),
-                          'image/png',
-                        );
-                      } catch (error) {
-                        if (context.mounted) showError(context, error);
-                      } finally {
-                        if (mounted) setState(() => exporting = false);
-                      }
-                    },
+            PopupMenuButton<String>(
+              tooltip: '导出票面',
+              enabled: !exporting,
+              onSelected: (format) => _export(record, format),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'png', child: Text('导出 PNG')),
+                PopupMenuItem(value: 'svg', child: Text('导出 SVG')),
+              ],
               icon: const Icon(Icons.download_outlined),
             ),
           ],
@@ -260,7 +286,8 @@ class _TicketDetailState extends State<TicketDetail> {
                   ),
                   if (!flight && record['railJourney'] is Map)
                     ..._railJourney(record),
-                  if (!flight && record['railRoute'] is Map) ...[
+                  if (flight) ..._boardingJourney(record),
+                  if (matchingRailRoute(record, store.catalog) != null) ...[
                     const SectionTitle('铁路线路'),
                     SizedBox(
                       height: 340,
@@ -271,6 +298,7 @@ class _TicketDetailState extends State<TicketDetail> {
                           [record],
                           railway: true,
                           airRoutes: false,
+                          showFullRailRoute: true,
                         ),
                       ),
                     ),
@@ -308,42 +336,70 @@ class _TicketDetailState extends State<TicketDetail> {
   List<Widget> _railJourney(TicketRecord record) {
     final journey = record['railJourney'] as Map,
         stops = (journey['stops'] as List? ?? []).cast<Map>();
-    var active = false;
+    if (!record.isJourney || stops.isEmpty) return [];
+    final query = journey['query'];
+    if (query is! Map ||
+        JourneyDate.fromJson(query['boardingDate'])?.calendarText !=
+            record.departure?.calendarText) {
+      return [];
+    }
+    final from = stops.indexWhere((stop) => stop['station'] == query['origin']);
+    final to = stops.indexWhere(
+      (stop) => stop['station'] == query['destination'],
+    );
+    final hasDistance = stops.every((stop) => stop['distanceKm'] is num);
+    String time(Map stop, String event) {
+      final clock = stop['${event}Time']?.toString() ?? '';
+      if (clock.isEmpty) return '—';
+      final date = JourneyDate.fromJson(stop['${event}Date']);
+      return date == null || date.calendarText == record.departure?.calendarText
+          ? clock
+          : '${date.label}\n$clock';
+    }
+
     return [
       const SectionTitle('列车全程'),
-      if (stops.isNotEmpty)
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            horizontalMargin: 12,
-            columnSpacing: 28,
-            columns: [
-              '车站',
-              '到达',
-              '出发',
-              '距始发 km',
-            ].map((label) => DataColumn(label: Text(label))).toList(),
-            rows: stops.map((stop) {
-              if (stop['station'] == record.text('origin')) active = true;
-              final selected = active;
-              if (stop['station'] == record.text('destination')) active = false;
-              return DataRow(
-                color: selected ? const WidgetStatePropertyAll(mist) : null,
-                cells:
-                    [
-                          stop['station'],
-                          stop['arrivalTime'],
-                          stop['departureTime'],
-                          stop['distanceKm'],
-                        ]
-                        .map(
-                          (value) => DataCell(Text((value ?? '').toString())),
-                        )
-                        .toList(),
-              );
-            }).toList(),
-          ),
+      Text('${stops.first['station']} → ${stops.last['station']}'),
+      if (from >= 0 && to > from)
+        Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 12),
+          child: Text('我的区间 · ${query['origin']} → ${query['destination']}'),
         ),
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          horizontalMargin: 12,
+          columnSpacing: 28,
+          columns: [
+            '车站',
+            '到达',
+            '出发',
+            '停留',
+            if (hasDistance) '距始发 km',
+          ].map((label) => DataColumn(label: Text(label))).toList(),
+          dataRowMaxHeight: double.infinity,
+          rows: stops.indexed.map((entry) {
+            final (index, stop) = entry;
+            final selected = from >= 0 && index >= from && index <= to;
+            final first = index == 0, last = index == stops.length - 1;
+            return DataRow(
+              color: selected ? const WidgetStatePropertyAll(mist) : null,
+              cells:
+                  [
+                        stop['station'],
+                        first ? '—' : time(stop, 'arrival'),
+                        last ? '—' : time(stop, 'departure'),
+                        first || last || stop['stopMinutes'] == null
+                            ? '—'
+                            : '${stop['stopMinutes']} 分钟',
+                        if (hasDistance) stop['distanceKm'],
+                      ]
+                      .map((value) => DataCell(Text((value ?? '').toString())))
+                      .toList(),
+            );
+          }).toList(),
+        ),
+      ),
       for (final stock in (journey['trainsets'] as List? ?? [])) ...[
         SectionTitle(stock['id']?.toString() ?? '乘坐车组'),
         for (final key in [
@@ -371,8 +427,57 @@ class _TicketDetailState extends State<TicketDetail> {
             padding: const EdgeInsets.only(bottom: 12),
             child: Text('${info['name']}：${info['value']}'),
           ),
-        CoachPanel(journey['coaches']),
+        CoachPanel(journey['coaches'], carriage: record.text('carriage')),
       ],
+    ];
+  }
+
+  List<Widget> _boardingJourney(TicketRecord record) {
+    final code = record['boardingCode'];
+    if (code is! Map || code['rawBytes'] is! String) return [];
+    final String raw = code['rawBytes'];
+    final Map<String, dynamic>? decoded;
+    try {
+      decoded = decodeBoardingBytes(base64Decode(raw));
+    } on FormatException {
+      return [];
+    }
+    final legs = decoded?['legs'] as List? ?? [];
+    if (legs.length < 2) return [];
+    final current = int.tryParse(record.text('boardingLegIndex'));
+    String airport(String code) =>
+        widget.store.catalog.resolve(code, code, flight: true)?.name ?? code;
+    return [
+      const SectionTitle('联程航段'),
+      for (final (index, leg) in legs.indexed)
+        Builder(
+          builder: (context) {
+            final saved = widget.store.records.where((other) {
+              final otherCode = other['boardingCode'];
+              return other.id != record.id &&
+                  other.isFlight &&
+                  otherCode is Map &&
+                  otherCode['rawBytes'] == raw &&
+                  int.tryParse(other.text('boardingLegIndex')) == index;
+            }).firstOrNull;
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              selected: index == current,
+              title: Text('${leg['service']}'),
+              subtitle: Text(
+                '${airport(leg['originCode'])} → ${airport(leg['destinationCode'])}',
+              ),
+              trailing: index == current
+                  ? const Text('本段')
+                  : saved == null
+                  ? null
+                  : const Icon(Icons.chevron_right),
+              onTap: saved == null
+                  ? null
+                  : () => openTicket(context, widget.store, saved),
+            );
+          },
+        ),
     ];
   }
 }

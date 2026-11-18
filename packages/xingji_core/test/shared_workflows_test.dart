@@ -224,6 +224,56 @@ void main() {
     );
   });
 
+  test('RailGo uses an explicit previous-day start when the boarding date has no service', () async {
+    final mainDates = <String>[];
+    final client = MockClient((request) async {
+      if (!request.url.path.endsWith('getTrainMain'))
+        return http.Response('{}', 404);
+      final date = request.url.queryParameters['date']!;
+      mainDates.add(date);
+      if (date != '20261116') return http.Response('{}', 404);
+      return http.Response(
+        jsonEncode({
+          'success': true,
+          'data': {
+            'numberFull': ['Z83'],
+            'rundays': ['20261116'],
+            'timetable': [
+              {'station': '北京', 'depart': '22:00', 'day': 0},
+              {
+                'station': '哈尔滨',
+                'arrive': '06:10',
+                'depart': '06:15',
+                'day': 1,
+              },
+              {'station': '齐齐哈尔', 'arrive': '08:30', 'day': 1},
+            ],
+          },
+        }),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+    final api = RailGoClient(catalog, client: client);
+    addTearDown(api.close);
+    final boarding = JourneyDate.calendar(2026, 11, 17);
+    final record = TicketRecord.create({
+      'service': 'Z83',
+      'origin': '哈尔滨',
+      'destination': '齐齐哈尔',
+      'departureDate': boarding.toJson(),
+    });
+    await expectLater(api.lookup(record), throwsFormatException);
+    final result = await api.lookup(
+      record,
+      startDate: JourneyDate.calendar(2026, 11, 16),
+    );
+    expect(mainDates, ['20261117', '20261116']);
+    expect(result['departureTime'], '06:15');
+    expect(result['arrivalTime'], '08:30');
+    expect(result['arrivalDate'], boarding.toJson());
+  });
+
   for (final mismatch in [false, true]) {
     test(
       'RailGo validates mileage schedule and only retains single-car diagram links (mismatch=$mismatch)',

@@ -21,9 +21,14 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool exporting = false;
   final choices = <String, bool>{};
+  ArchiveMerge? reviewed;
   @override
   Widget build(BuildContext context) {
     final store = widget.store;
+    if (!identical(reviewed, store.conflicts)) {
+      choices.clear();
+      reviewed = store.conflicts;
+    }
     Future<void> action(Future<void> Function() run) async {
       try {
         await run();

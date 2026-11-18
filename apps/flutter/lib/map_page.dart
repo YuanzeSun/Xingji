@@ -59,7 +59,7 @@ class _MapPageState extends State<MapPage> {
 class JourneyCanvas extends StatefulWidget {
   final AppStore store;
   final List<TicketRecord> records;
-  final bool railway, airRoutes, flights, rail;
+  final bool railway, airRoutes, flights, rail, showFullRailRoute;
   final double controlBottom;
   final EdgeInsets annotationInsets;
   const JourneyCanvas(
@@ -70,6 +70,7 @@ class JourneyCanvas extends StatefulWidget {
     this.airRoutes = true,
     this.flights = false,
     this.rail = false,
+    this.showFullRailRoute = false,
     this.controlBottom = 12,
     this.annotationInsets = const EdgeInsets.all(8),
   });
@@ -157,6 +158,22 @@ Offset project(List coordinates) => Offset(
   (90 - (coordinates[1] as num).toDouble()) / 360 * 1000,
 );
 
+Map? matchingRailRoute(TicketRecord record, ReferenceCatalog catalog) {
+  final route = record['railRoute'];
+  if (record.isFlight || !record.isJourney || route is! Map) return null;
+  String service(Object? value) =>
+      (value ?? '').toString().trim().toUpperCase().split('/').first;
+  if (service(record['service']) != service(route['service'])) return null;
+  for (final side in ['origin', 'destination']) {
+    final name = catalog.endpoint(record, side)?.name ?? record.text(side);
+    if (placeKey(name).replaceFirst(RegExp(r'站$'), '') !=
+        placeKey('${route[side] ?? ''}')) {
+      return null;
+    }
+  }
+  return route;
+}
+
 class JourneyPainter extends CustomPainter {
   final JourneyCanvas view;
   final Path land, countries, provinces;
@@ -200,10 +217,12 @@ class JourneyPainter extends CustomPainter {
     }
 
     for (final record in view.records.where((row) => row.isJourney)) {
-      final route = record['railRoute'];
-      if (!record.isFlight && view.railway && route is Map) {
+      final route = view.railway
+          ? matchingRailRoute(record, view.store.catalog)
+          : null;
+      if (route != null) {
         addSegments(route['segments'], tracks);
-        if (route['fullRoute'] is Map) {
+        if (view.showFullRailRoute && route['fullRoute'] is Map) {
           addSegments(route['fullRoute']['segments'], full);
         }
         for (final item in route['lineLabels'] as List? ?? []) {

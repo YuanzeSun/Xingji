@@ -41,6 +41,7 @@ class _TicketEditorState extends State<TicketEditor> {
   final placeFocus = {'origin': FocusNode(), 'destination': FocusNode()};
   late final scanAvailable = SystemRecognition().available();
   late Map<String, dynamic> data;
+  JourneyDate? railStart;
   bool saving = false,
       querying = false,
       importing = false,
@@ -73,6 +74,13 @@ class _TicketEditorState extends State<TicketEditor> {
     }
     fields.clear();
     data = record.toJson();
+    final journey = record['railJourney'];
+    final savedStart = journey is Map
+        ? JourneyDate.fromJson(journey['query']?['startDate'])
+        : null;
+    railStart = savedStart?.calendarText == record.departure?.calendarText
+        ? null
+        : savedStart;
     revision++;
     for (final key in fieldLabels.keys) {
       if (!journeyDateFields.contains(key)) {
@@ -142,6 +150,7 @@ class _TicketEditorState extends State<TicketEditor> {
       _refreshProfile();
     }
     if (!flight && ['service', 'departureDate'].contains(key)) {
+      railStart = null;
       data['railRoute'] = '';
       data['railJourney'] = '';
     }
@@ -254,27 +263,61 @@ class _TicketEditorState extends State<TicketEditor> {
     });
     final client = RailGoClient(store.catalog);
     try {
-      final before = TicketRecord.fromJson(values()),
-          result = await client.lookup(store.catalog.normalize(before));
+      final before = TicketRecord.fromJson(values());
+      final result = await client.lookup(
+        store.catalog.normalize(before),
+        startDate: railStart,
+      );
+      if (!mounted) return;
       final lookup = data['lookupValues'] as Map,
           sources = data['fieldSources'] as Map;
+      final start = JourneyDate.fromJson(
+        result['railJourney']['query']['startDate'],
+      );
+      railStart = start?.calendarText == before.departure?.calendarText
+          ? null
+          : start;
       for (final entry in result.entries) {
         if (entry.value == '' || entry.value == null) continue;
         if (!['railRoute', 'railJourney'].contains(entry.key) &&
-            value(entry.key).isNotEmpty &&
-            !sameValue(before[entry.key], lookup[entry.key])) {
+            (before.lockedFields.contains(entry.key) ||
+                before.barcodeLocked(entry.key) ||
+                (value(entry.key).isNotEmpty &&
+                    !before.isAutomatic(entry.key)))) {
           continue;
         }
         data[entry.key] = entry.value;
         fields[entry.key]?.text = entry.value.toString();
+        if (journeyDateFields.contains(entry.key)) {
+          fields['${entry.key}-year']?.text =
+              JourneyDate.fromJson(entry.value)?.year?.toString() ?? '';
+        }
         lookup[entry.key] = cloneJson(entry.value);
         sources[entry.key] = 'railgo';
       }
     } catch (failure) {
       error = failure.toString().replaceFirst('FormatException: ', '');
     } finally {
-      client.client.close();
+      client.close();
       if (mounted) setState(() => querying = false);
+    }
+  }
+
+  Future<void> chooseRailStart() async {
+    final boarding = JourneyDate.fromJson(data['departureDate'])?.date;
+    if (boarding == null) return;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: railStart?.date ?? boarding,
+      firstDate: DateTime(1800),
+      lastDate: boarding,
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        railStart = DateUtils.isSameDay(picked, boarding)
+            ? null
+            : JourneyDate.fromDateTime(picked);
+      });
     }
   }
 
@@ -561,22 +604,48 @@ class _TicketEditorState extends State<TicketEditor> {
                       flight ? '计划起飞日期' : '出发日期',
                       required: !flight || data['flightStatus'] == 'normal',
                     ),
-                    if (!flight)
+                    if (!flight && data['template'] != 'rail-refund-receipt')
                       Padding(
                         padding: const EdgeInsets.only(top: 16),
-                        child: OutlinedButton.icon(
-                          onPressed: querying ? null : lookupRail,
-                          icon: querying
-                              ? const SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.auto_awesome_outlined),
-                          label: Text(
-                            querying ? '正在查询 RailGo…' : 'RailGo 查询并补全',
-                          ),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: querying ? null : lookupRail,
+                              icon: querying
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.auto_awesome_outlined),
+                              label: Text(
+                                querying
+                                    ? '正在查询 RailGo…'
+                                    : data['railJourney'] is Map
+                                    ? '刷新 RailGo 资料'
+                                    : 'RailGo 查询并补全',
+                              ),
+                            ),
+                            if (JourneyDate.fromJson(data['departureDate'])
+                                    ?.complete ==
+                                true)
+                              TextButton.icon(
+                                onPressed: querying ? null : chooseRailStart,
+                                icon: const Icon(
+                                  Icons.calendar_today_outlined,
+                                  size: 16,
+                                ),
+                                label: Text(
+                                  railStart == null
+                                      ? '调整列车始发日'
+                                      : '始发日 ${railStart!.label}',
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                     const SizedBox(height: 16),
@@ -646,6 +715,7 @@ class _TicketEditorState extends State<TicketEditor> {
                                   'frequentFlyerCarrier',
                                 ],
                                 ['frequentFlyerNumber', 'marketingCarrier'],
+                                ['flightDistance', 'orderNumber'],
                               ]
                             : [
                                 ['railBureau', 'railRunner'],

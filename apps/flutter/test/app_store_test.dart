@@ -118,6 +118,65 @@ void main() {
     expect(app.pending, false);
     app.dispose();
   });
+
+  test(
+    'a failed refresh cannot apply choices from an outdated conflict review',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final remote = _MemoryRemote();
+      final app = AppStore(
+        await SharedPreferences.getInstance(),
+        catalog,
+        [],
+        {},
+        remoteFactory: (_, _) => remote,
+      );
+      addTearDown(app.dispose);
+      await app.connect(const GitHubConnection('user', 'private'), 'test');
+      final record = ticket();
+      await app.save(record);
+      remote.update(
+        remote.snapshot.settings,
+        records: [
+          record.withChanges({'seat': '11F'}),
+        ],
+      );
+      await app.save(record.withChanges({'seat': '12F'}));
+      expect(app.conflicts?.conflicts.single.field, 'seat');
+
+      remote.offline = true;
+      await expectLater(
+        app.save(record.withChanges({'seat': '13F'})),
+        throwsStateError,
+      );
+      await app.resolveConflicts({'${record.id}:seat': true});
+      expect(app.records.single.text('seat'), '13F');
+      expect(app.pending, true);
+      expect(app.conflicts, isNull);
+    },
+  );
+
+  test('a bound archive cannot silently connect to another branch', () async {
+    SharedPreferences.setMockInitialValues({});
+    final remote = _MemoryRemote();
+    final app = AppStore(
+      await SharedPreferences.getInstance(),
+      catalog,
+      [],
+      {},
+      remoteFactory: (_, _) => remote,
+    );
+    addTearDown(app.dispose);
+    await app.connect(const GitHubConnection('user', 'private'), 'test');
+    await expectLater(
+      app.connect(
+        const GitHubConnection('user', 'private', branch: 'other'),
+        'test',
+      ),
+      throwsFormatException,
+    );
+    expect(app.connection?.branch, 'main');
+  });
 }
 
 class _MemoryRemote extends GitHubArchive {
@@ -130,6 +189,7 @@ class _MemoryRemote extends GitHubArchive {
     repositoryId: 1,
     generation: 'initial',
   );
+  bool offline = false;
   void update(
     Map<String, dynamic> settings, {
     List<TicketRecord>? records,
@@ -148,7 +208,11 @@ class _MemoryRemote extends GitHubArchive {
   @override
   Future<Map<String, dynamic>> verify() async => {'id': 1};
   @override
-  Future<ArchiveSnapshot> read() async => snapshot;
+  Future<ArchiveSnapshot> read() async {
+    if (offline) throw StateError('offline');
+    return snapshot;
+  }
+
   @override
   Future<void> assertDescendant(String previous, String current) async {}
   @override
