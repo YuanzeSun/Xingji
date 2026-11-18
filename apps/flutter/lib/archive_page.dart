@@ -39,14 +39,12 @@ class _ArchivePageState extends State<ArchivePage> {
     }
   }
 
-  Widget _checkbox(TicketRecord record) => Material(
-    color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
-    borderRadius: BorderRadius.circular(10),
-    child: Checkbox(
-      semanticLabel: '选择 ${record.text('service')}',
-      value: selected.contains(record.id),
-      onChanged: exporting ? null : (_) => _toggle(record),
-    ),
+  Widget _checkbox(TicketRecord record) => Checkbox(
+    semanticLabel: '选择 ${record.text('service')}',
+    value: selected.contains(record.id),
+    activeColor: ink,
+    side: const BorderSide(color: ink, width: 1.5),
+    onChanged: exporting ? null : (_) => _toggle(record),
   );
 
   Future<void> _export(String kind) async {
@@ -192,14 +190,18 @@ class _ArchivePageState extends State<ArchivePage> {
               icon: const Icon(Icons.table_chart_outlined),
               label: const Text('导出 CSV'),
             ),
-            if (!widget.store.demo)
-              TextButton.icon(
-                onPressed: selected.isEmpty || exporting || widget.store.busy
-                    ? null
-                    : _delete,
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('删除'),
-              ),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(foregroundColor: ticketRed),
+              onPressed:
+                  widget.store.demo ||
+                      selected.isEmpty ||
+                      exporting ||
+                      widget.store.busy
+                  ? null
+                  : _delete,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('删除'),
+            ),
           ],
         ),
         if (exporting) ...[
@@ -249,16 +251,19 @@ class _ArchivePageState extends State<ArchivePage> {
       );
       return terms.every(text.contains);
     }).toList();
+    int datePart(int? a, int? b) {
+      if (a == null) return b == null ? 0 : 1;
+      if (b == null) return -1;
+      return recent ? b.compareTo(a) : a.compareTo(b);
+    }
+
     rows.sort((a, b) {
-      if (a.departure?.complete != true || b.departure?.complete != true) {
-        if ((a.departure?.complete == true) == (b.departure?.complete == true)) {
-          return a.id.compareTo(b.id);
-        }
-        return a.departure?.complete != true ? 1 : -1;
-      }
-      final order = '${a.departure!.calendarText} ${a.text('departureTime')}'
-          .compareTo('${b.departure!.calendarText} ${b.text('departureTime')}');
-      return order == 0 ? a.id.compareTo(b.id) : (recent ? -order : order);
+      final year = datePart(a.departure?.year, b.departure?.year);
+      if (year != 0) return year;
+      final day = datePart(a.departure?.dayOfYear, b.departure?.dayOfYear);
+      if (day != 0) return day;
+      final time = a.text('departureTime').compareTo(b.text('departureTime'));
+      return time == 0 ? a.id.compareTo(b.id) : (recent ? -time : time);
     });
     return rows;
   }
@@ -276,6 +281,7 @@ class _ArchivePageState extends State<ArchivePage> {
         !selecting &&
         recent &&
         grid &&
+        !small &&
         query.isEmpty &&
         filter == 'all' &&
         rows.isNotEmpty;
@@ -387,123 +393,242 @@ class _ArchivePageState extends State<ArchivePage> {
                   ),
                 ),
               ),
-            SliverPadding(
-              padding: EdgeInsets.fromLTRB(gutter, 0, gutter, 120),
-              sliver: grid
-                  ? SliverLayoutBuilder(
-                      builder: (context, constraints) {
-                        final count =
-                                (constraints.crossAxisExtent /
-                                        (small ? 230 : 370))
-                                    .floor()
-                                    .clamp(1, 4),
-                            width =
-                                (constraints.crossAxisExtent -
-                                    (count - 1) * 24) /
-                                count;
-                        return SliverGrid.builder(
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: count,
-                                crossAxisSpacing: 24,
-                                mainAxisSpacing: small ? 24 : 32,
-                                mainAxisExtent: width / 1.5 + (small ? 0 : 72),
-                              ),
-                          itemCount: rows.length,
-                          itemBuilder: (context, index) => _tile(rows[index]),
-                        );
-                      },
-                    )
-                  : SliverList.builder(
-                      itemCount: rows.length,
-                      itemBuilder: (context, index) {
-                        final record = rows[index],
-                            year = record.departure?.year,
-                            heading =
-                                index == 0 ||
-                                rows[index - 1].departure?.year != year;
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (heading)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  top: 8,
-                                  bottom: 20,
-                                ),
-                                child: Text(
-                                  year?.toString() ?? '年份未知',
-                                  style: Theme.of(context).textTheme.titleLarge,
-                                ),
-                              ),
-                            Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () => _open(record),
-                                borderRadius: BorderRadius.circular(16),
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    vertical: small ? 14 : 20,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      if (selecting) ...[
-                                        _checkbox(record),
-                                        const SizedBox(width: 12),
-                                      ],
-                                      if (!small) ...[
-                                        SizedBox(
-                                          width: 110,
-                                          child: Hero(
-                                            tag: record.id,
-                                            child: TicketFace(
-                                              record,
-                                              widget.store.catalog,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 20),
-                                      ],
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              '${record.text('origin')} → ${record.text('destination')}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Text(
-                                              '${record.departure?.label ?? '日期未知'}  ${record.text('service')}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      const Icon(
-                                        Icons.chevron_right,
-                                        size: 20,
-                                        color: muted,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const Divider(height: 1),
-                          ],
-                        );
-                      },
-                    ),
-            ),
+            ..._collection(rows, gutter),
+            const SliverToBoxAdapter(child: SizedBox(height: 120)),
           ],
         ),
       ),
+    );
+  }
+
+  List<Widget> _collection(List<TicketRecord> rows, double gutter) {
+    final padding = EdgeInsets.symmetric(horizontal: gutter);
+    if (grid && small) {
+      return [
+        SliverPadding(
+          padding: padding,
+          sliver: SliverLayoutBuilder(
+            builder: (context, constraints) => SliverGrid.builder(
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 265,
+                childAspectRatio: 1.5,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              itemCount: rows.length,
+              itemBuilder: (context, index) =>
+                  _ticketTap(rows[index], Center(child: _face(rows[index]))),
+            ),
+          ),
+        ),
+      ];
+    }
+    final years = <int?, List<TicketRecord>>{};
+    for (final record in rows) {
+      (years[record.departure?.year] ??= []).add(record);
+    }
+    return [
+      for (final MapEntry(key: year, value: trips) in years.entries) ...[
+        SliverPadding(
+          padding: padding,
+          sliver: SliverToBoxAdapter(child: _yearHeading(year, trips.length)),
+        ),
+        SliverPadding(
+          padding: padding,
+          sliver: SliverLayoutBuilder(
+            builder: (context, constraints) {
+              final columns = grid
+                  ? (constraints.crossAxisExtent / 340).floor().clamp(1, 3)
+                  : 1;
+              return SliverList.builder(
+                itemCount: (trips.length + columns - 1) ~/ columns,
+                itemBuilder: (context, row) {
+                  final start = row * columns;
+                  Widget entry(int index) => _timelineEntry(
+                    trips[index],
+                    first: index == 0,
+                    last: index == trips.length - 1,
+                    connect: !small && columns == 1,
+                  );
+
+                  if (columns == 1) return entry(start);
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (var col = 0; col < columns; col++) ...[
+                        if (col > 0) const SizedBox(width: 24),
+                        Expanded(
+                          child: start + col < trips.length
+                              ? entry(start + col)
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    ];
+  }
+
+  Widget _yearHeading(int? year, int count) => Padding(
+    padding: const EdgeInsets.only(top: 6, bottom: 16),
+    child: Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                year == null ? '年份未知' : '$year 年',
+                style: const TextStyle(
+                  color: ink,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            Text('$count 张', style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+        const SizedBox(height: 8),
+        const Divider(height: 1),
+      ],
+    ),
+  );
+
+  Widget _ticketTap(TicketRecord record, Widget child) => InkWell(
+    onTap: exporting ? null : () => _open(record),
+    borderRadius: BorderRadius.circular(12),
+    child: child,
+  );
+
+  Widget _face(TicketRecord record) => Stack(
+    children: [
+      Hero(tag: record.id, child: TicketFace(record, widget.store.catalog)),
+      if (selecting)
+        Positioned.fill(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: _checkbox(record),
+          ),
+        ),
+    ],
+  );
+
+  Widget _timelineEntry(
+    TicketRecord record, {
+    required bool first,
+    required bool last,
+    required bool connect,
+  }) {
+    final date = record.departure;
+    final calendar = date?.date;
+    final day = calendar == null
+        ? date?.label ?? '日期未知'
+        : '${calendar.month.toString().padLeft(2, '0')}.${calendar.day.toString().padLeft(2, '0')}';
+    final time = record.text('departureTime');
+    final service = record.text('service');
+    final metadata = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Text(
+                service.isEmpty ? '班次待补充' : service,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: ink,
+                  fontSize: small ? 16 : 22,
+                  height: 1.15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              flex: 2,
+              child: Text(
+                calendar != null && time.isNotEmpty ? '$day  $time' : day,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Text(
+          '${record.text('origin')} → ${record.text('destination')}',
+          maxLines: grid ? 2 : 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      ],
+    );
+    return Stack(
+      children: [
+        Padding(
+          padding: EdgeInsetsDirectional.only(
+            start: small ? 0 : 19,
+            bottom: grid ? 26 : 20,
+          ),
+          child: _ticketTap(
+            record,
+            grid
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      metadata,
+                      const SizedBox(height: 10),
+                      _face(record),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      if (selecting) _checkbox(record),
+                      Expanded(child: metadata),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.chevron_right, size: 19, color: muted),
+                    ],
+                  ),
+          ),
+        ),
+        if (connect && !(first && last))
+          PositionedDirectional(
+            start: 4,
+            width: 1,
+            top: first ? 12 : 0,
+            bottom: last ? null : 0,
+            height: last ? 12 : null,
+            child: const IgnorePointer(
+              child: ColoredBox(color: Color(0xFFCDD7E6)),
+            ),
+          ),
+        if (!small)
+          PositionedDirectional(
+            start: 0,
+            top: 8,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: paper,
+                  border: Border.all(
+                    color: record.isFlight ? ticketRed : ink,
+                    width: 1.5,
+                  ),
+                ),
+                child: const SizedBox.square(dimension: 9),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -571,7 +696,11 @@ class _ArchivePageState extends State<ArchivePage> {
           const SizedBox(height: 24),
           Text(
             record.text('service'),
-            style: const TextStyle(fontSize: 16, color: muted),
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              color: ink,
+            ),
           ),
         ] else
           Row(
@@ -612,9 +741,28 @@ class _ArchivePageState extends State<ArchivePage> {
               child: Text('最近一程', style: TextStyle(fontSize: 14, color: muted)),
             ),
             if (!wide)
-              Text(
-                record.departure?.label ?? '',
-                style: const TextStyle(fontSize: 14, color: muted),
+              Flexible(
+                flex: 3,
+                child: Wrap(
+                  spacing: 12,
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (record.text('service').isNotEmpty)
+                      Text(
+                        record.text('service'),
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: ink,
+                        ),
+                      ),
+                    Text(
+                      record.departure?.label ?? '',
+                      style: const TextStyle(fontSize: 14, color: muted),
+                    ),
+                  ],
+                ),
               ),
           ],
         ),
@@ -641,71 +789,6 @@ class _ArchivePageState extends State<ArchivePage> {
     );
   }
 
-  Widget _tile(TicketRecord record) => InkWell(
-    onTap: () => _open(record),
-    borderRadius: BorderRadius.circular(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Align(
-            alignment: Alignment.center,
-            child: Stack(
-              children: [
-                Hero(
-                  tag: record.id,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: ink.withValues(alpha: .07),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: TicketFace(record, widget.store.catalog),
-                  ),
-                ),
-                if (selecting)
-                  Positioned(top: 6, left: 6, child: _checkbox(record)),
-              ],
-            ),
-          ),
-        ),
-        if (!small)
-          Padding(
-            padding: const EdgeInsets.only(top: 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${record.text('origin')} → ${record.text('destination')}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${record.departure?.label ?? '日期未知'}  ${record.text('service')}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.north_east, size: 16, color: muted),
-              ],
-            ),
-          ),
-      ],
-    ),
-  );
   Future<void> _search() async {
     final controller = TextEditingController(text: query);
     final result = await showDialog<String>(

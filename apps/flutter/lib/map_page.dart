@@ -91,8 +91,14 @@ class _JourneyCanvasState extends State<JourneyCanvas> {
   }
 
   void zoom(double factor) {
-    final matrix = transform.value.clone()..scaleByDouble(factor, factor, 1, 1);
-    transform.value = matrix;
+    final center = context.size?.center(Offset.zero);
+    if (center == null) return;
+    final current = transform.value.getMaxScaleOnAxis();
+    final ratio = (current * factor).clamp(.5, 12) / current;
+    transform.value = Matrix4.translationValues(center.dx, center.dy, 0)
+      ..scaleByDouble(ratio, ratio, 1, 1)
+      ..translateByDouble(-center.dx, -center.dy, 0, 1)
+      ..multiply(transform.value);
   }
 
   @override
@@ -125,23 +131,26 @@ class _JourneyCanvasState extends State<JourneyCanvas> {
         right: 12,
         bottom: widget.controlBottom,
         child: Material(
-          color: Colors.white,
+          type: MaterialType.transparency,
           borderRadius: BorderRadius.circular(16),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
                 tooltip: '放大地图',
+                color: ink,
                 onPressed: () => zoom(1.25),
                 icon: const Icon(Icons.add),
               ),
               IconButton(
                 tooltip: '缩小地图',
+                color: ink,
                 onPressed: () => zoom(.8),
                 icon: const Icon(Icons.remove),
               ),
               IconButton(
                 tooltip: '恢复地图视野',
+                color: ink,
                 onPressed: () => transform.value = Matrix4.identity(),
                 icon: const Icon(Icons.center_focus_strong_outlined),
               ),
@@ -357,6 +366,7 @@ class JourneyPainter extends CustomPainter {
         size.height - inset.bottom,
       ),
       textScale: textScale,
+      zoom: transform.value.getMaxScaleOnAxis(),
       reserved: [
         Rect.fromLTWH(
           size.width - 170,

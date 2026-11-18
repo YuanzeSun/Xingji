@@ -26,16 +26,54 @@ class MapOverlay extends StatelessWidget {
               ('routes', '航线'),
               ('railway', '铁路线'),
             ])
-              FilterChip(
-                backgroundColor: Colors.white,
-                selectedColor: mist,
-                label: Text(label),
+              _LayerButton(
+                label,
                 selected: layers.contains(id),
-                onSelected: (value) => onChanged(id, value),
+                onPressed: () => onChanged(id, !layers.contains(id)),
               ),
           ],
         ),
       ],
+    ),
+  );
+}
+
+class _LayerButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+  const _LayerButton(
+    this.label, {
+    required this.selected,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    selected: selected,
+    child: TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: selected ? ink : muted,
+        backgroundColor: Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        minimumSize: const Size(44, 44),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (selected) ...[
+            const Icon(Icons.check, size: 16),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }

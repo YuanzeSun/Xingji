@@ -4,6 +4,32 @@ import 'package:xingji/map_annotations.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'dense labels leave room in the overview and reveal stops at higher zoom',
+    () {
+      final stations = {
+        for (var i = 0; i < 16; i++)
+          '站$i': Offset(35 + (i % 4) * 84, 55 + (i ~/ 4) * 106),
+      };
+      List<MapAnnotation> labels(double zoom) => layoutMapAnnotations(
+        stations: stations,
+        endpoints: {'站0', '站3'},
+        lines: {
+          '京沪高速线': [const Offset(170, 280)],
+        },
+        bounds: const Rect.fromLTWH(0, 0, 360, 480),
+        zoom: zoom,
+      );
+      final overview = labels(1), detail = labels(3);
+      expect(
+        overview.map((label) => label.name),
+        containsAll(['京沪高速线', '站0', '站3']),
+      );
+      expect(overview.length, lessThan(stations.length));
+      expect(detail.length, greaterThan(overview.length));
+    },
+  );
+
   test('a blocked first anchor cannot hide other visible anchors of the same railway', () {
     final labels = layoutMapAnnotations(
       stations: {'北京南': const Offset(60, 80)},
