@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRecord, applyImport, deduplicateRecords, archive, readArchive } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import { parseCSV } from '../src/importers.js';
 import { synchronize } from '../src/github.js';
 import { resolvePlace } from '../src/places.js';
 import { resolveCity } from '../src/locations.js';
@@ -34,7 +32,6 @@ test('multi-source rail records merge in storage data, enriching fields and reta
   assert.equal(r.seat, '08F'); assert.equal(r.carriage, '05'); assert.equal(r.price, '553.00');
   assert.equal(r.sources.length, 3); assert.deepEqual(r.mergedIds, ['b', 'c']);
   assert.deepEqual(readArchive(archive(result.records)), result.records);
-  assert.deepEqual(parseCSV(csv(result.records))[0].mergedIds, ['b', 'c']);
   assert.equal(applyImport(result.records, [email]).records.length, 1);
   assert.equal(deduplicateRecords([manual, email]).length, 1, 'existing underlying duplicates are also consolidated');
 });

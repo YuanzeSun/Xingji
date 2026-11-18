@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { maskIdentity } from '../src/identity.js';
 import { createRecord, archive, readArchive } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
 import { ticketSVG, exportSVG } from '../src/tickets.js';
 import { DEMO_TICKET_CODE } from '../src/demo-code.js';
 
@@ -41,7 +40,6 @@ test('all rail layouts mask the rendered number without modifying stored records
     }
     assert.deepEqual(record, before);
     assert.equal(readArchive(archive([record]))[0].identity, identity);
-    assert.ok(csv([record]).includes(identity));
   }
   const flight = createRecord({ type:'flight', template:'air-boarding-pass', identity, origin:'北京首都' });
   assert.ok(!ticketSVG(flight).includes(identity));

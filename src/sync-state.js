@@ -32,6 +32,18 @@ export async function bindRepository(config, expectedD1 = null) {
     return { write: { github: clone(config) }, result: { ...current, config: clone(config) } };
   });
 }
+export function signOutGitHub() {
+  return db.atomic(keys, raw => {
+    const write = { githubToken: '' };
+    if (raw.d1) return { write, result: unpack(raw) };
+    Object.assign(write, {
+      github: null, records: [], base: [], settings: {}, settingsBase: {},
+      syncMeta: { revision: (raw.syncMeta?.revision || 0) + 1 }, lastSync: null
+    });
+    return { write, result: unpack(write) };
+  });
+}
+
 export async function activateD1(captured, config, remote, rememberedToken) {
   return db.atomic(keys, raw => {
     const current = unpack(raw);
@@ -71,7 +83,7 @@ export function stageSettings(expected, proposed, config, d1 = null) {
 export function stageBackup(expected, proposed, config, d1) {
   return stageChange(config, d1, current => ({
     records: mergedRecords(expected.records, proposed.records, current.records),
-    settings: mergedSettings(expected.settings, proposed.settings, current.settings)
+    settings: mergedSettings(expected.settings, { ...proposed.settings, connections: expected.settings.connections }, current.settings)
   }));
 }
 export async function acknowledgeSync(captured, remote) {

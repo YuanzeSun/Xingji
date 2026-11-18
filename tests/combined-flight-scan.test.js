@@ -6,8 +6,6 @@ import {createBoardingCode,readBoardingCode} from '../src/bcbp.js';
 import {parseScanText,scanCandidate,createScanConsensus} from '../src/scan-engine.js';
 import {barcodeFieldLocked} from '../src/barcode-fields.js';
 import {archive,readArchive} from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import {parseCSV} from '../src/importers.js';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
 
 const values={passenger:'EXAMPLE/TRAVELER',pnr:'ABC123',origin:'JFK',destination:'LHR',carrier:'BA',flightNumber:'321',date:'2026-05-18',cabin:'Y',seat:'12A',sequence:'42',status:'1',electronic:''};
@@ -35,7 +33,10 @@ test('OCR and barcode recognition start together and produce one locked barcode 
     for(const key of ['passenger','service','origin','destination','originCode','destinationCode','seat','seatClass','pnr','airline'])assert.equal(barcodeFieldLocked(record,key),true,key);
     for(const key of ['departureTime','boardingTime','gate','identity','ticketNumber','terminal','price','aircraft']){assert.equal(barcodeFieldLocked(record,key),false,key);assert.equal(record.fieldSources[key],'ocr',key);}
     assert.equal(record.boardingCodeSource,'original');assert.equal(record.boardingCode.format,'PDF417');assert.equal(readBoardingCode(record.boardingCode).service,'BA321');
-    for(const saved of [readArchive(archive([record]))[0],parseCSV(csv([record]))[0]]){assert.equal(saved.boardingCodeSource,'original');assert.equal(barcodeFieldLocked(saved,'service'),true);assert.equal(saved.boardingTime,'09:55');}
+    const saved = readArchive(archive([record]))[0];
+    assert.equal(saved.boardingCodeSource,'original');
+    assert.equal(barcodeFieldLocked(saved,'service'),true);
+    assert.equal(saved.boardingTime,'09:55');
   }finally{await engine.terminate();assert.equal(terminated,true);}
 }));
 

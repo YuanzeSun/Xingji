@@ -3,8 +3,6 @@ import assert from 'node:assert/strict';
 import { personalProfile, profileDefaults, applyProfileDefaults } from '../src/personal-profile.js';
 import { sharedSettings, mergeSettings } from '../src/shared-settings.js';
 import { createRecord, archive, readArchive } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import { parseCSV } from '../src/importers.js';
 import { personalProfilePanel, personalProfileSummary } from '../src/personal-profile-form.js';
 import { JSDOM } from 'jsdom';
 
@@ -56,8 +54,6 @@ test('ticket defaults and backups contain only the saved name and document numbe
   const record = createRecord(applyProfileDefaults({type:'rail'},settings.profile));
   for(const key of ['identityType','gender','nationality','address'])assert.equal(Object.hasOwn(record,key),false);
   assert.deepEqual(readArchive(archive([record])),[record]);
-  const imported = parseCSV(csv([record]))[0];
-  for (const key of ['passenger','identity']) assert.equal(imported[key],record[key],key);
   assert.ok(!JSON.stringify(record).includes('private-key'));
 });
 

@@ -1,14 +1,7 @@
 import { SCHEMA_VERSION, readArchive, validateRecord } from './model.js';
 import { sameSettings, sharedSettings } from './shared-settings.js';
-
-export function workerURL(value) {
-  let url;
-  try { url = new URL(value); } catch { throw new Error('请输入完整的 Worker 地址'); }
-  const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-  if ((url.protocol !== 'https:' && !(local && url.protocol === 'http:')) || url.username || url.password ||
-      url.search || url.hash || url.pathname !== '/') throw new Error('请输入 Worker 的根地址，例如 https://your-archive.workers.dev');
-  return url.origin;
-}
+import { workerURL } from './cloud-connections.js';
+export { workerURL };
 
 export class D1Store {
   constructor(config, token, fetcher = fetch, { signal, cached } = {}) {

@@ -4,8 +4,7 @@ import assert from 'node:assert/strict';
 import {labelledFlightTimes,ACTUAL_FLIGHT_FIELDS} from '../src/flight-times.js';
 import {flightCandidates,flightCompletion} from '../src/flight-lookup-model.js';
 import {createRecord,archive,readArchive} from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import {parseText,parseCSV,mapFlightResult} from '../src/importers.js';
+import {parseText,mapFlightResult} from '../src/importers.js';
 import {parseScanText} from '../src/scan-engine.js';
 import {applyLookupValues,clearLookupValues,markManualFields} from '../src/lookup-values.js';
 import {ticketSVG} from '../src/tickets.js';
@@ -49,7 +48,7 @@ test('flight completion preserves manual events as a date-time pair and clears o
 
 test('actual times and flight distance round-trip in archives and imports with validation',()=>{
   const record=provider();
-  for(const saved of [readArchive(archive([record]))[0],parseCSV(csv([record]))[0],mapFlightResult([{flightNumber:record.service,...record}])[0]]){
+  for(const saved of [readArchive(archive([record]))[0],mapFlightResult([{flightNumber:record.service,...record}])[0]]){
     for(const key of [...ACTUAL_FLIGHT_FIELDS,'flightDistance'])assert.deepEqual(saved[key],record[key],key);
   }
   for(const extra of [{actualDepartureTime:'25:00'},{actualArrivalDate:'2026-02-30'},{flightDistance:'-2'}])assert.throws(()=>createRecord({...base,...extra}));

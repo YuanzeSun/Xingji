@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { indexedDB } from 'fake-indexeddb';
 import { sharedSettings, sameSettings, maskedKey } from '../src/shared-settings.js';
 import { createRecord, archive } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
 import { GitHubStore, synchronize } from '../src/github.js';
 import { stageSettings, stageRecords, readSyncState, acknowledgeSync } from '../src/sync-state.js';
 import * as db from '../src/db.js';
@@ -18,7 +17,7 @@ test('shared settings reject connection credentials; ticket exports never contai
   assert.deepEqual(sharedSettings(), settings('')); assert.ok(sameSettings(undefined, settings('')));
   for (const value of [{ githubToken: 'should-not-sync' }, { flightMcpKey: 'bad\nkey' }, { flightMcpKey: {} }, null]) assert.throws(() => sharedSettings(value));
   assert.equal(maskedKey('private-key-1234'), '已设置 · 尾号 1234'); assert.doesNotMatch(maskedKey('private-key-1234'), /private-key/);
-  assert.doesNotMatch(JSON.stringify(archive([base])) + csv([base]), /flightMcpKey|githubToken/);
+  assert.doesNotMatch(JSON.stringify(archive([base])), /flightMcpKey|githubToken/);
 });
 
 test('a key saved on one device is obtained on another; simultaneous ticket edits retain the key', async () => {

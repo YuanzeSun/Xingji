@@ -4,7 +4,6 @@ export const MARK_SHAPES = Object.freeze({ circle: '圆圈', plain: '仅文字' 
 export function normalizeMarks(input) {
   if (input === undefined || input === null || input === '') return [];
   let value = input;
-  // CSV may carry either the full JSON array or a simple list such as 网 学.
   if (typeof value === 'string') {
     if (value.trim().startsWith('[')) {
       try { value = JSON.parse(value); } catch { throw new Error('票面标识的JSON格式不正确'); }

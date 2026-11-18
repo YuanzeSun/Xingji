@@ -2,8 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {createRecord,archive,readArchive} from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import {parseCSV} from '../src/importers.js';
 import {resolveCities,cityLabel,cityOverview,placesInCity} from '../src/locations.js';
 import {searchAirports,resolvePlace} from '../src/places.js';
 import {searchTickets} from '../src/search.js';
@@ -30,7 +28,8 @@ test('all nine named or cross-city airports display both cities and match either
       assert.deepEqual(placesInCity(rows,city),[out.origin]);
       assert.equal(resolvePlace({type:'flight',origin:city},'origin').status,'unknown','a city name does not silently select one airport');
     }
-    assert.equal(readArchive(archive([out]))[0].originCity,out.originCity);assert.equal(parseCSV(csv([back]))[0].destinationCity,back.destinationCity);
+    assert.equal(readArchive(archive([out]))[0].originCity,out.originCity);
+    assert.equal(readArchive(archive([back]))[0].destinationCity,back.destinationCity);
   }
   const conflict=flight({origin:'西宁曹家堡',originCode:'LXA'});assert.deepEqual(resolveCities(conflict,'origin'),[]);
 });

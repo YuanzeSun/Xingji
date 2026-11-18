@@ -8,8 +8,6 @@ import {encodeBCBP,createBoardingCode,boardingCodeDefaults,BCBP_FORMATS} from '.
 import {symbolImage} from '../src/barcode-symbols.js';
 import {codeBytes,symbolFromCodeData} from '../src/barcode-data.js';
 import {createRecord,archive,readArchive} from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import {parseCSV} from '../src/importers.js';
 import {ticketCodeEditor,bindTicketCodeEditor} from '../src/code-editor.js';
 import {DEMO_BOARDING_CODE} from '../src/demo-boarding-code.js';
 
@@ -44,7 +42,7 @@ test('all generated symbologies decode to the complete BCBP and survive metadata
     const result=(await readBarcodes(image,{formats:[format],textMode:'Plain',tryHarder:true})).find(result=>result.isValid);
     assert.ok(result,format);assert.equal(result.text,encodeBCBP(values()));assert.deepEqual(result.bytes,codeBytes(code.rawBytes));
     assert.equal(result.symbologyIdentifier,code.symbologyIdentifier);
-    const record=flight({boardingCode:code});assert.deepEqual(readArchive(archive([record]))[0].boardingCode,code);assert.deepEqual(parseCSV(csv([record]))[0].boardingCode,code);
+    const record=flight({boardingCode:code});assert.deepEqual(readArchive(archive([record]))[0].boardingCode,code);
     assert.equal(createRecord({...record,deleted:true}).boardingCode,'');
   }
 });

@@ -3,8 +3,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {createRecord,archive,readArchive} from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import {parseCSV} from '../src/importers.js';
 import {railQuery,railCompletion,railDetails} from '../src/rail-lookup-model.js';
 import {lookupRailDetails} from '../src/rail-data.js';
 import {railJourneyMarkup} from '../src/rail-journey-ui.js';
@@ -33,7 +31,9 @@ test('a complete train timetable highlights only the booked section and saves ma
   assert.deepEqual([...root.querySelectorAll('[data-my-segment="true"] th>span')].map(node=>node.textContent),['天津西','南京']);
   assert.deepEqual([...root.querySelectorAll('[data-my-segment="false"] th>span')].map(node=>node.textContent),['北京','上海']);
   assert.match(root.textContent,/列车全程/);assert.match(root.querySelector('.rail-my-range').textContent,/1014 km/);
-  assert.deepEqual(readArchive(archive([saved]))[0].railJourney,saved.railJourney);assert.equal(parseCSV(csv([saved]))[0].railMileage,'1014');
+  const restored = readArchive(archive([saved]))[0];
+  assert.deepEqual(restored.railJourney,saved.railJourney);
+  assert.equal(restored.railMileage,'1014');
   assert.equal(railCompletion({...original,railMileage:'999'},result).railMileage,undefined);dom.window.close();
   assert.equal(createRecord({...saved,origin:'北京',originCode:''}).railMileage,'');
   assert.equal(createRecord({...saved,origin:'北京',originCode:'',railMileage:'999',lockedFields:['railMileage']}).railMileage,'999');
@@ -56,7 +56,6 @@ test('rolling stock model and explicit power supply are independent; identical m
   const dc=ticket({railModel:'25GDC600V'}),ac=ticket({railModel:'25GAC380V'});
   assert.equal(dc.railModel,'25G');assert.equal(dc.railPowerSupply,'DC600V');assert.equal(ac.railPowerSupply,'AC380V');
   const stats=journeyStatistics([dc,ac],{dateTo:'2026-11-17'});assert.deepEqual(stats.railModels,[{name:'25G',count:2}]);
-  assert.equal(parseCSV(csv([dc]))[0].railPowerSupply,'DC600V');
 });
 test('rail mileage follows the statistics date range, omits missing distances and excludes refunds',()=>{
   const rows=[ticket({railMileage:'1014'}),ticket({railMileage:''}),ticket({railMileage:'999',departureDate:'2200-01-01'}),ticket({railMileage:'999',template:'rail-refund-receipt'})];

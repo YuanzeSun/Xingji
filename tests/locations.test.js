@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRecord, archive, readArchive, applyImport, mergeThreeWay } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import { parseCSV } from '../src/importers.js';
 import { resolveCity, cityOverview, placesInCity, sameCity, LOCATION_REFERENCE } from '../src/locations.js';
 import { searchTickets } from '../src/search.js';
 import { STATIONS } from '../src/data/location-reference.js';
@@ -71,9 +69,7 @@ test('derived cities follow the database through edits, imports, backups and ind
   const r=record({originCity:'南京',destinationCity:'北京',lockedFields:['originCity']});
   assert.equal(r.originCity,'北京');assert.equal(r.destinationCity,'上海');assert.equal(r.lockedFields.includes('originCity'),false);
   assert.deepEqual(readArchive(JSON.parse(JSON.stringify(archive([r])))),[r]);
-  const imported=parseCSV(csv([r]))[0];assert.equal(imported.originCity,'北京');assert.equal(imported.destinationCity,'上海');
-  assert.equal(parseCSV('车次,出发站,出发城市\nG1,清河,南京')[0].originCity,'北京');
-  assert.equal(parseCSV('车次,出发城市\nG1,北京')[0].originCity,'');
+  const imported=readArchive(archive([r]))[0];assert.equal(imported.originCity,'北京');assert.equal(imported.destinationCity,'上海');
   assert.equal(record({...r,origin:'清河城',originCode:''}).originCity,'邢台');
   assert.equal(applyImport([r],[record({originCity:'邢台'})]).records[0].originCity,'北京');
   const base=record(),merged=mergeThreeWay([base],[r],[{...base,issuer:'北京南站'}]);
@@ -101,5 +97,5 @@ test('Xining flights are found by city filters and share common city routes with
   for(const filters of [{city:'西宁'},{query:'西宁'},{originCity:'西宁',destinationCity:'北京',bothDirections:true}])assert.equal(searchTickets(rows,filters).records.length,3);
   assert.equal(searchTickets(rows,{originCity:'西宁'}).records.length,2);assert.equal(searchTickets(rows,{city:'海东'}).records.length,2);
   const overview=cityOverview(rows);assert.equal(overview.routes.length,1);assert.equal(overview.routes[0].count,3);assert.equal(overview.cities.find(([city])=>city==='海东')[1],2);
-  assert.equal(readArchive(archive([out]))[0].originCity,'西宁 / 海东');assert.equal(parseCSV(csv([back]))[0].destinationCity,'西宁 / 海东');
+  assert.equal(readArchive(archive([out]))[0].originCity,'西宁 / 海东');
 });

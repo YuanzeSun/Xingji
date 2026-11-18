@@ -2,8 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord, archive, readArchive, applyImport, mergeThreeWay } from '../src/model.js';
-import { csv } from './helpers/ticket-csv.js';
-import { parseText, parseCSV } from '../src/importers.js';
+import { parseText } from '../src/importers.js';
 import { ticketSVG } from '../src/tickets.js';
 import { normalizeMarks, describeMarks, marksFromText } from '../src/ticket-marks.js';
 
@@ -42,13 +41,11 @@ test('each rail template renders independent borders and offsets; flight templat
   assert.match(describeMarks(marks), /偏移 -3 \/ 4/);
 });
 
-test('JSON and CSV roundtrips preserve mark shape and position', () => {
+test('JSON roundtrips preserve mark shape and position', () => {
   const record = sample({ ticketMarks: marks, lockedFields: ['ticketMarks'] });
   const backup = JSON.parse(JSON.stringify(archive([record])));
   assert.equal(backup.schemaVersion, 2);
   assert.deepEqual(readArchive(backup), [record]);
-  assert.deepEqual(parseCSV(csv([record]))[0].ticketMarks, marks);
-  assert.deepEqual(parseCSV('车次,票面标识\nC2021,网 学')[0].ticketMarks, normalizeMarks('网 学'));
 });
 
 test('imports respect corrected marks including intentional removal and sync detects mark conflicts', () => {

@@ -14,7 +14,7 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   window.scrollTo = () => {}; window.HTMLDialogElement.prototype.showModal = function () { this.open = true; }; window.HTMLDialogElement.prototype.close = function () { this.open = false; };
   let online = true; Object.defineProperty(navigator, 'onLine', { get: () => online, configurable: true });
   const ticket = createRecord({ id: 'cloud-ticket', origin: '清河', destination: '天津', service: 'G103', departureDate: '2026-11-15' });
-  const server = new MemoryGitHub([ticket]); globalThis.fetch = server.fetch;
+  const server = new MemoryGitHub([ticket], { flightMcpKey: 'test-mcp', profile: { chineseName: '云端旅客' } }); globalThis.fetch = server.fetch;
   const wait = async fn => { for (let i = 0; i < 150; i++) { if (await fn()) return; await new Promise(r => setTimeout(r, 10)); } assert.fail('Cloud UI did not settle'); };
   const click = selector => { const button = document.querySelector(selector); assert.ok(button, selector); button.click(); };
   await import('../src/app.js'); await wait(() => document.querySelector('.cloud-setup'));
@@ -65,10 +65,29 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   await wait(() => document.querySelector('#connection-state')?.textContent.includes('凭证'));
   assert.equal(document.querySelector('#manual-form'), null); assert.deepEqual(await db.get('records'), [ticket]);
   server.authorized = true; click('[data-action="sync"]'); await wait(() => document.querySelector('.manual-panel [data-action="new"]'));
-  click('[data-action="navigate"][data-page="data"]'); await wait(() => document.querySelector('#github-form'));
-  click('[data-action="disconnect"]'); await wait(() => !sessionStorage.getItem('xingji-github-token'));
-  assert.equal((await db.get('github')).id, 77, 'logging out must retain the repository binding and cache baseline');
-  click('[data-action="navigate"][data-page="archive"]'); await wait(() => document.querySelector('.ticket-card'));
-  assert.equal(document.querySelector('[data-action="new"]').disabled, true);
+  click('[data-action="navigate"][data-page="data"]');
+  await wait(() => document.querySelector('[data-action="disconnect"]'));
+  assert.equal(document.querySelector('#github-form'), null);
+  assert.equal((await db.get('settings')).flightMcpKey, 'test-mcp');
+  const head = server.head;
+  click('[data-action="disconnect"]');
+  await wait(() => document.querySelector('.cloud-setup #github-form'));
+  assert.equal(sessionStorage.getItem('xingji-github-token'), null);
+  assert.equal(await db.get('githubToken'), '');
+  assert.equal(await db.get('github', null), null);
+  assert.deepEqual(await db.get('records'), []);
+  assert.deepEqual(await db.get('settings'), {});
+  assert.equal(server.head, head);
+  assert.deepEqual(server.records(), [ticket]);
+
+  form = document.querySelector('#github-form');
+  assert.equal(form.elements.token.value, '');
+  for (const [name, value] of Object.entries({ owner: 'user', repo: 'data', token: 'replacement-key' })) {
+    form.elements[name].value = value;
+  }
+  form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  location.hash = 'archive';
+  await wait(() => document.querySelector('.ticket-card'));
+  assert.equal(sessionStorage.getItem('xingji-github-token'), 'replacement-key');
   dom.window.close();
 });
