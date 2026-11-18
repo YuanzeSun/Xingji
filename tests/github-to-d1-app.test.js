@@ -4,7 +4,7 @@ import { fullBackup } from '../src/archive-backup.js';
 import { createRecord } from '../src/model.js';
 import { prepareCloud } from './helpers/cloud.js';
 import { memoryD1 } from './helpers/d1.js';
-import { browser, until, connect, confirm, useServers } from './helpers/d1-app.js';
+import { browser, until, connect, chooseSource, confirm, useServers } from './helpers/d1-app.js';
 
 test('GitHub first: D1 adopts the latest GitHub data and later JSON imports only write to D1', async () => {
   const window = browser();
@@ -17,10 +17,11 @@ test('GitHub first: D1 adopts the latest GitHub data and later JSON imports only
     await import('../src/app.js');
     await until(writable);
     connect(window, 'd1');
-    await until(() => document.querySelector('dialog h2')?.textContent === '切换到 Cloudflare D1');
+    await until(() => document.querySelector('#archive-source-form'));
     assert.equal(d1.calls.filter(call => call.method === 'POST').length, 0);
+    await chooseSource('github');
     github.push([createRecord({ id: 'latest-github', service: 'G22' })]);
-    await confirm('切换到 Cloudflare D1');
+    await confirm('确认覆盖 D1');
     await until(() => document.querySelector('[data-cloud-label]')?.textContent === '手动备份' && writable());
     const migrated = d1.calls.find(call => call.method === 'POST').body;
     assert.equal(migrated.replace, true);

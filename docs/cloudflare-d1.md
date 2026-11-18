@@ -10,8 +10,8 @@
 
 **连接时收到 503**　确认 Worker 的 **Bindings** 有名为 `ARCHIVE` 的 D1 绑定，并在该数据库的 **Console** 核对是否存在 `archive_state` 和 `tickets` 两张表。新库缺表时，执行第 1 步的初始化 SQL。
 
-仅连接 GitHub 时，网页使用 GitHub 票库。此时添加 D1 会先用 GitHub 的数据覆盖 D1，再切换到 D1 日常读写。D1 暂时不可用时，仍可查看它的本机缓存。
+绑定第二个服务时，根据票据数量和账号选择以 GitHub 或 D1 的票库为准，再确认覆盖另一边。完成后 D1 负责日常读写，通过「立即备份到 GitHub」手动更新备份。D1 暂时不可用时，仍可查看它的本机缓存。
 
-先用 D1 再绑定 GitHub 时，确认后会自动备份一次。此后通过「立即备份到 GitHub」手动更新。覆盖和备份都包含票据、个人资料、MCP 和两种连接的凭证，写入 GitHub 的凭证会保留在 Git 历史中。手动重置仓库保留设置。
+迁移包含票据、个人资料、MCP 和两种连接的凭证。写入 GitHub 的凭证会保留在 Git 历史中。「重置仓库」会清空所有已绑定的票库，分别保留各自的设置。
 
 [Cloudflare 的 D1 配置文档](https://developers.cloudflare.com/d1/get-started/) · [Worker 凭证设置](https://developers.cloudflare.com/workers/configuration/secrets/)

@@ -179,12 +179,18 @@ function captureConnectionDraft(form) {
 }
 function d1ConnectionPanel() {
   const draft = state.d1Draft, bound = !!state.d1;
-  const help = state.config && !bound ? '首次切换会用 GitHub 票库替换 D1 中的行迹数据。之后 GitHub 只用于手动备份。' : '部署绑定 D1 的行迹 Worker，然后填写 Worker 地址和部署时设置的访问凭证。';
-  return `<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('database')}</span><div><h2>Cloudflare D1</h2><p data-d1-cloud-label>${bound ? e(syncLabel()) : '可作为主票库'}</p></div></div><form id="d1-form"><label class="field"><span>Worker 地址</span><input type="url" name="url" placeholder="https://your-archive.workers.dev" value="${e(state.d1?.url ?? draft?.url)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token ?? d1Token())}" required autocomplete="off" /></label><p class="form-error" role="alert">${e(state.d1Error)}</p><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${bound ? '更新 D1 授权' : '连接 D1'}</button>${bound ? '<button class="text-button" type="button" data-action="disconnect-d1">退出 D1 授权</button>' : ''}</div></form><div class="setup-help"><p>${help}</p><p><a href="https://github.com/YuanzeSun/Xingji/blob/main/docs/cloudflare-d1.md" target="_blank" rel="noopener noreferrer">D1 部署 ↗</a></p></div></section>`;
+  const help = state.config && !bound ? '首次绑定时选择以哪边的票库为准。绑定后由 D1 日常同步。' : '部署行迹 Worker 后，填写 Worker 地址和访问凭证。';
+  const controls = d1Token()
+    ? `<p class="body-copy">${e(state.d1?.url)}</p><div class="button-row"><button class="text-button" type="button" data-action="disconnect-d1">退出 D1</button></div>`
+    : `<form id="d1-form"><label class="field"><span>Worker 地址</span><input type="url" name="url" placeholder="https://your-archive.workers.dev" value="${e(state.d1?.url ?? draft?.url)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token)}" required autocomplete="off" /></label><p class="form-error" role="alert">${e(state.d1Error)}</p><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${bound ? '重新登录 D1' : '连接 D1'}</button></div></form>`;
+  return `<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('database')}</span><div><h2>Cloudflare D1</h2><p data-d1-cloud-label>${bound ? e(syncLabel()) : '可作为主票库'}</p></div></div>${controls}<div class="setup-help"><p>${help}</p><p><a href="https://github.com/YuanzeSun/Xingji/blob/main/docs/cloudflare-d1.md" target="_blank" rel="noopener noreferrer">D1 部署 ↗</a></p></div></section>`;
 }
 function githubExtras() {
-  if (state.d1) return state.config ? `<div class="button-row github-backup"><button class="button secondary" data-action="backup-github" ${!canWrite() || !token() || state.saving || state.githubBackingUp ? 'disabled' : ''}>${state.githubBackingUp ? '正在备份…' : '立即备份到 GitHub'}</button></div>` : '';
-  return `${state.config?.id ? '<button class="button danger" data-action="reset-repository">重置仓库</button>' : ''}${state.resetRequest ? '<button class="button danger" data-action="reset-archive">重置票库</button>' : ''}`;
+  if (!state.d1 || !state.config) return '';
+  return `<div class="button-row"><button class="button secondary" data-action="backup-github" ${!canWrite() || !token() || state.saving || state.githubBackingUp ? 'disabled' : ''}>${state.githubBackingUp ? '正在备份…' : '立即备份到 GitHub'}</button></div>`;
+}
+function resetButton() {
+  return state.config?.id || state.d1?.id ? '<div class="button-row"><button class="button danger" data-action="reset-repository">重置仓库</button></div>' : '';
 }
 function authorCredit(className) {
   return `<span class="author-credit ${className}"><a href="https://github.com/YuanzeSun" target="_blank" rel="noopener noreferrer">by @YuanzeSun</a></span>`;
@@ -200,7 +206,7 @@ function guestDemoNotice() {
   return `<section class="guest-demo-notice" aria-label="示例模式提示"><div>${icon('info')}<p>正在体验<strong>示例模式</strong>，登录后即可开始记录自己的旅程。</p></div><button type="button" class="button primary" data-action="exit-demo">退出示例并登录${icon('arrow')}</button></section>`;
 }
 function connectionPage() {
-  return `<main class="cloud-setup"><div class="cloud-setup-brand">${icon('ticket')} 行迹</div><section class="guest-demo-entry" aria-labelledby="guest-demo-title"><div class="guest-demo-heading">${icon('ticket')}<strong id="guest-demo-title">体验示例模式</strong></div><p>直接浏览示例票据与行程。</p><button type="button" class="button primary" data-action="enter-demo">进入示例模式${icon('arrow')}</button></section><section class="panel"><h1>连接 GitHub</h1><p class="cloud-setup-description">连接私有仓库后使用票据存档。暂时断联时，可查看已同步的本地缓存。</p>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError || (!state.d1 && state.syncMessage) || '')}</p>${githubExtras()}${state.records.some(r => !r.deleted) ? '<button class="text-button" data-action="backup">导出本机票据</button>' : ''}</section>${d1ConnectionPanel()}${pageFooter()}</main>`;
+  return `<main class="cloud-setup"><div class="cloud-setup-brand">${icon('ticket')} 行迹</div><section class="guest-demo-entry" aria-labelledby="guest-demo-title"><div class="guest-demo-heading">${icon('ticket')}<strong id="guest-demo-title">体验示例模式</strong></div><p>直接浏览示例票据与行程。</p><button type="button" class="button primary" data-action="enter-demo">进入示例模式${icon('arrow')}</button></section><section class="panel"><h1>连接 GitHub</h1><p class="cloud-setup-description">连接私有仓库后使用票据存档。暂时断联时，可查看已同步的本地缓存。</p>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError || (!state.d1 && state.syncMessage) || '')}</p>${githubExtras()}${state.records.some(r => !r.deleted) ? '<button class="text-button" data-action="backup">导出本机票据</button>' : ''}</section>${d1ConnectionPanel()}${resetButton()}${pageFooter()}</main>`;
 }
 function connectionNotice() {
   if (state.showDemo || canWrite() && !state.syncMeta.pending) return '';
@@ -338,7 +344,7 @@ function dataPage() {
     <div class="data-column"><section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h2>GitHub 私有仓库</h2><p data-cloud-label>${state.d1 ? '手动备份' : e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError)}</p>${githubExtras()}</section>${d1ConnectionPanel()}</div>
     <aside class="data-column">${flightSettingsPanel()}
     <section class="panel quiet-panel"><h3>${icon('ticket')}随身票夹</h3><p>在手机浏览器中选择“添加到主屏幕”，即可像应用一样打开。已有票据可离线查看。</p>${installPrompt ? '<button class="button secondary" data-action="install">安装行迹</button>' : ''}</section></aside>
-    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button></div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div></section>
+    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button></div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div>${resetButton()}</section>
   </div>`;
 }
 function render() {
@@ -445,19 +451,19 @@ function bindPage() {
     drop.addEventListener('drop', event => { event.preventDefault(); drop.classList.remove('dragover'); handleFiles([...event.dataTransfer.files]); });
   }
 }
-let arithmeticCancel=null;
+let modalCancel=null;
 function requireArithmetic(title, description = '', confirmLabel = '确认删除'){
   const challenge=createArithmeticChallenge();
   return new Promise(resolve=>{
     openModal(modalHead(title, e(description))+ '<form class="detail-body" data-delete-challenge>'+arithmeticField(challenge)+'<div class="reset-actions"><button type="button" class="button secondary" data-action="close-modal">取消</button><button type="submit" class="button danger">'+e(confirmLabel)+'</button></div></form>');
     const form=modalRoot.querySelector('[data-delete-challenge]');let finished=false;
-    const finish=accepted=>{if(finished)return;finished=true;arithmeticCancel=null;form.removeEventListener('submit',submit);if(accepted)closeModal(true);resolve(accepted);};
+    const finish=accepted=>{if(finished)return;finished=true;modalCancel=null;form.removeEventListener('submit',submit);if(accepted)closeModal(true);resolve(accepted);};
     const submit=event=>{event.preventDefault();if(!checkArithmeticAnswer(challenge,form.elements['arithmetic-answer'].value)){form.querySelector('[data-arithmetic-error]').textContent='答案不正确，请重新计算';return;}finish(true);};
-    arithmeticCancel=()=>finish(false);form.addEventListener('submit',submit);form.elements['arithmetic-answer'].focus();
+    modalCancel=()=>finish(false);form.addEventListener('submit',submit);form.elements['arithmetic-answer'].focus();
   });
 }
 function disposeModalBindings() {
-  arithmeticCancel?.();
+  modalCancel?.();
   flightLookupCleanup?.(); flightLookupCleanup = null;
   railLookupCleanup?.(); railLookupCleanup = null;
   railRouteCleanup?.(); railRouteCleanup = null;
@@ -830,6 +836,38 @@ async function connectCloud(form, errorKey, action) {
   } catch (error) { state[errorKey] = error.message; return false; }
   finally { state.connecting = false; release(); render(); }
 }
+async function chooseBindingSource(github, d1, d1Snapshot) {
+  const [githubPreview, d1Preview] = await Promise.all([github.read(), d1Snapshot ?? d1.read()]);
+  const count = snapshot => snapshot.records.filter(record => !record.deleted).length;
+  const repo = github.config.owner + '/' + github.config.repo;
+  const source = await new Promise(resolve => {
+    openModal(modalHead('选择保留哪边的票库') +
+      `<form id="archive-source-form" class="detail-body"><fieldset class="conflict"><legend>作为数据来源</legend>
+        <label><input type="radio" name="archive-source" value="github" required /><span><strong>GitHub · ${count(githubPreview)} 张</strong><small>${e(repo)}</small></span></label>
+        <label><input type="radio" name="archive-source" value="d1" required /><span><strong>Cloudflare D1 · ${count(d1Preview)} 张</strong><small>${e(d1.config.url)}</small></span></label>
+      </fieldset><div class="reset-actions"><button type="button" class="button secondary" data-action="close-modal">取消</button><button type="submit" class="button primary">继续</button></div></form>`);
+    const form = modalRoot.querySelector('#archive-source-form');
+    modalCancel = () => resolve(null);
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const choice = form.elements['archive-source'].value;
+      if (!choice) return;
+      modalCancel = null;
+      closeModal(true);
+      resolve(choice);
+    });
+  });
+  if (!source) return null;
+  const fromGitHub = source === 'github';
+  const name = fromGitHub ? 'GitHub' : 'D1';
+  const destination = fromGitHub ? 'D1' : 'GitHub';
+  const details = fromGitHub ? d1.config.url : repo;
+  const historyNote = fromGitHub ? '' : '凭证会进入 Git 历史。';
+  if (!await requireArithmetic('确认覆盖 ' + destination,
+    `用 ${name} 的票据、个人资料、MCP 和账号设置整体替换 ${details} 的行迹数据。${historyNote}完成后由 D1 日常同步。`, '覆盖并绑定')) return null;
+  if (fromGitHub) return copyGitHubToD1(github, d1, d1Preview);
+  return (await backUpToGitHub(d1, github, githubPreview)).source;
+}
 async function connectGitHub(event) {
   event.preventDefault();
   if (token()) return;
@@ -846,26 +884,33 @@ async function connectGitHub(event) {
     await github.verify();
     if (captured.d1 && !captured.config?.id) {
       if (!d1Token() || captured.meta.pending) throw new Error('请先连接并同步 D1 票库');
-      const destination = await github.read();
-      if (!await requireArithmetic('将 GitHub 绑定为备份仓库', `首次绑定会用 D1 的票据、个人资料、MCP 和账号设置替换 ${config.owner}/${config.repo} 的行迹数据。凭证会进入 Git 历史，后续按需手动备份。`, '备份并绑定')) return false;
-      await backUpToGitHub(new D1Store(captured.d1, d1Token()), github, destination);
-    } else if (!captured.d1) {
-      try { await github.read(); } catch (error) { if (error.code !== 'ARCHIVE_FILES_MISSING') throw error; }
+      const remote = await chooseBindingSource(github, new D1Store(captured.d1, d1Token()));
+      if (!remote) return false;
+      useSnapshot(await activateD1(captured, captured.d1, remote, { github }));
+      clearArchiveView();
+      state.d1Replacement = null;
+      state.connectionStatus = 'online';
+      toast('已绑定两边票库，日常同步使用 D1');
+    } else {
+      if (!captured.d1) {
+        try { await github.read(); } catch (error) { if (error.code !== 'ARCHIVE_FILES_MISSING') throw error; }
+      }
+      useSnapshot(await bindRepository(config, captured.d1, secret));
     }
-    useSnapshot(await bindRepository(config, captured.d1, secret));
     sessionStorage.setItem('xingji-github-token', secret);
     state.connectionDraft = null;
     announce();
-    if (captured.d1 && !captured.config?.id) toast('已完成首次 GitHub 备份，后续可手动备份');
     return true;
   });
   if (attached && !state.d1) await doSync();
 }
 async function connectD1(form) {
+  if (d1Token()) return;
   const { url, token: secretInput, target } = state.d1Draft;
   const secret = secretInput.trim();
   const attached = await connectCloud(form, 'd1Error', async () => {
     const captured = await readSyncState();
+    if (d1Token() || await db.get('d1Token', '')) return false;
     const address = workerURL(url.trim());
     if (captured.d1 && captured.d1.url !== address) throw new Error('本机票库已绑定其他 D1 地址');
     if (!secret || /\s/.test(secret)) throw new Error('请填写部署 Worker 时设置的访问凭证');
@@ -876,12 +921,17 @@ async function connectD1(form) {
     if (!captured.d1 && captured.config?.id) {
       if (captured.meta.pending) throw new Error('请先同步 GitHub 中的待提交修改，再切换到 D1');
       if (!token()) throw new Error('请先登录 GitHub，以读取要迁移的票库');
-      const repo = `${captured.config.owner}/${captured.config.repo}`;
-      if (!await requireArithmetic('切换到 Cloudflare D1', `会用 ${repo} 当前的票据、个人资料、MCP 和账号设置替换 ${address} 中的行迹数据。切换后可按需手动备份到 GitHub。`, '替换并切换')) return false;
-      remote = await copyGitHubToD1(new GitHubStore(clone(captured.config), token()), d1, remote);
+      const github = new GitHubStore(clone(captured.config), token());
+      await github.verify();
+      remote = await chooseBindingSource(github, d1, remote);
+      if (!remote) return false;
     }
     if (captured.d1) await db.set('d1Token', secret);
-    else useSnapshot(await activateD1(captured, config, remote, secret));
+    else {
+      useSnapshot(await activateD1(captured, config, remote, { credential: secret }));
+      clearArchiveView();
+      state.d1Replacement = null;
+    }
     sessionStorage.setItem('xingji-d1-token', secret);
     state.d1Draft = null;
     state.resetRequest = null;
@@ -898,12 +948,12 @@ async function backupGitHub() {
   state.githubBackingUp = true; render();
   try {
     if (!await requireArithmetic('备份到 GitHub', `用 D1 当前的票据、个人资料、MCP 和账号设置覆盖 ${object} 中的行迹数据。凭证会进入 Git 历史。`, '确认备份')) return;
-    const updated = await withCloudLock(async () => {
+    const { changed } = await withCloudLock(async () => {
       const captured = await readSyncState();
       if (activeBinding(captured) !== activeBinding({ d1, config }) || captured.config?.id !== config.id || captured.meta.pending || !canWrite() || state.saving) throw new Error('云端状态已变化，请重新发起备份');
       return backUpToGitHub(new D1Store(d1, d1Token()), new GitHubStore(clone(config), token()));
     });
-    toast(updated ? '已将 D1 票库备份到 GitHub' : 'GitHub 已有相同的备份');
+    toast(changed ? '已将 D1 票库备份到 GitHub' : 'GitHub 已有相同的备份');
   } catch (error) { fail(error); }
   finally { state.githubBackingUp = false; render(); }
 }
@@ -911,6 +961,11 @@ function forgetGitHubSession() {
   sessionStorage.removeItem('xingji-github-token');
   state.connectionDraft = null;
   state.githubError = '';
+}
+function forgetD1Session() {
+  sessionStorage.removeItem('xingji-d1-token');
+  state.d1Draft = null;
+  state.d1Error = '';
 }
 function clearArchiveView() {
   closeModal(true);
@@ -934,9 +989,11 @@ async function disconnectCloud(fromD1) {
     state.syncMessage = '';
   }
   if (fromD1) {
-    await db.set('d1Token', '');
-    state.d1Draft = null;
-    sessionStorage.removeItem('xingji-d1-token');
+    await withCloudLock(async () => {
+      await db.set('d1Token', '');
+      forgetD1Session();
+      announce({ d1SignedOut: true });
+    });
     render();
     toast('已退出 D1，本机缓存仅可查看');
     return;
@@ -1019,49 +1076,114 @@ async function doSync(resolutions = {}) {
   try { return await syncPromise; } finally { syncPromise = null; }
 }
 let resetPromptHead = '';
-async function showArchiveReset(manual=false) {
-  if(state.d1 || state.resetting || state.connecting || modalRoot.querySelector('[data-reset-preparing],[data-archive-reset]'))return;
-  if(!navigator.onLine)return toast('请先恢复网络连接再重置仓库',true);
-  openModal(modalHead(manual ? '重置仓库' : '采用新票库')+'<div class="detail-body" data-reset-preparing><p class="operation-status" role="status">'+icon('refresh','spin')+'正在读取仓库状态…</p><p class="form-error" role="alert" data-reset-prepare-error></p><button class="button secondary" data-action="close-modal">取消</button></div>');
-  const preparing=modalRoot.querySelector('[data-reset-preparing]');
-  let captured,request;
+async function showArchiveReset(manual = false) {
+  if ((!manual && state.d1) || state.resetting || state.connecting || state.saving || state.githubBackingUp ||
+      modalRoot.querySelector('[data-reset-preparing],[data-archive-reset]')) return;
+  if (!navigator.onLine) return toast('请先恢复网络连接再重置', true);
+  const title = manual ? '重置仓库' : '采用新票库';
+  openModal(modalHead(title) + '<div class="detail-body" data-reset-preparing><p class="operation-status" role="status">' +
+    icon('refresh', 'spin') + '正在读取仓库状态…</p><p class="form-error" role="alert" data-reset-prepare-error></p><button class="button secondary" data-action="close-modal">取消</button></div>');
+  const preparing = modalRoot.querySelector('[data-reset-preparing]');
+  let captured, request, github, d1;
   try {
-    if(!token()){const remembered=await db.get('githubToken','');if(remembered)sessionStorage.setItem('xingji-github-token',remembered);}
-    if(!token())throw new Error('请先连接 GitHub 再重置仓库');
-    captured=await readResetState();if(captured.d1 || !captured.config?.id)throw new Error('当前未使用 GitHub 作为主票库');
-    request=state.resetRequest;
-    if(manual){const store=new GitHubStore(clone(captured.config),token());request={code:'REPOSITORY_RESET',snapshot:await store.resetTarget(captured.settings)};}
-    if(!preparing.isConnected)return;
-    if(!request){closeModal(true);return;}
-  } catch(error) {
-    if(preparing.isConnected){preparing.querySelector('[role="status"]').textContent='暂时无法读取仓库';preparing.querySelector('[data-reset-prepare-error]').textContent=error.message;}
+    captured = await readResetState();
+    if (!captured.config?.id && !captured.d1) throw new Error('请先连接票库再重置');
+    if (captured.config?.id) {
+      const secret = token() || await db.get('githubToken', '');
+      if (!secret) throw new Error('请先登录 GitHub，再重置已绑定的票库');
+      github = new GitHubStore(clone(captured.config), secret);
+    }
+    if (captured.d1) {
+      const secret = d1Token() || await db.get('d1Token', '');
+      if (!secret) throw new Error('请先登录 D1，再重置已绑定的票库');
+      d1 = new D1Store(captured.d1, secret);
+    }
+    request = state.resetRequest;
+    if (manual) {
+      const [githubSnapshot, d1Snapshot] = await Promise.all([
+        github?.resetTarget(d1 ? {} : captured.settings), d1?.read()
+      ]);
+      request = { code: 'REPOSITORY_RESET', snapshot: githubSnapshot, d1Snapshot };
+    }
+    if (!preparing.isConnected) return;
+    if (!request) { closeModal(true); return; }
+  } catch (error) {
+    if (preparing.isConnected) {
+      preparing.querySelector('[role="status"]').textContent = '暂时无法读取票库';
+      preparing.querySelector('[data-reset-prepare-error]').textContent = error.message;
+    }
     return;
   }
-  const challenge=createArithmeticChallenge();
-  openModal(modalHead(request.code==='ARCHIVE_RESET' ? '采用新票库' : '重置仓库')+archiveResetMarkup(request,captured,challenge));
-  const form=modalRoot.querySelector('[data-archive-reset]'),submit=form.querySelector('[type="submit"]');
-  form.elements['confirm-reset'].addEventListener('change',event=>{submit.disabled=!event.target.checked;});
-  form.addEventListener('submit',async event=>{
-    event.preventDefault();if(!form.elements['confirm-reset'].checked || state.resetting)return;
-    if(!checkArithmeticAnswer(challenge,form.elements['arithmetic-answer'].value)){form.querySelector('[data-arithmetic-error]').textContent='答案不正确，请重新计算';return;}
-    state.resetting=true;authEpoch++;syncAbort?.abort();clearTimeout(syncTimer);
-    const release=freezeForm(form,'重置中…');
-    form.querySelector('[data-reset-error]').textContent='';
-    try{
-      if(syncPromise)await syncPromise;
-      const execute=async()=>{
-        const current=await readResetState();
-        if(current.d1 || current.meta.revision!==captured.meta.revision || current.meta.head!==captured.meta.head || current.config?.id!==captured.config?.id)throw new Error('本机数据已变化，请关闭窗口后重新确认');
-        const store=new GitHubStore(clone(captured.config),token());let remote;
-        if(request.code==='ARCHIVE_RESET'){await store.verify();remote=await store.read();if(remote.head!==request.snapshot.head)throw new Error('新票库已有变化，请重新确认');}
-        else remote=await store.resetRepository(request.snapshot.head,captured.settings);
-        return replaceWithRemote(captured,remote);
-      };
-      const accepted=await withCloudLock(execute);
-      useSnapshot(accepted);state.resetRequest=null;state.profileDraft=null;state.profileBase=null;state.profileDirty=false;state.profileError='';state.flightKeyDraft=null;state.flightResult=null;state.flightResultYear=null;state.settingsError='';state.filters=searchOptions();state.mapView={layers:['airway','railway'],year:'all'};state.limit=48;state.pendingConflicts=[];state.candidates=[];state.selected.clear();archiveSelected.clear();state.syncMessage='';state.connectionStatus='online';state.showDemo=false;
-      announce();closeModal(true);navigate('archive');toast(request.code==='ARCHIVE_RESET' ? '已采用新票库并清理旧数据' : '仓库已重置，个人资料和 MCP 设置已保留');
-    }catch(error){if(form.isConnected)form.querySelector('[data-reset-error]').textContent=error.message;}
-    finally{state.resetting=false;release();renderSyncState();}
+
+  const challenge = createArithmeticChallenge(), remoteReset = request.code === 'ARCHIVE_RESET';
+  openModal(modalHead(remoteReset ? '采用新票库' : title) + archiveResetMarkup(request, captured, challenge));
+  const form = modalRoot.querySelector('[data-archive-reset]'), submit = form.querySelector('[type="submit"]');
+  let githubResult;
+  form.elements['confirm-reset'].addEventListener('change', event => { submit.disabled = !event.target.checked; });
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!form.elements['confirm-reset'].checked || state.resetting || state.connecting || state.saving || state.githubBackingUp) return;
+    if (!checkArithmeticAnswer(challenge, form.elements['arithmetic-answer'].value)) {
+      form.querySelector('[data-arithmetic-error]').textContent = '答案不正确，请重新计算';
+      return;
+    }
+    state.resetting = true;
+    authEpoch++;
+    syncAbort?.abort();
+    clearTimeout(syncTimer);
+    const release = freezeForm(form, '重置中…');
+    form.querySelector('[data-reset-error]').textContent = '';
+    try {
+      if (syncPromise) await syncPromise;
+      const accepted = await withCloudLock(async () => {
+        const current = await readResetState();
+        if (activeBinding(current) !== activeBinding(captured) || current.config?.id !== captured.config?.id ||
+            current.config?.branch !== captured.config?.branch || current.meta.revision !== captured.meta.revision ||
+            current.meta.head !== captured.meta.head ||
+            github && (token() || await db.get('githubToken', '')) !== github.token ||
+            d1 && (d1Token() || await db.get('d1Token', '')) !== d1.token) {
+          throw new Error('本机数据已变化，请关闭窗口后重新确认');
+        }
+        if (remoteReset) {
+          await github.verify();
+          const remote = await github.read();
+          if (remote.head !== request.snapshot.head) throw new Error('新票库已有变化，请重新确认');
+          return replaceWithRemote(captured, remote);
+        }
+        if (d1 && (await d1.read()).head !== request.d1Snapshot.head) {
+          throw new Error('D1 票库已有变化，请关闭窗口后重新确认');
+        }
+        if (github) {
+          if (!githubResult) githubResult = await github.resetRepository(request.snapshot.head, d1 ? {} : captured.settings);
+          else if (await github.head() !== githubResult.head) throw new Error('GitHub 仓库已有变化，请关闭窗口后重新确认');
+        }
+        if (d1) {
+          const remote = await d1.replace(request.d1Snapshot, [], request.d1Snapshot.settings);
+          return activateD1(captured, captured.d1, remote);
+        }
+        return replaceWithRemote(captured, githubResult);
+      });
+      useSnapshot(accepted);
+      if (github && !token()) sessionStorage.setItem('xingji-github-token', github.token);
+      if (d1 && !d1Token()) sessionStorage.setItem('xingji-d1-token', d1.token);
+      clearArchiveView();
+      Object.assign(state, {
+        mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48,
+        connectionStatus: 'online', showDemo: false, d1Replacement: null
+      });
+      announce();
+      navigate('archive');
+      toast(remoteReset ? '已采用新票库并清理旧数据' : '仓库已重置，个人资料和 MCP 设置已保留');
+    } catch (error) {
+      if (form.isConnected) {
+        const progress = githubResult && d1 ? 'GitHub 已重置，D1 重置尚未完成。' : '';
+        form.querySelector('[data-reset-error]').textContent = progress + error.message;
+      }
+    } finally {
+      state.resetting = false;
+      release();
+      renderSyncState();
+    }
   });
 }
 async function adoptD1Replacement() {
@@ -1258,9 +1380,19 @@ channel?.addEventListener('message', async event => {
       clearArchiveView();
     }
   }
-  if (!state.d1 && snapshot.d1) {
+  if (event.data?.d1SignedOut) {
+    authEpoch++;
+    syncAbort?.abort();
+    clearTimeout(syncTimer);
+    forgetD1Session();
+    state.connectionStatus = 'auth';
+    state.syncMessage = '';
+  } else if (snapshot.d1 && !d1Token()) {
     const savedSecret = await db.get('d1Token', '');
-    if (savedSecret) sessionStorage.setItem('xingji-d1-token', savedSecret);
+    if (savedSecret) {
+      sessionStorage.setItem('xingji-d1-token', savedSecret);
+      state.connectionStatus = 'checking';
+    }
   }
   useSnapshot(snapshot);
   if (snapshot.meta.verified && cloudToken() && state.connectionStatus === 'checking' && !snapshot.meta.pending) {

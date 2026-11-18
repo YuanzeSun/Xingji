@@ -42,6 +42,12 @@ export function connect(window, provider, secret = provider === 'd1' ? token : '
   form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
 }
 
+export async function chooseSource(provider) {
+  await until(() => document.querySelector('#archive-source-form'));
+  document.querySelector('#archive-source-form [value="' + provider + '"]').click();
+  document.querySelector('#archive-source-form [type="submit"]').click();
+}
+
 export async function confirm(title) {
   await until(() => document.querySelector('dialog h2')?.textContent === title);
   answerArithmetic(document.querySelector('dialog'));

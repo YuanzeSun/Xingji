@@ -5,7 +5,7 @@ import { fullBackup, readFullBackup } from '../src/archive-backup.js';
 import { sharedSettings } from '../src/shared-settings.js';
 import { prepareCloud } from './helpers/cloud.js';
 import { endpoint, memoryD1, token } from './helpers/d1.js';
-import { browser, until, confirm, useServers } from './helpers/d1-app.js';
+import { browser, until, chooseSource, confirm, useServers } from './helpers/d1-app.js';
 import { D1Store } from '../src/d1.js';
 
 test('restored tickets and settings sync before proposing the only missing account', async () => {
@@ -49,7 +49,8 @@ test('restored tickets and settings sync before proposing the only missing accou
     const form = document.querySelector('#d1-form');
     assert.equal(form.elements.token.value, token);
     form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-    await confirm('切换到 Cloudflare D1');
+    await chooseSource('github');
+    await confirm('确认覆盖 D1');
     await until(() => document.querySelector('[data-d1-cloud-label]')?.textContent === '已同步');
     const migrated = await d1Store.read();
     assert.deepEqual(migrated.records.map(row => row.id), ['restored']);

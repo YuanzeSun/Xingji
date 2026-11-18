@@ -4,7 +4,7 @@ import { createRecord } from '../src/model.js';
 import { MemoryGitHub } from './helpers/cloud.js';
 import { D1Store } from '../src/d1.js';
 import { endpoint, memoryD1, token } from './helpers/d1.js';
-import { browser, until, connect, confirm, useServers } from './helpers/d1-app.js';
+import { browser, until, connect, chooseSource, confirm, useServers } from './helpers/d1-app.js';
 
 test('D1 first: binding backs up once, later changes only reach GitHub on manual backup', async () => {
   const window = browser();
@@ -30,9 +30,18 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
     assert.equal(d1.calls.filter(call => call.method === 'POST').length, 0);
 
     connect(window, 'github');
-    await until(() => document.querySelector('dialog h2')?.textContent === '将 GitHub 绑定为备份仓库');
+    await until(() => document.querySelector('#archive-source-form'));
+    const sourceForm = document.querySelector('#archive-source-form');
+    assert.match(sourceForm.textContent, /GitHub · 1 张/);
+    assert.match(sourceForm.textContent, /D1 · 1 张/);
     assert.equal(github.records()[0].id, 'github-ticket');
-    await confirm('将 GitHub 绑定为备份仓库');
+    sourceForm.querySelector('[data-action="close-modal"]').click();
+    await until(() => document.querySelector('#github-form button[type="submit"]')?.disabled === false);
+    assert.equal(github.head, before);
+    assert.equal(sessionStorage.getItem('xingji-github-token'), null);
+    connect(window, 'github');
+    await chooseSource('d1');
+    await confirm('确认覆盖 GitHub');
     await until(() => button()?.disabled === false);
     assert.deepEqual(github.records().map(row => row.id), ['d1-ticket']);
     assert.equal(github.settings().flightMcpKey, 'd1-key');
