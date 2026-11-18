@@ -1,5 +1,4 @@
-import {calendarDate} from './journey-date.js';
-import { archive, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords } from './model.js';
+import { archive, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings } from './shared-settings.js';
 import { upgradeCodeRecords, hasLegacyCodes } from './code-upgrade.js';
 
@@ -78,7 +77,7 @@ export class GitHubStore {
           parsed.records = await upgradeCodeRecords(parsed.records); rewritePaths.push(item.path);
         }
         const rows = readArchive(parsed);
-        if (rows.some(record => (calendarDate(record.departureDate).slice(0, 4) || 'unknown') !== item.path.slice(8, -5))) throw new Error('云端票据年份与文件不匹配');
+        if (rows.some(record => yearOf(record) !== item.path.slice(8, -5))) throw new Error('云端票据年份与文件不匹配');
         contents[item.path] = content;
         return rows;
       }));

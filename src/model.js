@@ -17,6 +17,7 @@ import { normalizePlaces, placeIdentity } from './places.js';
 import { isRefundReceipt } from './record-kind.js';
 import { normalizeRailBureau, splitRailModel, normalizeRailPowerSupply } from './rail-details.js';
 import { cityLabel } from './locations.js';
+import { isStoredTimeZone } from './data/time-zone-ids.js';
 import { normalizeFlightStatus } from './flight-status.js';
 import { normalizeRailJourney, railJourneyMatches, normalizeRailTrainsets } from './rail-journey.js';
 export const SCHEMA_VERSION = 2;
@@ -81,13 +82,13 @@ export function validateRecord(input) {
   for (const [field,label] of [['railMileage','铁路里程'],['flightDistance','航程距离']]) if(out[field] && (!/^(?:0|[1-9]\d{0,5})(?:\.\d{1,3})?$/.test(out[field]) || Number(out[field])>100000))throw new Error(label+'须为 0 至 100000 km，可保留三位小数');
   if(out.checkedBaggageCount&&(!/^(?:0|[1-9]\d{0,3})$/.test(out.checkedBaggageCount)||Number(out.checkedBaggageCount)>2997))throw new Error('托运行李件数须为 0 至 2997 的整数');
   for (const field of ['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime', 'actualBoardingTime']) if (out[field] && !/^([01]\d|2[0-3]):[0-5]\d$/.test(out[field])) throw new Error('时间请填写 HH:mm');
-  for (const field of ['departureZone', 'arrivalZone']) if (out[field]) { try { Intl.DateTimeFormat('en', { timeZone: out[field] }); } catch { throw new Error('请填写有效时区，例如 Asia/Shanghai'); } }
+  for (const field of ['departureZone', 'arrivalZone']) if (out[field] && !isStoredTimeZone(out[field])) throw new Error('请填写有效时区，例如 Asia/Shanghai');
   for (const field of ['offsetX', 'offsetY']) if (!Number.isFinite(Number(out[field])) || Math.abs(Number(out[field])) > 30) throw new Error('排版偏移范围为 -30 至 30');
   if (out.price && !/^\d{1,9}(\.\d{1,2})?$/.test(out.price)) throw new Error('票价请填写正数，最多两位小数');
   out.createdAt = typeof input.createdAt === 'string' ? input.createdAt : now();
   out.updatedAt = typeof input.updatedAt === 'string' ? input.updatedAt : now();
   out.sources = (Array.isArray(input.sources) ? input.sources : []).slice(0, 200).filter(s => s && typeof s === 'object').map(s => ({ kind: String(s.kind || 'manual').slice(0, 80), label: String(s.label || '').slice(0, 300), at: String(s.at || now()).slice(0, 40) }));
-  out.sources.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  out.sources.sort((a, b) => wireOrder(JSON.stringify(a), JSON.stringify(b)));
   out.lockedFields = [...new Set((Array.isArray(input.lockedFields) ? input.lockedFields : []).filter(f => FIELDS.includes(f) && !['originCity','destinationCity','lookupValues','fieldSources','boardingCodeSource','boardingCodeOperatingFlight'].includes(f)))].sort();
   out.mergedIds = [...new Set((Array.isArray(input.mergedIds) ? input.mergedIds : []).filter(id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id) && id !== out.id))].sort();
   if (out.deleted) {
@@ -277,11 +278,12 @@ export function mergeThreeWay(baseRecords, localRecords, remoteRecords) {
   }
   return { records, conflicts };
 }
+const wireOrder = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 export const yearOf = r => String(journeyDate(r.departureDate)?.year || 'unknown');
 export function partition(records) {
   const years = {};
   for (const record of records) (years[yearOf(record)] ||= []).push(record);
-  for (const rs of Object.values(years)) rs.sort((a, b) => a.id.localeCompare(b.id));
+  for (const rs of Object.values(years)) rs.sort((a, b) => wireOrder(a.id, b.id));
   return years;
 }
 export function csv(records) {
