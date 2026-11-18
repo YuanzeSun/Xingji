@@ -47,14 +47,19 @@ export function signOutGitHub() {
   });
 }
 
-export async function activateD1(captured, config, remote, credential) {
+export async function activateD1(captured, config, remote, { credential, github } = {}) {
   return db.atomic(keys, raw => {
     const current = unpack(raw);
     if (activeBinding(current) !== activeBinding(captured) || current.meta.revision !== captured.meta.revision || current.meta.head !== captured.meta.head) throw new Error('本机票库已变化，请重新核对后连接');
     const records = clone(remote.records), settings = sharedSettings(remote.settings), lastSync = now();
     const meta = { revision: current.meta.revision + 1, head: remote.head, generation: remote.generation || '', verified: true, pending: false };
     const write = { d1: config, records, base: clone(records), settings, settingsBase: clone(settings), syncMeta: meta, lastSync };
-    return { write: credential === undefined ? write : { ...write, d1Token: credential }, result: { ...current, ...write, meta } };
+    if (credential !== undefined) write.d1Token = credential;
+    if (github) {
+      write.github = clone(github.config);
+      write.githubToken = github.token;
+    }
+    return { write, result: unpack({ ...raw, ...write }) };
   });
 }
 
