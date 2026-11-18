@@ -8,6 +8,7 @@ import 'design.dart';
 import 'journey_statistics.dart';
 import 'platform_services.dart';
 import 'ride_trend_chart.dart';
+import 'statistics_ranking.dart';
 
 class StatisticsPage extends StatefulWidget {
   final AppStore store;
@@ -19,6 +20,7 @@ class StatisticsPage extends StatefulWidget {
 class _StatisticsPageState extends State<StatisticsPage> {
   DateTime? from;
   DateTime until = DateUtils.dateOnly(DateTime.now());
+  final rankingViews = <String, RankingView>{};
   bool monthly = false,
       supply = false,
       subtype = true,
@@ -143,6 +145,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
             value: supply,
             onChanged: (value) => setState(() => supply = value),
           ),
+          switchable: true,
         ),
         _bars(
           '担当路局',
@@ -153,6 +156,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
             value: owner,
             onChanged: (value) => setState(() => owner = value),
           ),
+          switchable: true,
         ),
         _bars(
           '乘坐机型',
@@ -163,6 +167,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
             value: subtype,
             onChanged: (value) => setState(() => subtype = value),
           ),
+          switchable: true,
         ),
         const SectionTitle('去过的大洲与国家'),
         Wrap(
@@ -377,49 +382,41 @@ class _StatisticsPageState extends State<StatisticsPage> {
     );
   }
 
-  Widget _bars(String title, Map<String, int> values, Widget control) {
-    final ordered = values.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-    final max = ordered.isEmpty ? 1 : ordered.first.value;
+  Widget _bars(
+    String title,
+    Map<String, int> values,
+    Widget control, {
+    bool switchable = false,
+  }) {
+    final view = rankingViews[title] ?? RankingView.bars;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionTitle(title),
         control,
-        if (ordered.isEmpty) const Text('暂无记录', style: TextStyle(color: muted)),
-        for (final row in ordered)
+        if (switchable)
           Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: Text(row.key)),
-                    const SizedBox(width: 16),
-                    Text(
-                      '${row.value} 次',
-                      style: const TextStyle(color: muted),
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Semantics(
+              container: true,
+              label: '$title 的图表样式',
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final option in RankingView.values)
+                    ChoiceChip(
+                      label: Text(option.label),
+                      selected: view == option,
+                      showCheckmark: false,
+                      onSelected: (_) =>
+                          setState(() => rankingViews[title] = option),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0, end: row.value / max),
-                  duration: Duration(
-                    milliseconds: MediaQuery.disableAnimationsOf(context)
-                        ? 0
-                        : 360,
-                  ),
-                  builder: (context, value, _) => LinearProgressIndicator(
-                    value: value,
-                    minHeight: 5,
-                    borderRadius: BorderRadius.circular(4),
-                    backgroundColor: mist,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
+        StatisticsRanking(values, key: ValueKey(title), view: view),
       ],
     );
   }

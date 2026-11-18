@@ -2,8 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xingji/app_store.dart';
+import 'package:xingji/design.dart';
 import 'package:xingji/journey_statistics.dart';
 import 'package:xingji/map_page.dart';
+import 'package:xingji/statistics_page.dart';
+import 'package:xingji/statistics_ranking.dart';
 import 'package:xingji_core/xingji_core.dart';
 
 void main() {
@@ -41,6 +44,87 @@ void main() {
     'origin': 'SFO',
     'destination': 'PEK',
     'aircraft': '737-200',
+  });
+
+  testWidgets('statistic cards keep separate chart formats when regrouped', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final store = AppStore(await SharedPreferences.getInstance(), catalog, [
+      outbound,
+      inbound,
+      TicketRecord.create({
+        'departureDate': date,
+        'railModel': '25G',
+        'railPowerSupply': 'DC600V',
+        'railBureau': '上海局',
+        'railCarOwner': '上海动车段',
+      }),
+    ], {});
+    store.setDemo(true);
+    addTearDown(store.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: archiveTheme(),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: Scaffold(body: StatisticsPage(store)),
+      ),
+    );
+
+    Finder group(String title) => find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics && widget.properties.label == '$title 的图表样式',
+    );
+    Finder button(String title, RankingView view) => find.descendant(
+      of: group(title),
+      matching: find.widgetWithText(ChoiceChip, view.label),
+    );
+    StatisticsRanking chart(String title) =>
+        tester.widget(find.byKey(ValueKey(title)));
+    final pageScroll = find.byType(Scrollable).first;
+    Future<void> choose(String title, RankingView view) async {
+      final option = button(title, view);
+      await tester.scrollUntilVisible(option, 180, scrollable: pageScroll);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(option);
+      await tester.pumpAndSettle();
+      await tester.tap(option);
+      await tester.pumpAndSettle();
+    }
+
+    await choose('乘坐车型', RankingView.columns);
+    expect(chart('乘坐车型').view, RankingView.columns);
+    await choose('乘坐机型', RankingView.donut);
+    expect(chart('乘坐机型').view, RankingView.donut);
+    final subtype = find.widgetWithText(SwitchListTile, '包含子型号');
+    await tester.ensureVisible(subtype);
+    await tester.pumpAndSettle();
+    await tester.tap(subtype);
+    await tester.pumpAndSettle();
+    expect(chart('乘坐机型').values, {'737': 2});
+    expect(chart('乘坐机型').view, RankingView.donut);
+    await tester.scrollUntilVisible(
+      group('担当路局'),
+      -180,
+      scrollable: pageScroll,
+    );
+    await tester.pumpAndSettle();
+    expect(chart('担当路局').view, RankingView.bars);
+    await tester.scrollUntilVisible(
+      group('乘坐车型'),
+      -180,
+      scrollable: pageScroll,
+    );
+    expect(chart('乘坐车型').view, RankingView.columns);
+    expect(tester.takeException(), isNull);
   });
 
   test('statistics use known date intervals, deduplicated models, and canonical routes', () {
