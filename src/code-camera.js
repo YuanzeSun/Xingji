@@ -4,7 +4,7 @@ export function codeCameraMarkup() {
 }
 
 export function bindCodeCamera(section, onCapture, {
-  mediaDevices = navigator.mediaDevices, schedule = (fn, ms) => setTimeout(fn, ms), unschedule = clearTimeout, onCancel = () => {}
+  mediaDevices = navigator.mediaDevices, schedule = (fn, ms) => setTimeout(fn, ms), unschedule = clearTimeout, onCancel = () => {}, asCanvas = false
 } = {}) {
   const panel = section.querySelector('[data-code-camera]'), video = panel.querySelector('video');
   const status = panel.querySelector('[data-code-camera-status]'), trigger = section.querySelector('[data-code-start]');
@@ -20,12 +20,12 @@ export function bindCodeCamera(section, onCapture, {
     reading = request; unschedule(timer); timer = null;
     try {
       if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {
-        const canvas = doc.createElement('canvas'), scale = Math.min(1, 1600 / Math.max(video.videoWidth, video.videoHeight));
+        const canvas = doc.createElement('canvas'), scale = Math.min(1, (asCanvas ? 2400 : 1600) / Math.max(video.videoWidth, video.videoHeight));
         canvas.width = Math.round(video.videoWidth * scale); canvas.height = Math.round(video.videoHeight * scale);
         canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        const image = asCanvas ? canvas : await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
         if (disposed || request !== generation) return;
-        if (blob && await onCapture(blob)) { if (request === generation) stop(); return; }
+        if (image && await onCapture(image)) { if (request === generation) stop(); return; }
       }
       if (request === generation) status.textContent = '将完整的码对准相机，保持清晰、稳定';
     } catch (error) { if (request === generation) status.textContent = error.message || '暂未读到码，请调整距离重试'; }

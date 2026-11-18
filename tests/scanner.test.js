@@ -11,7 +11,7 @@ import {barcodeFieldLocked} from '../src/barcode-fields.js';
 const notice = '日期：2026-11-15 车次：G103\n出发：北京南 到达：上海虹桥\n时间：08:00 二等座';
 const wait = () => new Promise(resolve => setTimeout(resolve, 0));
 function harness(options = {}) {
-  const dom = new JSDOM(scannerMarkup(), { url: 'https://example.com/' }), root = dom.window.document.querySelector('#live-scanner');
+  const dom = new JSDOM(scannerMarkup(options.type), { url: 'https://example.com/' }), root = dom.window.document.querySelector('#live-scanner');
   let stopped = 0, terminated = 0, reads = 0, captured = [], clock = 2000;
   const tasks = [], track = { stop() { stopped++; }, addEventListener() {} }, stream = { getTracks: () => [track], getVideoTracks: () => [track] };
   dom.window.HTMLMediaElement.prototype.play = async () => {};
@@ -81,11 +81,17 @@ test('stable camera frames are recognized automatically, then camera and worker 
 });
 
 test('flight camera scanning waits for the combined OCR and barcode result and returns locked decoded fields',async()=>{
-  let reads=0;
+  let reads=0,finish;
   const boardingCode=createBoardingCode({passenger:'EXAMPLE/TRAVELER',pnr:'ABC123',origin:'JFK',destination:'LHR',carrier:'BA',flightNumber:'321',date:'2026-05-18',cabin:'Y',seat:'12A',sequence:'42',status:'1',electronic:''});
-  const h=harness({type:'flight',loadRecognizer:async()=>({recognize:async(_image,options)=>{reads++;assert.equal(options.type,'flight');assert.equal(options.refineRailDate,false);return {text:'BOARDING PASS\nFLIGHT: BA999\nDATE: 18MAY2026\nSEAT: 46K\nBOARDING TIME: 09:55',confidence:90,boardingCodes:[boardingCode]};},terminate:async()=>{}})});
+  const h=harness({type:'auto',loadRecognizer:async()=>({recognize:async(_image,options)=>{reads++;assert.equal(options.type,'auto');assert.equal(options.refineRailDate,true);return new Promise(resolve=>{finish=resolve;});},terminate:async()=>{}})});
   try{
-    await h.ticks(12);assert.equal(reads,2);assert.equal(h.captured.length,1);
+    assert.equal(h.root.querySelector('[aria-pressed="true"]').textContent, '自动');
+    h.frame.metrics.mean=248;
+    await h.ticks(5);assert.equal(reads,1);assert.equal(h.captured.length,0);
+    h.frame.metrics.fingerprint=Array(384).fill(90);
+    await h.ticks(1);
+    finish({text:'BOARDING PASS\nFLIGHT: BA999\nDATE: 18MAY2026\nSEAT: 46K\nBOARDING TIME: 09:55',confidence:90,boardingCodes:[boardingCode]});
+    await wait();assert.equal(h.captured.length,1);
     const record=h.captured[0].record;assert.equal(record.service,'BA321');assert.equal(record.seat,'12A');assert.equal(record.boardingTime,'09:55');assert.equal(record.boardingCodeSource,'original');assert.equal(barcodeFieldLocked(record,'seat'),true);assert.equal(barcodeFieldLocked(record,'boardingTime'),false);
   }finally{h.dispose();h.dom.window.close();}
 });

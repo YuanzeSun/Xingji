@@ -306,9 +306,9 @@ function newPersonalRecord(type = 'rail') {
 }
 function scanTicket() {
   if (state.showDemo) return;
-  openModal(scannerMarkup('rail'), true);
+  openModal(scannerMarkup('auto'), true);
   modalRoot.querySelector('dialog').classList.add('scanner-modal');
-  scannerCleanup = mountScanner(modalRoot.querySelector('#live-scanner'), { type: 'rail', onResult(record, blob) {
+  scannerCleanup = mountScanner(modalRoot.querySelector('#live-scanner'), { type: 'auto', onResult(record, blob) {
     closeModal(true); localFileURL = URL.createObjectURL(blob);
     state.candidates = record.boardingCandidates || [record];state.selected=new Set(state.candidates.map((_,index)=>index));if(state.candidates.length===1)editRecord(record,0);else reviewCandidates();
   } });

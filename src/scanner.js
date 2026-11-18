@@ -4,7 +4,7 @@ import { videoCrop, frameMetrics, frameMotion, frameQuality, scanCandidate, crea
 export { prepareScanImage } from './scan-image.js';
 
 export function scannerMarkup(type = 'rail') {
-  return `<section class="live-scanner" id="live-scanner"><header class="scanner-header"><div><h2>扫描票据</h2><p>票面放入框内，自动识别</p></div><button class="scanner-close" type="button" data-action="close-modal" aria-label="关闭相机"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></header><div class="scanner-types" role="group" aria-label="扫描票据类型">${[['rail', '火车票'], ['flight', '机票']].map(([value, title]) => `<button type="button" data-scan-type="${value}" aria-pressed="${type === value}" class="${type === value ? 'selected' : ''}">${title}</button>`).join('')}</div><div class="scanner-stage"><video id="scanner-video" autoplay muted playsinline aria-label="实时相机预览"></video><div id="scanner-guide" class="scanner-guide" style="--ticket-ratio:${type === 'flight' ? 2.46 : 1.58}"><span></span><span></span><span></span><span></span></div></div><div class="scanner-feedback"><div class="scanner-status-line"><span class="scanner-state-dot" aria-hidden="true"></span><p id="scanner-status" role="status" aria-live="polite">正在打开相机…</p></div><div class="scanner-actions"><button type="button" id="scanner-retry" class="button secondary" hidden>重新开启相机</button><button type="button" class="text-button" data-action="close-modal">返回填写</button></div></div></section>`;
+  return `<section class="live-scanner" id="live-scanner"><header class="scanner-header"><div><h2>扫描票据</h2><p>票面或完整登机牌条码放入框内</p></div><button class="scanner-close" type="button" data-action="close-modal" aria-label="关闭相机"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button></header><div class="scanner-types" role="group" aria-label="扫描票据类型">${[['auto', '自动'], ['rail', '火车票'], ['flight', '机票']].map(([value, title]) => `<button type="button" data-scan-type="${value}" aria-pressed="${type === value}" class="${type === value ? 'selected' : ''}">${title}</button>`).join('')}</div><div class="scanner-stage"><video id="scanner-video" autoplay muted playsinline aria-label="实时相机预览"></video><div id="scanner-guide" class="scanner-guide" style="--ticket-ratio:${type === 'flight' ? 2.46 : 1.58}"><span></span><span></span><span></span><span></span></div></div><div class="scanner-feedback"><div class="scanner-status-line"><span class="scanner-state-dot" aria-hidden="true"></span><p id="scanner-status" role="status" aria-live="polite">正在打开相机…</p></div><div class="scanner-actions"><button type="button" id="scanner-retry" class="button secondary" hidden>重新开启相机</button><button type="button" class="text-button" data-action="close-modal">返回填写</button></div></div></section>`;
 }
 function cameraError(error) {
   if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') return '请允许相机访问，然后重新开启扫描';
@@ -22,7 +22,7 @@ export function mountScanner(root, {
   const status = root.querySelector('#scanner-status'), retry = root.querySelector('#scanner-retry');
   const doc = root.ownerDocument, win = doc.defaultView, consensus = createScanConsensus();
   const analysis = doc.createElement('canvas'); analysis.width = 320;
-  let disposed = false, active = false, generation = 0, epoch = 0, timer, stream, worker;
+  let disposed = false, active = false, generation = 0, motionEpoch = 0, typeEpoch = 0, timer, stream, worker;
   let fingerprint = null, steady = 0, busy = false, lastRead = 0, recognitionErrors = 0;
   function message(text) { if (!disposed && status.textContent !== text) status.textContent = text; }
   function release() {
@@ -44,25 +44,29 @@ export function mountScanner(root, {
     ctx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, analysis.width, analysis.height);
     const metrics = frameMetrics(ctx.getImageData(0, 0, analysis.width, analysis.height));
     return { metrics, snapshot() {
-      const canvas = doc.createElement('canvas'); canvas.width = Math.round(Math.min(1800, crop.width)); canvas.height = Math.max(1, Math.round(canvas.width * crop.height / crop.width));
+      const canvas = doc.createElement('canvas'); canvas.width = Math.round(Math.min(type === 'rail' ? 1800 : 2400, crop.width)); canvas.height = Math.max(1, Math.round(canvas.width * crop.height / crop.width));
       canvas.getContext('2d').drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, canvas.width, canvas.height);
       return canvas;
     } };
   }
-  async function recognize(canvas, request, frameEpoch) {
+  async function recognize(canvas, request) {
     busy = true; lastRead = now(); guide.classList.add('reading'); message('正在读取票面…');
+    const requestedType = type, requestedTypeEpoch = typeEpoch, frameEpoch = motionEpoch;
+    const current = () => !disposed && active && request === generation && requestedTypeEpoch === typeEpoch;
     try {
-      const result = await worker.recognize(prepareImage(canvas, type), { type, refineRailDate: type === 'rail' });
-      if (disposed || !active || request !== generation || frameEpoch !== epoch) return;
+      const result = await worker.recognize(prepareImage(canvas, requestedType), { type: requestedType, refineRailDate: requestedType !== 'flight' });
+      if (!current()) return;
       recognitionErrors = 0;
-      const candidate = scanCandidate(result.text, result.confidence, type, result);
-      const confirmed = consensus.observe(candidate, result.confidence);
+      const candidate = scanCandidate(result.text, result.confidence, requestedType, result);
+      const verifiedCode = candidate?.boardingCodeSource === 'original';
+      if (!verifiedCode && frameEpoch !== motionEpoch) return;
+      const confirmed = verifiedCode ? candidate : consensus.observe(candidate, result.confidence);
       if (!confirmed) { message(candidate ? `已读到 ${candidate.service}，保持片刻…` : '让整张票面进入框内，保持字迹清晰'); return; }
       const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('扫描图像未能生成，请重试')), 'image/png'));
-      if (disposed || !active || request !== generation || frameEpoch !== epoch) return;
+      if (!current() || (!verifiedCode && frameEpoch !== motionEpoch)) return;
       release(); onResult?.(confirmed, blob);
     } catch (error) {
-      if (disposed || !active || request !== generation) return;
+      if (!current()) return;
       consensus.reset(); recognitionErrors++;
       if (recognitionErrors >= 3) { release(); message('识别暂时未能完成，请重新扫描'); retry.hidden = false; }
       else message('正在重新读取票面…');
@@ -76,10 +80,11 @@ export function mountScanner(root, {
       const sample = frame();
       if (sample) {
         const quality = frameQuality(sample.metrics), motion = frameMotion(fingerprint, sample.metrics.fingerprint); fingerprint = sample.metrics.fingerprint;
-        if (quality || motion > 4.5) { steady = 0; epoch++; consensus.reset(); message(quality || '保持稳定，正在对焦…'); }
+        const mayContainCode = type !== 'rail' && sample.metrics.contrast >= 10 && sample.metrics.sharpness >= 3;
+        if ((quality && !mayContainCode) || motion > 4.5) { steady = 0; motionEpoch++; consensus.reset(); message(quality || '保持稳定，正在对焦…'); }
         else {
           steady++;
-          if (steady >= 3 && !busy && now() - lastRead >= 1200) void recognize(sample.snapshot(), request, epoch);
+          if (steady >= 3 && !busy && now() - lastRead >= 1200) void recognize(sample.snapshot(), request);
         }
       }
     } catch { release(); message('相机画面暂时不可用，请重试'); retry.hidden = false; return; }
@@ -108,7 +113,8 @@ export function mountScanner(root, {
   const visibility = () => { if (doc.visibilityState === 'hidden') pause(); };
   const changeType = event => {
     const button = event.target.closest('[data-scan-type]'); if (!button) return;
-    type = button.dataset.scanType; epoch++; steady = 0; fingerprint = null; consensus.reset();
+    if (type === button.dataset.scanType) return;
+    type = button.dataset.scanType; typeEpoch++; steady = 0; fingerprint = null; consensus.reset();
     guide.style.setProperty('--ticket-ratio', type === 'flight' ? 2.46 : 1.58);
     for (const b of root.querySelectorAll('[data-scan-type]')) { b.classList.toggle('selected', b === button); b.setAttribute('aria-pressed', String(b === button)); }
   };
