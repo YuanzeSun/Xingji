@@ -37,10 +37,10 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
       const input = railQuery(getRecord(),date.value || undefined), original=stamp();
       busy=true; button.disabled=true; button.textContent='正在查询…'; status.textContent='正在查询时刻、担当单位与列车资料…';
       request=new AbortController();
-      const result=await lookup(input,{railRoute:getRecord().railRoute,signal:AbortSignal.any([request.signal,AbortSignal.timeout(40000)])});
+      const result=await lookup(input,{railRoute:getRecord().railRoute,railJourney:getRecord().railJourney,signal:AbortSignal.any([request.signal,AbortSignal.timeout(40000)])});
       if (disposed || !form.isConnected) return;
       if (!canQuery() || form.querySelector('[type="submit"]')?.disabled || original!==stamp()) { status.textContent='查询条件已改变，本次结果未填入'; return; }
-      const changes=railCompletion(getRecord(),result,date.value || undefined), count=Object.keys(changes).filter(key=>!['railJourney','railRoute'].includes(key)).length, snapshot=!!(changes.railJourney || changes.railRoute);
+      const changes=railCompletion(getRecord(),result,date.value || undefined), count=Object.keys(changes).filter(key=>changes[key] && !['railJourney','railRoute'].includes(key)).length, snapshot=!!(changes.railJourney || changes.railRoute);
       if (Object.keys(changes).length) {
         applying=true;
         try { apply(changes,{kind:'rail-lookup',label:`RailGo 行程资料（始发日 ${calendarDate(result.railJourney.query.startDate)}）`,at:new Date().toISOString()}); }

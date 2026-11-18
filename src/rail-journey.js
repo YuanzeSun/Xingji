@@ -50,6 +50,17 @@ export function normalizeRailJourney(value) {
   return { query, queriedAt:timestamp(value.queriedAt), stops, distanceQueriedAt:timestamp(value.distanceQueriedAt), trainsets, coupling:value.coupling === true, coaches,access };
 }
 
+export function sameRailTimetable(saved, fresh) {
+  if (!saved?.query || !fresh?.query || saved.stops.length !== fresh.stops.length) return false;
+  if (!['trainNum', 'origin', 'destination'].every(key => saved.query[key] === fresh.query[key])
+      || !['startDate', 'boardingDate'].every(key => sameDate(saved.query[key], fresh.query[key]))) return false;
+  return fresh.stops.every((stop, i) => {
+    const old = saved.stops[i];
+    return ['station', 'trainCode', 'arrivalTime', 'departureTime'].every(key => old[key] === stop[key])
+      && ['arrivalDate', 'departureDate'].every(key => calendarDate(old[key]) === calendarDate(stop[key]));
+  });
+}
+
 export function railJourneyMatches(record, journey = record.railJourney) {
   if (record.type !== 'rail' || record.template === 'rail-refund-receipt' || !journey?.query) return false;
   const query = journey.query;

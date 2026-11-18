@@ -122,7 +122,8 @@ export async function loadRailLineNames(route,{fetcher=globalThis.fetch,signal}=
   return {...route,lineLabels:matchRailLineNames(route,lines),...(route.fullRoute?{fullRoute:{...route.fullRoute,lineLabels:matchRailLineNames(route.fullRoute,lines)}}:{})};
 }
 
-export function railLineAnnotations(labels,viewport,width,height,occupied=[]) {
+export function railLineAnnotations(labels,viewport,width,height,occupied=[],limit=20) {
+  if (limit <= 0) return [];
   const unit=1000/viewport.zoom/width,seen=new Set(),boxes=[];
   const screen=point=>[(point[0]-viewport.x)/unit+width/2,(point[1]-viewport.y)/unit+height/2];
   for(const row of occupied)if(Array.isArray(row))boxes.push(row);else if(row.label){const [x,y]=screen(row.point),{dx,dy,fontSize}=row.label;boxes.push([x+dx-4,y+dy-fontSize-3,x+dx+row.name.length*fontSize+4,y+dy+5]);}
@@ -137,7 +138,7 @@ export function railLineAnnotations(labels,viewport,width,height,occupied=[]) {
       if(box[0]<6||box[1]<6||box[2]>width-6||box[3]>height-6||boxes.some(other=>box[0]<other[2]&&box[2]>other[0]&&box[1]<other[3]&&box[3]>other[1]))continue;
       boxes.push(box);seen.add(row.name);result.push({...row,label:{dx,dy,fontSize:12,box}});break;
     }
-    if(result.length>=20)break;
+    if(result.length>=limit)break;
   }
   return result;
 }

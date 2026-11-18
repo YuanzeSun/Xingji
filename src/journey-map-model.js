@@ -71,10 +71,22 @@ export function networkGeometry(network, railway = null) {
     const spread = group?.length > 1 ? (index / (group.length - 1) - .5) * Math.min(.36, (group.length - 1) * .06) : 0;
     return { ...route, ...routeArc(from, to, route.type, spread) };
   });
-  let bounds = routes.length ? routes.reduce((bounds, route) => {
-    for (const [x, y] of route.points) { bounds[0] = Math.min(bounds[0], x); bounds[1] = Math.min(bounds[1], y); bounds[2] = Math.max(bounds[2], x); bounds[3] = Math.max(bounds[3], y); }
-    return bounds;
-  }, [Infinity, Infinity, -Infinity, -Infinity]) : [700, 98, 885, 215];
+  let bounds = [700, 98, 885, 215];
+  if (routes.length) {
+    bounds = [Infinity, Infinity, -Infinity, -Infinity];
+    const include = ([x, y]) => {
+      bounds[0] = Math.min(bounds[0], x); bounds[1] = Math.min(bounds[1], y);
+      bounds[2] = Math.max(bounds[2], x); bounds[3] = Math.max(bounds[3], y);
+    };
+    for (const node of nodes) include(node.point);
+    // The SVG draws repeated copies of each arc. Fit their points in the
+    // same longitude window as the markers, even when an arc crosses its seam.
+    const frame = (center + 180) / 360 * 1000;
+    for (const route of routes) for (const [x, y] of route.points) {
+      const wrapped = x - 1000 * Math.floor((x - frame + 500) / 1000);
+      include([wrapped, y]);
+    }
+  }
   if (railway?.trackPath) {
     const middle = (railway.bounds[0] + railway.bounds[2]) / 2;
     const shift = projectPoint([middle / 1000 * 360 - 180, 0], center)[0] - middle;

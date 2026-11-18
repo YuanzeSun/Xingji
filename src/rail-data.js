@@ -1,9 +1,10 @@
 import {calendarDate} from './journey-date.js';
 import { loadRailRoute } from './rail-route.js';
+import { railRouteMatches } from './rail-route-snapshot.js';
 import { loadRailLineNames } from './rail-line-names.js';
 import { railDetails } from './rail-lookup-model.js';
 import {resolvePlace} from './places.js';
-import { railText as clean, railService, railDate, railTime, railStation, isEmuModel, normalizeRailJourney } from './rail-journey.js';
+import { railText as clean, railService, railDate, railTime, railStation, isEmuModel, normalizeRailJourney, railJourneyRange, sameRailTimetable } from './rail-journey.js';
 export const RAIL_DETAILS_SOURCE = 'https://api.railgo.dev/479755220e0';
 export const RAIL_STOCK_SOURCE = 'https://api.railgo.dev/507418598e0';
 
@@ -66,7 +67,59 @@ async function stationAccess(result,options) {
   return {station:stop.station,date,gates,platform};
 }
 
-export async function lookupRailDetails(query, { fetcher = globalThis.fetch, signal, enrich = true, railRoute = '' } = {}) {
+function validDistances(distances) {
+  return distances[0] === 0 && distances.every((km, i) =>
+    Number.isFinite(km) && km <= 100000 && (i === 0 || km > distances[i - 1]));
+}
+
+function retainSavedDetails(journey, saved, { emuPossible }) {
+  if (!saved) return;
+  if (!journey.distanceQueriedAt && saved.distanceQueriedAt
+      && validDistances(saved.stops.map(stop => stop.distanceKm))) {
+    journey.stops.forEach((stop, i) => { stop.distanceKm = saved.stops[i].distanceKm; });
+    journey.distanceQueriedAt = saved.distanceQueriedAt;
+  }
+  if (!journey.trainsets.length && emuPossible) {
+    journey.trainsets = saved.trainsets;
+    journey.coupling = saved.coupling;
+  } else {
+    const byId = new Map(saved.trainsets.map(stock => [stock.id, stock]));
+    journey.trainsets = journey.trainsets.map(stock => ({
+      ...byId.get(stock.id), ...Object.fromEntries(Object.entries(stock).filter(([, value]) => value)),
+    }));
+  }
+  const oldAccess = saved.access.find(item => calendarDate(item.date) === calendarDate(journey.query.boardingDate));
+  if (oldAccess) {
+    const fresh = journey.access[0];
+    journey.access = [fresh ? {
+      ...fresh, platform: fresh.platform || oldAccess.platform,
+      gates: fresh.gates.length ? fresh.gates : oldAccess.gates,
+    } : oldAccess];
+  }
+  if (!saved.coaches) return;
+  const fresh = journey.coaches, identity = ['model', 'code', 'type'];
+  if (!fresh || ![...identity.map(key => fresh[key]), ...fresh.cars, ...fresh.info].some(Boolean)) {
+    journey.coaches = saved.coaches;
+  } else if (identity.every(key => !fresh[key] || fresh[key] === saved.coaches[key])) {
+    for (const key of identity) fresh[key] ||= saved.coaches[key];
+    if (!fresh.cars.length) fresh.cars = saved.coaches.cars;
+    if (!fresh.info.length) fresh.info = saved.coaches.info;
+  }
+}
+
+function retainFullRoute(route, saved, stops) {
+  const coversJourney = candidate => candidate?.stops[0]?.name === stops[0].station
+    && candidate.stops.at(-1)?.name === stops.at(-1).station;
+  if (!coversJourney(route.fullRoute)) delete route.fullRoute;
+  if (!route.fullRoute && coversJourney(saved?.fullRoute)
+      && JSON.stringify(route.segments) === JSON.stringify(saved.segments)
+      && JSON.stringify(route.stops) === JSON.stringify(saved.stops)) {
+    route.fullRoute = structuredClone(saved.fullRoute);
+  }
+  return route;
+}
+
+export async function lookupRailDetails(query, { fetcher = globalThis.fetch, signal, enrich = true, railRoute = '', railJourney = '' } = {}) {
   const options = { fetcher, signal };
   const main = async input => {
     const url = new URL('https://rg-api.zenglingkun.cn/api/v2/getTrainMain');
@@ -82,6 +135,11 @@ export async function lookupRailDetails(query, { fetcher = globalThis.fetch, sig
   }
   if (!enrich) return result;
   const journey = result.railJourney, queriedAt = journey.queriedAt;
+  const saved = sameRailTimetable(railJourney, journey) ? railJourney : null;
+  const routeRecord = {type:'rail', service:result.query.trainNum, origin:result.query.origin, destination:result.query.destination};
+  const previousRoute = railRouteMatches(routeRecord, railRoute) ? railRoute : null;
+  const savedRoute = saved ? previousRoute : null;
+  let partialStock = false;
   const stocks = async () => {
     if (!isEmuModel(result.railModel)) return;
     const url = new URL('https://emu.railgo.zenglingkun.cn/api/query'); url.searchParams.set('keyword',result.query.trainNum);
@@ -89,6 +147,7 @@ export async function lookupRailDetails(query, { fetcher = globalThis.fetch, sig
     if (!match) return;
     journey.coupling = match.coupling;
     const details = await Promise.allSettled(match.ids.map(id => stockDetails(id,options,queriedAt)));
+    partialStock = details.some(item => item.status === 'rejected');
     journey.trainsets = details.map((item,i) => item.status === 'fulfilled' ? item.value : { id:match.ids[i] });
   };
   const coaches = async () => {
@@ -97,35 +156,43 @@ export async function lookupRailDetails(query, { fetcher = globalThis.fetch, sig
   };
   const access=async()=>{
     const departure=await stationAccess(result,options);journey.access=departure?[departure]:[];
-    if(departure){result.gate=compactRailGates(departure.gates);result.railPlatform=departure.platform;}
   };
   const mileage=async()=>{
     const url=new URL('https://data.railgo.zenglingkun.cn/api/train/query');url.searchParams.set('train',result.query.trainNum);
     const payload=await requestJSON(url,options),row=payload.data || payload,rows=row.timetable;
     if(!Array.isArray(row.numberFull) || !row.numberFull.includes(result.query.trainNum) || !Array.isArray(row.rundays) || !row.rundays.includes(result.query.date) || !Array.isArray(rows) || rows.length!==journey.stops.length)return;
     if(rows.some((stop,i)=>railStation(stop.station)!==journey.stops[i].station || railTime(stop.arrive)!==journey.stops[i].arrivalTime || railTime(stop.depart)!==journey.stops[i].departureTime || !Number.isInteger(stop.day) || (railTime(stop.arrive) && shiftRailDateForMileage(result.query.date,stop.day)!==calendarDate(journey.stops[i].arrivalDate)) || (railTime(stop.depart) && shiftRailDateForMileage(result.query.date,stop.day+(railTime(stop.arrive) && stop.depart<stop.arrive ? 1 : 0))!==calendarDate(journey.stops[i].departureDate))))return;
-    if(rows[0].distance!==0 || rows.some((stop,i)=>!Number.isFinite(stop.distance) || stop.distance<0 || stop.distance>100000 || (i>0 && stop.distance<=rows[i-1].distance)))return;
-    const from=rows.findIndex(stop=>railStation(stop.station)===journey.query.origin),to=rows.findIndex(stop=>railStation(stop.station)===journey.query.destination);
-    if(from<0 || to<=from)return;
-    result.railMileage=String(Math.round((rows[to].distance-rows[from].distance)*1000)/1000);
+    if (!validDistances(rows.map(stop => stop.distance))) return;
     journey.stops.forEach((stop,i)=>{stop.distanceKm=rows[i].distance;});journey.distanceQueriedAt=queriedAt;
   };
   const extras = await Promise.allSettled([stocks(),coaches(),mileage(),access(), (async () => {
-    const route = await loadRailRoute({type:'rail',service:result.query.trainNum,origin:result.query.origin,destination:result.query.destination,railRoute},{...options,refresh:true});
+    const route = await loadRailRoute(routeRecord,{...options,refresh:true});
     if (route) {
-      result.railRoute = await loadRailLineNames(route,options);
+      result.railRoute = await loadRailLineNames(retainFullRoute(route, savedRoute, journey.stops),options);
       // A name-source outage must not erase labels already verified for this geometry.
       for (const section of ['', 'fullRoute']) {
-        const current=section ? result.railRoute[section] : result.railRoute, saved=section ? railRoute?.[section] : railRoute;
-        if(current && !current.lineLabels?.length && saved?.lineLabels?.length && JSON.stringify(current.segments)===JSON.stringify(saved.segments)) current.lineLabels=structuredClone(saved.lineLabels);
+        const current=section ? result.railRoute[section] : result.railRoute, savedGeometry=section ? previousRoute?.[section] : previousRoute;
+        if(current && !current.lineLabels?.length && savedGeometry?.lineLabels?.length && JSON.stringify(current.segments)===JSON.stringify(savedGeometry.segments)) current.lineLabels=structuredClone(savedGeometry.lineLabels);
       }
     }
   })()]);
   if (signal?.aborted) throw signal.reason;
-  result.railJourney = normalizeRailJourney(journey);
+  const fresh = normalizeRailJourney(journey);
+  retainSavedDetails(fresh, saved, {emuPossible: !result.railModel || isEmuModel(result.railModel)});
+  result.railJourney = fresh;
+  if (savedRoute && !result.railRoute) result.railRoute = savedRoute;
+  const accessAtOrigin = fresh.access[0];
+  if (accessAtOrigin) {
+    result.gate = compactRailGates(accessAtOrigin.gates);
+    result.railPlatform = accessAtOrigin.platform;
+  }
+  if (fresh.distanceQueriedAt) {
+    const {from, to} = railJourneyRange(fresh);
+    result.railMileage = String(Math.round((fresh.stops[to].distanceKm - fresh.stops[from].distanceKm) * 1000) / 1000);
+  }
   // Date-matched, identified stock is more specific than the main timetable's model snapshot.
-  if (journey.trainsets.length && journey.trainsets.every(stock => stock.model)) result.railModel = [...new Set(journey.trainsets.map(stock=>stock.model))].join(' / ');
-  result.partial = extras.some(item => item.status === 'rejected');
+  if (fresh.trainsets.length && fresh.trainsets.every(stock => stock.model)) result.railModel = [...new Set(fresh.trainsets.map(stock=>stock.model))].join(' / ');
+  result.partial = partialStock || extras.some(item => item.status === 'rejected');
   return result;
 }
 

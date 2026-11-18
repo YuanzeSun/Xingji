@@ -51,6 +51,19 @@ test('visible route arcs preserve endpoints and use the short crossing of the da
   assert.equal((COUNTRY_PATH.match(/[ML]/g) || []).length, MAP_REFERENCE.countryVertices);
 });
 
+test('routes crossing the fit window seam keep all airport markers in a single world', () => {
+  const nodes = [55, 155, -135, -35].map((longitude, i) => ({id:String(i),coordinates:[longitude, 25]}));
+  const routes = [[0, 1], [2, 3]].map(([from, to], i) => ({
+    id:String(i), type:'flight', aggregated:true, from:nodes[from], to:nodes[to],
+  }));
+  const geometry = networkGeometry({nodes,routes});
+  const [left, , right] = geometry.bounds;
+  const first = geometry.routes[0].points;
+  assert.ok(Math.abs(first.at(-1)[0] - geometry.nodes[1].point[0]) > 999);
+  assert.ok(geometry.nodes.every(node => node.point[0] >= left && node.point[0] <= right));
+  assert.ok(right - left <= 1000);
+});
+
 test('same-city and empty maps remain finite and retain their tickets', () => {
   const same = journeyNetwork([rail({ origin: '北京南', destination: '清河' })]);
   assert.equal(same.mapped, 1); assert.equal(same.nodes.length, 1); assert.equal(same.routes.length, 1);

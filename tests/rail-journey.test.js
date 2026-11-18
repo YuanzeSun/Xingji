@@ -31,6 +31,87 @@ function fetcher(calls,runData=runs([{runDate:'2026-11-16',trainNum:'G1',trainCo
 }
 async function completed() { const record=ticket(),result=await lookupRailDetails(railQuery(record),{fetcher:fetcher([])});return createRecord({...record,...railCompletion(record,result)}); }
 
+test('refresh keeps compatible RailGo details and discards only stale automatic values for a changed timetable',async()=>{
+  const record = ticket(), first = main();
+  const names = first.data.timetable.map(stop => stop.station);
+  const points = [[116.38, 39.86], [118.8, 32], [120.6, 31.4], [121.3, 31.2]];
+  const ids = ['CR400BF-5033', 'CR400BF-5034'];
+  const query = railQuery(record, '2026-11-16');
+  const response = phase => async url => {
+    const path = new URL(url).pathname;
+    if (path.endsWith('getTrainMain')) {
+      const timetable = structuredClone(first.data.timetable);
+      if (phase === 'changed') timetable.at(-1).arrive = '01:59';
+      return Response.json(main({timetable}));
+    }
+    if (phase === 'unavailable' || phase === 'changed') return new Response('', {status:503});
+    if (path === '/api/query') return Response.json(runs([{
+      runDate:'2026-11-16', trainNum:'G1', trainCode:ids, coupling:true,
+    }]));
+    if (path === '/api/car/info') {
+      const id = new URL(url).searchParams.get('id');
+      if (phase === 'partial' && id === ids[1]) return new Response('', {status:503});
+      const data = stock(id);
+      if (phase === 'partial') data.data.depot = '北京动车所';
+      return Response.json(data);
+    }
+    if (path.endsWith('getCoachPic')) {
+      return Response.json(phase === 'partial'
+        ? {success:true, data:{trainStyle:'CR400BF-A'}}
+        : coach());
+    }
+    if (path.endsWith('getExit')) return Response.json({success:true,data:phase === 'full'
+      ? {entrance:['16A检票口'],platform:'13'}
+      : {platform:'18'}});
+    if (path.endsWith('mapLine')) {
+      const start = phase === 'full' ? 0 : 1;
+      return Response.json({success:true,data:{
+        stations:names.slice(start).map((name, i) => ({[name]: points[i + start]})),
+        train:Object.fromEntries(names.slice(start + 1).map((name, i) => {
+          const j = start + i;
+          return [names[j] + '-' + name, {index:j, line:points.slice(j, j + 2)}];
+        })),
+      }});
+    }
+    if (path === '/api/train/query' && phase === 'full') {
+      return Response.json({data:{
+        ...first.data, timetable:first.data.timetable.map((stop, i) => ({...stop, distance:[0, 1023, 1225, 1302][i]})),
+      }});
+    }
+    return new Response('', {status:503});
+  };
+  const initial = await lookupRailDetails(query,{fetcher:response('full')});
+  applyLookupValues(record,railCompletion(record,initial));
+  assert.equal(record.railMileage,'279');
+  assert.ok(record.railRoute.fullRoute);
+  const saved = {railJourney:record.railJourney,railRoute:record.railRoute};
+  const unchanged = await lookupRailDetails(query,{...saved,fetcher:response('unavailable')});
+  assert.deepEqual(unchanged.railRoute,record.railRoute);
+  assert.deepEqual(unchanged.railJourney.trainsets,record.railJourney.trainsets);
+  assert.deepEqual(unchanged.railJourney.coaches,record.railJourney.coaches);
+  assert.deepEqual(unchanged.railJourney.access,record.railJourney.access);
+  assert.equal(unchanged.railMileage,'279');
+
+  const updated = await lookupRailDetails(query,{...saved,fetcher:response('partial')});
+  assert.deepEqual(updated.railRoute.fullRoute,record.railRoute.fullRoute);
+  assert.equal(updated.railJourney.trainsets[0].depot,'北京动车所');
+  assert.deepEqual(updated.railJourney.trainsets[1],record.railJourney.trainsets[1]);
+  assert.deepEqual(updated.railJourney.coaches.cars,record.railJourney.coaches.cars);
+  assert.equal(updated.gate,'16A');
+  assert.equal(updated.railPlatform,'18');
+  assert.equal(updated.railJourney.distanceQueriedAt,record.railJourney.distanceQueriedAt);
+
+  record.railPlatform = '手填';
+  markManualFields(record,['railPlatform']);
+  const changed = await lookupRailDetails(query,{...saved,fetcher:response('changed')});
+  const changes = railCompletion(record,changed);
+  assert.deepEqual(changes.railJourney.trainsets,[]);
+  assert.equal(changes.railJourney.coaches,'');
+  assert.equal(changes.railJourney.distanceQueriedAt,'');
+  for (const key of ['railRoute','railMileage','railTrainsets','gate']) assert.equal(changes[key],'',key);
+  assert.equal(changes.railPlatform,undefined);
+});
+
 test('explicit metadata refresh fetches route coordinates even when the ticket already has a saved route',async()=>{
   const saved=await completed(),calls=[];
   const result=await lookupRailDetails(railQuery(saved),{fetcher:fetcher(calls),railRoute:saved.railRoute});
@@ -167,9 +248,10 @@ test('a date-confirmed specific trainset model takes priority over the less spec
 test('a temporary line-name source outage retains saved names only for identical route geometry',async()=>{
   const saved=await completed();saved.railRoute.lineLabels=[{name:'京沪高速线',coordinates:[120,31.6]}];
   const result=await lookupRailDetails(railQuery(saved),{fetcher:fetcher([]),railRoute:saved.railRoute});
+  assert.equal(result.railRoute.fullRoute, undefined);
   assert.deepEqual(result.railRoute.lineLabels,saved.railRoute.lineLabels);
   assert.notEqual(result.railRoute.lineLabels,saved.railRoute.lineLabels);
-  const changed=structuredClone(saved.railRoute);changed.segments[0][0][0]+=.001;changed.fullRoute.segments[0][0][0]+=.001;
+  const changed=structuredClone(saved.railRoute);changed.segments[0][0][0]+=.001;
   const fresh=await lookupRailDetails(railQuery(saved),{fetcher:fetcher([]),railRoute:changed});
   assert.equal(fresh.railRoute.lineLabels,undefined);
 });

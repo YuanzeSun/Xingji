@@ -1,10 +1,10 @@
 import {calendarDate} from './journey-date.js';
 import {isLookupValue} from './lookup-values.js';
-import { railRouteNeedsSave } from './rail-route-snapshot.js';
+import { railRouteMatches, railRouteNeedsSave } from './rail-route-snapshot.js';
 import { validDate } from './model.js';
 import { resolvePlace } from './places.js';
 import { bureauFromCode, normalizeRailBureau, parseRailGoModel } from './rail-details.js';
-import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney } from './rail-journey.js';
+import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, sameRailTimetable } from './rail-journey.js';
 
 export const shiftRailDate = (date, days) => { const result = new Date(calendarDate(date) + 'T00:00:00Z'); result.setUTCDate(result.getUTCDate() + days); return result.toISOString().slice(0, 10); };
 function endpoint(record, side) {
@@ -67,7 +67,18 @@ export function railCompletion(record, result, startDate) {
   const values={...result,railTrainsets:(result.railJourney?.trainsets || []).map(stock=>stock.id).join(' / ')};
   const fields = ['railBureau','railModel','railTrainsets','railPowerSupply','railMileage','railRunner','railCarOwner','gate','railPlatform','departureTime','arrivalDate','arrivalTime'];
   const changes = Object.fromEntries(fields.filter(field => (!record[field] || isLookupValue(record,field)) && !record.lockedFields?.includes(field) && values[field]).map(field => [field, values[field]]));
-  if (result.railRoute && railRouteNeedsSave(record,result.railRoute)) changes.railRoute = result.railRoute;
+  const differentTimetable = record.railJourney && result.railJourney
+    && !sameRailTimetable(record.railJourney, result.railJourney);
+  if (differentTimetable) {
+    for (const field of ['railMileage', 'railTrainsets', 'gate', 'railPlatform']) {
+      if (!values[field] && isLookupValue(record, field)) changes[field] = '';
+    }
+  }
+  const route = result.railRoute || '';
+  if (railRouteNeedsSave(record, route) ||
+      (record.railJourney && railRouteMatches(record, route)
+        && JSON.stringify(record.railRoute) !== JSON.stringify(route))) changes.railRoute = route;
+  else if (differentTimetable && record.railRoute && !route) changes.railRoute = '';
   if (result.railJourney && JSON.stringify(record.railJourney) !== JSON.stringify(result.railJourney)) changes.railJourney = result.railJourney;
   return changes;
 }

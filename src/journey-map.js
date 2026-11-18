@@ -80,10 +80,14 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
 
     const pointers = new Map();
     const measure = () => { const rect = frameBounds = frame.getBoundingClientRect(); width = rect.width || 1000; height = rect.height || 620; aspect = width / height; };
+    function fitZoom() {
+      const [x1, y1, x2, y2] = geometry.bounds, padding = Math.min(.24, 48 / Math.min(width, height));
+      return clamp(Math.min(1000 * (1 - padding * 2) / Math.max(railway ? .15 : 18, x2 - x1), 1000 / aspect * (1 - padding * 2) / Math.max(railway ? .1 : 14, y2 - y1)), .8, railway ? 6000 : 28);
+    }
     const fit = () => {
       options.userMoved = false;
-      const [x1, y1, x2, y2] = geometry.bounds, padding = Math.min(.24, 48 / Math.min(width, height));
-      viewport = { x: (x1 + x2) / 2, y: (y1 + y2) / 2, zoom: clamp(Math.min(1000 * (1 - padding * 2) / Math.max(railway ? .15 : 18, x2 - x1), 1000 / aspect * (1 - padding * 2) / Math.max(railway ? .1 : 14, y2 - y1)), .8, railway ? 6000 : 28) };
+      const [x1, y1, x2, y2] = geometry.bounds;
+      viewport = { x: (x1 + x2) / 2, y: (y1 + y2) / 2, zoom: fitZoom() };
     };
     function storeViewport() {
       const viewHeight=1000/viewport.zoom/aspect;
@@ -110,8 +114,13 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
         return `<path class="map-route ${route.type} ${active(route) ? 'emphasized' : 'dimmed'} ${route.id === selected?.id ? 'selected' : ''}" d="${route.path}" transform="translate(${route.offset},0)" data-map-route="${e(route.id)}" tabindex="0" role="button" aria-label="${e(description)}" style="--route-width:${route.aggregated ? Math.min(4, 1.5 + Math.log2(route.records.length + 1) * .45) : 1.7}"><title>${e(description)}</title></path>`;
       }).join('');
       svg.querySelector('.map-nodes').innerHTML = visibleNodes.map(point => `<g class="map-node ${point.id === options.node ? 'selected' : ''}" data-map-node="${e(point.id)}" tabindex="0" role="button" aria-label="${e(point.name + '，' + point.trips.size + '程')}"><circle class="node-hit" cx="${point.point[0]}" cy="${point.point[1]}" r="${13 * unit}"/><circle cx="${point.point[0]}" cy="${point.point[1]}" r="${(point.id === options.node ? 5.5 : 3.5) * unit}"/><title>${e(point.name)}${point.code ? ' · ' + point.code : ''}</title></g>`).join('');
-      const occupied = [], labels = [];
-      for (const point of [...visibleNodes].sort((a, b) => b.trips.size - a.trips.size)) {
+      const occupied = [], labels = [], labelledNodes = new Set();
+      const labelLimit = clamp(Math.round(width * height * clamp(viewport.zoom / fitZoom(), .5, 5) / 28000), 4, 60);
+      const lineAllowance = geometry.lineLabels.length ? Math.ceil(labelLimit / 3) : 0;
+      for (const point of [...visibleNodes].sort((a, b) =>
+        Number(b.id === options.node) - Number(a.id === options.node) || b.trips.size - a.trips.size)) {
+        if (labels.length >= labelLimit - lineAllowance) break;
+        if (labelledNodes.has(point.id)) continue;
         const [x, y] = point.point, sx = (x - viewport.x) / unit + width / 2, sy = (y - viewport.y) / unit + height / 2, textWidth = [...point.name].length * 12.5;
         if (sx < 0 || sx > width || sy < 0 || sy > height) continue;
         let placed = false;
@@ -119,13 +128,13 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
           for (const side of [1, -1]) {
             const left = side === 1 ? sx + 8 : sx - 8 - textWidth, box = [left, sy + direction * 17 - 13, left + textWidth, sy + direction * 17 + 3];
             if (box[0] < 8 || box[2] > width - 8 || box[1] < 8 || box[3] > height - 8 || occupied.some(b => box[0] < b[2] + 5 && box[2] > b[0] - 5 && box[1] < b[3] + 4 && box[3] > b[1] - 4)) continue;
-            occupied.push(box); labels.push(`<text x="${x + side * 8 * unit}" y="${y + direction * 17 * unit}" text-anchor="${side === 1 ? 'start' : 'end'}" font-size="${12.5 * unit}" stroke-width="${3 * unit}">${e(point.name)}</text>`); placed = true; break;
+            occupied.push(box); labelledNodes.add(point.id); labels.push(`<text x="${x + side * 8 * unit}" y="${y + direction * 17 * unit}" text-anchor="${side === 1 ? 'start' : 'end'}" font-size="${12.5 * unit}" stroke-width="${3 * unit}">${e(point.name)}</text>`); placed = true; break;
           }
           if (placed) break;
         }
       }
       svg.querySelector('.map-labels').innerHTML = labels.join('');
-      if(railway)svg.querySelector('.map-rail-line-names').innerHTML=railLineAnnotations(geometry.lineLabels||[],viewport,width,height,occupied).map(row=>`<g class="rail-line-name" data-rail-line-name="${e(row.name)}" transform="translate(${row.point})"><text x="${row.label.dx*unit}" y="${row.label.dy*unit}" font-size="${row.label.fontSize*unit}" stroke-width="${3*unit}">${e(row.name)}</text></g>`).join('');
+      if(railway)svg.querySelector('.map-rail-line-names').innerHTML=railLineAnnotations(geometry.lineLabels||[],viewport,width,height,occupied,Math.min(20,labelLimit-labels.length)).map(row=>`<g class="rail-line-name" data-rail-line-name="${e(row.name)}" transform="translate(${row.point})"><text x="${row.label.dx*unit}" y="${row.label.dy*unit}" font-size="${row.label.fontSize*unit}" stroke-width="${3*unit}">${e(row.name)}</text></g>`).join('');
     }
     function zoom(factor, anchor = [width / 2, height / 2], base = viewport, currentAnchor = anchor, interactive = false) {
       options.userMoved = true;
