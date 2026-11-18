@@ -155,7 +155,12 @@ async function persist(records, settings) {
   } finally { state.saving = false; render(); }
 }
 function savedMessage(message = '票据已同步') { return state.syncMeta.pending ? '已保存本机，等待云端确认' : message; }
-function queueSync(delay = 1800) { if (state.resetting) return; clearTimeout(syncTimer); if (hasCloud() && cloudToken() && document.visibilityState !== 'hidden') { syncTimer = setTimeout(() => doSync(), delay); syncTimer.unref?.(); } }
+function queueSync(delay) {
+  clearTimeout(syncTimer);
+  if (state.resetting || !state.syncMeta.pending || !cloudToken() || document.visibilityState === 'hidden') return;
+  syncTimer = setTimeout(() => doSync(), delay);
+  syncTimer.unref?.();
+}
 function syncLabel() {
   if (!hasCloud()) return '需要连接云端';
   if (state.syncing) return '正在核对云端…';
@@ -167,15 +172,15 @@ function connectionForm() {
   const draft = state.connectionDraft, config = state.config || draft || {}, bound = !!state.config?.id;
   if (token()) return `<p class="body-copy">${e(config.owner)}/${e(config.repo)}</p><div class="button-row"><button class="text-button" type="button" data-action="disconnect">退出 GitHub</button></div>`;
   const label = bound ? '重新登录 GitHub' : state.d1 ? '绑定为备份仓库' : '连接并同步';
-  return `<form id="github-form"><div class="form-grid"><label class="field"><span>GitHub用户名</span><input name="owner" value="${e(config.owner)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>私有仓库名</span><input name="repo" value="${e(config.repo)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label></div><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token ?? token())}" autocomplete="off" required /></label><label class="checkbox-row"><input type="checkbox" name="remember" ${(draft?.remember ?? state.rememberToken) ? 'checked' : ''} />在此设备记住凭证</label><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${label}</button></div></form><div class="setup-help"><p>创建 GitHub 私有仓库并勾选添加 README。创建细粒度访问凭证时，仅授权该仓库，并将 Contents 设为 Read and write。</p><p><a href="https://github.com/new" target="_blank" rel="noopener noreferrer">创建私有仓库 ↗</a><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">创建访问凭证 ↗</a></p></div>`;
+  return `<form id="github-form"><div class="form-grid"><label class="field"><span>GitHub用户名</span><input name="owner" value="${e(config.owner)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>私有仓库名</span><input name="repo" value="${e(config.repo)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label></div><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token ?? token())}" autocomplete="off" required /></label><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${label}</button></div></form><div class="setup-help"><p>创建 GitHub 私有仓库并勾选添加 README。创建细粒度访问凭证时，仅授权该仓库，并将 Contents 设为 Read and write。</p><p><a href="https://github.com/new" target="_blank" rel="noopener noreferrer">创建私有仓库 ↗</a><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">创建访问凭证 ↗</a></p></div>`;
 }
 function captureConnectionDraft(form) {
-  state.connectionDraft = { ...state.connectionDraft, owner: form.elements.owner.value, repo: form.elements.repo.value, token: form.elements.token.value, remember: form.elements.remember.checked };
+  state.connectionDraft = { ...state.connectionDraft, owner: form.elements.owner.value, repo: form.elements.repo.value, token: form.elements.token.value };
 }
 function d1ConnectionPanel() {
   const draft = state.d1Draft, bound = !!state.d1;
   const help = state.config && !bound ? '首次切换会用 GitHub 票库替换 D1 中的行迹数据。之后 GitHub 只用于手动备份。' : '部署绑定 D1 的行迹 Worker，然后填写 Worker 地址和部署时设置的访问凭证。';
-  return `<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('database')}</span><div><h2>Cloudflare D1</h2><p data-d1-cloud-label>${bound ? e(syncLabel()) : '可作为主票库'}</p></div></div><form id="d1-form"><label class="field"><span>Worker 地址</span><input type="url" name="url" placeholder="https://your-archive.workers.dev" value="${e(state.d1?.url ?? draft?.url)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token ?? d1Token())}" required autocomplete="off" /></label><label class="checkbox-row"><input type="checkbox" name="remember" ${(draft?.remember ?? state.rememberD1Token) ? 'checked' : ''} />在此设备记住凭证</label><p class="form-error" role="alert">${e(state.d1Error)}</p><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${bound ? '更新 D1 授权' : '连接 D1'}</button>${bound ? '<button class="text-button" type="button" data-action="disconnect-d1">退出 D1 授权</button>' : ''}</div></form><div class="setup-help"><p>${help}</p><p><a href="https://github.com/YuanzeSun/Xingji/blob/main/docs/cloudflare-d1.md" target="_blank" rel="noopener noreferrer">D1 部署 ↗</a></p></div></section>`;
+  return `<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('database')}</span><div><h2>Cloudflare D1</h2><p data-d1-cloud-label>${bound ? e(syncLabel()) : '可作为主票库'}</p></div></div><form id="d1-form"><label class="field"><span>Worker 地址</span><input type="url" name="url" placeholder="https://your-archive.workers.dev" value="${e(state.d1?.url ?? draft?.url)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token ?? d1Token())}" required autocomplete="off" /></label><p class="form-error" role="alert">${e(state.d1Error)}</p><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${bound ? '更新 D1 授权' : '连接 D1'}</button>${bound ? '<button class="text-button" type="button" data-action="disconnect-d1">退出 D1 授权</button>' : ''}</div></form><div class="setup-help"><p>${help}</p><p><a href="https://github.com/YuanzeSun/Xingji/blob/main/docs/cloudflare-d1.md" target="_blank" rel="noopener noreferrer">D1 部署 ↗</a></p></div></section>`;
 }
 function githubExtras() {
   if (state.d1) return state.config ? `<div class="button-row github-backup"><button class="button secondary" data-action="backup-github" ${!canWrite() || !token() || state.saving || state.githubBackingUp ? 'disabled' : ''}>${state.githubBackingUp ? '正在备份…' : '立即备份到 GitHub'}</button></div>` : '';
@@ -401,7 +406,7 @@ function bindPage() {
   if (githubForm) { githubForm.addEventListener('input', () => captureConnectionDraft(githubForm)); githubForm.addEventListener('change', () => captureConnectionDraft(githubForm)); githubForm.addEventListener('submit', connectGitHub); }
   const d1Form = root.querySelector('#d1-form');
   if (d1Form) {
-    const capture = () => { state.d1Draft = { ...state.d1Draft, url: d1Form.elements.url.value, token: d1Form.elements.token.value, remember: d1Form.elements.remember.checked }; };
+    const capture = () => { state.d1Draft = { ...state.d1Draft, url: d1Form.elements.url.value, token: d1Form.elements.token.value }; };
     d1Form.addEventListener('input', capture);
     d1Form.addEventListener('change', capture);
     d1Form.addEventListener('submit', event => { event.preventDefault(); capture(); connectD1(d1Form); });
@@ -805,8 +810,8 @@ function offerBackupConnection({ github, d1 }) {
     '<div class="detail-body"><div class="reset-actions"><button type="button" class="button secondary" data-action="close-modal">跳过</button><button type="button" class="button primary" data-connect-from-backup>继续连接</button></div></div>');
   modalRoot.querySelector('[data-connect-from-backup]').addEventListener('click', () => {
     if (state[missing === 'd1' ? 'd1' : 'config']?.id) { closeModal(true); return; }
-    if (missing === 'd1') state.d1Draft = { ...target, target, remember: false };
-    else state.connectionDraft = { ...target, target, remember: false };
+    if (missing === 'd1') state.d1Draft = { ...target, target };
+    else state.connectionDraft = { ...target, target };
     closeModal(true);
     navigate('data');
     const form = root.querySelector(missing === 'd1' ? '#d1-form' : '#github-form');
@@ -830,7 +835,7 @@ async function connectGitHub(event) {
   if (token()) return;
   const form = event.target;
   captureConnectionDraft(form);
-  const { owner, repo, token: secretInput, remember, target } = state.connectionDraft;
+  const { owner, repo, token: secretInput, target } = state.connectionDraft;
   const secret = secretInput.trim();
   const attached = await connectCloud(form, 'githubError', async () => {
     const captured = await readSyncState();
@@ -847,10 +852,8 @@ async function connectGitHub(event) {
     } else if (!captured.d1) {
       try { await github.read(); } catch (error) { if (error.code !== 'ARCHIVE_FILES_MISSING') throw error; }
     }
-    useSnapshot(await bindRepository(config, captured.d1));
-    await db.set('githubToken', remember ? secret : '');
+    useSnapshot(await bindRepository(config, captured.d1, secret));
     sessionStorage.setItem('xingji-github-token', secret);
-    state.rememberToken = remember;
     state.connectionDraft = null;
     announce();
     if (captured.d1 && !captured.config?.id) toast('已完成首次 GitHub 备份，后续可手动备份');
@@ -859,7 +862,7 @@ async function connectGitHub(event) {
   if (attached && !state.d1) await doSync();
 }
 async function connectD1(form) {
-  const { url, token: secretInput, remember, target } = state.d1Draft;
+  const { url, token: secretInput, target } = state.d1Draft;
   const secret = secretInput.trim();
   const attached = await connectCloud(form, 'd1Error', async () => {
     const captured = await readSyncState();
@@ -877,10 +880,9 @@ async function connectD1(form) {
       if (!await requireArithmetic('切换到 Cloudflare D1', `会用 ${repo} 当前的票据、个人资料、MCP 和账号设置替换 ${address} 中的行迹数据。切换后可按需手动备份到 GitHub。`, '替换并切换')) return false;
       remote = await copyGitHubToD1(new GitHubStore(clone(captured.config), token()), d1, remote);
     }
-    if (captured.d1) await db.set('d1Token', remember ? secret : '');
-    else useSnapshot(await activateD1(captured, config, remote, remember ? secret : ''));
+    if (captured.d1) await db.set('d1Token', secret);
+    else useSnapshot(await activateD1(captured, config, remote, secret));
     sessionStorage.setItem('xingji-d1-token', secret);
-    state.rememberD1Token = remember;
     state.d1Draft = null;
     state.resetRequest = null;
     state.pendingConflicts = [];
@@ -909,7 +911,6 @@ function forgetGitHubSession() {
   sessionStorage.removeItem('xingji-github-token');
   state.connectionDraft = null;
   state.githubError = '';
-  state.rememberToken = false;
 }
 function clearArchiveView() {
   closeModal(true);
@@ -935,7 +936,6 @@ async function disconnectCloud(fromD1) {
   if (fromD1) {
     await db.set('d1Token', '');
     state.d1Draft = null;
-    state.rememberD1Token = false;
     sessionStorage.removeItem('xingji-d1-token');
     render();
     toast('已退出 D1，本机缓存仅可查看');
@@ -954,7 +954,11 @@ async function doSync(resolutions = {}) {
   if (state.resetting) return false;
   if (syncPromise) return syncPromise;
   if (!hasCloud() || !cloudToken()) { state.connectionStatus = 'auth'; renderSyncState(); return false; }
-  if (!navigator.onLine) { state.connectionStatus = 'offline'; renderSyncState(); return false; }
+  if (!navigator.onLine) {
+    if (state.connectionStatus === 'checking') state.connectionStatus = state.syncMeta.verified ? 'online' : 'offline';
+    renderSyncState();
+    return false;
+  }
   const epoch = authEpoch, binding = activeBinding(state);
   const run = async () => {
     state.syncing = true; state.syncMessage = ''; renderSyncState();
@@ -985,7 +989,6 @@ async function doSync(resolutions = {}) {
       if (epoch !== authEpoch) return false;
       const accepted = await acknowledgeSync(captured, result); useSnapshot(accepted);
       needsRetry = !!accepted.retry; state.connectionStatus = accepted.retry ? 'checking' : navigator.onLine ? 'online' : 'offline'; state.pendingConflicts = []; state.resetRequest = null; state.d1Replacement = null; syncFailures = 0; if (accepted.changed) announce();
-      if (accepted.retry || accepted.meta.pending) queueSync(200);
       return !accepted.retry;
     } catch (error) {
       if (epoch !== authEpoch) return false;
@@ -1005,7 +1008,11 @@ async function doSync(resolutions = {}) {
       return false;
     } finally {
       state.syncing = false; renderSyncState();
-      if (state.connectionStatus !== 'conflict') queueSync(needsRetry ? 250 : state.connectionStatus === 'online' ? state.syncMeta.pending ? 250 : 30000 : Math.max(retryAt - Date.now(), Math.min(120000, 5000 * 2 ** Math.min(syncFailures, 5))));
+      if (state.syncMeta.pending && !['conflict', 'auth'].includes(state.connectionStatus)) {
+        const delay = needsRetry || state.connectionStatus === 'online' ? 250
+          : Math.max(retryAt - Date.now(), Math.min(120000, 5000 * 2 ** Math.min(syncFailures, 5)));
+        queueSync(delay);
+      }
     }
   };
   syncPromise = withCloudLock(run);
@@ -1054,7 +1061,7 @@ async function showArchiveReset(manual=false) {
       useSnapshot(accepted);state.resetRequest=null;state.profileDraft=null;state.profileBase=null;state.profileDirty=false;state.profileError='';state.flightKeyDraft=null;state.flightResult=null;state.flightResultYear=null;state.settingsError='';state.filters=searchOptions();state.mapView={layers:['airway','railway'],year:'all'};state.limit=48;state.pendingConflicts=[];state.candidates=[];state.selected.clear();archiveSelected.clear();state.syncMessage='';state.connectionStatus='online';state.showDemo=false;
       announce();closeModal(true);navigate('archive');toast(request.code==='ARCHIVE_RESET' ? '已采用新票库并清理旧数据' : '仓库已重置，个人资料和 MCP 设置已保留');
     }catch(error){if(form.isConnected)form.querySelector('[data-reset-error]').textContent=error.message;}
-    finally{state.resetting=false;release();renderSyncState();queueSync(1000);}
+    finally{state.resetting=false;release();renderSyncState();}
   });
 }
 async function adoptD1Replacement() {
@@ -1231,9 +1238,16 @@ document.addEventListener('click', event => {
   const fn = actions[button.dataset.action]; if (fn) Promise.resolve().then(() => fn(button)).catch(fail);
 });
 window.addEventListener('hashchange', () => { state.page = location.hash.slice(1) || 'archive'; render(); });
-window.addEventListener('online', () => { state.connectionStatus = 'checking'; renderSyncState(); doSync(); });
-window.addEventListener('offline', () => { state.connectionStatus = 'offline'; renderSyncState(); });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') doSync(); else clearTimeout(syncTimer); });
+window.addEventListener('online', () => {
+  if (state.syncMeta.pending || state.connectionStatus === 'offline') doSync();
+  else renderSyncState();
+});
+window.addEventListener('offline', renderSyncState);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') clearTimeout(syncTimer);
+  else if (state.syncMeta.pending) doSync();
+  else renderSyncState();
+});
 channel?.addEventListener('message', async event => {
   const snapshot = await readSyncState();
   if (event.data?.githubSignedOut) {
@@ -1247,10 +1261,11 @@ channel?.addEventListener('message', async event => {
   if (!state.d1 && snapshot.d1) {
     const savedSecret = await db.get('d1Token', '');
     if (savedSecret) sessionStorage.setItem('xingji-d1-token', savedSecret);
-    state.rememberD1Token = !!savedSecret;
   }
   useSnapshot(snapshot);
-  state.connectionStatus = 'checking';
+  if (snapshot.meta.verified && cloudToken() && state.connectionStatus === 'checking' && !snapshot.meta.pending) {
+    state.connectionStatus = 'online';
+  }
   renderSyncState();
   queueSync(100);
 });
@@ -1259,7 +1274,7 @@ window.addEventListener('beforeunload', event => { if (state.profileDirty || edi
 async function boot() {
   try {
     const [snapshot, secret, d1Secret, showDemo] = await Promise.all([readSyncState(), db.get('githubToken', ''), db.get('d1Token', ''), db.get('showDemo', false)]);
-    useSnapshot(snapshot); state.rememberToken = !!secret; state.rememberD1Token = !!d1Secret;
+    useSnapshot(snapshot);
     if (snapshot.config && secret) sessionStorage.setItem('xingji-github-token', secret);
     if (!snapshot.config) forgetGitHubSession();
     if (d1Secret) sessionStorage.setItem('xingji-d1-token', d1Secret);

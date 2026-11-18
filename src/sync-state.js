@@ -24,12 +24,15 @@ export async function readSyncState() {
   }
   throw new Error('条码转换期间其他标签页持续修改，请刷新重试');
 }
-export async function bindRepository(config, expectedD1 = null) {
+export async function bindRepository(config, expectedD1 = null, credential) {
   return db.atomic(keys, raw => {
     const current = unpack(raw);
     if (activeBinding({ d1: current.d1 }) !== activeBinding({ d1: expectedD1 })) throw new Error('主存储已变化，请刷新后重新连接');
     if (current.config && binding(current.config) !== binding(config)) throw new Error('本机缓存已绑定其他仓库，不能混入当前票库');
-    return { write: { github: clone(config) }, result: { ...current, config: clone(config) } };
+    const bound = clone(config);
+    const write = { github: bound };
+    if (credential !== undefined) write.githubToken = credential;
+    return { write, result: { ...current, config: bound } };
   });
 }
 export function signOutGitHub() {
@@ -44,14 +47,14 @@ export function signOutGitHub() {
   });
 }
 
-export async function activateD1(captured, config, remote, rememberedToken) {
+export async function activateD1(captured, config, remote, credential) {
   return db.atomic(keys, raw => {
     const current = unpack(raw);
     if (activeBinding(current) !== activeBinding(captured) || current.meta.revision !== captured.meta.revision || current.meta.head !== captured.meta.head) throw new Error('本机票库已变化，请重新核对后连接');
     const records = clone(remote.records), settings = sharedSettings(remote.settings), lastSync = now();
     const meta = { revision: current.meta.revision + 1, head: remote.head, generation: remote.generation || '', verified: true, pending: false };
     const write = { d1: config, records, base: clone(records), settings, settingsBase: clone(settings), syncMeta: meta, lastSync };
-    return { write: rememberedToken === undefined ? write : { ...write, d1Token: rememberedToken }, result: { ...current, ...write, meta } };
+    return { write: credential === undefined ? write : { ...write, d1Token: credential }, result: { ...current, ...write, meta } };
   });
 }
 

@@ -41,7 +41,7 @@ test('GitHub first: D1 adopts the latest GitHub data and later JSON imports only
     assert.equal(github.records().length, 1);
 
     d1.available = false;
-    window.dispatchEvent(new window.Event('online'));
+    document.querySelector('[data-action="sync"]').click();
     await until(() => document.querySelector('#connection-state')?.textContent.includes('当前仅可查看本地缓存'));
     assert.equal(github.calls.length, githubCalls);
   } finally { window.dispatchEvent(new window.Event('offline')); window.close(); }

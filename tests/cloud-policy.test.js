@@ -5,7 +5,13 @@ import { indexedDB } from 'fake-indexeddb';
 import { createRecord } from '../src/model.js';
 import { MemoryGitHub } from './helpers/cloud.js';
 
-test('GitHub is required on first use; verified caches remain read-only offline or after authorization expires', async () => {
+test('GitHub is required on first use; verified caches remain read-only offline or after authorization expires', async t => {
+  const idleSchedules = [];
+  const setTimeout = globalThis.setTimeout;
+  t.mock.method(globalThis, 'setTimeout', (callback, delay, ...args) => {
+    if (delay === 30_000) idleSchedules.push(delay);
+    return setTimeout(callback, delay, ...args);
+  });
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost/' });
   const { window } = dom;
   for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData']) Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
@@ -24,15 +30,14 @@ test('GitHub is required on first use; verified caches remain read-only offline 
     form.elements[name].value = value;
     form.elements[name].dispatchEvent(new window.Event('input', { bubbles: true }));
   }
-  form.elements.remember.checked = true;
-  form.elements.remember.dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal(form.elements.namedItem('remember'), null);
   form.elements.token.focus(); form.elements.token.setSelectionRange(2, 5);
   Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
   document.dispatchEvent(new window.Event('visibilitychange'));
   window.dispatchEvent(new window.HashChangeEvent('hashchange'));
   form = document.querySelector('#github-form');
   assert.equal(form.elements.owner.value, 'user'); assert.equal(form.elements.repo.value, 'data');
-  assert.equal(form.elements.token.value, 'test-key'); assert.equal(form.elements.remember.checked, true);
+  assert.equal(form.elements.token.value, 'test-key');
   assert.equal(document.activeElement, form.elements.token); assert.equal(form.elements.token.selectionStart, 2);
   const db = await import('../src/db.js');
   assert.equal(sessionStorage.getItem('xingji-github-token'), null);
@@ -47,12 +52,14 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await wait(() => document.querySelector('.form-error').textContent && !document.querySelector('#github-form [type="submit"]').disabled);
   form = document.querySelector('#github-form');
-  assert.equal(form.elements.token.value, 'test-key'); assert.equal(form.elements.remember.checked, true);
+  assert.equal(form.elements.token.value, 'test-key');
   server.authorized = true;
   form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await wait(() => document.querySelector('.ticket-card') && !document.querySelector('[data-action="new"]').disabled);
   assert.equal((await db.get('records', [])).length, 1);
   assert.equal((await db.get('syncMeta')).verified, true);
+  assert.equal(await db.get('githubToken'), 'test-key');
+  assert.deepEqual(idleSchedules, [], 'a successful GitHub sync must not start an idle poll');
   online = false; window.dispatchEvent(new window.Event('offline'));
   assert.match(document.querySelector('#connection-state').textContent, /缓存/);
   assert.equal(document.querySelector('[data-action="new"]').disabled, true);
@@ -61,7 +68,14 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   click('[data-action="close-modal"]'); click('[data-action="navigate"][data-page="import"]'); await wait(() => document.body.textContent.includes('当前仅可查看缓存'));
   assert.equal(document.querySelector('#manual-form'), null); assert.equal(document.querySelector('#camera-file'), null);
   assert.deepEqual(await db.get('records'), [ticket]);
-  online = true; server.authorized = false; window.dispatchEvent(new window.Event('online'));
+  const callsBeforeReconnect = server.calls.length;
+  online = true;
+  window.dispatchEvent(new window.Event('online'));
+  document.dispatchEvent(new window.Event('visibilitychange'));
+  await wait(() => document.querySelector('.manual-panel [data-action="new"]')?.disabled === false);
+  assert.equal(server.calls.length, callsBeforeReconnect, 'returning online or to the foreground must not poll GitHub');
+  server.authorized = false;
+  click('[data-action="sync"]');
   await wait(() => document.querySelector('#connection-state')?.textContent.includes('凭证'));
   assert.equal(document.querySelector('#manual-form'), null); assert.deepEqual(await db.get('records'), [ticket]);
   server.authorized = true; click('[data-action="sync"]'); await wait(() => document.querySelector('.manual-panel [data-action="new"]'));
@@ -89,5 +103,6 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   location.hash = 'archive';
   await wait(() => document.querySelector('.ticket-card'));
   assert.equal(sessionStorage.getItem('xingji-github-token'), 'replacement-key');
+  assert.equal(await db.get('githubToken'), 'replacement-key');
   dom.window.close();
 });
