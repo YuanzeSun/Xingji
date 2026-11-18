@@ -173,14 +173,30 @@ class _ArchiveShellState extends State<ArchiveShell>
                     if (!store.demo || store.connected) const Spacer(),
                     if (store.demo && !store.connected)
                       Expanded(
-                        child: TextButton.icon(
-                          onPressed: () => _demo(false),
-                          icon: const Icon(Icons.explore_outlined, size: 16),
-                          label: const Text(
-                            '示例票库 · 开始使用',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final textScale =
+                                MediaQuery.textScalerOf(context).scale(14) / 14;
+                            return TextButton.icon(
+                              onPressed: () => _demo(false),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.explore_outlined,
+                                size: 16,
+                              ),
+                              label: Text(
+                                constraints.maxWidth >= 164 * textScale
+                                    ? '示例票库 · 开始使用'
+                                    : '开始使用',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          },
                         ),
                       ),
                     if (!store.demo) ...[

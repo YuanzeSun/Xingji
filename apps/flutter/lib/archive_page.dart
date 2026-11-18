@@ -275,8 +275,8 @@ class _ArchivePageState extends State<ArchivePage> {
       selecting = false;
       lastDemo = widget.store.demo;
     }
-    final rows = records, wide = MediaQuery.sizeOf(context).width >= 900;
-    final gutter = wide ? 48.0 : 24.0;
+    final rows = records, width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 900, gutter = archiveGutter(width);
     final feature =
         !selecting &&
         recent &&
@@ -287,7 +287,7 @@ class _ArchivePageState extends State<ArchivePage> {
         rows.isNotEmpty;
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1240),
+        constraints: const BoxConstraints(maxWidth: archiveContentWidth),
         child: CustomScrollView(
           controller: scroll,
           slivers: [
@@ -509,10 +509,21 @@ class _ArchivePageState extends State<ArchivePage> {
     children: [
       Hero(tag: record.id, child: TicketFace(record, widget.store.catalog)),
       if (selecting)
-        Positioned.fill(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: _checkbox(record),
+        PositionedDirectional(
+          top: 0,
+          start: 0,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  color: paper,
+                  borderRadius: BorderRadius.all(Radius.circular(7)),
+                ),
+                child: SizedBox.square(dimension: 28),
+              ),
+              _checkbox(record),
+            ],
           ),
         ),
     ],

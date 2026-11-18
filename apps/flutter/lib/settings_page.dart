@@ -38,41 +38,59 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 48),
+      padding: archivePagePadding(context),
       children: [
         Text('数据与同步', style: Theme.of(context).textTheme.headlineLarge),
         const SectionTitle('私人票库'),
         Container(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.cloud_outlined, color: ink, size: 32),
-              const SizedBox(height: 16),
-              Text(
-                store.connection?.label ?? '尚未连接 GitHub',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(store.status, style: const TextStyle(color: muted)),
-              if (store.syncError case final error?)
-                Text(
-                  error,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              if (store.busy)
-                const Padding(
-                  padding: EdgeInsets.only(top: 16),
-                  child: LinearProgressIndicator(),
-                ),
-              const SizedBox(height: 20),
-              Wrap(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final summary = Row(
+                children: [
+                  const SizedBox.square(
+                    dimension: 44,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: mist,
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      ),
+                      child: Icon(Icons.cloud_outlined, color: ink, size: 24),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          store.connection?.label ?? '尚未连接 GitHub',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          store.status,
+                          style: const TextStyle(color: muted),
+                        ),
+                        if (store.syncError case final error?)
+                          Text(
+                            error,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+              final controls = Wrap(
                 spacing: 12,
-                runSpacing: 12,
+                runSpacing: 8,
                 children: [
                   FilledButton.icon(
                     onPressed: store.busy
@@ -88,8 +106,34 @@ class _SettingsPageState extends State<SettingsPage> {
                       label: Text(store.busy ? '正在同步…' : '立即同步'),
                     ),
                 ],
-              ),
-            ],
+              );
+              final inline =
+                  constraints.maxWidth >= 640 &&
+                  MediaQuery.textScalerOf(context).scale(14) <= 18;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (inline)
+                    Row(
+                      children: [
+                        Expanded(child: summary),
+                        const SizedBox(width: 20),
+                        controls,
+                      ],
+                    )
+                  else ...[
+                    summary,
+                    const SizedBox(height: 16),
+                    controls,
+                  ],
+                  if (store.busy)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 16),
+                      child: LinearProgressIndicator(),
+                    ),
+                ],
+              );
+            },
           ),
         ),
         if (store.resetDetected)
@@ -112,12 +156,15 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
         const SectionTitle('个人资料'),
-        OutlinedButton.icon(
-          onPressed: store.busy
-              ? null
-              : () => openProfileEditor(context, store),
-          icon: const Icon(Icons.person_outline),
-          label: const Text('姓名与常用证件'),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: OutlinedButton.icon(
+            onPressed: store.busy
+                ? null
+                : () => openProfileEditor(context, store),
+            icon: const Icon(Icons.person_outline),
+            label: const Text('姓名与常用证件'),
+          ),
         ),
         if (store.conflicts != null) ...[
           const SectionTitle('处理同步冲突'),

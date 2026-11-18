@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:material_ui/material_ui.dart';
 
 const ink = Color(0xFF243C65);
@@ -5,6 +7,16 @@ const paper = Color(0xFFF5F6FA);
 const mist = Color(0xFFE6ECF5);
 const muted = Color(0xFF657187);
 const ticketRed = Color(0xFFBF5862);
+double archiveGutter(double width) => width < 900 ? 24 : 48;
+const archiveContentWidth = 1240.0;
+
+EdgeInsets archivePagePadding(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  final gutter =
+      archiveGutter(width) + math.max(0, (width - archiveContentWidth) / 2);
+  return EdgeInsets.fromLTRB(gutter, 28, gutter, 120);
+}
+
 ThemeData archiveTheme() {
   final scheme = ColorScheme.fromSeed(
     seedColor: ink,

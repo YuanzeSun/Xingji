@@ -44,58 +44,11 @@ class _StatisticsPageState extends State<StatisticsPage> {
               .toStringAsFixed(3)
               .replaceFirst(RegExp(r'\.?0+$'), '');
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 48),
+      padding: archivePagePadding(context),
       children: [
         Text('数据统计', style: Theme.of(context).textTheme.headlineLarge),
         const SizedBox(height: 24),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            OutlinedButton.icon(
-              onPressed: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: from ?? until,
-                  firstDate: DateTime(1800),
-                  lastDate: DateTime(2200),
-                );
-                if (picked != null) {
-                  setState(() {
-                    from = picked;
-                    if (until.isBefore(picked)) until = picked;
-                  });
-                }
-              },
-              icon: const Icon(Icons.calendar_today_outlined, size: 18),
-              label: Text(
-                from == null
-                    ? '起始日期 · 不限'
-                    : JourneyDate.fromDateTime(from!).label,
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: until,
-                  firstDate: from ?? DateTime(1800),
-                  lastDate: DateTime(2200),
-                );
-                if (picked != null) setState(() => until = picked);
-              },
-              icon: const Icon(Icons.calendar_today_outlined, size: 18),
-              label: Text('截止 ${JourneyDate.fromDateTime(until).label}'),
-            ),
-            TextButton(
-              onPressed: () => setState(() {
-                from = null;
-                until = DateUtils.dateOnly(DateTime.now());
-              }),
-              child: const Text('恢复默认'),
-            ),
-          ],
-        ),
+        _dateRange(context),
         const SizedBox(height: 24),
         LayoutBuilder(
           builder: (context, constraints) => Wrap(
@@ -300,6 +253,114 @@ class _StatisticsPageState extends State<StatisticsPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _pickDate({required bool start}) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: start ? from ?? until : until,
+      firstDate: start ? DateTime(1800) : from ?? DateTime(1800),
+      lastDate: DateTime(2200, 12, 31),
+      helpText: start ? '选择起始日期' : '选择截止日期',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (start) {
+        from = picked;
+        if (until.isBefore(picked)) until = picked;
+      } else {
+        until = picked;
+      }
+    });
+  }
+
+  Widget _dateRange(BuildContext context) => Align(
+    alignment: AlignmentDirectional.centerStart,
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 470),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: ink.withValues(alpha: .09)),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Row(
+            children: [
+              Expanded(
+                child: _dateButton(
+                  context,
+                  label: '起始日期',
+                  date: from,
+                  onPressed: () => _pickDate(start: true),
+                ),
+              ),
+              const ExcludeSemantics(
+                child: Icon(Icons.remove, color: muted, size: 16),
+              ),
+              Expanded(
+                child: _dateButton(
+                  context,
+                  label: '截止日期',
+                  date: until,
+                  onPressed: () => _pickDate(start: false),
+                ),
+              ),
+              IconButton(
+                tooltip: '恢复默认日期',
+                color: muted,
+                icon: const Icon(Icons.restart_alt, size: 21),
+                onPressed: () => setState(() {
+                  from = null;
+                  until = DateUtils.dateOnly(DateTime.now());
+                }),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _dateButton(
+    BuildContext context, {
+    required String label,
+    required DateTime? date,
+    required VoidCallback onPressed,
+  }) {
+    final textTheme = Theme.of(context).textTheme;
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        alignment: AlignmentDirectional.centerStart,
+        minimumSize: const Size(0, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(11)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Flexible(child: Text(label, style: textTheme.bodySmall)),
+              const SizedBox(width: 3),
+              const ExcludeSemantics(
+                child: Icon(Icons.expand_more_rounded, color: muted, size: 16),
+              ),
+            ],
+          ),
+          Text(
+            date == null ? '不限' : JourneyDate.fromDateTime(date).label,
+            style: textTheme.bodyMedium?.copyWith(
+              color: ink,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

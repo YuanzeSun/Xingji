@@ -44,6 +44,7 @@ void main() {
   );
 
   for (final size in [
+    const Size(320, 740),
     const Size(375, 812),
     const Size(768, 1024),
     const Size(1440, 960),
@@ -71,6 +72,16 @@ void main() {
         for (final label in ['地图', '统计', '票夹']) {
           await tester.tap(find.byKey(ValueKey('nav-$label')));
           await settle(tester);
+          if (label == '统计') {
+            final start = tester.getRect(
+              find.widgetWithText(TextButton, '起始日期'),
+            );
+            final end = tester.getRect(find.widgetWithText(TextButton, '截止日期'));
+            expect(start.center.dy, closeTo(end.center.dy, 1));
+            expect(start.right, lessThan(end.left));
+            expect(start.height, greaterThanOrEqualTo(48));
+            expect(end.height, greaterThanOrEqualTo(48));
+          }
           expect(tester.takeException(), isNull);
         }
         await tester.tap(find.byType(Switch));
@@ -80,6 +91,56 @@ void main() {
       },
     );
   }
+  testWidgets('ticket selection stays at the top left in both grid sizes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final app = (await tester.runAsync(store))!;
+    app.setDemo(true);
+    addTearDown(app.dispose);
+    await tester.pumpWidget(XingjiApp(store: app));
+    await settle(tester);
+    await tester.tap(find.text('选择'));
+    await settle(tester);
+
+    for (final compact in [false, true]) {
+      if (compact) {
+        tester
+            .widget<CustomScrollView>(find.byType(CustomScrollView).first)
+            .controller!
+            .jumpTo(0);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('整理'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('紧凑尺寸'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, '完成'));
+        await settle(tester);
+      }
+      final face = find.byType(TicketFace).first;
+      await tester.ensureVisible(face);
+      await tester.pumpAndSettle();
+      final checkbox = find
+          .byWidgetPredicate(
+            (widget) =>
+                widget is Checkbox &&
+                widget.semanticLabel?.startsWith('选择 ') == true,
+          )
+          .first;
+      final faceBounds = tester.getRect(face);
+      final checkBounds = tester.getRect(checkbox);
+      expect(checkBounds.topLeft, faceBounds.topLeft);
+      expect(checkBounds.width, greaterThanOrEqualTo(44));
+      await tester.ensureVisible(checkbox);
+      await tester.tap(checkbox);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Checkbox>(checkbox).value, !compact);
+    }
+  });
+
   testWidgets(
     'empty submission keeps form and displays explicit required errors',
     (tester) async {
@@ -121,6 +182,12 @@ void main() {
     addTearDown(app.dispose);
     await tester.pumpWidget(XingjiApp(store: app));
     await settle(tester);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const ValueKey('nav-统计')));
+    await settle(tester);
+    final start = tester.getRect(find.widgetWithText(TextButton, '起始日期'));
+    final end = tester.getRect(find.widgetWithText(TextButton, '截止日期'));
+    expect(start.center.dy, closeTo(end.center.dy, 1));
     expect(tester.takeException(), isNull);
   });
 }
