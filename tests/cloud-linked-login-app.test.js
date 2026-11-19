@@ -41,10 +41,11 @@ test('either linked login uses the current D1 archive without copying the GitHub
     assert.equal(github.records()[0].id, 'older-github', 'publishing an existing link must retain the backup contents');
     assert.equal(d1.calls.some(call => call.method === 'POST'), false);
     await until(() => document.querySelector('[data-action="backup-github"]')?.disabled === false);
-    document.querySelector('[data-action="disconnect"]').click();
-    await until(() => document.querySelector('#github-form'));
-    document.querySelector('[data-action="disconnect-d1"]').click();
+    assert.equal(document.querySelector('[data-action="disconnect"], [data-action="disconnect-d1"]'), null);
+    document.querySelector('[data-action="disconnect-all"]').click();
     await until(() => document.querySelector('.cloud-setup #d1-form'));
+    assert.equal(sessionStorage.getItem('xingji-github-token'), null);
+    assert.equal(sessionStorage.getItem('xingji-d1-token'), null);
     github.corrupt('archive/unknown.json', 'obsolete backup content');
     github.calls.length = d1.calls.length = 0;
 
@@ -57,11 +58,11 @@ test('either linked login uses the current D1 archive without copying the GitHub
     d1.available = true;
     connect(window, 'github');
     await assertLinked();
-    document.querySelector('[data-action="disconnect"]').click();
-    await until(() => document.querySelector('#github-form'));
-    assert.equal(sessionStorage.getItem('xingji-github-token'), null);
-    document.querySelector('[data-action="disconnect-d1"]').click();
+    assert.equal(document.querySelector('[data-action="disconnect"], [data-action="disconnect-d1"]'), null);
+    document.querySelector('[data-action="disconnect-all"]').click();
     await until(() => document.querySelector('.cloud-setup #d1-form'));
+    assert.equal(sessionStorage.getItem('xingji-github-token'), null);
+    assert.equal(sessionStorage.getItem('xingji-d1-token'), null);
 
     connect(window, 'd1');
     await assertLinked();

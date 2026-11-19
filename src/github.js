@@ -1,5 +1,5 @@
 import { archive, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
-import { sharedSettings, sameSettings, mergeSettings, preservedSettings } from './shared-settings.js';
+import { sharedSettings, sameSettings, mergeSettings, preservedSettings, unlinkedSettings } from './shared-settings.js';
 
 export class GitHubError extends Error { constructor(message, status, retryAt = 0) { super(message); this.status = status; this.retryAt = retryAt; } }
 export class ArchiveResetError extends Error {
@@ -106,15 +106,16 @@ export class GitHubStore {
     }
     return {head,tree:commit.tree.sha,settings,paths:tree.tree.filter(entry=>entry.type!=='tree').map(entry=>entry.path)};
   }
-  async resetRepository(expectedHead, fallbackSettings = {}) {
+  async resetRepository(expectedHead, fallbackSettings = {}, { unlink = false } = {}) {
     const snapshot=await this.resetTarget(fallbackSettings);
     if(snapshot.head!==expectedHead)throw new GitHubError('仓库已变化，请重新检查后确认重置',409);
-    const generation=crypto.randomUUID(),manifest={format:'xingji-index',schemaVersion:1,recordCount:0,generation,files:{},settings:snapshot.settings};
+    const settings = unlink ? unlinkedSettings(snapshot.settings) : snapshot.settings;
+    const generation=crypto.randomUUID(),manifest={format:'xingji-index',schemaVersion:1,recordCount:0,generation,files:{},settings};
     const tree=await this.request('/git/trees',{method:'POST',body:JSON.stringify({tree:[{path:'archive/index.json',mode:'100644',type:'blob',content:JSON.stringify(manifest,null,2)}]})});
     const commit=await this.request('/git/commits',{method:'POST',body:JSON.stringify({message:'Reset private archive and retain personal settings',tree:tree.sha,parents:[snapshot.head]})});
     try { await this.request('/git/refs/heads/'+encodeURIComponent(this.config.branch||'main'),{method:'PATCH',body:JSON.stringify({sha:commit.sha,force:false})}); }
     catch(error) { let head;try{head=await this.head();}catch{}if(head!==commit.sha)throw error; }
-    return {records:[],settings:snapshot.settings,head:commit.sha,generation};
+    return {records:[],settings,head:commit.sha,generation};
   }
   async write(records, snapshot, settings = snapshot.settings, message = 'Sync private ticket metadata') {
     const groups = partition(records);

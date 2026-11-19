@@ -22,6 +22,7 @@ export function backupConnections(value = {}) {
       typeof github.repo !== 'string' || !slug.test(github.repo) || !Number.isSafeInteger(github.id) ||
       typeof github.branch !== 'string' || !github.branch)) throw new Error('备份中的 GitHub 仓库信息无效');
   if (d1 != null && (!object(d1) || typeof d1.id !== 'string' || !/^[0-9a-f]{32}$/.test(d1.id) || typeof d1.url !== 'string')) throw new Error('备份中的 D1 数据库信息无效');
+  if (!github && !d1 && value.unlinked === true) return { unlinked: true };
   return {
     ...(github ? { github: { owner: github.owner, repo: github.repo, id: github.id, branch: github.branch, token: secret(github.token) } } : {}),
     ...(d1 ? { d1: { id: d1.id, url: workerURL(d1.url), token: secret(d1.token) } } : {})
