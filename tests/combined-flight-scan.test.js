@@ -19,6 +19,16 @@ async function withImage(run){
   try{return await run({width:20,height:10});}finally{for(const [key,value] of Object.entries(previous)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}}
 }
 
+test('a reported OCR language-load error rejects initialization instead of hanging', async () => withImage(async () => {
+  const failure = new Error('language model download failed');
+  await assert.rejects(createRecognizer(() => {}, {
+    workerFactory: (_languages, _mode, { errorHandler }) => {
+      errorHandler(failure);
+      return new Promise(() => {});
+    }
+  }), error => /文字识别模型未能加载/.test(error.message) && error.cause === failure);
+}));
+
 test('OCR and barcode recognition start together and produce one locked barcode record with editable OCR supplements',async()=>withImage(async image=>{
   let finishOCR,finishCode,reads=0,terminated=false,settled=false;const started=[];
   const engine=await createRecognizer(()=>{},{workerFactory:async()=>({setParameters:async()=>{},recognize:async()=>{started.push('ocr');if(++reads===1)return new Promise(resolve=>{finishOCR=resolve;});return {data:{text,confidence:95,tsv:''}};},terminate:async()=>{terminated=true;}}),readCodes:async source=>{assert.equal(source,image);started.push('barcode');return new Promise(resolve=>{finishCode=resolve;});}});

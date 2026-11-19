@@ -23,7 +23,7 @@ function harness(options = {}) {
     readBoardingFrame: async () => [],
     schedule: fn => { tasks.push(fn); return fn; }, unschedule: fn => { const i = tasks.indexOf(fn); if (i >= 0) tasks.splice(i, 1); },
     readFrame: () => frame, now: () => clock, prepareImage: image => image,
-    onResult: (record, blob) => captured.push({ record, blob }), ...options
+    onResult: (record, blob, options) => captured.push({ record, blob, ...options }), ...options
   });
   return { dom, root, dispose, frame, get stopped() { return stopped; }, get terminated() { return terminated; }, get reads() { return reads; }, get captured() { return captured; }, async ticks(n) { for (let i = 0; i < n; i++) { await wait(); clock += 350; tasks.shift()?.(); await wait(); } } };
 }
@@ -35,7 +35,7 @@ test('camera crop maps the visible guide through cover scaling for portrait and 
   assert.equal(videoCrop(0, 0, { width: 0, height: 0 }, { width: 1, height: 1 }), null);
 });
 
-test('blank, dark and overexposed frames do not trigger capture and motion must settle', () => {
+test('frame analysis distinguishes blank and poorly lit frames from clear text', () => {
   const image = value => ({ width: 64, height: 64, data: new Uint8ClampedArray(64 * 64 * 4).fill(value) });
   for (const value of [0, 160, 255]) assert.ok(frameQuality(frameMetrics(image(value))));
   const textured = image(200); for (let i = 0; i < 64 * 64; i++) if ((i % 8) < 3) textured.data.fill(20, i * 4, i * 4 + 3);
@@ -77,8 +77,116 @@ test('stable camera frames are recognized automatically, then camera and worker 
   assert.equal(h.captured.length, 1); assert.equal(h.captured[0].record.service, 'G103');
   assert.equal(h.captured[0].blob.type, 'image/png'); assert.equal(h.reads, 2);
   assert.equal(h.stopped, 1); assert.equal(h.terminated, 1);
-  assert.doesNotMatch(h.root.innerHTML, /type="file"|capture="|拍照|快门/);
+  assert.doesNotMatch(h.root.innerHTML, /type="file"|capture="/);
+  assert.equal(h.root.querySelector('#scanner-shutter').disabled, true);
   h.dispose(); h.dom.window.close();
+});
+
+test('persistently moving, low-contrast frames still reach automatic OCR and agreement', async () => {
+  const h = harness();
+  try {
+    h.frame.metrics.contrast = 9;
+    h.frame.metrics.sharpness = 3;
+    for (let i = 0; i < 13 && !h.captured.length; i++) {
+      h.frame.metrics.fingerprint = Array(384).fill(i % 2 ? 139 : 161);
+      await h.ticks(1);
+    }
+    assert.equal(h.reads, 2);
+    assert.equal(h.captured[0].record.service, 'G103');
+    assert.equal(h.stopped, 1);
+  } finally { h.dispose(); h.dom.window.close(); }
+});
+
+test('the shutter keeps the chosen snapshot while the OCR model loads', async () => {
+  let ready, recognized;
+  const h = harness({ loadRecognizer: () => new Promise(resolve => { ready = resolve; }) });
+  try {
+    const captured = h.frame.snapshot();
+    h.frame.snapshot = () => captured;
+    await h.ticks(5);
+    assert.match(h.root.querySelector('#scanner-status').textContent, /正在加载文字识别/);
+    h.root.querySelector('#scanner-shutter').click();
+    assert.match(h.root.querySelector('#scanner-status').textContent, /已拍照/);
+    h.frame.snapshot = () => assert.fail('the selected frame must not be recaptured');
+    ready({ recognize: async image => {
+      assert.equal(image, captured);
+      recognized = true;
+      return { text: notice, confidence: 90 };
+    }, terminate: async () => {} });
+    await h.ticks(1);
+    assert.equal(recognized, true);
+    assert.equal(h.captured[0].record.service, 'G103');
+    assert.equal(h.stopped, 1);
+  } finally { h.dispose(); h.dom.window.close(); }
+});
+
+test('a manual photo supersedes an automatic read already in progress', async () => {
+  let finishAutomatic, selected, currentFrame;
+  const h = harness({ loadRecognizer: async () => ({ recognize: async image => {
+    if (image === selected) return { text: notice.replace('G103', 'G104'), confidence: 90 };
+    return new Promise(resolve => { finishAutomatic = resolve; });
+  }, terminate: async () => {} }) });
+  try {
+    h.frame.snapshot = () => currentFrame;
+    currentFrame = { toBlob: () => assert.fail('superseded image cannot open review') };
+    await h.ticks(5);
+    assert.ok(finishAutomatic);
+    selected = currentFrame = { toBlob: callback => callback(new Blob(['manual frame'])) };
+    h.root.querySelector('#scanner-shutter').click();
+    finishAutomatic({ text: notice, confidence: 90 });
+    await h.ticks(2);
+    assert.equal(h.captured.length, 1);
+    assert.equal(h.captured[0].record.service, 'G104');
+    assert.equal(await h.captured[0].blob.text(), 'manual frame');
+  } finally { h.dispose(); h.dom.window.close(); }
+});
+
+test('a manual photo keeps recognizable fields when the route or date is incomplete', async () => {
+  const text = '车次：G103\n出发：北京南';
+  assert.equal(scanCandidate(text, 90, 'rail'), null);
+  const h = harness({ loadRecognizer: async () => ({
+    recognize: async () => ({ text, confidence: 90 }), terminate: async () => {}
+  }) });
+  try {
+    await h.ticks(1);
+    h.root.querySelector('#scanner-shutter').click();
+    await h.ticks(1);
+    const { record, photoOnly, blob } = h.captured[0];
+    assert.equal(record.service, 'G103');
+    assert.equal(record.origin, '北京南');
+    assert.equal(record.destination, '');
+    assert.equal(record.fieldSources.service, 'ocr');
+    assert.equal(photoOnly, false);
+    assert.equal(blob.type, 'image/png');
+  } finally { h.dispose(); h.dom.window.close(); }
+});
+
+test('a manual photo still opens as a draft when OCR has no result or fails', async () => {
+  for (const outcome of ['empty', 'recognition error', 'model unavailable']) {
+    const h = harness({ type: 'flight', loadRecognizer: async () => {
+      if (outcome === 'model unavailable') throw new Error(outcome);
+      return {
+        recognize: async () => {
+          if (outcome === 'recognition error') throw new Error(outcome);
+          return { text: '', confidence: 0 };
+        }, terminate: async () => {}
+      };
+    } });
+    try {
+      await h.ticks(1);
+      const shutter = h.root.querySelector('#scanner-shutter');
+      assert.equal(shutter.disabled, false, outcome);
+      shutter.click();
+      await h.ticks(1);
+      const { record, photoOnly, blob } = h.captured[0];
+      assert.equal(photoOnly, true, outcome);
+      assert.equal(record.type, 'flight');
+      assert.equal(record.service, '');
+      assert.equal(record.fieldSources.service, undefined);
+      assert.equal(await blob.text(), 'frame');
+      assert.equal(h.stopped, 1);
+    } finally { h.dispose(); h.dom.window.close(); }
+  }
 });
 
 test('flight camera scanning waits for the combined OCR and barcode result and returns locked decoded fields',async()=>{
@@ -167,7 +275,7 @@ test('a boarding pass keeps repeated coupon fields together and distinguishes bo
   assert.equal(scanCandidate(text.replace('09:55', '69:55'), 90, 'flight').boardingTime, '');
 });
 
-test('motion invalidates an in-flight recognition and closing stops a late-arriving camera', async () => {
+test('a single automatic OCR result still requires agreement and a late camera stream is stopped after closing', async () => {
   let finishRead;
   const h = harness({ loadRecognizer: async () => ({ recognize: () => new Promise(resolve => { finishRead = resolve; }), terminate: async () => {} }) });
   await h.ticks(5); assert.ok(finishRead);

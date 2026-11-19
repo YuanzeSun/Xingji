@@ -35,13 +35,17 @@ export async function createRecognizer(progress = () => {}, {
   readCodes=async image=>(await import('./code-reader.js')).readBoardingCodesFromImage(image)
 } = {}) {
   const base = new URL('./', location.href);
-  const worker = await workerFactory(['chi_sim', 'eng'], 1, {
+  let rejectStartup;
+  const startupError = new Promise((_, reject) => { rejectStartup = reject; });
+  const creating = workerFactory(['chi_sim', 'eng'], 1, {
     workerPath: new URL('vendor/worker.min.js', base).href,
     corePath: new URL('vendor/', base).href,
     langPath: new URL('ocr/', base).href,
     logger: m => progress(m.status === 'recognizing text' ? `正在识别 ${Math.round(m.progress * 100)}%` : '正在加载本地识别模型…'),
-    errorHandler: () => {}
+    // Tesseract can signal a language-load failure without rejecting createWorker.
+    errorHandler: cause => rejectStartup?.(new Error('文字识别模型未能加载，请重试', { cause }))
   });
+  const worker = await Promise.race([creating, startupError]).finally(() => { rejectStartup = undefined; });
   await worker.setParameters({ user_defined_dpi: '300', preserve_interword_spaces: '1', tessedit_pageseg_mode: '3' });
   return {
     async recognize(image, { refineRailDate = false, type = '', decodedBoardingCodes } = {}) {

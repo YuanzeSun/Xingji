@@ -1,6 +1,6 @@
 # 行迹 · 票据存档
 
-一个自用的火车票与机票存档工具，支持电脑和手机。
+一个自用的火车票与机票存档工具，电脑和手机都可通过浏览器使用。
 
 **[在线使用](https://yuanzesun.github.io/Xingji/)**
 
@@ -20,14 +20,11 @@
 
 航班补全需在电脑端配置飞常准连接，使用个人账户额度。
 
-## App
-
-Flutter App 正在开发。App 可在本机离线录入和管理票据。也可选择绑定 GitHub 私有仓库同步，绑定后在线修改，离线可查看和导出。共用工程和各平台接入说明见 [App 开发说明](docs/flutter-development.md)。
+Flutter App 正在 [`app` 分支](https://github.com/YuanzeSun/Xingji/tree/app) 开发。
 
 ## 导入方式
 
 机票支持扫描**登机牌条码或电子登机牌二维码**录入，自动填写码内可识别的信息。
-
 
 以下截图和票面均为虚构示例。扫描或上传后，核对识别结果再保存。
 
@@ -37,7 +34,7 @@ Flutter App 正在开发。App 可在本机离线录入和管理票据。也可�
 
 ### 相机扫描
 
-![使用虚构票面模拟的相机扫描画面](docs/images/camera-scan.jpg)
+![用示例票演示相机扫描与拍照识别](docs/images/camera-scan.jpg)
 
 ### 上传图片
 
