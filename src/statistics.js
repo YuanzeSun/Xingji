@@ -131,18 +131,32 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       return;
     }
     const scale = event.target.closest('[data-stat-scale]');
-    if (scale) { options.period = scale.dataset.statScale; render(); }
-    if (event.target.closest('[data-stat-reset]')) { options.dateFrom = ''; options.dateTo = todayDate(); scrollPositions.year = scrollPositions.month = null; render(); }
-    readPoint(event);
+    if (scale) {
+      const period = scale.dataset.statScale;
+      if (period !== options.period) {
+        options.period = period;
+        render();
+        container.querySelector(`[data-stat-scale="${period}"]`).focus({ preventScroll: true });
+      }
+      return;
+    }
+    if (event.target.closest('[data-stat-reset]')) {
+      options.dateFrom = '';
+      options.dateTo = todayDate();
+      scrollPositions.year = scrollPositions.month = null;
+      render();
+      container.querySelector('[data-stat-reset]').focus({ preventScroll: true });
+    }
   };
-  function readPoint(event) {
-    const target = event.target.closest('[data-stat-period]');
-    if (!target) return;
-    const row = series.find(row => row.key === target.dataset.statPeriod);
-    if (row) {container.querySelector('.statistics-chart-readout').textContent = `${row.label} · 火车 ${row.rail} 次 · 飞机 ${row.flight} 次`;for(const dot of container.querySelectorAll('.statistics-dot'))dot.classList.toggle('is-active',dot.dataset.statPeriod===row.key);}
-  }
-  const keydown = event => { if (['Enter', ' '].includes(event.key) && event.target.closest('[data-stat-period]')) { event.preventDefault(); readPoint(event); } };
-  container.addEventListener('change', change); container.addEventListener('click', click); container.addEventListener('focusin', readPoint); container.addEventListener('pointerover', readPoint); container.addEventListener('keydown', keydown); container.addEventListener('scroll', scrolled, true);
+  container.addEventListener('change', change);
+  container.addEventListener('click', click);
+  container.addEventListener('scroll', scrolled, true);
   render();
-  return () => { dateDialog?.remove(); chartCleanup(); container.removeEventListener('change', change); container.removeEventListener('click', click); container.removeEventListener('focusin', readPoint); container.removeEventListener('pointerover', readPoint); container.removeEventListener('keydown', keydown); container.removeEventListener('scroll', scrolled, true); };
+  return () => {
+    dateDialog?.remove();
+    chartCleanup();
+    container.removeEventListener('change', change);
+    container.removeEventListener('click', click);
+    container.removeEventListener('scroll', scrolled, true);
+  };
 }

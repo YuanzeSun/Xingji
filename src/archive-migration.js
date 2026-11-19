@@ -35,9 +35,9 @@ export async function backUpToGitHub(d1, github) {
   const destination = await github.read();
   assertActiveCloudLink(github, d1, destination, source);
   const settings = transferSettings(source.settings, github, d1);
-  if (destination.initialized && sameRecords(source.records, destination.records) && sameSettings(settings, destination.settings)) return { changed: false };
-  await github.write(source.records, destination, settings, 'Back up the Xingji archive from Cloudflare D1');
-  return { changed: true };
+  const changed = !destination.initialized || !sameRecords(source.records, destination.records) || !sameSettings(settings, destination.settings);
+  if (changed) await github.write(source.records, destination, settings, 'Back up the Xingji archive from Cloudflare D1');
+  return { changed, sourceHead: source.head, generation: source.generation };
 }
 
 export function sameGitHubAccount(left, right) {

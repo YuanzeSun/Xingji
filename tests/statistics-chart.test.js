@@ -40,6 +40,13 @@ test('pinch and modifier-wheel zoom around the gesture, ordinary scrolling remai
     scroll.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'0',bubbles:true,cancelable:true}));assert.equal(width(root),360);
     scroll.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'+',bubbles:true,cancelable:true}));assert.ok(width(root)>360);
     const point=root.querySelector('[data-stat-period="2023-06"]');point.dispatchEvent(new dom.window.FocusEvent('focusin',{bubbles:true}));assert.equal(root.querySelectorAll('.statistics-dot.is-active').length,2);assert.match(root.querySelector('.statistics-chart-readout').textContent,/2023年6月.*火车 1 次/);
+    assert.equal(scroll.querySelectorAll('[tabindex="0"]').length, 0);
+    scroll.focus();
+    scroll.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+    assert.match(root.querySelector('.statistics-chart-readout').textContent,/2023年7月/);
+    assert.equal(dom.window.document.activeElement,scroll);
+    root.querySelector('[data-stat-scale="year"]').click();
+    assert.equal(dom.window.document.activeElement.dataset.statScale,'year');
   }finally{cleanup();dom.window.close();}
 });
 

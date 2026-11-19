@@ -10,19 +10,22 @@ function content(series,width,enter=false) {
   const x=i=>series.length===1 ? width/2 : LEFT+i*spacing,y=count=>BOTTOM-count/max*(BOTTOM-22);
   const grid=Array.from({length:5},(_,i)=>`<path class="statistics-gridline" d="M${LEFT},${y(i*step)}H${right}"/><text class="statistics-axis" x="${LEFT-10}" y="${y(i*step)+4}" text-anchor="end">${i*step}</text>`).join('');
   const lines=['rail','flight'].map(type=>`<polyline class="statistics-line ${type}" points="${series.map((row,i)=>`${x(i)},${y(row[type])}`).join(' ')}"/>`).join('');
-  const dots=series.map((row,i)=>`<g>${['rail','flight'].map(type=>`<circle class="statistics-dot ${type}" cx="${x(i)}" cy="${y(row[type])}" r="${Math.max(2,Math.min(5,spacing/5))}" tabindex="0" role="button" data-stat-period="${e(row.key)}" aria-label="${e(row.label)}，火车 ${row.rail} 次，飞机 ${row.flight} 次"><title>${e(row.label)} · 火车 ${row.rail} 次 · 飞机 ${row.flight} 次</title></circle>`).join('')}${i%labels===0 || i===series.length-1 ? `<text class="statistics-axis" x="${x(i)}" y="272" text-anchor="middle">${e(row.label)}</text>` : ''}</g>`).join('');
+  const dots=series.map((row,i)=>`<g>${['rail','flight'].map(type=>`<circle class="statistics-dot ${type}" cx="${x(i)}" cy="${y(row[type])}" r="${Math.max(2,Math.min(5,spacing/5))}" data-stat-period="${e(row.key)}"><title>${e(row.label)} · 火车 ${row.rail} 次 · 飞机 ${row.flight} 次</title></circle>`).join('')}${i%labels===0 || i===series.length-1 ? `<text class="statistics-axis" x="${x(i)}" y="272" text-anchor="middle">${e(row.label)}</text>` : ''}</g>`).join('');
   return grid+`<g class="statistics-series${enter ? ' is-entering' : ''}">${lines}${dots}</g>`;
 }
 export function tripChartMarkup(series,{zoom=1,viewportWidth=720}={}) {
   const width=Math.max(viewportWidth,Math.round(baseWidth(series)*zoom));
   const controls=`<div class="statistics-chart-toolbar"><div class="statistics-legend"><span class="rail">火车</span><span class="flight">飞机</span></div><div class="statistics-chart-zoom" role="group" aria-label="折线图缩放"><button type="button" data-stat-zoom="out" aria-label="缩小折线图" ${series.length ? '' : 'disabled'}>−</button><span data-stat-zoom-label aria-label="图表缩放比例">${percentage(zoom)}</span><button type="button" data-stat-zoom="in" aria-label="放大折线图" ${series.length ? '' : 'disabled'}>＋</button><button type="button" data-stat-zoom="fit" ${series.length ? '' : 'disabled'}>全览</button></div></div>`;
   if(!series.length)return controls+'<div class="statistics-empty">所选日期范围内暂无可统计的行程</div>';
-  return controls+`<div class="statistics-chart-scroll" tabindex="0" role="region" aria-label="乘坐次数图表，可横向滚动、双指缩放，或用加减键缩放"><svg class="statistics-chart" viewBox="0 0 ${width} ${HEIGHT}" style="width:${width}px;min-width:${width}px" role="group" aria-label="火车与飞机乘坐次数折线图">${content(series,width,true)}</svg></div><output class="statistics-chart-readout" aria-live="polite"></output>`;
+  return controls+`<div class="statistics-chart-scroll" tabindex="0" role="region" aria-label="乘坐次数图表，用左右方向键逐期查看，用加减键缩放"><svg class="statistics-chart" viewBox="0 0 ${width} ${HEIGHT}" style="width:${width}px;min-width:${width}px" aria-hidden="true">${content(series,width,true)}</svg></div><output class="statistics-chart-readout" aria-live="polite"></output>`;
 }
 
 export function bindTripChart(container,series,options,{onZoom=()=>{}}={}) {
   const frame=container.querySelector('.statistics-chart-scroll');if(!frame)return ()=>{};
   const svg=frame.querySelector('svg'),win=container.ownerDocument.defaultView;
+  const readout=container.querySelector('.statistics-chart-readout');
+  const periodIndex=new Map(series.map((row,index)=>[row.key,index]));
+  let activeIndex=-1;
   const request=win.requestAnimationFrame?.bind(win) || (fn=>setTimeout(()=>fn(Date.now()),16)),cancel=win.cancelAnimationFrame?.bind(win) || clearTimeout;
   const motion=win.matchMedia?.('(prefers-reduced-motion: reduce)');
   let animation=0,disposed=false,gesture=null,targetZoom=options.chartZoom,lastViewport=0;
@@ -32,11 +35,34 @@ export function bindTripChart(container,series,options,{onZoom=()=>{}}={}) {
     const width=Number(svg.getAttribute('viewBox').split(' ')[2]),physical=svg.getBoundingClientRect().width || width;
     return clamp(((frame.scrollLeft+pixel)*width/physical-LEFT)/(width-LEFT*2),0,1);
   };
+  function showPeriod(index, reveal = false) {
+    const row = series[index];
+    if (!row) return;
+    for (const dot of svg.querySelectorAll('.is-active')) dot.classList.remove('is-active');
+    const dots = svg.querySelectorAll(`[data-stat-period="${row.key}"]`);
+    for (const dot of dots) dot.classList.add('is-active');
+    const label = `${row.label} · 火车 ${row.rail} 次 · 飞机 ${row.flight} 次`;
+    if (readout.textContent !== label) readout.textContent = label;
+    activeIndex = index;
+    if (reveal && dots.length) {
+      const svgWidth = Number(svg.getAttribute('viewBox').split(' ')[2]);
+      const x = Number(dots[0].getAttribute('cx')) * ((svg.getBoundingClientRect().width || svgWidth) / svgWidth);
+      const margin = 24;
+      if (x < frame.scrollLeft + margin) frame.scrollLeft = Math.max(0, x - margin);
+      if (x > frame.scrollLeft + viewport() - margin) frame.scrollLeft = x - viewport() + margin;
+    }
+  }
+  function readPoint(event) {
+    const point = event.target.closest('[data-stat-period]');
+    const index = periodIndex.get(point?.dataset.statPeriod);
+    if (index !== undefined && index !== activeIndex) showPeriod(index);
+  }
   function draw(zoom,time,anchor,enter=false,notify=true) {
     if(disposed)return;
     options.chartZoom=clamp(zoom,minimum(),MAX_ZOOM);
     const width=Math.max(viewport(),Math.round(baseWidth(series)*options.chartZoom));
     svg.setAttribute('viewBox',`0 0 ${width} ${HEIGHT}`);svg.style.width=width+'px';svg.style.minWidth=width+'px';svg.innerHTML=content(series,width,enter);
+    if (activeIndex >= 0) showPeriod(activeIndex);
     if(time!==undefined)frame.scrollLeft=clamp(LEFT+time*(width-LEFT*2)-anchor,0,Math.max(0,width-viewport()));
     container.querySelector('[data-stat-zoom-label]').textContent=percentage(options.chartZoom);
     container.querySelector('[data-stat-zoom="out"]').disabled=options.chartZoom<=minimum()+.000001;
@@ -69,9 +95,21 @@ export function bindTripChart(container,series,options,{onZoom=()=>{}}={}) {
     if(gesture.span)zoomTo(gesture.zoom*span/gesture.span,{anchor:(a.clientX+b.clientX)/2-frame.getBoundingClientRect().left,time:gesture.time});
   };
   const touchEnd=event=>{if(event.touches.length!==2)gesture=null;};
-  const keydown=event=>{if(!['+','=','-','0'].includes(event.key))return;event.preventDefault();if(event.target!==frame)frame.focus({preventScroll:true});zoomTo(event.key==='0' ? minimum() : options.chartZoom*(event.key==='-' ? .8 : 1.25),{smooth:true});};
+  const keydown=event=>{
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      const step = event.key === 'ArrowLeft' ? -1 : 1;
+      const center = Math.round(normalized(viewport() / 2) * (series.length - 1));
+      showPeriod(clamp(activeIndex < 0 ? center : activeIndex + step, 0, series.length - 1), true);
+      return;
+    }
+    if(!['+','=','-','0'].includes(event.key))return;
+    event.preventDefault();
+    zoomTo(event.key==='0' ? minimum() : options.chartZoom*(event.key==='-' ? .8 : 1.25),{smooth:true});
+  };
   container.addEventListener('click',click);frame.addEventListener('wheel',wheel,{passive:false});frame.addEventListener('touchstart',touchStart,{passive:false});frame.addEventListener('touchmove',touchMove,{passive:false});frame.addEventListener('touchend',touchEnd);frame.addEventListener('touchcancel',touchEnd);frame.addEventListener('keydown',keydown);
+  for (const type of ['click', 'pointerover', 'focusin']) svg.addEventListener(type, readPoint);
   const observer=win.ResizeObserver ? new win.ResizeObserver(()=>{const width=viewport();if(width===lastViewport)return;lastViewport=width;stop();draw(options.chartZoom,undefined,0,false,false);}) : null;
   observer?.observe(frame);lastViewport=viewport();draw(options.chartZoom,undefined,0,true,false);
-  return ()=>{disposed=true;stop();observer?.disconnect();container.removeEventListener('click',click);frame.removeEventListener('wheel',wheel);frame.removeEventListener('touchstart',touchStart);frame.removeEventListener('touchmove',touchMove);frame.removeEventListener('touchend',touchEnd);frame.removeEventListener('touchcancel',touchEnd);frame.removeEventListener('keydown',keydown);};
+  return ()=>{disposed=true;stop();observer?.disconnect();container.removeEventListener('click',click);frame.removeEventListener('wheel',wheel);frame.removeEventListener('touchstart',touchStart);frame.removeEventListener('touchmove',touchMove);frame.removeEventListener('touchend',touchEnd);frame.removeEventListener('touchcancel',touchEnd);frame.removeEventListener('keydown',keydown);for (const type of ['click', 'pointerover', 'focusin']) svg.removeEventListener(type, readPoint);};
 }

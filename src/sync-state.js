@@ -7,7 +7,7 @@ const keys = ['records', 'base', 'settings', 'settingsBase', 'github', 'd1', 'sy
 export { sameRecords };
 const binding = config => config ? `${config.id}:${config.branch}` : '';
 export const activeBinding = ({ d1, config }) => d1 ? `d1:${d1.id}:${d1.url}` : binding(config);
-const sessionKeys = [...keys, 'githubToken', 'd1Token', 'showDemo'];
+const sessionKeys = [...keys, 'githubToken', 'd1Token', 'showDemo', 'githubBackupReceipt'];
 
 function unpack(raw, session = false) {
   return {
@@ -19,7 +19,7 @@ function unpack(raw, session = false) {
     d1: raw.d1 || null,
     meta: { revision: 0, head: '', verified: false, pending: false, ...raw.syncMeta },
     lastSync: raw.lastSync || null,
-    ...(session ? { credentials: { github: raw.github ? raw.githubToken || '' : '', d1: raw.d1 ? raw.d1Token || '' : '' }, showDemo: raw.showDemo === true } : {})
+    ...(session ? { credentials: { github: raw.github ? raw.githubToken || '' : '', d1: raw.d1 ? raw.d1Token || '' : '' }, showDemo: raw.showDemo === true, githubBackupReceipt: raw.githubBackupReceipt || null } : {})
   };
 }
 export async function readSyncState({ session = false } = {}) {
@@ -67,7 +67,7 @@ export function bindRepository(config, expectedD1 = null, credential, cloudLinkR
 export function signOutCloud() {
   return db.atomic(['syncMeta'], raw => {
     const write = {
-      github: null, d1: null, githubToken: '', d1Token: '', showDemo: false, cloudLinkReady: false,
+      github: null, d1: null, githubToken: '', d1Token: '', showDemo: false, cloudLinkReady: false, githubBackupReceipt: null,
       records: [], base: [], settings: {}, settingsBase: {},
       syncMeta: { revision: (raw.syncMeta?.revision || 0) + 1 }, lastSync: null
     };
@@ -86,7 +86,7 @@ export function keepUnlinkedArchive(captured, provider, archive, credential) {
       ...archiveFields(current, archive),
       github: github ? current.config : null, d1: github ? null : current.d1,
       githubToken: github ? credential : '', d1Token: github ? '' : credential,
-      cloudLinkReady: false, showDemo: false
+      cloudLinkReady: false, showDemo: false, githubBackupReceipt: null
     };
     return { write, result: unpack(write, true) };
   });

@@ -32,7 +32,7 @@ import { MARK_SHAPES, describeMarks } from './ticket-marks.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from './code-editor.js';
 import {ticketViewOptions,ticketViewControls,ticketCollection,bindTicketViewControls} from './ticket-view.js';
 import {mountTicketSpace} from './ticket-space.js';
-import { requiredTicketFields, ticketFieldLabel, validateTicketForm, ticketFormFeedback } from './ticket-form.js';
+import { requiredTicketFields, missingTicketFields, ticketFieldLabel, validateTicketForm, ticketFormFeedback } from './ticket-form.js';
 import { seatClassField, bindSeatClassFields } from './seat-class-field.js';
 import { seatField, bindSeatFields } from './seat-field.js';
 import { bindDatePickers,ticketDateField,bindTicketDates,readTicketDate,writeTicketDate,barcodeDateDay } from './date-field.js';
@@ -85,7 +85,7 @@ const icons = {
 };
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.ticket}</svg>`;
 const labels = { ...BOARDING_METADATA_LABELS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '二维码', boardingCode: '机票条码' };
-const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, routesOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, busy: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, candidates: [], selected: new Set(), flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null, flightChecking: false };
+const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, routesOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, busy: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, candidates: [], reviewBatch: false, selected: new Set(), flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null, flightChecking: false };
 const samples = demoRecords();
 const ticketView=ticketViewOptions();
 const archiveIsSpace=()=>ticketView.mode==='space';
@@ -102,6 +102,7 @@ const modalRoot = document.querySelector('#modal-root');
 const live = () => (state.showDemo ? samples : state.records).filter(r => !r.deleted);
 async function setDemoMode(enabled) { archiveSelected.clear(); await db.set('showDemo', enabled); state.showDemo = enabled; }
 let credentials = { github: '', d1: '' };
+let backupRestoreOffer = null, githubBackupReceipt = null;
 const token = () => credentials.github;
 const d1Token = () => credentials.d1;
 const cloudToken = () => state.d1 ? d1Token() : token();
@@ -121,8 +122,13 @@ function fileName(r) { return `${calendarDate(r.departureDate) || '未定日期'
 const channel = window.BroadcastChannel ? new window.BroadcastChannel('xingji-cloud-state') : null;
 const canWrite = () => !!(hasCloud() && state.syncMeta.verified && !state.syncMeta.pending && cloudToken() && navigator.onLine && state.connectionStatus === 'online' && !state.connecting);
 function useSnapshot(snapshot) {
-  if (snapshot.credentials) credentials = snapshot.credentials;
+  if (snapshot.credentials) {
+    credentials = snapshot.credentials;
+    githubBackupReceipt = snapshot.githubBackupReceipt;
+  }
   state.records = snapshot.records; state.base = snapshot.base; state.settings = snapshot.settings; state.settingsBase = snapshot.settingsBase; state.config = snapshot.config; state.d1 = snapshot.d1; state.syncMeta = snapshot.meta; state.lastSync = snapshot.lastSync;
+  if (backupRestoreOffer && (!isRestoreContext(backupRestoreOffer) ||
+      (!state.syncMeta.pending && !missingBackupConnection(backupRestoreOffer.connections)))) backupRestoreOffer = null;
 }
 const announce = (changes = {}) => channel?.postMessage(changes);
 function freezeForm(form, pendingLabel) {
@@ -167,8 +173,8 @@ function syncLabel() {
   if (!hasCloud()) return '需要连接云端';
   if (state.syncing) return '正在核对云端…';
   if (state.connectionStatus === 'conflict') return '有冲突待处理 · 只读';
-  if (!canWrite()) return state.syncMeta.pending ? '缓存只读 · 有待确认修改' : '缓存只读';
-  return state.syncMeta.pending ? '等待云端确认' : '已同步';
+  if (state.syncMeta.pending) return '等待云端同步 · 只读';
+  return canWrite() ? '已同步' : '缓存只读';
 }
 const bothClouds = () => !!(state.config?.id && state.d1?.id);
 const firstBindingHelp = '首次绑定时，选择保留哪边的票库，并覆盖另一边。绑定后由 D1 日常同步，GitHub 可手动备份。';
@@ -196,9 +202,20 @@ function d1ConnectionPanel() {
     : `<form id="d1-form"><label class="field"><span>Worker 地址</span><input type="url" name="url" placeholder="https://your-archive.workers.dev" value="${e(state.d1?.url ?? draft?.url)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token)}" required autocomplete="off" /></label><p class="form-error" role="alert">${e(state.d1Error)}</p><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${bound ? '重新登录 D1' : '连接 D1'}</button></div></form>`;
   return `<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('database')}</span><div><h2>Cloudflare D1</h2><p data-d1-cloud-label>${bound ? e(syncLabel()) : '可作为主票库'}</p></div></div>${controls}<div class="setup-help">${help ? `<p>${help}</p>` : ''}<p><a href="https://github.com/YuanzeSun/Xingji/blob/main/docs/cloudflare-d1.md" target="_blank" rel="noopener noreferrer">D1 部署 ↗</a></p></div></section>`;
 }
+function githubBackupPair(d1, config) {
+  return JSON.stringify([activeBinding({ d1 }), config.id, config.branch]);
+}
+function githubBackupLabel() {
+  const receipt = githubBackupReceipt;
+  if (!receipt || !state.d1 || !state.config || receipt.pair !== githubBackupPair(state.d1, state.config) ||
+      receipt.generation !== (state.syncMeta.generation || '')) return '';
+  const date = new Date(receipt.at).toLocaleString('zh-CN', { hour12: false });
+  const updatedSinceBackup = state.lastSync > receipt.at && receipt.head !== state.syncMeta.head;
+  return '本机上次确认备份 · ' + date + (updatedSinceBackup ? ' · D1 已更新，可再次备份' : '');
+}
 function githubExtras() {
   if (!state.d1 || !state.config) return '';
-  return `<div class="button-row"><button class="button secondary" data-action="backup-github" ${!canWrite() || !token() || state.saving || state.githubBackingUp ? 'disabled' : ''}>${state.githubBackingUp ? '正在备份…' : '立即备份到 GitHub'}</button></div>`;
+  return `<p data-github-backup-status class="import-status" role="status">${e(githubBackupLabel())}</p><div class="button-row"><button class="button secondary" data-action="backup-github" ${!canWrite() || !token() || state.saving || state.githubBackingUp ? 'disabled' : ''}>${state.githubBackingUp ? '正在备份…' : '立即备份到 GitHub'}</button></div>`;
 }
 function cloudActions() {
   if (!hasCloud()) return '';
@@ -236,6 +253,8 @@ function applyAccessPolicy() {
   const refresh = document.querySelector('[data-action="flight-refresh"]'); if (refresh) refresh.disabled = !flightKey() || state.flightChecking || !navigator.onLine || (state.flightKeyDraft !== null && state.flightKeyDraft.trim() !== flightKey());
   const flightYear = document.querySelector('#flight-year'); if (flightYear) flightYear.disabled = state.flightChecking;
   if (!canWrite() && scannerCleanup) closeModal(true);
+  const saveReview = modalRoot.querySelector('[data-candidate-review] [type="submit"]');
+  if (saveReview) saveReview.disabled = !canWrite() || state.saving || !state.selected.size;
   const form = document.querySelector('#editor-form');
   if (form) for (const input of form.querySelectorAll('input,select,textarea,button:not([data-action="close-modal"])')) {
     if (!canWrite()) { if (!input.hasAttribute('data-readonly-disabled')) input.dataset.readonlyDisabled = String(input.disabled); input.disabled = true; }
@@ -337,7 +356,7 @@ function scanTicket() {
   modalRoot.querySelector('dialog').classList.add('scanner-modal');
   scannerCleanup = mountScanner(modalRoot.querySelector('#live-scanner'), { type: 'auto', onResult(record, blob) {
     closeModal(true); localFileURL = URL.createObjectURL(blob);
-    state.candidates = record.boardingCandidates || [record];state.selected=new Set(state.candidates.map((_,index)=>index));if(state.candidates.length===1)editRecord(record,0);else reviewCandidates();
+    reviewImportCandidates(record.boardingCandidates || [record]);
   } });
 }
 
@@ -357,7 +376,7 @@ function dataPage() {
     <div class="data-column"><section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h2>GitHub 私有仓库</h2><p data-cloud-label>${state.d1 ? '手动备份' : e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError)}</p>${githubExtras()}</section>${d1ConnectionPanel()}</div>
     <aside class="data-column">${flightSettingsPanel()}
     <section class="panel quiet-panel"><h3>${icon('ticket')}随身票夹</h3><p>在手机浏览器中选择“添加到主屏幕”，即可像应用一样打开。已有票据可离线查看。</p>${installPrompt ? '<button class="button secondary" data-action="install">安装行迹</button>' : ''}</section></aside>
-    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button></div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div>${cloudActions()}</section>
+    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button></div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div><div data-restore-followup>${backupRestoreMarkup()}</div>${cloudActions()}</section>
   </div>`;
 }
 function render() {
@@ -385,13 +404,49 @@ function renderSyncState() {
   const cloudLabel = root.querySelector(state.d1 ? '[data-d1-cloud-label]' : '[data-cloud-label]'); if (cloudLabel) cloudLabel.textContent = syncLabel();
   for (const button of root.querySelectorAll('#github-form [type="submit"], #d1-form [type="submit"]')) button.disabled = state.syncing || state.connecting || state.saving || state.githubBackingUp;
   const backup = root.querySelector('[data-action="backup-github"]'); if (backup) backup.disabled = !canWrite() || !token() || state.saving || state.githubBackingUp;
+  const backupStatus = root.querySelector('[data-github-backup-status]');
+  if (backupStatus) {
+    const label = githubBackupLabel();
+    if (backupStatus.textContent !== label) backupStatus.textContent = label;
+  }
+  const followup = root.querySelector('[data-restore-followup]');
+  if (followup) {
+    const markup = backupRestoreMarkup();
+    if (followup.innerHTML !== markup) followup.innerHTML = markup;
+  }
   applyAccessPolicy();
 }
 document.addEventListener('compositionstart', () => { composing = true; });
 document.addEventListener('compositionend', () => { composing = false; if (deferredRender) { deferredRender = false; setTimeout(render, 0); } });
+const pageScroll = new Map();
+function visitPage(page, restoreScroll = false) {
+  if (page !== state.page) pageScroll.set(state.page, window.scrollY);
+  state.page = page;
+  render();
+  window.scrollTo(0, restoreScroll ? pageScroll.get(state.page) || 0 : 0);
+  const title = root.querySelector('h1');
+  if (title) {
+    title.tabIndex = -1;
+    title.focus({ preventScroll: true });
+  }
+}
 function navigate(page) {
-  state.page = ['archive', 'map', 'statistics', 'import', 'data'].includes(page) ? page : 'archive';
-  history.replaceState(null, '', '#' + state.page); render(); window.scrollTo(0, 0);
+  if (location.hash !== '#' + page) history.pushState(null, '', '#' + page);
+  visitPage(page);
+}
+function followHistory() {
+  const page = location.hash.slice(1) || 'archive';
+  if (page !== state.page) visitPage(page, true);
+}
+function loadMoreTickets(button) {
+  const firstNew = searchTickets(live(), state.filters).records[state.limit];
+  const hadFocus = document.activeElement === button;
+  state.limit += 48;
+  render();
+  if (hadFocus && firstNew) {
+    [...root.querySelectorAll('#search-results [data-action="view"]')]
+      .find(item => item.dataset.id === firstNew.id)?.focus({ preventScroll: true });
+  }
 }
 function mountCollectionSpace() {
   const container=root.querySelector('[data-ticket-space]');if(!container)return;
@@ -582,7 +637,7 @@ function reviewBoardingLegs(code,current) {
     return createRecord(applyProfileDefaults(values,state.settings.profile));
   });
   if(editor)editor.dirty=false;closeModal(true);
-  state.candidates=candidates;state.selected=new Set(candidates.map((_,index)=>index));reviewCandidates();
+  reviewImportCandidates(candidates, true);
 }
 function editRecord(record = newPersonalRecord(), importIndex = null, preserve = false, originalOverride = null) {
   const original = clone(originalOverride || record), draft = normalizePlaces(clone(record));
@@ -690,7 +745,7 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
       const checked = validateRecord({ ...draft, updatedAt: now(), lockedFields: draft.lockedFields, sources: draft.sources.length ? draft.sources : [{ kind: 'manual', label: '手动录入', at: now() }] });
       if (importIndex !== null) {
         state.candidates[importIndex] = checked;
-        if (state.candidates.length === 1) await saveCandidates([checked]);
+        if (!state.reviewBatch) await saveCandidates([importIndex]);
         else { editor.dirty = false; closeModal(true); reviewCandidates(); }
       } else {
         const records = clone(state.records); const index = records.findIndex(r => r.id === checked.id);
@@ -780,7 +835,7 @@ async function handleFiles(files, { backupOnly = false } = {}) {
         } else throw new Error('请选择图片、JSON、PDF、邮件或文本文件');
       } catch (error) { failures.push(`${file.name}：${error.message}`); }
     }
-    if (found.length) { state.candidates = found; state.selected = new Set(found.map((_, i) => i)); if (found.length === 1) editRecord(found[0], 0); else reviewCandidates(); }
+    if (found.length) reviewImportCandidates(found);
     if (failures.length) {
       importStatus(failures.join('\n'));
       toast(`${failures.length} 个文件需要手动处理，详情见导入状态`, true);
@@ -788,16 +843,89 @@ async function handleFiles(files, { backupOnly = false } = {}) {
     } else importStatus(`已识别 ${found.length} 条候选记录，请核对后保存。`);
   } finally { state.busy = false; applyAccessPolicy(); }
 }
+function reviewImportCandidates(records, batch = false) {
+  const offset = state.candidates.length;
+  state.candidates.push(...records);
+  state.reviewBatch = batch || state.candidates.length > 1;
+  records.forEach((record, index) => {
+    if (!missingTicketFields(record).length) state.selected.add(offset + index);
+  });
+  openCandidateReview();
+}
+function openCandidateReview() {
+  if (state.reviewBatch) reviewCandidates();
+  else if (state.candidates.length) editRecord(state.candidates[0], 0);
+}
 function reviewCandidates() {
   editor = null;
-  openModal(modalHead(`核对 ${state.candidates.length} 条候选票据`, '重复票据会合并补充，已有的手动修订会保留。') + `<div class="review-list">${state.candidates.map((r, i) => `<div class="review-row"><label><input type="checkbox" class="candidate-select" data-index="${i}" ${state.selected.has(i) ? 'checked' : ''} aria-label="选择第${i + 1}条" /></label><div><strong>${e(r.origin || '出发地待补充')} → ${e(r.destination || '到达地待补充')}</strong><p>${e(r.service || (r.flightStatus === 'open' ? 'OPEN' : '班次待补充'))} · ${e(formatDate(r.departureDate))} · ${e(r.passenger || '旅客待补充')}</p></div><button class="button small secondary" data-action="edit-candidate" data-index="${i}">${icon('edit')}校对</button></div>`).join('')}</div><div class="modal-footer"><button class="button secondary" data-action="close-modal">稍后处理</button><div class="spacer"></div><button class="button primary" data-action="save-candidates">${icon('check')}收藏所选票据</button></div>`);
-  modalRoot.querySelectorAll('.candidate-select').forEach(input => input.addEventListener('change', () => { const i = Number(input.dataset.index); if (input.checked) state.selected.add(i); else state.selected.delete(i); }));
+  const rows = state.candidates.map((record, index) => {
+    const missing = missingTicketFields(record);
+    const fields = missing.map(key => key === 'price' && isRefundReceipt(record) ? '退票费' : ticketFieldLabel(key, record.type));
+    return `<div class="review-row">
+      <label><input type="checkbox" class="candidate-select" data-index="${index}" ${missing.length ? 'disabled' : state.selected.has(index) ? 'checked' : ''} aria-label="选择第${index + 1}条" ${missing.length ? `aria-describedby="candidate-missing-${index}"` : ''} /></label>
+      <div><strong>${e(record.origin || '出发地待补充')} → ${e(record.destination || '到达地待补充')}</strong>
+      <p>${e(record.service || (record.flightStatus === 'open' ? 'OPEN' : '班次待补充'))} · ${e(formatDate(record.departureDate))} · ${e(record.passenger || '旅客待补充')}</p>
+      ${fields.length ? `<p class="danger" id="candidate-missing-${index}">缺少 ${e(fields.join('、'))}</p>` : ''}</div>
+      <button class="button small secondary" type="button" data-action="edit-candidate" data-index="${index}">${icon('edit')}校对</button></div>`;
+  });
+  openModal(modalHead(`核对 ${rows.length} 条候选票据`, '补齐必填项后即可勾选保存。') +
+    `<form data-candidate-review><div class="review-list">${rows.join('')}</div>
+    <div class="modal-footer"><button type="button" class="button secondary" data-action="close-modal">稍后处理</button>
+    <button type="button" class="text-button danger" data-action="discard-candidates">放弃剩余</button><div class="spacer"></div>
+    <button class="button primary" type="submit" data-action="save-candidates" ${state.selected.size && canWrite() ? '' : 'disabled'}>${icon('check')}保存所选票据</button></div></form>`);
+  const form = modalRoot.querySelector('[data-candidate-review]');
+  form.addEventListener('change', event => {
+    const input = event.target.closest('.candidate-select');
+    if (!input || input.disabled) return;
+    const index = Number(input.dataset.index);
+    if (input.checked) state.selected.add(index);
+    else state.selected.delete(index);
+    form.querySelector('[type="submit"]').disabled = !state.selected.size || !canWrite();
+  });
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    saveCandidates([...state.selected]).catch(fail);
+  });
 }
-async function saveCandidates(candidates) {
-  if (!candidates.length) return toast('请先选择要收藏的票据', true);
-  const result = applyImport(state.records, candidates);
-  await persist(result.records); await setDemoMode(false); state.candidates = []; state.selected.clear();
-  closeModal(true); navigate('archive'); toast(savedMessage(`已新增 ${result.added} 张，补充 ${result.enriched} 张票据，已同步`));
+function discardCandidates() {
+  if (!state.candidates.length || !confirm('放弃剩余待校对票据？')) return;
+  state.candidates = [];
+  state.selected.clear();
+  state.reviewBatch = false;
+  closeModal(true);
+  render();
+}
+async function saveCandidates(indices) {
+  if (state.saving) return;
+  if (!indices.length) return toast('请先选择要保存的票据', true);
+  const records = indices.map(index => state.candidates[index]);
+  for (const record of records) validateTicketForm(record);
+  const result = applyImport(state.records, records);
+  const form = modalRoot.querySelector('[data-candidate-review]');
+  const release = form ? freezeForm(form, '保存中…') : () => {};
+  const epoch = authEpoch;
+  try {
+    await persist(result.records);
+    if (epoch !== authEpoch) return;
+    const saved = new Set(indices);
+    const remaining = [], selection = new Set();
+    state.candidates.forEach((record, index) => {
+      if (saved.has(index)) return;
+      if (state.selected.has(index)) selection.add(remaining.length);
+      remaining.push(record);
+    });
+    state.candidates = remaining;
+    state.selected = selection;
+    closeModal(true);
+    if (remaining.length) {
+      render();
+      reviewCandidates();
+    } else {
+      state.reviewBatch = false;
+      navigate('archive');
+    }
+    toast(savedMessage(`已新增 ${result.added} 张，补充 ${result.enriched} 张票据`));
+  } finally { release(); applyAccessPolicy(); }
 }
 function reviewFullBackup(backup) {
   const count = backup.records.filter(record => !record.deleted).length;
@@ -808,27 +936,59 @@ function reviewFullBackup(backup) {
     event.preventDefault();
     if (state.saving) return;
     const release = freezeForm(form, '正在恢复…');
+    const context = { binding: activeBinding(state), generation: state.syncMeta.generation || '', epoch: authEpoch };
     try {
       await persist(applyImport(state.records, backup.records).records, backup.settings);
       state.profileDraft = null; state.profileBase = null; state.profileDirty = false; state.flightKeyDraft = null;
       closeModal(true);
       render();
       toast(savedMessage('已恢复票库和设置'));
-      if (!state.syncMeta.pending) offerBackupConnection(backup.connections);
+      if (isRestoreContext(context)) {
+        backupRestoreOffer = state.syncMeta.pending ? { ...context, connections: backup.connections } : null;
+        if (!backupRestoreOffer) offerBackupConnection(backup.connections);
+        renderSyncState();
+      }
     } catch (error) { form.querySelector('.form-error').textContent = error.message; }
     finally { release(); }
   });
 }
-function offerBackupConnection({ github, d1 }) {
-  const missing = state.d1 ? (!state.config?.id && github ? 'github' : '') : (state.config?.id && d1 ? 'd1' : '');
+function isRestoreContext(context) {
+  return context.epoch === authEpoch && context.binding === activeBinding(state) &&
+    context.generation === (state.syncMeta.generation || '');
+}
+function missingBackupConnection(connections) {
+  if (!state.d1 && state.config?.id && connections.d1) return 'd1';
+  if (state.d1 && !state.config?.id && connections.github) return 'github';
+  return '';
+}
+function backupRestoreMarkup() {
+  if (!backupRestoreOffer) return '';
+  const provider = missingBackupConnection(backupRestoreOffer.connections);
+  if (state.syncMeta.pending) {
+    return `<p class="import-status" role="status">备份已导入，等待同步。${provider ? '同步后可以添加备份中的连接。' : ''}</p>`;
+  }
+  if (!provider) return '';
+  const name = provider === 'd1' ? 'Cloudflare D1' : 'GitHub';
+  return `<div class="button-row"><button type="button" class="button secondary" data-action="continue-backup-restore">添加备份中的 ${name} 连接</button></div>`;
+}
+function continueBackupRestore() {
+  const offer = backupRestoreOffer;
+  if (!offer || state.syncMeta.pending || !isRestoreContext(offer)) return;
+  backupRestoreOffer = null;
+  offerBackupConnection(offer.connections);
+  renderSyncState();
+}
+function offerBackupConnection(connections) {
+  const missing = missingBackupConnection(connections);
   if (!missing) return;
   const name = missing === 'd1' ? 'Cloudflare D1' : 'GitHub';
-  const target = missing === 'd1' ? d1 : github;
+  const target = connections[missing];
+  const context = { binding: activeBinding(state), generation: state.syncMeta.generation || '', epoch: authEpoch };
   const label = missing === 'd1' ? target.url : target.owner + '/' + target.repo;
   openModal(modalHead('是否添加 ' + name + ' 连接', e(label)) +
     '<div class="detail-body"><div class="reset-actions"><button type="button" class="button secondary" data-action="close-modal">跳过</button><button type="button" class="button primary" data-connect-from-backup>继续连接</button></div></div>');
   modalRoot.querySelector('[data-connect-from-backup]').addEventListener('click', () => {
-    if (state[missing === 'd1' ? 'd1' : 'config']?.id) { closeModal(true); return; }
+    if (!isRestoreContext(context) || state.syncMeta.pending || missingBackupConnection(connections) !== missing) { closeModal(true); return; }
     if (missing === 'd1') state.d1Draft = { ...target, target };
     else state.connectionDraft = { ...target, target };
     closeModal(true);
@@ -1050,20 +1210,26 @@ async function backupGitHub() {
     const { changed } = await withCloudLock(async () => {
       const captured = await readSyncState();
       if (activeBinding(captured) !== activeBinding({ d1, config }) || !sameGitHubAccount(captured.config, config) || captured.meta.pending || !canWrite() || state.saving) throw new Error('云端状态已变化，请重新发起备份');
-      return backUpToGitHub(new D1Store(d1, d1Token()), new GitHubStore(clone(config), token()));
+      const result = await backUpToGitHub(new D1Store(d1, d1Token()), new GitHubStore(clone(config), token()));
+      githubBackupReceipt = { pair: githubBackupPair(d1, config), head: result.sourceHead, generation: result.generation || '', at: now() };
+      try { await db.set('githubBackupReceipt', githubBackupReceipt); announce(); }
+      catch { toast('备份已确认，本机未能记录备份时间', true); }
+      return result;
     });
     toast(changed ? '已将 D1 票库备份到 GitHub' : 'GitHub 已有相同的备份');
   } catch (error) { fail(error); }
   finally { state.githubBackingUp = false; render(); }
 }
 function clearArchiveView() {
+  pageScroll.clear();
+  backupRestoreOffer = null;
   closeModal(true);
   state.selected.clear();
   archiveSelected.clear();
   Object.assign(state, {
     profileDraft: null, profileBase: null, profileDirty: false, profileError: '',
     flightKeyDraft: null, flightResult: null, flightResultYear: null, settingsError: '',
-    filters: searchOptions(), candidates: [], lastOCRText: '', syncMessage: '',
+    filters: searchOptions(), candidates: [], reviewBatch: false, lastOCRText: '', syncMessage: '',
     pendingConflicts: [], resetRequest: null, d1Draft: null, d1Error: '', connectionStatus: 'auth'
   });
   resetPromptHead = '';
@@ -1377,8 +1543,7 @@ async function checkFlights() {
     } else if (payload && (Array.isArray(payload) || Array.isArray(payload.flights))) {
       try {
         const candidates = mapFlightResult(payload);
-        state.candidates = candidates; state.selected = new Set(candidates.map((_, i) => i));
-        if (candidates.length) reviewCandidates();
+        if (candidates.length) reviewImportCandidates(candidates, true);
         else toast(`${year} 年未返回历史行程`);
       } catch { toast('接口已返回内容，请查看并校对字段'); }
     } else toast('已取得接口返回；尚需核对结构，请在数据页查看');
@@ -1394,9 +1559,10 @@ const actions = {
   navigate: button => navigate(button.dataset.page),
   'toggle-routes': button => { state.routesOpen = !state.routesOpen; button.closest('.route-shortcuts-section').dataset.expanded = String(state.routesOpen); button.setAttribute('aria-expanded', String(state.routesOpen)); },
   filter: button => { state.filters.type = button.dataset.type; state.limit = 48; render(); },
-  'load-more': () => { state.limit += 48; render(); },
+  'load-more': loadMoreTickets,
   'reset-archive': () => showArchiveReset(),
   'reset-repository': () => showArchiveReset(true),
+  'continue-backup-restore': continueBackupRestore,
   'reset-filters': () => { state.filters = searchOptions(); state.limit = 48; render(); },
   'clear-search-field': button => { state.filters = clearSearchField(state.filters, button.dataset.field); state.limit = 48; render(); },
   'swap-route': () => { const f = state.filters; [f.originCity, f.destinationCity] = [f.destinationCity, f.originCity]; [f.origin, f.destination] = [f.destination, f.origin]; state.limit = 48; render(); },
@@ -1420,15 +1586,14 @@ const actions = {
   edit: button => { const r = findRecord(button.dataset.id); if (r) editRecord(r); },
   'close-modal': () => closeModal(),
   'edit-candidate': button => editRecord(state.candidates[Number(button.dataset.index)], Number(button.dataset.index)),
-  'save-candidates': () => saveCandidates(state.candidates.filter((_, i) => state.selected.has(i))),
-  review: () => { if (state.candidates.length === 1) editRecord(state.candidates[0], 0); else reviewCandidates(); },
+  'discard-candidates': discardCandidates,
+  review: openCandidateReview,
   'parse-text': () => {
     const text = document.querySelector('#import-text').value.trim();
     if (!text) return toast('请先粘贴一段行程信息', true);
     const candidates = parseText(text);
     if (!candidates.length) return toast('没有识别到行程，请补充日期、车次或起终点，也可直接手动添加', true);
-    state.candidates = candidates; state.selected = new Set(candidates.map((_, i) => i));
-    if (candidates.length === 1) editRecord(candidates[0], 0); else reviewCandidates();
+    reviewImportCandidates(candidates);
   },
   backup: () => download(JSON.stringify(fullBackup(state.records, state.settings, {
     github: state.config?.id ? { ...state.config, token: token() } : null,
@@ -1474,7 +1639,9 @@ document.addEventListener('click', event => {
   if (['new', 'edit', 'delete', 'delete-selected', 'scan-ticket', 'edit-candidate', 'save-candidates', 'parse-text', 'flight-to-import'].includes(button.dataset.action) && !canWrite()) return toast('当前仅可查看缓存，请恢复云端连接', true);
   const fn = actions[button.dataset.action]; if (fn) Promise.resolve().then(() => fn(button)).catch(fail);
 });
-window.addEventListener('hashchange', () => { state.page = location.hash.slice(1) || 'archive'; render(); });
+history.scrollRestoration = 'manual';
+window.addEventListener('hashchange', followHistory);
+window.addEventListener('popstate', followHistory);
 window.addEventListener('online', () => {
   if (state.syncMeta.pending || state.connectionStatus === 'offline') doSync();
   else renderSyncState();

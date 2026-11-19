@@ -162,6 +162,7 @@ test('app creates, reloads, edits, imports and filters personal records without 
   assert.equal(document.querySelector('dialog'), null);
   const json = JSON.stringify(archive(Array.from({ length: 100 }, (_, i) => createRecord({
     service: 'G' + (100 + i), departureDate: '2026-10-01', origin: '测试出发' + i, destination: '测试到达' + i,
+    departureTime: '08:00', passenger: '测试旅客', identity: 'TEST123', carriage: '05', seat: '08F', seatClass: '二等座'
   }))));
   Object.defineProperty(input, 'files', { value: [{ name: 'test.json', type: 'application/json', size: json.length, text: async () => json }] });
   input.dispatchEvent(new window.Event('change', { bubbles: true }));
@@ -169,6 +170,8 @@ test('app creates, reloads, edits, imports and filters personal records without 
   click('[data-action="save-candidates"]'); await waitFor(() => !document.querySelector('dialog'));
   click('[data-action="filter"][data-type="all"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 48);
   assert.equal((await get('records', [])).length, 102);
+  document.querySelector('[data-action="load-more"]').focus();
   click('[data-action="load-more"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 96);
+  assert.equal(document.activeElement.closest('.ticket-card'), document.querySelectorAll('.ticket-card')[48]);
   dom.window.close();
 });

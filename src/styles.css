@@ -314,6 +314,7 @@ dialog.scanner-modal::backdrop{background:#20242a80;backdrop-filter:blur(5px)}
 
 /* Compact mobile archive; desktop keeps its existing layout. */
 .route-shortcuts-toggle{display:none}
+[data-github-backup-status]:empty{display:none}
 .backup-panel{grid-column:1/-1}.backup-panel .backup-actions{display:grid;grid-template-columns:1fr 1fr;gap:15px}
 .data-layout>.panel{align-self:start}
 @media(max-width:680px){
