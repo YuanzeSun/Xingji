@@ -216,7 +216,7 @@ test('a single readable PDF417 frame is captured before OCR is ready, even while
   try {
     await h.ticks(1);
     assert.equal(reads, 1);
-    assert.match(h.root.querySelector('#scanner-status').textContent, /已读到登机牌条码/);
+    assert.match(h.root.querySelector('#scanner-status').textContent, /正在识别计划登机时间/);
     assert.equal(h.captured.length, 0);
     h.frame.metrics.fingerprint.fill(30);
     startOCR({
@@ -265,14 +265,15 @@ test('a late boarding barcode is ignored after closing the live scanner', async 
   } finally { h.dispose(); h.dom.window.close(); }
 });
 
-test('a boarding pass keeps repeated coupon fields together and distinguishes boarding from departure time', () => {
+test('a manual boarding photo can supply a labelled time while waiting for a barcode', () => {
   const text = '中国东方航空 登机牌 BOARDING PASS\n姓名 NAME 航班 FLIGHT 日期 DATE\n示例旅客 MU5403 2025.05.03\nSHA TFU\n航程 ROUTE\nSHA - TFU\nGATE BOARDING DEPARTURE SEAT\nD21 09:55 10:35 32A';
-  const record = scanCandidate(text, 90, 'flight');
-  assert.equal(record.service, 'MU5403'); assert.equal(calendarDate(record.departureDate), '2025-05-03');
-  assert.equal(record.originCode, 'SHA'); assert.equal(record.destinationCode, 'TFU');
-  assert.equal(record.boardingTime, '09:55'); assert.equal(record.departureTime, '10:35');
-  assert.equal(record.passenger, '示例旅客');
-  assert.equal(scanCandidate(text.replace('09:55', '69:55'), 90, 'flight').boardingTime, '');
+  assert.equal(scanCandidate(text, 90, 'flight'), null);
+  const record = scanCandidate(text, 90, 'flight', { allowPartial: true });
+  assert.equal(record.boardingTime, '09:55');
+  assert.equal(record.service, '');
+  assert.equal(record.departureTime, '');
+  assert.equal(record.passenger, '');
+  assert.equal(scanCandidate(text.replace('09:55', '69:55'), 90, 'flight', { allowPartial: true }), null);
 });
 
 test('a single automatic OCR result still requires agreement and a late camera stream is stopped after closing', async () => {

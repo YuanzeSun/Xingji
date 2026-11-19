@@ -1,5 +1,25 @@
 import {calendarDate} from './journey-date.js';
 import { railTrainRectangle, railFareRectangle, parsePrintedRailTicket } from './rail-ticket.js';
+import { printedRailTemplate } from './rail-template.js';
+
+export async function refineRailTemplate(worker, image, data, paperColor) {
+  if (paperColor === 'red' || printedRailTemplate(data.text) || !parsePrintedRailTicket(data.text, 'OCR', { layout: data.tsv })) return;
+  // A blue ticket can be either type. Re-read the printed notices beneath the route.
+  const rectangle = {
+    left: 0, top: Math.floor(image.height * .38),
+    width: Math.floor(image.width * .78), height: Math.floor(image.height * .57)
+  };
+  try {
+    await worker.setParameters({ tessedit_pageseg_mode: '11' });
+    const { data: notice } = await worker.recognize(image, { rectangle });
+    if (notice.confidence < 40) return;
+    const template = printedRailTemplate(notice.text);
+    if (template === 'rail-refund-receipt') data.text += '\n退票费';
+    else if (template === 'rail-receipt') data.text += '\n报销凭证';
+    else if (/限乘|当次车/.test(notice.text.replace(/\s/g, ''))) data.text += '\n限乘当日当次车';
+  } catch { /* Use the text and colour already collected. */ }
+  finally { await worker.setParameters({ tessedit_pageseg_mode: '3' }); }
+}
 
 export function railReadScore(data) {
   const record = parsePrintedRailTicket(data.text, 'OCR', { layout: data.tsv });
@@ -15,9 +35,11 @@ export function preferEnhancedRailRead(original, enhanced) {
 }
 
 export async function refineRailService(worker, image, data) {
-  if (parsePrintedRailTicket(data.text, 'OCR', { layout: data.tsv }) === null) return;
+  const record = parsePrintedRailTicket(data.text, 'OCR', { layout: data.tsv });
+  if (record === null) return;
   const region = railTrainRectangle(data.text, data.tsv);
   if (!region) return;
+  if (!region.text && record?.service) return;
   if (region.code && region.confidence >= 65) { data.text = `车次：${region.code}\n` + data.text; return; }
   try {
     await worker.setParameters({ tessedit_char_whitelist: 'GDCZTKYLS0123456789', tessedit_pageseg_mode: '7' });

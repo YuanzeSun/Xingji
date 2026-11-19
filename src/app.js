@@ -991,6 +991,7 @@ async function handleFiles(files, { backupOnly = false } = {}) {
           if (!currentImport(task)) return;
           const result = parseScanText(recognized.text, file.name, recognized);
           if (!result.length) {
+            if (recognized.flightImage) throw new Error('未读到有效登机牌码，请上传条码或二维码清晰的图片');
             fallbackText = recognized.text;
             throw new Error('没有识别到行程。可复制识别文字并手动修订');
           }

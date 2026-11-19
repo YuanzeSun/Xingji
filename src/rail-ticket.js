@@ -1,11 +1,12 @@
 import { createRecord, validDate } from './model.js';
 import { STATIONS } from './data/location-reference.js';
-import { ocrWords } from './ocr-layout.js';
+import { ocrWords, railRouteAreas } from './ocr-layout.js';
 import { marksFromText } from './ticket-marks.js';
 import { railTemplateFromText } from './rail-template.js';
 
 const key = value => value.toLowerCase().replace(/['’\s]/g, '');
 const stations = new Map();
+const stationNames = new Set(STATIONS.map(row => row[0]));
 for (const row of STATIONS) {
   const code = key(row[3]);
   if (!stations.has(code)) stations.set(code, new Map());
@@ -47,7 +48,15 @@ export function railTrainRectangle(raw, layout) {
   const candidates = words.filter(word => /^[A-Za-z0-9]{2,8}(?:次)?$/.test(word.text) && !stationFor(word.text, raw) && word.height >= height * .7 && word.top > top - height * 4 && word.top < top + height * .3 && word.left > width * .3 && word.left + word.width < width * .72)
     .sort((a,b) => Math.abs(a.left + a.width / 2 - width / 2) - Math.abs(b.left + b.width / 2 - width / 2));
   const word = candidates[0];
-  if (!word) return null;
+  if (!word) {
+    const [from, to] = [...anchors].sort((a, b) => a.left - b.left);
+    if (anchors.length !== 2 || Math.abs(from.top - to.top) > height || to.left - from.left < width * .3) return null;
+    const left = Math.max(from.left + from.width * .8, width * .28);
+    const right = Math.min(to.left + to.width * .15, width * .72);
+    const cropTop = Math.max(0, top - height * 3);
+    if (right <= left) return null;
+    return { rectangle: { left: Math.floor(left), top: cropTop, width: Math.floor(right - left), height: Math.floor(top - cropTop + height / 4) }, confidence: 0 };
+  }
   const pad = Math.max(4, Math.round(word.height * .16));
   return { rectangle: { left: Math.max(0, word.left-pad), top: Math.max(0, word.top-pad), width: Math.min(width-word.left+pad, word.width+pad*2), height: word.height+pad*2 }, text: word.text, confidence: word.confidence, code: trainCode(word.text, true) };
 }
@@ -65,9 +74,9 @@ export function railFareRectangle(raw, layout) {
 
 // Printed tickets put the train between the station names. A serial number
 // elsewhere on the paper must never turn a railway ticket into a flight.
-export function parsePrintedRailTicket(raw, label, { layout = '' } = {}) {
+export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '' } = {}) {
   if (/BOARDING|\bFLIGHT\b|航班|航空公司|订座编号/i.test(raw)) return null;
-  const printed = /限乘|当日当次|仅供报销|报销凭证|退票费|买票请到|中国铁路|检票/.test(raw);
+  const printed = /限乘|当日当次|仅供报销|报销凭证|退票费|买票请到|中国铁路|检票/.test(raw.replace(/\s/g, ''));
   const hits = [...raw.matchAll(/[A-Za-z]+(?:['’][A-Za-z]+)*/g)].map(match => ({ text: match[0], row: stationFor(match[0], raw), index: match.index })).filter(hit => hit.row);
   const unique = hits.filter((hit, i) => !i || hit.row[0] !== hits[i - 1].row[0]);
   if (unique.length > 2) return false; // Separate a collage before recognizing a single ticket.
@@ -108,10 +117,22 @@ export function parsePrintedRailTicket(raw, label, { layout = '' } = {}) {
     }
   }
   if ((!origin || !destination) && service) {
-    const route = compact.match(new RegExp('([\\u3400-\\u9fff]{2,10})站?\\s*' + service + '(?:次)?\\s*([\\u3400-\\u9fff]{2,10})站?'));
-    if (route) { origin ||= route[1].replace(/站$/, ''); destination ||= route[2].replace(/站$/, ''); }
+    const areas = railRouteAreas(layout, service);
+    const chinaStation = value => {
+      const name = value?.replace(/站$/, '');
+      return stationNames.has(name) ? name : '';
+    };
+    origin ||= chinaStation(areas?.origin);
+    destination ||= chinaStation(areas?.destination);
+    if (!origin || !destination) {
+      const route = compact.match(new RegExp('([\\u3400-\\u9fff][\\u3400-\\u9fff \\t]{1,18})\\s*' + service + '(?:次)?\\s*([\\u3400-\\u9fff][\\u3400-\\u9fff \\t]{1,18})'));
+      if (route) {
+        origin ||= route[1].replace(/\s/g, '').replace(/站$/, '');
+        destination ||= route[2].replace(/\s/g, '').replace(/站$/, '');
+      }
+    }
   }
-  const record = createRecord({ type: 'rail', template: railTemplateFromText(raw), origin, destination, originCode: pair[0]?.row[3] || '', destinationCode: pair[1]?.row[3] || '', service,
+  const record = createRecord({ type: 'rail', template: railTemplateFromText(raw, { paperColor, departureDate }), origin, destination, originCode: pair[0]?.row[3] || '', destinationCode: pair[1]?.row[3] || '', service,
     departureDate: validDate(departureDate) ? departureDate : '', departureTime: time ? `${time[1].padStart(2, '0')}:${time[2]}` : '',
     carriage: seat ? digits(seat[1]) : '', seat: seat ? digits(seat[2]).toUpperCase() + (seat[3] ? '号' + seat[3] + '铺' : '') : '', seatClass, price: price ? price[1].replace(/\s/g, '') : '', identity: identity?.[1] || '', passenger: identity?.[2] || '',
     ticketNumber: raw.match(/^\s*([A-Z]\d{5,10})(?=\s|$)/m)?.[1] || '',
