@@ -1,5 +1,5 @@
 import * as db from './db.js';
-import { clone, deduplicateRecords, mergeThreeWay, now, sameRecords } from './model.js';
+import { applyImport, clone, deduplicateRecords, mergeThreeWay, now, sameRecords } from './model.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings } from './shared-settings.js';
 import { upgradeCodeRecords, hasLegacyCodes } from './code-upgrade.js';
 
@@ -130,9 +130,9 @@ function stageChange(config, d1, change) {
     const current = unpack(raw);
     if (current.archiveResetProgress) throw new Error('请先处理未完成的仓库重置');
     if (!current.meta.verified || activeBinding(current) !== activeBinding({ config, d1 })) throw new Error('请先连接并同步云端票库');
-    const { records = current.records, settings = current.settings } = change(current);
-    const meta = { ...current.meta, revision: current.meta.revision + 1, pending: !sameRecords(records, current.base) || !sameSettings(settings, current.settingsBase) };
-    return { write: { records, settings, syncMeta: meta }, result: { ...current, records, settings, meta } };
+    const { records = current.records, settings = current.settings, ...result } = change(current);
+    const meta = { ...current.meta, rejection: null, revision: current.meta.revision + 1, pending: !sameRecords(records, current.base) || !sameSettings(settings, current.settingsBase) };
+    return { write: { records, settings, syncMeta: meta }, result: { ...current, records, settings, meta, ...result } };
   });
 }
 function mergedRecords(expected, proposed, current) {
@@ -151,11 +151,31 @@ export function stageRecords(expected, proposed, config, d1 = null) {
 export function stageSettings(expected, proposed, config, d1 = null) {
   return stageChange(config, d1, current => ({ settings: mergedSettings(expected, proposed, current.settings) }));
 }
-export function stageBackup(expected, proposed, config, d1) {
+export function stageImport(candidates, config, d1, expectedSettings, settings) {
   return stageChange(config, d1, current => ({
-    records: mergedRecords(expected.records, proposed.records, current.records),
-    settings: mergedSettings(expected.settings, { ...proposed.settings, connections: expected.settings.connections }, current.settings)
+    ...applyImport(current.records, candidates),
+    settings: settings ? mergedSettings(expectedSettings, { ...settings, connections: expectedSettings.connections }, current.settings) : current.settings
   }));
+}
+export function rejectPendingChange(captured, message) {
+  return db.atomic(keys, raw => {
+    const current = unpack(raw);
+    if (!current.meta.pending || !sameArchiveBaseline(current, captured)) return { result: current };
+    if (current.meta.rejection === message) return { result: current };
+    const meta = { ...current.meta, revision: current.meta.revision + 1, rejection: message };
+    return { write: { syncMeta: meta }, result: { ...current, meta } };
+  });
+}
+export function discardRejectedChange(captured) {
+  return db.atomic(keys, raw => {
+    const current = unpack(raw);
+    if (!current.meta.rejection || current.archiveResetProgress || !sameArchiveBaseline(current, captured)) {
+      throw new Error('待同步的修改已变化，请重新核对。');
+    }
+    const records = clone(current.base), settings = clone(current.settingsBase);
+    const meta = { ...current.meta, revision: current.meta.revision + 1, pending: false, rejection: null };
+    return { write: { records, settings, syncMeta: meta }, result: { ...current, records, settings, meta } };
+  });
 }
 export async function acknowledgeSync(captured, remote) {
   if (!remote.head) throw new Error('云端没有确认版本，保留本机待同步内容');

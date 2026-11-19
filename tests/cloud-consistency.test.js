@@ -76,10 +76,10 @@ test('incomplete, altered or rolled-back cloud snapshots never trigger a write',
   server.id = 88; await assert.rejects(store(server).verify(), /身份/);
 });
 
-test('independent IDs for one ticket merge once; conflicting manual changes require an explicit choice', async () => {
+test('independent IDs with conflicting data are rejected before a cloud write', async () => {
   const a = ticket({ id: 'a', lockedFields: ['seat'] }), b = ticket({ id: 'b', seat: '02A', lockedFields: ['seat'] }), server = new MemoryGitHub([a]);
-  const result = await synchronize(store(server), [], [b]);
-  assert.equal(result.conflicts.length, 1); assert.equal(result.conflicts[0].field, 'seat');
+  await assert.rejects(synchronize(store(server), [], [b]), /座位.*冲突/);
+  assert.deepEqual(server.records().map(record => record.id), ['a']);
   assert.equal(server.calls.some(c => c.method === 'POST'), false);
 });
 

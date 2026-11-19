@@ -13,9 +13,9 @@ import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } fro
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
 import { upgradeCodeRecords } from './code-upgrade.js';
 import { renderCodeData } from './barcode-data.js';
-import { createRecord, validateRecord, mergeThreeWay, TEMPLATES, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, readArchive, applyImport, formatDate } from './model.js';
+import { createRecord, validateRecord, mergeThreeWay, TEMPLATES, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, readArchive, formatDate } from './model.js';
 import * as db from './db.js';
-import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageBackup, stageRecords, stageSettings, acknowledgeSync, replaceWithRemote } from './sync-state.js';
+import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageImport, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, replaceWithRemote } from './sync-state.js';
 import { sharedSettings, sameSettings, maskedKey, wasUnlinked } from './shared-settings.js';
 import { watchAppUpdates } from './app-update.js';
 import { supportsDesktopMcp } from './device.js';
@@ -31,7 +31,7 @@ import { escape as e } from './html.js';
 import { demoRecords } from './demo.js';
 import { MARK_SHAPES, describeMarks } from './ticket-marks.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from './code-editor.js';
-import {ticketViewOptions,ticketViewControls,ticketCollection,bindTicketViewControls} from './ticket-view.js';
+import {ticketViewOptions,ticketViewControls,ticketCollection, appendTicketCollection,bindTicketViewControls} from './ticket-view.js';
 import {mountTicketSpace} from './ticket-space.js';
 import { requiredTicketFields, missingTicketFields, ticketFieldLabel, validateTicketForm, ticketFormFeedback } from './ticket-form.js';
 import { seatClassField, bindSeatClassFields } from './seat-class-field.js';
@@ -132,7 +132,11 @@ function download(data, name, type = 'application/json;charset=utf-8') {
 }
 function fileName(r) { return `${calendarDate(r.departureDate) || '未定日期'}_${r.service || '票据'}_${r.origin}-${r.destination}`.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_'); }
 const channel = window.BroadcastChannel ? new window.BroadcastChannel('xingji-cloud-state') : null;
-const canWrite = () => !!(!state.showDemo && !state.resetting && !state.archiveResetProgress && hasCloud() && state.syncMeta.verified && !state.syncMeta.pending && cloudToken() && navigator.onLine && state.connectionStatus === 'online' && !state.connecting);
+const canWrite = () => !!(!state.showDemo && !state.resetting && !state.archiveResetProgress && hasCloud() &&
+  state.syncMeta.verified && cloudToken() && navigator.onLine && !state.connecting &&
+  (state.syncMeta.pending ? state.syncMeta.rejection && state.connectionStatus === 'rejected' && !state.syncing
+    : state.connectionStatus === 'online'));
+
 function useSnapshot(snapshot) {
   const context = archiveContext();
   if (snapshot.credentials) {
@@ -168,21 +172,35 @@ function freezeForm(form, pendingLabel) {
   };
 }
 
-async function persist(records, settings) {
+async function verifyBeforeWrite(message) {
+  if (state.syncMeta.rejection && canWrite()) return;
+  if (!await doSync() || !canWrite()) throw new Error(message);
+}
+async function persist(records, { candidates = false, settings } = {}) {
   if (!canWrite() || state.saving) throw new Error('当前不能修改票据，请先完成云端核对');
-  const expected = { records: clone(state.records), settings: clone(state.settings) }, { config, d1 } = state; state.saving = true;
+  const expected = { records: clone(state.records), settings: clone(state.settings) };
+  const { config, d1 } = state;
+  const context = archiveContext();
+  state.saving = true;
   try {
-    if (!await doSync() || !canWrite()) throw new Error('云端尚未核对成功，修改未提交，请保留当前输入');
-    useSnapshot(await withCloudLock(() => settings ? stageBackup(expected, { records, settings }, config, d1) :
-      stageRecords(expected.records, records, config, d1)));
+    await verifyBeforeWrite('云端尚未核对成功，修改未提交，请保留当前输入');
+    if (!isArchiveContext(context)) throw new Error('票库已变化，请重新打开后核对。');
+    const staged = await withCloudLock(() => candidates
+      ? stageImport(records, config, d1, expected.settings, settings)
+      : stageRecords(expected.records, records, config, d1));
+    useSnapshot(staged);
     announce();
     await doSync();
+    return staged;
   } finally { state.saving = false; render(); }
 }
-function savedMessage(message = '票据已同步') { return state.syncMeta.pending ? '已保存本机，等待云端确认' : message; }
+function savedMessage(message = '票据已同步') {
+  if (state.syncMeta.rejection) return '本机修改已保留，云端拒绝了这次提交';
+  return state.syncMeta.pending ? '已保存本机，等待云端确认' : message;
+}
 function queueSync(delay) {
   clearTimeout(syncTimer);
-  if (state.resetting || state.archiveResetProgress || !state.syncMeta.pending || !cloudToken() || document.visibilityState === 'hidden') return;
+  if (state.resetting || state.archiveResetProgress || !state.syncMeta.pending || state.syncMeta.rejection || !cloudToken() || document.visibilityState === 'hidden') return;
   syncTimer = setTimeout(() => doSync(), delay);
   syncTimer.unref?.();
 }
@@ -191,6 +209,7 @@ function syncLabel() {
   if (state.archiveResetProgress) return '等待继续重置 · 只读';
   if (state.syncing) return '正在核对云端…';
   if (state.connectionStatus === 'conflict') return '有冲突待处理 · 只读';
+  if (state.syncMeta.rejection) return '云端拒绝提交';
   if (state.syncMeta.pending) return '等待云端同步 · 只读';
   return canWrite() ? '已同步' : '缓存只读';
 }
@@ -233,7 +252,7 @@ function githubBackupLabel() {
 }
 function githubExtras() {
   if (!state.d1 || !state.config) return '';
-  return `<p data-github-backup-status class="import-status" role="status">${e(githubBackupLabel())}</p><div class="button-row"><button class="button secondary" data-action="backup-github" ${!canWrite() || !token() || state.saving || state.githubBackingUp ? 'disabled' : ''}>${state.githubBackingUp ? '正在备份…' : '立即备份到 GitHub'}</button></div>`;
+  return `<p data-github-backup-status class="import-status" role="status">${e(githubBackupLabel())}</p><div class="button-row"><button class="button secondary" data-action="backup-github" ${!canWrite() || state.syncMeta.pending || !token() || state.saving || state.githubBackingUp ? 'disabled' : ''}>${state.githubBackingUp ? '正在备份…' : '立即备份到 GitHub'}</button></div>`;
 }
 function cloudActions() {
   if (!hasCloud()) return '';
@@ -259,6 +278,14 @@ function connectionPage() {
 function connectionNotice() {
   if (!state.showDemo && state.archiveResetProgress) return '<div class="connection-notice" role="status"><div><strong>上次仓库重置尚未完成</strong></div><button class="button secondary small" data-action="resume-archive-reset">继续重置</button></div>';
   if (state.showDemo || canWrite() && !state.syncMeta.pending) return '';
+  if (state.syncMeta.rejection && !state.d1Replacement && !state.resetRequest && state.connectionStatus !== 'conflict') {
+    const disabled = state.syncing || state.saving ? 'disabled' : '';
+    return `<div class="connection-notice rejected-change" role="status"><div><strong>云端拒绝了这次提交</strong>
+    <span>${e(state.syncMeta.rejection)}</span><span>本机已保留修改，可修正后保存，或撤回待同步修改。</span></div>
+    <div class="button-row"><button class="button secondary small" data-action="backup">导出当前备份</button>
+    <button class="button secondary small" data-action="discard-rejected-change" ${disabled}>撤回待同步修改</button>
+    <button class="button secondary small" data-action="sync" ${disabled}>重试同步</button></div></div>`;
+  }
   const label = state.connectionStatus === 'conflict' ? '云端与本机有修改需要选择' : state.syncMeta.pending ? '本机修改等待云端确认，当前仅可查看缓存' : state.syncing ? '正在核对云端，当前仅可查看缓存' : '当前仅可查看本地缓存';
   const time = state.lastSync ? '上次同步：' + new Date(state.lastSync).toLocaleString('zh-CN', { hour12: false }) : '';
   const reset = state.d1Replacement ? '<button class="button danger small" data-action="adopt-d1">采用 D1 新票库</button>' : state.resetRequest ? '<button class="button danger small" data-action="reset-archive">重置票库</button>' : '';
@@ -306,12 +333,40 @@ function refreshArchiveSelection(result = searchTickets(live(), state.filters)) 
     input.closest('.ticket-card,.timeline-ticket').classList.toggle('is-selected', input.checked);
   }
 }
+function exportScope() {
+  return { context: archiveContext(), view: importView, demo: state.showDemo };
+}
+async function currentExport(scope) {
+  const sameView = () => root.isConnected && scope.view === importView && scope.demo === state.showDemo;
+  return sameView() && (scope.demo || await currentArchive(scope.context)) && sameView();
+}
 async function exportArchiveSelection(format) {
+  const scope = exportScope();
   const records = clone(selectedArchiveRecords());
   if (!records.length) return;
   const { exportDialog, bindExportDialog } = await import('./export-dialog.js');
+  if (!await currentExport(scope) || modalRoot.querySelector('dialog')) return;
   openModal(modalHead(format === 'pdf' ? '导出纪念册' : '逐个导出', '已选择 ' + records.length + ' 张票据') + exportDialog(records, { format }));
-  exportCleanup = bindExportDialog(modalRoot.querySelector('dialog'), records, { download });
+  const dialog = modalRoot.querySelector('dialog');
+  exportCleanup = bindExportDialog(dialog, records, { async download(data, name, signal) {
+    if (!await currentExport(scope) || !dialog.isConnected || signal?.aborted) return false;
+    download(data, name);
+    return true;
+  } });
+}
+async function exportSingleTicket(button, format) {
+  const scope = exportScope(), record = findRecord(button.dataset.id);
+  if (!record) return;
+  button.disabled = true;
+  toast(format === 'svg' ? '正在准备包含字体的票面…' : '正在生成高清票面…');
+  try {
+    const data = await (format === 'svg' ? exportSVG(record) : exportPNG(record));
+    if (await currentExport(scope) && button.isConnected) {
+      download(data, fileName(record) + '.' + format, format === 'svg' ? 'image/svg+xml;charset=utf-8' : 'image/png');
+    }
+  } catch (error) {
+    if (await currentExport(scope) && button.isConnected) throw error;
+  } finally { button.disabled = false; }
 }
 function archivePage() {
   const rs = live(), cities = cityOverview(rs).cities;
@@ -332,6 +387,8 @@ function searchResults(rs, result) {
   return visible.length ? collection + (!archiveIsSpace() && visible.length>state.limit ? `<div class="load-more"><button class="button secondary" data-action="load-more">继续翻看 · 已显示 ${state.limit} / ${visible.length} 张</button></div>` : '') : `<div class="empty-state">${icon('ticket')}<h2>${rs.length ? '还没有匹配的票据' : '暂无票据'}</h2><p>${rs.length ? '试试减少条件，或查找其他路线、旅客与日期。' : '填写信息或扫描纸质票据。'}</p><button class="button primary" data-action="${rs.length ? 'reset-filters' : 'new'}">${icon(rs.length ? 'search' : 'plus')}${rs.length ? '清除筛选' : '录入票据'}</button></div>`;
 }
 function refreshSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = null;
   if (state.page !== 'archive') return;
   ticketSpaceCleanup?.();ticketSpaceCleanup=null;
   const rs = live(), result = searchTickets(rs, state.filters);
@@ -413,6 +470,7 @@ function render() {
   statisticsCleanup?.(); statisticsCleanup = null;
   ticketSpaceCleanup?.();ticketSpaceCleanup=null;
   clearTimeout(searchTimer);
+  searchTimer = null;
   const scroll = window.scrollY;
   if(!['archive','map','statistics','import','data'].includes(state.page) || (state.showDemo && ['import','data'].includes(state.page))){state.page='archive';history.replaceState(null,'','#archive');}
   if (!state.showDemo && (!hasCloud() || !state.syncMeta.verified)) { root.innerHTML = connectionPage(); bindPage(); }
@@ -430,7 +488,7 @@ function renderSyncState() {
   for (const button of document.querySelectorAll('.sync-button')) { button.innerHTML = icon(state.syncing ? 'refresh' : 'cloud', state.syncing ? 'spin' : '') + '<span>' + e(syncLabel()) + '</span>'; button.title = syncLabel(); }
   const cloudLabel = root.querySelector(state.d1 ? '[data-d1-cloud-label]' : '[data-cloud-label]'); if (cloudLabel) cloudLabel.textContent = syncLabel();
   for (const button of root.querySelectorAll('#github-form [type="submit"], #d1-form [type="submit"]')) button.disabled = state.syncing || state.connecting || state.saving || state.githubBackingUp;
-  const backup = root.querySelector('[data-action="backup-github"]'); if (backup) backup.disabled = !canWrite() || !token() || state.saving || state.githubBackingUp;
+  const backup = root.querySelector('[data-action="backup-github"]'); if (backup) backup.disabled = !canWrite() || state.syncMeta.pending || !token() || state.saving || state.githubBackingUp;
   const backupStatus = root.querySelector('[data-github-backup-status]');
   if (backupStatus) {
     const label = githubBackupLabel();
@@ -469,13 +527,20 @@ function followHistory() {
   if (page !== state.page) visitPage(page, true);
 }
 function loadMoreTickets(button) {
-  const firstNew = searchTickets(live(), state.filters).records[state.limit];
+  if (searchTimer) { refreshSearch(); return; }
+  if (!button.isConnected || archiveIsSpace()) return;
+  const container = root.querySelector('#search-results');
+  const { records } = searchTickets(live(), state.filters);
+  const next = records.slice(state.limit, state.limit + 48);
+  if (!container || !next.length) return;
   const hadFocus = document.activeElement === button;
-  state.limit += 48;
-  render();
-  if (hadFocus && firstNew) {
-    [...root.querySelectorAll('#search-results [data-action="view"]')]
-      .find(item => item.dataset.id === firstNew.id)?.focus({ preventScroll: true });
+  appendTicketCollection(container, next, ticketView, { icon, selected: archiveSelected, sort: state.filters.sort });
+  state.limit += next.length;
+  if (state.limit >= records.length) button.closest('.load-more').remove();
+  else button.textContent = `继续翻看 · 已显示 ${state.limit} / ${records.length} 张`;
+  if (hadFocus) {
+    [...container.querySelectorAll('[data-action="view"]')]
+      .find(item => item.dataset.id === next[0].id)?.focus({ preventScroll: true });
   }
 }
 function mountCollectionSpace() {
@@ -798,8 +863,13 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
           const merged=mergeThreeWay([original],[checked],[records[index]]);
           if(merged.conflicts.length)throw new Error('此票的同一字段已在同步时更新。请先复制你的修改，关闭并重新打开这张票后校对。');
           records[index]=merged.records[0];
-        } else { const imported = applyImport(records, [checked]); records.splice(0, records.length, ...imported.records); }
-        await persist(records); await setDemoMode(false); editor.dirty = false; closeModal(true); render(); toast(savedMessage());
+          await persist(records);
+        } else await persist([checked], { candidates: true });
+        if (!isArchiveContext(context) || !form.isConnected) return;
+        editor.dirty = false;
+        closeModal(true);
+        render();
+        toast(savedMessage());
       }
     } catch (err) { release(); release = () => {}; applyAccessPolicy(); showError(err); } finally { release(); applyAccessPolicy(); }
   });
@@ -1005,13 +1075,12 @@ async function saveCandidates(indices) {
   if (!indices.length) return toast('请先选择要保存的票据', true);
   const records = indices.map(index => imports.entries[index].record);
   for (const record of records) validateTicketForm(record);
-  const result = applyImport(state.records, records);
   const form = modalRoot.querySelector('[data-candidate-review]');
   const release = form ? freezeForm(form, '保存中…') : () => {};
   const context = archiveContext();
   imports.review = 'saving';
   try {
-    await persist(result.records);
+    const result = await persist(records, { candidates: true });
     if (!isArchiveContext(context)) return;
     const saved = new Set(indices);
     const remaining = [], selection = new Set();
@@ -1046,7 +1115,7 @@ function reviewFullBackup(backup, context) {
     if (state.saving || !isArchiveContext(context)) return;
     const release = freezeForm(form, '正在恢复…');
     try {
-      await persist(applyImport(state.records, backup.records).records, backup.settings);
+      await persist(backup.records, { candidates: true, settings: backup.settings });
       if (!isArchiveContext(context)) return;
       imports.backup = null;
       state.profileDraft = null; state.profileBase = null; state.profileDirty = false; state.flightKeyDraft = null;
@@ -1372,10 +1441,15 @@ async function disconnectCloud() {
   render();
   toast(paired ? '已同时退出 GitHub 和 D1' : '已退出，本机票库已清空');
 }
-async function doSync(resolutions = {}) {
+async function doSync(resolutions = {}, { retryRejected = false } = {}) {
   if (state.resetting || state.archiveResetProgress) return false;
   if (syncPromise) return syncPromise;
   if (!hasCloud() || !cloudToken()) { state.connectionStatus = 'auth'; renderSyncState(); return false; }
+  if (state.syncMeta.rejection && !retryRejected) {
+    state.connectionStatus = 'rejected';
+    renderSyncState();
+    return false;
+  }
   if (!navigator.onLine) {
     if (state.connectionStatus === 'checking') state.connectionStatus = state.syncMeta.verified ? 'online' : 'offline';
     renderSyncState();
@@ -1391,6 +1465,11 @@ async function doSync(resolutions = {}) {
       captured = await readSyncState();
       if (captured.archiveResetProgress) { useSnapshot(captured); return false; }
       if (activeBinding(captured) !== binding) { useSnapshot(captured); needsRetry = true; return false; }
+      if (captured.meta.rejection && !retryRejected) {
+        useSnapshot(captured);
+        state.connectionStatus = 'rejected';
+        return false;
+      }
       const { d1, meta } = captured;
       const signal = syncAbort.signal;
       const cached = meta.verified ? { id: d1?.id, records: captured.base, settings: captured.settingsBase, head: meta.head, generation: meta.generation || '' } : null;
@@ -1434,6 +1513,18 @@ async function doSync(resolutions = {}) {
       return !accepted.retry;
     } catch (error) {
       if (epoch !== authEpoch) return false;
+      if (captured?.meta.pending && (error.writeRejected || error.code === 'DUPLICATE_RAIL_TICKET')) {
+        try {
+          const rejected = await rejectPendingChange(captured, error.message);
+          if (epoch !== authEpoch) return false;
+          useSnapshot(rejected);
+          if (rejected.meta.rejection) {
+            state.connectionStatus = 'rejected';
+            announce();
+            return false;
+          }
+        } catch (storageError) { error = storageError; }
+      }
       if (captured?.d1 && error.code === 'ARCHIVE_RESET') {
         if (captured.config && wasUnlinked(error.snapshot)) {
           if (captured.meta.pending || state.saving || editor?.dirty || state.profileDirty) {
@@ -1471,6 +1562,18 @@ async function doSync(resolutions = {}) {
   };
   syncPromise = withCloudLock(run);
   try { return await syncPromise; } finally { syncPromise = null; }
+}
+async function discardRejectedChanges() {
+  if (!state.syncMeta.rejection || state.syncing || state.saving ||
+      !confirm('撤回本机待同步的修改？票夹会恢复到上次确认的版本。')) return;
+  const captured = { config: state.config, d1: state.d1, meta: state.syncMeta };
+  await withCloudLock(async () => {
+    useSnapshot(await discardRejectedChange(captured));
+    state.connectionStatus = 'checking';
+    announce();
+  });
+  render();
+  await doSync();
 }
 let resetPromptHead = '';
 async function showArchiveReset(manual = false) {
@@ -1699,7 +1802,7 @@ async function saveFlightSettings(event) {
   const release = freezeForm(form);
   try {
     const proposed = sharedSettings({ ...expected, flightMcpKey: secret });
-    if (!await doSync() || !canWrite()) throw new Error('云端核对未完成，Key 尚未提交');
+    await verifyBeforeWrite('云端核对未完成，Key 尚未提交');
     useSnapshot(await withCloudLock(() => stageSettings(expected, proposed, config, d1))); announce();
     await doSync(); state.flightKeyDraft = null; toast(savedMessage('连接设置已同步'));
   } catch (error) { state.settingsError = error.message; }
@@ -1714,7 +1817,7 @@ async function savePersonalProfile(event) {
   state.saving = true; const release = freezeForm(form);
   try {
     const proposed = sharedSettings({ ...expected, profile:personalProfile(state.profileDraft) });
-    if (!await doSync() || !canWrite()) throw new Error('云端核对未完成，个人资料尚未提交');
+    await verifyBeforeWrite('云端核对未完成，个人资料尚未提交');
     useSnapshot(await withCloudLock(() => stageSettings(expected, proposed, config, d1))); announce();
     await doSync(); state.profileDraft = null; state.profileBase = null; state.profileDirty = false;
     toast(savedMessage('个人资料已同步'));
@@ -1809,8 +1912,8 @@ const actions = {
     github: state.config?.id ? { ...state.config, token: token() } : null,
     d1: state.d1?.id ? { ...state.d1, token: d1Token() } : null
   }), null, 2), `行迹备份_${now().slice(0, 10)}.json`),
-  'export-svg': async button => { const r = findRecord(button.dataset.id); button.disabled = true; toast('正在准备包含字体的票面…'); try { download(await exportSVG(r), fileName(r) + '.svg', 'image/svg+xml;charset=utf-8'); } finally { button.disabled = false; } },
-  'export-png': async button => { const r = findRecord(button.dataset.id); button.disabled = true; toast('正在生成高清票面…'); try { download(await exportPNG(r), fileName(r) + '.png'); } finally { button.disabled = false; } },
+  'export-svg': button => exportSingleTicket(button, 'svg'),
+  'export-png': button => exportSingleTicket(button, 'png'),
   delete: async button => {
     if (!confirm('删除这张票据？删除后无法恢复。')) return;
     const id=button.dataset.id;
@@ -1820,9 +1923,10 @@ const actions = {
   },
   sync: async () => {
     if (!cloudToken()) { navigate('data'); return; }
-    if (await doSync()) await completeExistingCloudLink();
+    if (await doSync({}, { retryRejected: true })) await completeExistingCloudLink();
   },
   'backup-github': backupGitHub,
+  'discard-rejected-change': discardRejectedChanges,
   'adopt-d1': adoptD1Replacement,
   'review-conflicts': () => { if (modalRoot.querySelector('dialog') && !closeModal()) return; showConflicts(state.pendingConflicts || []); },
   disconnect: disconnectCloud,
@@ -1868,6 +1972,7 @@ channel?.addEventListener('message', async event => {
     const previous = { binding: activeBinding(state), github: state.config, token: token(), d1Token: d1Token() };
     const clearView = event.data?.clearView;
     const resetChanged = state.archiveResetProgress?.id !== snapshot.archiveResetProgress?.id;
+    const rejectionChanged = state.syncMeta.rejection !== snapshot.meta.rejection;
     if (clearView) {
       invalidateCloudSession();
       clearSignedOutArchive();
@@ -1875,8 +1980,8 @@ channel?.addEventListener('message', async event => {
     useSnapshot(snapshot);
     const primaryChanged = previous.binding !== activeBinding(state) || (state.d1 ? previous.d1Token !== d1Token() : previous.token !== token());
     const githubChanged = previous.github?.id !== state.config?.id || previous.github?.branch !== state.config?.branch || previous.token !== token();
-    if (clearView || primaryChanged || resetChanged || state.connectionStatus === 'checking') {
-      state.connectionStatus = !cloudToken() ? 'auth'
+    if (clearView || primaryChanged || resetChanged || rejectionChanged || state.connectionStatus === 'checking') {
+      state.connectionStatus = !cloudToken() ? 'auth' : snapshot.meta.rejection ? 'rejected'
         : snapshot.meta.verified && !snapshot.meta.pending && navigator.onLine ? 'online' : 'checking';
     }
     if (clearView || primaryChanged || resetChanged || (githubChanged && state.page === 'data')) render();

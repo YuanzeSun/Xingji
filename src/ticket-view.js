@@ -19,6 +19,27 @@ export function ticketCollection(records, value, options) {
   const renderRows=rows=>`<div class="ticket-collection ${list ? 'ticket-list' : 'ticket-grid'}" data-faces-only="${!list&&value.size==='small'}" style="${ticketGridStyle(value.size)}">${rows.map(record=>render(record,{...options,selected:options.selected?.has(record.id)})).join('')}</div>`;
   return groupYears&&value.size==='medium' ? `<section class="ticket-chronology">${[...groupTicketsByYear(records)].map(([year,rows])=>`<section class="timeline-year-group">${ticketYearHeading(year,rows.length)}${renderRows(rows)}</section>`).join('')}</section>` : renderRows(records);
 }
+export function appendTicketCollection(container, records, view, options) {
+  const fragment = container.ownerDocument.createElement('template');
+  fragment.innerHTML = ticketCollection(records, view, options);
+  const next = fragment.content.firstElementChild;
+  const current = container.firstElementChild;
+  if (current.matches('.ticket-collection')) {
+    current.append(...next.children);
+    return;
+  }
+  const last = current.lastElementChild, first = next.firstElementChild;
+  const lastHeading = last.querySelector('.timeline-year-heading');
+  const firstHeading = first.querySelector('.timeline-year-heading');
+  if (lastHeading?.querySelector('h2').textContent === firstHeading?.querySelector('h2').textContent) {
+    const list = '.ticket-collection,.timeline-list';
+    const previousRows = last.querySelector(list);
+    previousRows.append(...first.querySelector(list).children);
+    if (lastHeading) lastHeading.querySelector('span').textContent = previousRows.children.length + ' 张票据';
+    first.remove();
+  }
+  current.append(...next.children);
+}
 export function bindTicketViewControls(root, {value,change}) {
   const controls=root.querySelector('.ticket-view-controls');if(!controls)return;
   controls.querySelectorAll('[data-ticket-view]').forEach(button=>button.addEventListener('click',()=>change(button.dataset.ticketView)));

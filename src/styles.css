@@ -309,6 +309,8 @@ dialog.scanner-modal::backdrop{background:#20242a80;backdrop-filter:blur(5px)}
 .connection-notice{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 18px;border:1px solid #dce2db;border-radius:9px;background:#fffefa;margin-bottom:25px}
 .connection-notice>div{display:flex;flex-direction:column;gap:6px;min-width:0}.connection-notice strong{font-size:15px;font-weight:550;color:#495b50}
 .connection-notice span{font-size:14px;color:#7a837a;overflow-wrap:anywhere}.connection-notice>.button{flex-shrink:0}
+.connection-notice.rejected-change>.button-row{flex-direction:row;justify-content:flex-end}
+@media(max-width:620px){.connection-notice.rejected-change{align-items:flex-start;flex-direction:column}.connection-notice.rejected-change>.button-row{justify-content:flex-start}}
 .button:disabled,.icon-button:disabled{cursor:default;opacity:.45}.field input[readonly]{background:#f0f2ec;color:#74816f}
 @media(max-width:620px){.cloud-setup{padding:32px 17px}.cloud-setup>.panel{padding:23px 18px}.cloud-setup h1{font-size:26px}.cloud-setup-description{font-size:15px}.connection-notice{padding:13px;gap:10px}.connection-notice strong{font-size:14px}.connection-notice span{font-size:13px}}
 
