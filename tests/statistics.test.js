@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord } from '../src/model.js';
-import { statisticsOptions, statisticsRange, journeyStatistics, tripSeries } from '../src/statistics-model.js';
+import { statisticsOptions, statisticsRange, todayDate, journeyStatistics, tripSeries } from '../src/statistics-model.js';
 import { mountStatistics } from '../src/statistics.js';
 
 const rail = extra => createRecord({ origin: '北京南', destination: '上海虹桥', departureDate: '2024-02-29', ...extra });
@@ -17,6 +17,14 @@ test('statistics default to an unbounded start and today, compare dates only and
   assert.deepEqual(result.records.map(row => row.id), ['past', 'today']); assert.equal(result.omittedDates, 1);
   assert.equal(statisticsRange(rows, { dateFrom: '2026-11-16', dateTo: '2026-11-17' }).records.length, 2);
   assert.equal(statisticsRange(rows, { dateFrom: '', dateTo: '' }).records.length, 3);
+  const today = todayDate();
+  const tomorrow = new Date(today + 'T00:00:00Z');
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const future = tomorrow.toISOString().slice(0, 10);
+  const nowRows = [rail({ id: 'today-limit', departureDate: today }), rail({ id: 'future-limit', departureDate: future })];
+  assert.equal(statisticsOptions({ dateTo: future }).dateTo, today);
+  assert.equal(statisticsOptions({ dateTo: '' }).dateTo, today);
+  assert.deepEqual(statisticsRange(nowRows, { dateTo: future }).records.map(row => row.id), ['today-limit']);
   assert.match(statisticsRange(rows, { dateFrom: '2025-01-01', dateTo: '2024-12-31' }).error, /起始日期/);
   assert.ok(statisticsRange(rows, { dateTo: '2025-02-30' }).error);
 });

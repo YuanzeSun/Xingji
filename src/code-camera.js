@@ -8,7 +8,7 @@ export function bindCodeCamera(section, onCapture, {
 } = {}) {
   const panel = section.querySelector('[data-code-camera]'), video = panel.querySelector('video');
   const status = panel.querySelector('[data-code-camera-status]'), trigger = section.querySelector('[data-code-start]');
-  const doc = section.ownerDocument;
+  const doc = section.ownerDocument, win = doc.defaultView;
   let stream, timer, generation = 0, disposed = false, reading = -1;
   function stop() {
     generation++; unschedule(timer); timer = null;
@@ -53,10 +53,20 @@ export function bindCodeCamera(section, onCapture, {
     }
   }
   const cancel = () => { stop(); onCancel(); };
-  const visibility = () => { if (doc.visibilityState === 'hidden') cancel(); };
+  const pause = () => { if (!panel.hidden) cancel(); };
+  const visibility = () => { if (doc.visibilityState === 'hidden') pause(); };
   trigger.addEventListener('click', start);
   panel.querySelector('[data-code-shutter]').addEventListener('click', () => capture());
   panel.querySelector('[data-code-stop]').addEventListener('click', cancel);
   doc.addEventListener('visibilitychange', visibility);
-  return { stop: cancel, dispose() { disposed = true; stop(); doc.removeEventListener('visibilitychange', visibility); } };
+  win.addEventListener('pagehide', pause);
+  return {
+    stop: cancel,
+    dispose() {
+      disposed = true;
+      stop();
+      doc.removeEventListener('visibilitychange', visibility);
+      win.removeEventListener('pagehide', pause);
+    }
+  };
 }

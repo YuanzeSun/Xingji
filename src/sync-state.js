@@ -3,7 +3,7 @@ import { clone, deduplicateRecords, mergeThreeWay, now, sameRecords } from './mo
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings } from './shared-settings.js';
 import { upgradeCodeRecords, hasLegacyCodes } from './code-upgrade.js';
 
-const keys = ['records', 'base', 'settings', 'settingsBase', 'github', 'd1', 'syncMeta', 'lastSync'];
+const keys = ['records', 'base', 'settings', 'settingsBase', 'github', 'd1', 'syncMeta', 'lastSync', 'archiveResetProgress'];
 export { sameRecords };
 const binding = config => config ? `${config.id}:${config.branch}` : '';
 export const activeBinding = ({ d1, config }) => d1 ? `d1:${d1.id}:${d1.url}` : binding(config);
@@ -19,6 +19,7 @@ function unpack(raw, session = false) {
     d1: raw.d1 || null,
     meta: { revision: 0, head: '', verified: false, pending: false, ...raw.syncMeta },
     lastSync: raw.lastSync || null,
+    archiveResetProgress: raw.archiveResetProgress || null,
     ...(session ? { credentials: { github: raw.github ? raw.githubToken || '' : '', d1: raw.d1 ? raw.d1Token || '' : '' }, showDemo: raw.showDemo === true, githubBackupReceipt: raw.githubBackupReceipt || null } : {})
   };
 }
@@ -64,21 +65,33 @@ export function bindRepository(config, expectedD1 = null, credential, cloudLinkR
     return { write, result: unpack({ ...raw, ...write }, true) };
   });
 }
+export function saveArchiveResetProgress(progress, expected, captured) {
+  return db.atomic(keys, raw => {
+    const current = unpack(raw);
+    const previous = current.archiveResetProgress;
+    if (previous?.id !== expected?.id || previous?.step !== expected?.step ||
+        (captured && !sameArchiveBaseline(current, captured))) {
+      throw new Error('本机重置状态已变化，请重新核对');
+    }
+    return { write: { archiveResetProgress: progress } };
+  });
+}
+
 export function signOutCloud() {
   return db.atomic(['syncMeta'], raw => {
     const write = {
       github: null, d1: null, githubToken: '', d1Token: '', showDemo: false, cloudLinkReady: false, githubBackupReceipt: null,
-      records: [], base: [], settings: {}, settingsBase: {},
+      records: [], base: [], settings: {}, settingsBase: {}, archiveResetProgress: null,
       syncMeta: { revision: (raw.syncMeta?.revision || 0) + 1 }, lastSync: null
     };
     return { write, result: unpack(write, true) };
   });
 }
 
-export function keepUnlinkedArchive(captured, provider, archive, credential) {
+export function keepUnlinkedArchive(captured, provider, archive, credential, resetId) {
   return db.atomic(sessionKeys, raw => {
     const current = unpack(raw);
-    if (!sameArchiveBaseline(current, captured)) {
+    if (!sameArchiveBaseline(current, captured) || current.archiveResetProgress?.id !== resetId) {
       throw new Error('本机票库已变化，请重新登录');
     }
     const github = provider === 'github';
@@ -86,17 +99,22 @@ export function keepUnlinkedArchive(captured, provider, archive, credential) {
       ...archiveFields(current, archive),
       github: github ? current.config : null, d1: github ? null : current.d1,
       githubToken: github ? credential : '', d1Token: github ? '' : credential,
-      cloudLinkReady: false, showDemo: false, githubBackupReceipt: null
+      cloudLinkReady: false, showDemo: false, githubBackupReceipt: null, archiveResetProgress: null
     };
     return { write, result: unpack(write, true) };
   });
 }
 
-export function activateD1(captured, config, remote, { credential, github, cloudLinkReady } = {}) {
+export function activateD1(captured, config, remote, { credential, github, cloudLinkReady, resetId } = {}) {
   return db.atomic(sessionKeys, raw => {
     const current = unpack(raw);
     if (activeBinding(current) !== activeBinding(captured) || current.meta.revision !== captured.meta.revision || current.meta.head !== captured.meta.head) throw new Error('本机票库已变化，请重新核对后连接');
+    if (current.archiveResetProgress && current.archiveResetProgress.id !== resetId) throw new Error('请先处理未完成的仓库重置');
     const write = { d1: config, ...archiveFields(current, remote) };
+    if (resetId) {
+      if (current.archiveResetProgress?.id !== resetId) throw new Error('重置记录已变化');
+      Object.assign(write, { archiveResetProgress: null, githubBackupReceipt: null, showDemo: false });
+    }
     if (credential !== undefined) write.d1Token = credential;
     if (cloudLinkReady !== undefined) write.cloudLinkReady = cloudLinkReady;
     if (github) {
@@ -110,6 +128,7 @@ export function activateD1(captured, config, remote, { credential, github, cloud
 function stageChange(config, d1, change) {
   return db.atomic(keys, raw => {
     const current = unpack(raw);
+    if (current.archiveResetProgress) throw new Error('请先处理未完成的仓库重置');
     if (!current.meta.verified || activeBinding(current) !== activeBinding({ config, d1 })) throw new Error('请先连接并同步云端票库');
     const { records = current.records, settings = current.settings } = change(current);
     const meta = { ...current.meta, revision: current.meta.revision + 1, pending: !sameRecords(records, current.base) || !sameSettings(settings, current.settingsBase) };

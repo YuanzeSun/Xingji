@@ -50,7 +50,8 @@ test('route disclosure, private timeline, interactive map and manual-only flight
   window.dispatchEvent(new window.Event('online')); document.dispatchEvent(new window.Event('visibilitychange'));
   await new Promise(r => setTimeout(r, 40)); assert.equal(flightRequests.length, 0);
   click('[data-action="flight-refresh"]');
-  await wait(() => !document.querySelector('#flight-form [type="submit"]').disabled && flightRequests.some(r => r.method === 'tools/call'));
+  await wait(() => document.querySelector('[data-action="flight-result"]') &&
+    document.querySelector('[data-action="flight-refresh"]')?.disabled === false);
   assert.equal(flightRequests.filter(r => r.method === 'tools/call').length, 1);
   click('[data-action="navigate"][data-page="archive"]'); click('[data-action="navigate"][data-page="data"]');
   await new Promise(r => setTimeout(r, 30)); assert.equal(flightRequests.filter(r => r.method === 'tools/call').length, 1);

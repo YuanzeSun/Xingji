@@ -1,7 +1,7 @@
 import { escape as e } from './html.js';
 import { arithmeticField } from './arithmetic-confirm.js';
-import { assertLinkTargets } from './archive-migration.js';
-import { sameSettings, unlinkedSettings, wasUnlinked } from './shared-settings.js';
+import { assertLinkTargets, sameD1Account, sameGitHubAccount } from './archive-migration.js';
+import { sharedSettings, unlinkedSettings, wasUnlinked } from './shared-settings.js';
 
 export async function prepareArchiveReset(github, d1, settings) {
   const [snapshot, d1Snapshot] = await Promise.all([github?.resetTarget(d1 ? {} : settings), d1?.read()]);
@@ -14,29 +14,80 @@ export async function prepareArchiveReset(github, d1, settings) {
   return { snapshot, d1Snapshot, unlinkStarted: wasUnlinked(snapshot) && !!d1 };
 }
 
-export async function resetArchiveTargets(github, d1, request, progress, { unlink, settings }) {
-  let d1Result, d1Settings;
-  if (d1) {
-    const before = request.d1Snapshot;
-    d1Settings = unlink ? unlinkedSettings(before.settings) : before.settings;
-    const latest = await d1.read();
-    if (latest.head !== before.head) {
-      if (!progress.d1Attempted || latest.generation === before.generation ||
-          latest.records.length || !sameSettings(latest.settings, d1Settings)) {
-        throw new Error('D1 票库已有变化，请关闭窗口后重新确认');
-      }
-      d1Result = latest;
+function settingsAfterReset(settings, unlink) {
+  return unlink ? unlinkedSettings(settings) : settings;
+}
+
+async function settingsDigest(settings) {
+  const bytes = new TextEncoder().encode(JSON.stringify(sharedSettings(settings)));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function createPairedReset(request, captured, unlink, keep) {
+  const github = request.snapshot, d1 = request.d1Snapshot;
+  return {
+    id: crypto.randomUUID(), step: 'github', unlink, keep: unlink ? keep : 'd1',
+    github: { id: captured.config.id, branch: captured.config.branch },
+    d1: { id: captured.d1.id, url: captured.d1.url },
+    beforeGitHub: github.head,
+    beforeD1: d1.head,
+    beforeD1Generation: d1.generation,
+    githubSettings: await settingsDigest(settingsAfterReset(github.settings, unlink)),
+    d1Settings: await settingsDigest(settingsAfterReset(d1.settings, unlink))
+  };
+}
+
+export function matchesResetPair(progress, captured) {
+  return sameGitHubAccount(progress.github, captured.config) && sameD1Account(progress.d1, captured.d1);
+}
+
+export async function continuePairedReset(github, d1, progress, save) {
+  let [githubResult, d1Result] = await Promise.all([github.resetTarget(), d1.read()]);
+  const githubCompleted = githubResult.generation === progress.id && githubResult.recordCount === 0 &&
+    githubResult.paths.length === 1 && githubResult.paths[0] === 'archive/index.json' &&
+    await settingsDigest(githubResult.settings) === progress.githubSettings;
+  if (progress.githubHead ? githubResult.head !== progress.githubHead || !githubCompleted
+    : githubResult.head !== progress.beforeGitHub && !githubCompleted) {
+    throw new Error('GitHub 仓库已有变化，请放弃续接后重新核对。');
+  }
+
+  async function advance(step, evidence = {}) {
+    const next = { ...progress, ...evidence, step };
+    await save(next, progress);
+    progress = next;
+  }
+
+  if (progress.step === 'github') {
+    if (d1Result.head !== progress.beforeD1) throw new Error('D1 票库已有变化，请放弃续接后重新核对。');
+    if (!githubCompleted) {
+      githubResult = await github.resetRepository(progress.beforeGitHub, {}, { unlink: progress.unlink, generation: progress.id });
     }
+    await advance('check-d1', { githubHead: githubResult.head });
+    d1Result = await d1.read();
   }
-  if (github) {
-    if (!progress.github) progress.github = await github.resetRepository(request.snapshot.head, d1 ? {} : settings, { unlink });
-    else if (await github.head() !== progress.github.head) throw new Error('GitHub 仓库已有变化，请关闭窗口后重新确认');
+
+  if (progress.step === 'check-d1') {
+    if (d1Result.head !== progress.beforeD1) throw new Error('D1 票库已有变化，请放弃续接后重新核对。');
+    await advance('d1');
   }
-  if (d1 && !d1Result) {
-    progress.d1Attempted = true;
-    d1Result = await d1.replace(request.d1Snapshot, [], d1Settings);
+
+  if (progress.step === 'd1') {
+    if (d1Result.head === progress.beforeD1) {
+      if (await github.head() !== progress.githubHead) throw new Error('GitHub 仓库已有变化，请放弃续接后重新核对。');
+      d1Result = await d1.replace(d1Result, [], settingsAfterReset(d1Result.settings, progress.unlink));
+    } else {
+      // The D1 API reports its generation only after the commit. A lost reply can
+      // be accepted after a recorded attempt if the complete reset result matches.
+      const confirmed = d1Result.generation !== progress.beforeD1Generation && d1Result.records.length === 0 &&
+        await settingsDigest(d1Result.settings) === progress.d1Settings;
+      if (!confirmed) throw new Error('D1 票库已有变化，请放弃续接后重新核对。');
+    }
+    await advance('adopt', { d1Head: d1Result.head });
   }
-  return { github: progress.github, d1: d1Result };
+
+  if (d1Result.head !== progress.d1Head) throw new Error('D1 票库已有变化，请放弃续接后重新核对。');
+  return { github: { ...githubResult, records: [] }, d1: d1Result };
 }
 
 export function archiveResetMarkup(request, captured, challenge) {

@@ -119,13 +119,37 @@ test('motion invalidates an in-flight recognition and closing stops a late-arriv
   assert.equal(stops, 1); assert.equal(late.captured.length, 0); late.dom.window.close();
 });
 
-test('backgrounding releases the camera; denied permission offers a retry', async () => {
-  const h = harness(); await h.ticks(1);
-  Object.defineProperty(h.dom.window.document, 'visibilityState', { value: 'hidden', configurable: true });
-  h.dom.window.document.dispatchEvent(new h.dom.window.Event('visibilitychange'));
-  assert.equal(h.stopped, 1); assert.equal(h.root.querySelector('#scanner-retry').hidden, false);
-  h.dispose(); h.dom.window.close();
-  const denied = harness({ mediaDevices: { getUserMedia: async () => { throw Object.assign(new Error(), { name: 'NotAllowedError' }); } } });
-  await wait(); assert.match(denied.root.querySelector('#scanner-status').textContent, /允许相机/);
-  assert.equal(denied.root.querySelector('#scanner-retry').hidden, false); denied.dispose(); denied.dom.window.close();
+test('backgrounding releases the camera, and a denied camera can be retried', async () => {
+  const h = harness();
+  await h.ticks(1);
+  const doc = h.dom.window.document, retry = h.root.querySelector('#scanner-retry');
+  Object.defineProperty(doc, 'visibilityState', { value: 'hidden', configurable: true });
+  doc.dispatchEvent(new h.dom.window.Event('visibilitychange'));
+  assert.equal(h.stopped, 1);
+  assert.equal(retry.hidden, false);
+  Object.defineProperty(doc, 'visibilityState', { value: 'visible', configurable: true });
+  doc.dispatchEvent(new h.dom.window.Event('visibilitychange'));
+  assert.equal(retry.hidden, false);
+  retry.click();
+  await h.ticks(1);
+  assert.equal(retry.hidden, true);
+  h.dispose();
+  h.dom.window.close();
+
+  let attempts = 0;
+  const track = { stop() {} };
+  const denied = harness({ mediaDevices: { async getUserMedia() {
+    if (++attempts === 1) throw Object.assign(new Error(), { name: 'NotAllowedError' });
+    return { getTracks: () => [track], getVideoTracks: () => [track] };
+  } } });
+  await wait();
+  const retryDenied = denied.root.querySelector('#scanner-retry');
+  assert.match(denied.root.querySelector('#scanner-status').textContent, /允许相机/);
+  assert.equal(retryDenied.hidden, false);
+  retryDenied.click();
+  await denied.ticks(1);
+  assert.equal(attempts, 2);
+  assert.equal(retryDenied.hidden, true);
+  denied.dispose();
+  denied.dom.window.close();
 });

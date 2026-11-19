@@ -16,7 +16,7 @@ test('four sample journeys stay recent across month and year boundaries while hi
     assert.equal(rows.length,7);assert.equal(recent.length,4);assert.equal(recent.filter(record=>record.type==='rail').length,2);assert.equal(recent.filter(record=>record.type==='flight').length,2);
     assert.equal(calendarDate(rows.find(record=>record.template==='rail-blue').departureDate),'2018-10-01');assert.equal(calendarDate(rows.find(record=>record.template==='rail-red-classic').departureDate),'2014-07-12');assert.equal(calendarDate(rows.find(record=>record.template==='rail-red').departureDate),'2017-09-10');
     for(const record of rows){assert.doesNotThrow(()=>validateTicketForm(record));assert.ok(calendarDate(record.departureDate)<=calendarDate(record.arrivalDate));for(const key of ['passenger','identity','origin','destination','departureTime','arrivalTime','price','gate','ticketNumber','orderNumber','departureZone','arrivalZone'])assert.ok(record[key],record.id+' '+key);}
-    assert.equal(journeyStatistics(rows,{dateTo:today}).flight,2);assert.equal(journeyStatistics(rows,{dateTo:today}).rail,5);
+    assert.equal(journeyStatistics(rows,{dateTo:today},today).flight,2);assert.equal(journeyStatistics(rows,{dateTo:today},today).rail,5);
   }
 });
 

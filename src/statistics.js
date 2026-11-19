@@ -82,7 +82,9 @@ export function mountStatistics(container, records, { options = {} } = {}) {
     const dialog = dateDialog = container.ownerDocument.createElement('dialog');
     dialog.className = 'modal statistics-date-dialog';
     dialog.setAttribute('aria-label', label);
-    dialog.innerHTML = `<form method="dialog" class="detail-body"><label class="field"><span>${label}</span><input type="date" name="date" min="1800-01-01" max="2200-12-31" value="${e(options[key] || todayDate())}" required /></label><div class="button-row"><button type="button" class="text-button" data-clear-date>不限</button><button type="button" class="button secondary" data-cancel-date>取消</button><button type="submit" class="button primary">应用</button></div></form>`;
+    const today = todayDate();
+    const isEnd = key === 'dateTo';
+    dialog.innerHTML = `<form method="dialog" class="detail-body"><label class="field"><span>${label}</span><input type="date" name="date" min="1800-01-01" max="${today}" value="${e(options[key])}" required /></label><div class="button-row"><button type="button" class="text-button" data-clear-date>${isEnd ? '截至今天' : '不限'}</button><button type="button" class="button secondary" data-cancel-date>取消</button><button type="submit" class="button primary">应用</button></div></form>`;
     const form = dialog.querySelector('form');
     const finish = value => {
       dialog.close();
@@ -92,7 +94,7 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       event.preventDefault();
       if (form.checkValidity()) finish(form.elements.date.value);
     });
-    dialog.querySelector('[data-clear-date]').addEventListener('click', () => finish(''));
+    dialog.querySelector('[data-clear-date]').addEventListener('click', () => finish(isEnd ? today : ''));
     dialog.querySelector('[data-cancel-date]').addEventListener('click', () => finish());
     dialog.addEventListener('close', () => {
       dialog.remove();
