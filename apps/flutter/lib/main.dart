@@ -131,13 +131,13 @@ class _ArchiveShellState extends State<ArchiveShell>
 
   bool _refreshing = false;
 
-  void _activatePlatform() => unawaited(_refreshPlatform(restoreGitHub: true));
+  void _activatePlatform() => unawaited(_refreshPlatform(restoreCloud: true));
 
-  Future<void> _refreshPlatform({bool restoreGitHub = false}) async {
+  Future<void> _refreshPlatform({bool restoreCloud = false}) async {
     if (_refreshing) return;
     _refreshing = true;
     try {
-      if (restoreGitHub) {
+      if (restoreCloud) {
         await store.restoreConnection();
         if (mounted && store.pending) await store.refreshConnection();
       }
@@ -255,7 +255,7 @@ class _ArchiveShellState extends State<ArchiveShell>
                         Tooltip(
                           message: store.readOnlyReason ?? store.status,
                           child: Text(
-                            store.connection == null
+                            !store.hasCloud
                                 ? '本机票库'
                                 : store.readOnlyReason != null
                                 ? '同步暂停'

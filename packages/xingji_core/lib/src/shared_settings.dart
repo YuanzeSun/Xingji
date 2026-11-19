@@ -84,6 +84,22 @@ Map<String, dynamic> personalProfile([Map value = const {}]) {
   };
 }
 
+String d1WorkerOrigin(String value) {
+  final url = Uri.tryParse(value.trim());
+  if (url == null ||
+      url.host.isEmpty ||
+      (url.scheme != 'https' &&
+          !(url.scheme == 'http' &&
+              ['localhost', '127.0.0.1', '::1'].contains(url.host))) ||
+      url.authority.contains('@') ||
+      url.hasQuery ||
+      url.hasFragment ||
+      (url.path.isNotEmpty && url.path != '/')) {
+    throw const FormatException('请输入 Worker 的根地址');
+  }
+  return url.origin;
+}
+
 Map<String, dynamic> archiveConnections([Object? value = const {}]) {
   if (value is! Map) {
     throw const FormatException('备份中的账号信息无效');
@@ -122,21 +138,9 @@ Map<String, dynamic> archiveConnections([Object? value = const {}]) {
         d1['url'] is! String) {
       throw const FormatException('备份中的 D1 数据库信息无效');
     }
-    final url = Uri.tryParse(d1['url']);
-    if (url == null ||
-        url.host.isEmpty ||
-        (url.scheme != 'https' &&
-            !(url.scheme == 'http' &&
-                ['localhost', '127.0.0.1', '::1'].contains(url.host))) ||
-        url.userInfo.isNotEmpty ||
-        url.hasQuery ||
-        url.hasFragment ||
-        (url.path.isNotEmpty && url.path != '/')) {
-      throw const FormatException('请输入 Worker 的根地址');
-    }
     connections['d1'] = {
       'id': d1['id'],
-      'url': url.origin,
+      'url': d1WorkerOrigin(d1['url']),
       'token': secret(d1),
     };
   }

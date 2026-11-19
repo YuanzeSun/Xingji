@@ -48,150 +48,102 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: archivePagePadding(context),
       children: [
         Text('数据与同步', style: Theme.of(context).textTheme.headlineLarge),
+        const SectionTitle('Cloudflare D1'),
+        _CloudConnectionCard(
+          title: store.d1Connection == null
+              ? '连接 Worker 票库'
+              : Uri.parse(store.d1Connection!.url).host,
+          description: '填写 Worker 根地址及部署时设置的访问凭证。',
+          connectLabel: store.d1Connection == null ? '连接 D1' : '重新连接 D1',
+          connected: store.d1Connected,
+          enabled:
+              !store.busy &&
+              (!store.hasResetProgress || store.d1Connection != null),
+          connect: () => connectD1Dialog(context, store),
+        ),
         SectionTitle(
-          'GitHub 同步（可选）',
+          'GitHub 私有仓库',
           trailing: TextButton(
             onPressed: () => _showGitHubSetup(context),
             child: const Text('连接说明'),
           ),
         ),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final summary = Row(
-                children: [
-                  const SizedBox.square(
-                    dimension: 44,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: mist,
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                      ),
-                      child: Icon(Icons.cloud_outlined, color: ink, size: 24),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          store.connection?.label ?? '同步到其他设备',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          store.readOnlyReason ?? store.status,
-                          style: const TextStyle(color: muted),
-                        ),
-                        if (store.syncError case final error?)
-                          Text(
-                            error,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-              final controls = Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  if (store.connected)
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Theme.of(context).colorScheme.error,
-                        side: BorderSide(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                      onPressed: store.busy
-                          ? null
-                          : () async {
-                              final confirmed = await showAdaptiveDialog<bool>(
-                                context: context,
-                                builder: (dialog) => AlertDialog.adaptive(
-                                  title: const Text('退出登录？'),
-                                  content: const Text(
-                                    '退出后会清空此设备的 GitHub 票库缓存。重新登录即可读取云端票据。',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(dialog, false),
-                                      child: const Text('取消'),
-                                    ),
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(dialog, true),
-                                      child: const Text('退出登录'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              if (confirmed == true && context.mounted) {
-                                await action(
-                                  () => store.clearLocalArchive(signOut: true),
-                                );
-                              }
-                            },
-                      child: const Text('退出登录'),
-                    )
-                  else
-                    FilledButton.icon(
-                      onPressed: store.busy
-                          ? null
-                          : () => connectDialog(context, store),
-                      icon: const Icon(Icons.link),
-                      label: Text(
-                        store.connection == null ? '连接 GitHub' : '重新登录 GitHub',
-                      ),
-                    ),
-                  if (store.connected)
-                    OutlinedButton.icon(
-                      onPressed: store.busy ? null : () => action(store.sync),
-                      icon: const Icon(Icons.sync),
-                      label: Text(store.busy ? '正在同步…' : '立即同步'),
-                    ),
-                ],
-              );
-              final inline =
-                  constraints.maxWidth >= 640 &&
-                  MediaQuery.textScalerOf(context).scale(14) <= 18;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (inline)
-                    Row(
-                      children: [
-                        Expanded(child: summary),
-                        const SizedBox(width: 20),
-                        controls,
-                      ],
-                    )
-                  else ...[
-                    summary,
-                    const SizedBox(height: 16),
-                    controls,
-                  ],
-                  if (store.busy)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 16),
-                      child: LinearProgressIndicator(),
-                    ),
-                ],
-              );
-            },
-          ),
+        _CloudConnectionCard(
+          title: store.connection?.label ?? '连接私有仓库',
+          description: '填写仓库所有者、名称和拥有写入权限的访问令牌。',
+          connectLabel: store.connection == null ? '连接 GitHub' : '重新登录 GitHub',
+          connected: store.githubConnected,
+          enabled:
+              !store.busy &&
+              (!store.hasResetProgress || store.connection != null),
+          connect: () => connectDialog(context, store),
         ),
+        if (store.hasCloud) ...[
+          const SizedBox(height: 16),
+          Text(store.readOnlyReason ?? store.status),
+          if (store.syncError case final error?)
+            Text(
+              error,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          if (store.isPaired)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                '变更保存在 D1。需要更新 GitHub 时，点「立即备份到 GitHub」。换设备时登录任一账号即可继续使用 D1。两个账号一起退出。如需解除关联，可在重置仓库时选择保留一个账号。',
+              ),
+            ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed:
+                    store.busy || !store.connected || store.hasResetProgress
+                    ? null
+                    : () => action(store.sync),
+                icon: const Icon(Icons.sync),
+                label: const Text('立即同步'),
+              ),
+              if (store.isPaired)
+                OutlinedButton(
+                  onPressed: !store.canWrite || !store.githubConnected
+                      ? null
+                      : () => action(store.backupToGitHub),
+                  child: const Text('立即备份到 GitHub'),
+                ),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                  side: BorderSide(color: Theme.of(context).colorScheme.error),
+                ),
+                onPressed: store.busy
+                    ? null
+                    : () => action(() async {
+                        if (await _confirmAction(
+                              context,
+                              '退出登录？',
+                              store.isPaired
+                                  ? '两个账号将一起退出，本机票库缓存将清空。再次登录时会恢复关联。'
+                                  : '此设备的票库缓存将清空。重新登录后可读取云端票库。',
+                              '退出登录',
+                            ) &&
+                            context.mounted) {
+                          await store.clearLocalArchive(signOut: true);
+                        }
+                      }),
+                child: const Text('退出登录'),
+              ),
+            ],
+          ),
+        ],
+        if (store.busy)
+          const Padding(
+            padding: EdgeInsets.only(top: 16),
+            child: LinearProgressIndicator(),
+          ),
+
         if (store.resetDetected)
           Padding(
             padding: const EdgeInsets.only(top: 20),
@@ -354,10 +306,10 @@ class _SettingsPageState extends State<SettingsPage> {
                           if (restored &&
                               context.mounted &&
                               archiveSession == store.archiveSession) {
-                            await _offerGitHubBackupConnection(
+                            await _offerBackupConnection(
                               context,
                               store,
-                              backup.github,
+                              backup,
                             );
                           }
                           return;
@@ -398,26 +350,43 @@ class _SettingsPageState extends State<SettingsPage> {
           spacing: 12,
           runSpacing: 12,
           children: [
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(foregroundColor: ticketRed),
-              onPressed:
-                  store.busy || !store.connected || store.connection == null
-                  ? null
-                  : () => action(() async {
-                      if (await confirmGitHubReset(
-                        context,
-                        store.connection!,
-                        clearLocal: true,
-                      )) {
-                        await store.resetRepository();
-                        if (context.mounted) _showResetComplete(context);
-                      }
-                    }),
-              icon: const Icon(Icons.restart_alt),
-              label: Text(store.busy ? '正在处理…' : '重置 GitHub 仓库'),
-            ),
+            if (store.hasResetProgress) ...[
+              OutlinedButton(
+                onPressed:
+                    store.busy || !store.d1Connected || !store.githubConnected
+                    ? null
+                    : () => action(store.continueCloudReset),
+                child: const Text('继续重置'),
+              ),
+              TextButton(
+                onPressed: store.busy
+                    ? null
+                    : () => action(() async {
+                        if (await _confirmAction(
+                          context,
+                          '放弃续接？',
+                          '已经完成的云端重置会保留。',
+                          '放弃续接',
+                        )) {
+                          await store.abandonCloudReset();
+                        }
+                      }),
+                child: const Text('放弃续接'),
+              ),
+            ] else
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(foregroundColor: ticketRed),
+                onPressed:
+                    store.busy ||
+                        !store.connected ||
+                        store.isPaired && !store.githubConnected
+                    ? null
+                    : () => action(() => _resetCloud(context, store)),
+                icon: const Icon(Icons.restart_alt),
+                label: Text(store.hasCloud ? '重置仓库' : '重置 GitHub 仓库'),
+              ),
             OutlinedButton(
-              onPressed: store.busy
+              onPressed: store.busy || store.hasCloud
                   ? null
                   : () => action(() async {
                       if (await confirmDeletion(
@@ -435,7 +404,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 24),
         const Text(
-          '本机票库可离线编辑。绑定 GitHub 后，修改须在线保存，离线可查看和导出。GitHub 凭证仅在本次应用会话中使用。',
+          '本机票库可离线编辑。连接云端后，在线保存修改，离线可查看和导出。',
           style: TextStyle(color: muted),
         ),
         const SizedBox(height: 40),
@@ -448,45 +417,409 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
-Future<void> _offerGitHubBackupConnection(
+class _CloudConnectionCard extends StatelessWidget {
+  const _CloudConnectionCard({
+    required this.title,
+    required this.description,
+    required this.connectLabel,
+    required this.connected,
+    required this.enabled,
+    required this.connect,
+  });
+  final String title, description, connectLabel;
+  final bool connected, enabled;
+  final VoidCallback connect;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        Text(description, style: const TextStyle(color: muted)),
+        const SizedBox(height: 12),
+        if (connected)
+          const Text('已授权')
+        else
+          OutlinedButton.icon(
+            onPressed: enabled ? connect : null,
+            icon: const Icon(Icons.link),
+            label: Text(connectLabel),
+          ),
+      ],
+    ),
+  );
+}
+
+Future<bool> _confirmAction(
   BuildContext context,
-  AppStore store,
-  GitHubBackupConnection? connection,
-) async {
-  if (connection == null ||
-      connection.token.isEmpty ||
-      store.connection != null) {
+  String title,
+  String body,
+  String label,
+) async =>
+    await showAdaptiveDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog.adaptive(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: Text(label),
+          ),
+        ],
+      ),
+    ) ==
+    true;
+
+Future<void> _resetCloud(BuildContext context, AppStore store) async {
+  final primary = store.d1Connection;
+  if (primary == null) {
+    if (await confirmGitHubReset(
+      context,
+      store.connection!,
+      clearLocal: true,
+    )) {
+      await store.resetRepository();
+      if (context.mounted) _showResetComplete(context);
+    }
     return;
   }
-  final add = await showDialog<bool>(
+  final preview = await store.prepareD1Reset();
+  if (!context.mounted) return;
+  CloudSource? keep;
+  if (preview.github != null) {
+    final unlinkStarted = unlinkedArchive(preview.github!);
+    var unlink = unlinkStarted;
+    final selection = await showDialog<({CloudSource? keep})>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (context, update) => AlertDialog(
+          title: const Text('重置关联票库'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('两边的票据都会清空，各自的个人资料和飞常准设置会保留。'),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: unlink,
+                title: const Text('同时解除关联'),
+                onChanged: unlinkStarted
+                    ? null
+                    : (value) => update(() {
+                        unlink = value;
+                        keep = null;
+                      }),
+              ),
+              if (unlink)
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final source in CloudSource.values)
+                      ChoiceChip(
+                        label: Text(
+                          source == CloudSource.d1 ? '继续使用 D1' : '继续使用 GitHub',
+                        ),
+                        selected: keep == source,
+                        onSelected: (_) => update(() => keep = source),
+                      ),
+                  ],
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialog),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: unlink && keep == null
+                  ? null
+                  : () => Navigator.pop(dialog, (keep: unlink ? keep : null)),
+              child: const Text('继续'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selection == null || !context.mounted) return;
+    keep = selection.keep;
+  }
+  if (await confirmDeletion(
+    context,
+    title: '重置仓库？',
+    description: preview.github != null
+        ? '清空 D1 和 GitHub 当前票据。个人资料、飞常准设置和 Git 历史会保留。'
+        : '清空 D1 当前票据，保留个人资料和飞常准设置。',
+    confirmLabel: '确认重置',
+  )) {
+    await store.resetD1Archive(preview, keep: keep);
+    if (context.mounted) _showResetComplete(context);
+  }
+}
+
+Future<CloudSource?> chooseCloudAuthority(
+  BuildContext context,
+  int githubCount,
+  int d1Count,
+) async {
+  if (!context.mounted) return null;
+  final selected = await showDialog<CloudSource>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('是否添加 GitHub 连接'),
-      content: Text(connection.target.label),
+    builder: (dialog) => AlertDialog(
+      title: const Text('选择以哪边的票库为准'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'GitHub 有 $githubCount 张票据，D1 有 $d1Count 张。票据和设置将按所选一边覆盖。绑定后日常同步使用 D1。',
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(dialog, CloudSource.d1),
+            child: const Text('以 D1 为准'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(dialog, CloudSource.github),
+            child: const Text('以 GitHub 为准'),
+          ),
+        ],
+      ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('跳过'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('继续连接'),
+          onPressed: () => Navigator.pop(dialog),
+          child: const Text('取消'),
         ),
       ],
     ),
   );
-  if (add != true || !context.mounted || store.connection != null) return;
-  await store.connect(
-    connection.target,
-    connection.token,
-    choose: (local, cloud) => chooseBinding(context, local, cloud),
-    pick: pickSyncConflicts(context),
+  if (selected == null || !context.mounted) return null;
+  return await _confirmAction(
+        context,
+        '确认覆盖票库？',
+        selected == CloudSource.d1
+            ? '用 D1 的票据、个人资料和飞常准设置覆盖 GitHub。'
+            : '用 GitHub 的票据、个人资料和飞常准设置覆盖 D1。',
+        '确认绑定',
+      )
+      ? selected
+      : null;
+}
+
+Future<void> _offerBackupConnection(
+  BuildContext context,
+  AppStore store,
+  FullArchiveBackup backup,
+) async {
+  final github =
+      store.connection == null && backup.github?.token.isNotEmpty == true
+      ? backup.github
+      : null;
+  final d1 = store.d1Connection == null && backup.d1?.token.isNotEmpty == true
+      ? backup.d1
+      : null;
+  if (github == null && d1 == null) return;
+  final session = store.archiveSession;
+  final selected = await showDialog<CloudSource>(
+    context: context,
+    builder: (dialog) => AlertDialog(
+      title: const Text('连接备份中的账号？'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (d1 != null)
+            OutlinedButton(
+              onPressed: () => Navigator.pop(dialog, CloudSource.d1),
+              child: const Text('连接 D1'),
+            ),
+          if (github != null)
+            OutlinedButton(
+              onPressed: () => Navigator.pop(dialog, CloudSource.github),
+              child: const Text('连接 GitHub'),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialog),
+          child: const Text('跳过'),
+        ),
+      ],
+    ),
   );
+  if (selected == null || !context.mounted) return;
+  Future<BindingChoice?> choose(int local, int cloud) => chooseBinding(
+    context,
+    local,
+    cloud,
+    cloudName: selected == CloudSource.d1 ? 'D1' : 'GitHub',
+  );
+  Future<CloudSource?> chooseSource(int github, int d1) =>
+      chooseCloudAuthority(context, github, d1);
+  final pick = pickSyncConflicts(context);
+  if (selected == CloudSource.d1 &&
+      d1 != null &&
+      store.d1Connection == null &&
+      session == store.archiveSession) {
+    await store.connectD1(
+      d1.target,
+      d1.token,
+      choose: choose,
+      pick: pick,
+      chooseSource: chooseSource,
+    );
+  } else if (selected == CloudSource.github &&
+      github != null &&
+      store.connection == null &&
+      session == store.archiveSession) {
+    await store.connect(
+      github.target,
+      github.token,
+      choose: choose,
+      pick: pick,
+      chooseSource: chooseSource,
+    );
+  }
+}
+
+Future<void> connectD1Dialog(BuildContext context, AppStore store) async {
+  final url = TextEditingController(text: store.d1Connection?.url),
+      token = TextEditingController();
+  final form = GlobalKey<FormState>();
+  var working = false, error = '';
+  try {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialog) => StatefulBuilder(
+        builder: (dialog, update) => PopScope(
+          canPop: !working,
+          child: AlertDialog(
+            title: const Text('连接 Cloudflare D1'),
+            content: SizedBox(
+              width: 440,
+              child: SingleChildScrollView(
+                child: Form(
+                  key: form,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('填写已部署的 Worker 根地址和配置的 ARCHIVE_TOKEN。'),
+                      const SizedBox(height: 12),
+                      ArchiveTextField(
+                        controller: url,
+                        enabled: !working && store.d1Connection == null,
+                        autocorrect: false,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'Worker 地址',
+                          hintText: 'https://example.workers.dev',
+                        ),
+                        validator: (value) {
+                          try {
+                            d1WorkerOrigin(value ?? '');
+                            return null;
+                          } on FormatException catch (e) {
+                            return e.message;
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      ArchiveTextField(
+                        controller: token,
+                        enabled: !working,
+                        obscureText: true,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        decoration: const InputDecoration(labelText: '访问凭证'),
+                        validator: (value) =>
+                            (value ?? '').trim().isEmpty ? '请填写访问凭证' : null,
+                      ),
+                      if (error.isNotEmpty)
+                        Text(
+                          error,
+                          style: TextStyle(
+                            color: Theme.of(dialog).colorScheme.error,
+                          ),
+                        ),
+                      if (working) const LinearProgressIndicator(),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: working ? null : () => Navigator.pop(dialog),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: working
+                    ? null
+                    : () async {
+                        if (!form.currentState!.validate()) return;
+                        update(() {
+                          working = true;
+                          error = '';
+                        });
+                        try {
+                          final bound = await store.connectD1(
+                            D1Connection(url.text),
+                            token.text.trim(),
+                            choose: (local, cloud) => chooseBinding(
+                              dialog,
+                              local,
+                              cloud,
+                              cloudName: 'D1',
+                            ),
+                            chooseSource: (github, d1) =>
+                                chooseCloudAuthority(dialog, github, d1),
+                            pick: pickSyncConflicts(dialog, newEdit: false),
+                          );
+                          if (bound && dialog.mounted) Navigator.pop(dialog);
+                        } catch (failure) {
+                          if (dialog.mounted) {
+                            update(
+                              () => error = failure.toString().replaceFirst(
+                                'FormatException: ',
+                                '',
+                              ),
+                            );
+                          }
+                        } finally {
+                          if (dialog.mounted) update(() => working = false);
+                        }
+                      },
+                child: Text(working ? '正在连接…' : '连接'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  } finally {
+    url.dispose();
+    token.dispose();
+  }
 }
 
 void _showResetComplete(BuildContext context) {
   ScaffoldMessenger.of(context)
-      .showSnackBar(const SnackBar(content: Text('GitHub 仓库已重置')));
+      .showSnackBar(const SnackBar(content: Text('云端票库已重置')));
 }
 
 Future<bool> confirmGitHubReset(
@@ -506,8 +839,9 @@ Future<bool> confirmGitHubReset(
 Future<BindingChoice?> chooseBinding(
   BuildContext context,
   int localCount,
-  int cloudCount,
-) async {
+  int cloudCount, {
+  String cloudName = 'GitHub',
+}) async {
   if (!context.mounted) return null;
   final choice = await showDialog<BindingChoice>(
     context: context,
@@ -517,7 +851,7 @@ Future<BindingChoice?> chooseBinding(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('本机有 $localCount 张票据，GitHub 有 $cloudCount 张票据。'),
+          Text('本机有 $localCount 张票据，$cloudName 有 $cloudCount 张票据。'),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: () => Navigator.pop(context, BindingChoice.merge),
@@ -643,6 +977,8 @@ Future<void> connectDialog(BuildContext context, AppStore store) async {
                           token.text.trim(),
                           choose: (local, cloud) =>
                               chooseBinding(context, local, cloud),
+                          chooseSource: (github, d1) =>
+                              chooseCloudAuthority(context, github, d1),
                           pick: pickSyncConflicts(context, newEdit: false),
                         );
                         if (bound && context.mounted) Navigator.pop(context);

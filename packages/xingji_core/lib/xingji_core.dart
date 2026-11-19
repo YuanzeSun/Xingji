@@ -8,6 +8,8 @@ export 'src/archive_merge.dart';
 export 'src/boarding_decoder.dart';
 export 'src/recognition.dart';
 export 'src/github_archive.dart';
+export 'src/d1_archive.dart';
+export 'src/cloud_pair.dart';
 export 'src/archive_backup.dart';
 export 'src/railgo.dart';
 export 'src/rail_line_names.dart';

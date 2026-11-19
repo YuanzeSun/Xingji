@@ -261,9 +261,11 @@ void main() {
       await tester.pumpAndSettle();
       for (final label in ['姓名与常用证件', '导入票库']) {
         final button = find.widgetWithText(OutlinedButton, label);
+        await tester.scrollUntilVisible(button, 180);
         expect(tester.widget<OutlinedButton>(button).onPressed, isNull);
       }
       final backup = find.widgetWithText(OutlinedButton, '导出备份');
+      await tester.scrollUntilVisible(backup, 180);
       expect(tester.widget<OutlinedButton>(backup).onPressed, isNotNull);
     },
   );
@@ -312,8 +314,19 @@ void main() {
     await settle(tester);
     await tester.tap(find.byKey(const ValueKey('nav-同步')));
     await settle(tester);
-    expect(find.text('GitHub 同步（可选）'), findsOneWidget);
-    expect(find.text('连接 GitHub'), findsOneWidget);
+    expect(find.text('Cloudflare D1'), findsOneWidget);
+    await tester.tap(find.text('连接 D1'));
+    await tester.pumpAndSettle();
+    expect(find.text('连接 Cloudflare D1'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    final github = find.text('GitHub 私有仓库');
+    await tester.scrollUntilVisible(github, 160);
+    expect(
+      tester.getTopLeft(find.text('Cloudflare D1')).dy,
+      lessThan(tester.getTopLeft(github).dy),
+    );
+    await tester.scrollUntilVisible(find.text('连接 GitHub'), 100);
     await tester.tap(find.text('连接说明'));
     await tester.pumpAndSettle();
     expect(find.text('1. 新建私有仓库'), findsOneWidget);

@@ -45,13 +45,19 @@ class ArchiveSnapshot {
   final String head, tree, generation;
   final Map<String, String> contents;
   final bool initialized;
-  final int repositoryId;
+  final int? repositoryId;
+  final String? databaseId;
+  final int? recordCount;
+  final List<String> paths;
   ArchiveSnapshot({
     required this.records,
     required this.settings,
     required this.head,
     required this.tree,
-    required this.repositoryId,
+    this.repositoryId,
+    this.databaseId,
+    this.recordCount,
+    this.paths = const [],
     this.generation = '',
     this.contents = const {},
     this.initialized = true,
@@ -62,7 +68,20 @@ typedef NormalizeArchiveRecords = Future<List<TicketRecord>> Function(
   List<TicketRecord>,
 );
 
-class GitHubArchive {
+abstract interface class ArchiveRemote {
+  Future<ArchiveSnapshot> read();
+  Future<String> head();
+  Future<String> write(
+    List<TicketRecord> records,
+    ArchiveSnapshot snapshot,
+    Map<String, dynamic> settings,
+  );
+  Future<List<TicketRecord>> canonicalRecords(List<TicketRecord> records);
+  Future<void> assertDescendant(String previous, String current);
+  void close();
+}
+
+class GitHubArchive implements ArchiveRemote {
   final GitHubConnection connection;
   final String token;
   final http.Client client;
@@ -415,7 +434,8 @@ class GitHubArchive {
           (row) => row['type'] == 'blob' && row['path'] == 'archive/index.json',
         )
         .firstOrNull;
-    var settings = sharedSettings(fallbackSettings);
+    var settings = sharedSettings(fallbackSettings), generation = '';
+    int? recordCount;
     if (index != null) {
       final manifest = jsonDecode(await _blob(index['sha']));
       if (manifest is! Map ||
@@ -423,6 +443,8 @@ class GitHubArchive {
         throw const FormatException('无法读取要保留的个人资料和飞常准设置');
       }
       final saved = manifest['settings'] as Map? ?? {};
+      generation = manifest['generation'] as String? ?? '';
+      recordCount = manifest['recordCount'] as int?;
       settings = sharedSettings({
         for (final key in ['profile', 'flightMcpKey', 'connections'])
           if (saved.containsKey(key)) key: saved[key],
@@ -435,19 +457,27 @@ class GitHubArchive {
       tree: commit['tree']['sha'],
       repositoryId: repository['id'],
       initialized: index != null,
+      generation: generation,
+      recordCount: recordCount,
+      paths: [
+        for (final row in tree['tree'] as List)
+          if (row['type'] != 'tree') row['path'] as String,
+      ],
     );
   }
 
   /// Replace the current tree atomically, preserving commit history and settings.
   Future<ArchiveSnapshot> reset(
     ArchiveSnapshot snapshot,
-    Map<String, dynamic> settings,
-  ) async {
+    Map<String, dynamic> settings, {
+    String? resetId,
+  }) async {
     final verified = await verify();
     if (verified['id'] != snapshot.repositoryId) {
       throw const FormatException('仓库身份已改变，已停止重置');
     }
-    final preserved = sharedSettings(settings), generation = newTicketId();
+    final preserved = sharedSettings(settings),
+        generation = resetId ?? newTicketId();
     final tree = await _request(
       '/git/trees',
       method: 'POST',

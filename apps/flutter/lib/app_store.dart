@@ -31,6 +31,16 @@ typedef PickConflicts = Future<Map<String, bool>?> Function(
   SettingsMerge settings,
 );
 
+typedef ChooseLocalArchive = Future<BindingChoice?> Function(
+  int localCount,
+  int cloudCount,
+);
+typedef ChooseCloudSource = Future<CloudSource?> Function(
+  int githubCount,
+  int d1Count,
+);
+typedef CloudResetPreview = ({ArchiveSnapshot? github, ArchiveSnapshot? d1});
+
 /// Demo data never enters the private archive or the persistence envelope.
 class AppStore extends ChangeNotifier {
   final SharedPreferences preferences;
@@ -38,11 +48,16 @@ class AppStore extends ChangeNotifier {
   final List<TicketRecord> examples;
   final Map<String, dynamic> mapData;
   final GitHubArchive Function(GitHubConnection, String) remoteFactory;
+  final D1Archive Function(D1Connection, String) d1Factory;
   List<TicketRecord> _records = [], _base = [];
   ArchiveSnapshot? _reviewedRemote;
   Map<String, dynamic> settings = {}, _baseSettings = {};
   GitHubConnection? connection;
-  GitHubArchive? _remote;
+  D1Connection? d1Connection;
+  GitHubArchive? _github;
+  D1Archive? _d1;
+  ArchiveRemote? get _remote => d1Connection != null ? _d1 : _github;
+  Map<String, dynamic>? _resetJournal;
   ArchiveMerge? conflicts;
   SettingsMerge? settingsConflicts;
   bool resetDetected = false;
@@ -58,8 +73,10 @@ class AppStore extends ChangeNotifier {
     this.examples,
     this.mapData, {
     GitHubArchive Function(GitHubConnection, String)? remoteFactory,
+    D1Archive Function(D1Connection, String)? d1Factory,
   }) : remoteFactory =
-           remoteFactory ?? ((target, token) => GitHubArchive(target, token));
+           remoteFactory ?? ((target, token) => GitHubArchive(target, token)),
+       d1Factory = d1Factory ?? ((target, token) => D1Archive(target, token));
   static const storageKey = 'xingji.flutter.archive.v2';
   static Future<AppStore> load() async {
     final assets = await Future.wait(
@@ -80,6 +97,8 @@ class AppStore extends ChangeNotifier {
         token,
         normalizeRecords: _normalizeCloudRecords,
       ),
+      d1Factory: (target, token) =>
+          D1Archive(target, token, normalizeRecords: _normalizeCloudRecords),
     );
     final saved = preferences.getString(storageKey);
     await prepareTicketFaces(store.examples);
@@ -96,9 +115,13 @@ class AppStore extends ChangeNotifier {
       if (envelope['connection'] != null) {
         store.connection = GitHubConnection.fromJson(envelope['connection']);
       }
-      store.pending = store.connection != null && envelope['pending'] == true;
-      if (store.connection != null) {
-        store.status = 'GitHub 待重新登录 · 只读';
+      if (envelope['d1Connection'] case final Map d1) {
+        store.d1Connection = D1Connection.fromJson(d1);
+      }
+      store._resetJournal = envelope['resetProgress'] as Map<String, dynamic>?;
+      store.pending = store.hasCloud && envelope['pending'] == true;
+      if (store.hasCloud) {
+        store.status = '云端票库待连接 · 只读';
       }
     }
     return store;
@@ -108,11 +131,11 @@ class AppStore extends ChangeNotifier {
 
   String _credentialKey(GitHubConnection target) =>
       'github:${target.label.toLowerCase()}:${target.branch}';
+  String _d1CredentialKey(D1Connection target) => 'd1:${target.url}';
 
   Future<void> restoreConnection() async {
-    final target = connection;
     if (!AppleServices.available ||
-        target == null ||
+        !hasCloud ||
         connected ||
         busy ||
         demo ||
@@ -122,46 +145,67 @@ class AppStore extends ChangeNotifier {
     _restoreTried = true;
     await _run(() async {
       try {
-        final token = await AppleServices.credential(_credentialKey(target));
-        if (token == null) return;
-        final remote = remoteFactory(target, token);
-        _remote = remote;
+        await _restoreGitHubCredential();
+        final target = d1Connection;
+        if (target != null) {
+          final token = await AppleServices.credential(
+            _d1CredentialKey(target),
+          );
+          if (token != null) _d1 = d1Factory(target, token);
+        }
+        if (_remote == null || hasResetProgress) return;
         try {
           await _sync();
         } on ArchiveApiException catch (error) {
           if (error.status == 401) {
-            remote.close();
-            _remote = null;
-            status = 'GitHub 授权已失效 · 只读';
+            _remote?.close();
+            if (d1Connection == null) {
+              _github = null;
+            } else {
+              _d1 = null;
+            }
+            status = '云端授权已失效 · 只读';
           }
         } catch (_) {
           // The cache is still readable. Connection refresh retries on resume.
         }
       } catch (_) {
-        syncError = '暂时无法读取钥匙串中的 GitHub 凭据';
+        syncError = '暂时无法读取钥匙串中的云端凭据';
       }
     });
   }
 
-  Future<void> _rememberCredential(
-    GitHubConnection target,
-    String token,
-  ) async {
+  Future<void> _restoreGitHubCredential() async {
+    final target = connection;
+    if (target == null) return;
+    final token = await AppleServices.credential(_credentialKey(target));
+    if (token != null) _github = remoteFactory(target, token);
+  }
+
+  Future<void> _rememberCredential(String key, String token) async {
     if (!AppleServices.available) return;
     try {
-      await AppleServices.writeCredential(_credentialKey(target), token);
+      await AppleServices.writeCredential(key, token);
     } catch (_) {
-      syncError = 'GitHub 已连接，但无法在钥匙串保留凭据';
+      syncError = '票库已连接，但无法在钥匙串保留凭据';
     }
   }
 
   bool get connected => _remote != null;
+  bool get hasCloud => connection != null || d1Connection != null;
+  bool get githubConnected => _github != null;
+  bool get d1Connected => _d1 != null;
+  bool get isPaired => connection != null && d1Connection != null;
+  bool get hasResetProgress => _resetJournal != null;
   String? get readOnlyReason {
-    if (connection == null) return null;
-    if (!connected) return '请重新登录 GitHub 后编辑';
+    if (hasResetProgress) return '请继续或放弃此前的票库重置';
+    if (!hasCloud) return null;
+    if (!connected) {
+      return d1Connection != null ? '请重新登录 D1 后编辑' : '请重新登录 GitHub 后编辑';
+    }
     if (resetDetected) return '请先处理云端票库重置';
     if (conflicts != null) return '请先处理同步冲突';
-    if (!_online) return 'GitHub 连接不可用，票库暂时只读';
+    if (!_online) return '云端连接不可用，票库暂时只读';
     if (pending) return '请先完成之前的同步';
     return null;
   }
@@ -178,12 +222,14 @@ class AppStore extends ChangeNotifier {
       jsonEncode({
         'local': TicketArchive(_records).toJson(),
         'base': TicketArchive(_base).toJson(),
-        'settings': settings,
-        'baseSettings': _baseSettings,
+        'settings': {...settings}..remove('connections'),
+        'baseSettings': {..._baseSettings}..remove('connections'),
         'head': _head,
         'generation': _generation,
         'pending': pending,
         'connection': connection?.toJson(),
+        'd1Connection': d1Connection?.toJson(),
+        if (_resetJournal != null) 'resetProgress': _resetJournal,
       }),
     );
     if (!saved) throw StateError('本机存储失败，请先导出备份');
@@ -215,7 +261,7 @@ class AppStore extends ChangeNotifier {
 
   Future<void> checkWriteAccess() async {
     _requireWritable();
-    if (connection == null) return;
+    if (!hasCloud) return;
     await _run(() async {
       try {
         await _remote!.head();
@@ -233,6 +279,7 @@ class AppStore extends ChangeNotifier {
         busy ||
         _checking ||
         resetDetected ||
+        hasResetProgress ||
         conflicts != null) {
       return;
     }
@@ -353,6 +400,10 @@ class AppStore extends ChangeNotifier {
           if (attempt == 0) continue;
           throw const FormatException('云端票库仍在变化，请稍后重新保存');
         }
+        if (remote is D1Archive &&
+            (failure.status == 400 || failure.status == 413)) {
+          rethrow;
+        }
         _syncFailure(failure);
         rethrow;
       } catch (failure) {
@@ -422,14 +473,20 @@ class AppStore extends ChangeNotifier {
     final target = connection;
     final archive = TicketArchive(List.of(_records));
     final savedSettings = sharedSettings(settings);
-    var token = _remote?.token ?? '';
+    var token = _github?.token ?? '';
     if (token.isEmpty && target != null && AppleServices.available) {
       token = await AppleServices.credential(_credentialKey(target)) ?? '';
+    }
+    final d1 = d1Connection;
+    var d1Token = _d1?.token ?? '';
+    if (d1Token.isEmpty && d1 != null && AppleServices.available) {
+      d1Token = await AppleServices.credential(_d1CredentialKey(d1)) ?? '';
     }
     return FullArchiveBackup(
       archive,
       savedSettings,
       github: target == null ? null : (target: target, token: token),
+      d1: d1 == null ? null : (target: d1, token: d1Token),
     );
   }
 
@@ -462,105 +519,306 @@ class AppStore extends ChangeNotifier {
     }
   }
 
+  GitHubConnection _verifiedGitHub(
+    GitHubConnection target,
+    ArchiveSnapshot snapshot,
+  ) {
+    final id = snapshot.repositoryId;
+    if (id == null ||
+        target.repositoryId != null && target.repositoryId != id ||
+        connection?.repositoryId != null && connection!.repositoryId != id) {
+      throw const FormatException('GitHub 仓库身份已改变，已保留本机票库');
+    }
+    return GitHubConnection(
+      target.owner,
+      target.repository,
+      branch: target.branch,
+      repositoryId: id,
+    );
+  }
+
   Future<bool> connect(
     GitHubConnection target,
     String token, {
-    Future<BindingChoice?> Function(int localCount, int cloudCount)? choose,
+    ChooseLocalArchive? choose,
     PickConflicts? pick,
+    ChooseCloudSource? chooseSource,
   }) => _run(() async {
-    if (demo) throw StateError('请退出示例模式后连接票库');
+    if (demo) throw const FormatException('请退出示例模式后连接票库');
+    if (githubConnected) throw const FormatException('请先退出登录');
     _checkBinding(target);
-    if (connected) throw const FormatException('请先退出 GitHub');
-    final current = connection;
-    final remote = remoteFactory(target, token);
+    final github = remoteFactory(target, token);
     try {
-      final snapshot = await remote.read();
-      if (current?.repositoryId != null &&
-          current!.repositoryId != snapshot.repositoryId) {
-        throw const FormatException('仓库身份已改变，已保留本机票库');
-      }
-      final binding = GitHubConnection(
-        target.owner,
-        target.repository,
-        branch: target.branch,
-        repositoryId: snapshot.repositoryId,
-      );
-      if (current != null) {
-        _remote?.close();
-        _remote = remote;
+      final repo = await github.read();
+      final binding = _verifiedGitHub(target, repo);
+      if (hasResetProgress) {
         connection = binding;
-        _archiveSession++;
-        await _sync(firstSnapshot: snapshot);
-        await _rememberCredential(binding, token);
+        _github = github;
+        await _rememberCredential(_credentialKey(binding), token);
         return true;
       }
-
-      final localCount = _records.where((row) => !row.deleted).length;
-      final cloudCount = snapshot.records.where((row) => !row.deleted).length;
-      final choice = localCount > 0 && cloudCount > 0
-          ? await choose?.call(localCount, cloudCount)
-          : BindingChoice.merge;
-      if (choice == null) return false;
-      final tickets = switch (choice) {
-        BindingChoice.merge when _records.isEmpty => ArchiveMerge(
-          snapshot.records,
-          [],
-        ),
-        BindingChoice.merge => mergeTickets(
-          [],
-          await remote.canonicalRecords(_records),
-          snapshot.records,
-          catalog: catalog,
-        ),
-        BindingChoice.replaceCloud => ArchiveMerge(List.of(_records), []),
-        BindingChoice.replaceLocal => ArchiveMerge(snapshot.records, []),
-      };
-      final shared = mergeSettings({}, settings, snapshot.settings);
-      var merged = tickets.records, mergedSettings = shared.settings;
-      if (tickets.conflicts.isNotEmpty || shared.conflicts.isNotEmpty) {
-        final choices = await pick?.call(tickets, shared);
-        if (choices == null) return false;
-        merged = tickets.resolve(choices);
-        mergedSettings = shared.resolve(choices);
+      if (d1Connection != null && connection == null) {
+        final primary = _d1;
+        if (primary == null || pending) {
+          throw const FormatException('请先连接并同步 D1 票库');
+        }
+        final paired = await _bindPair(
+          CloudPair(github, binding, primary, d1Connection!),
+          repo,
+          await primary.read(),
+          chooseSource,
+        );
+        if (paired == null) return false;
+        await _activateD1(primary, paired, github, binding);
+        return true;
       }
-      merged = await remote.canonicalRecords(
-        choice == BindingChoice.replaceLocal || _records.isEmpty
-            ? merged
-            : deduplicateTickets(merged, catalog),
+      if (linkedCloud(repo) case final link?) {
+        return await _useLinkedD1(
+          github,
+          binding,
+          repo,
+          link,
+          choose: choose,
+          pick: pick,
+        );
+      }
+      if (d1Connection != null) {
+        throw const FormatException('两边票库的关联已解除，请重新登录 D1');
+      }
+      if (connection != null) {
+        connection = binding;
+        _github = github;
+        _archiveSession++;
+        await _sync(firstSnapshot: repo);
+        await _rememberCredential(_credentialKey(binding), token);
+        return true;
+      }
+      final initial = await _bindLocal(
+        github,
+        repo,
+        choose: choose,
+        pick: pick,
       );
-      final replace = choice == BindingChoice.replaceCloud;
-      final generation = replace ? newTicketId() : snapshot.generation;
-      final head = replace
-          ? await remote.replaceTickets(
-              merged,
-              snapshot,
-              mergedSettings,
-              generation,
-            )
-          : await remote.write(merged, snapshot, mergedSettings);
-      _remote = remote;
+      if (initial == null) return false;
       connection = binding;
+      _github = github;
       _archiveSession++;
-      _adopt(
-        snapshot,
-        records: merged,
-        newSettings: mergedSettings,
-        head: head,
-        generation: generation,
-      );
+      _adopt(initial);
       await _persistSynced();
-      await _rememberCredential(binding, token);
+      await _rememberCredential(_credentialKey(binding), token);
       return true;
     } finally {
-      if (!identical(_remote, remote)) remote.close();
+      if (!identical(_github, github)) github.close();
     }
   });
 
+  Future<bool> connectD1(
+    D1Connection target,
+    String token, {
+    ChooseLocalArchive? choose,
+    PickConflicts? pick,
+    ChooseCloudSource? chooseSource,
+  }) => _run(() async {
+    if (demo) throw const FormatException('请退出示例模式后连接票库');
+    if (d1Connected) throw const FormatException('请先退出登录');
+    final current = d1Connection;
+    if (current != null && target.url != current.url) {
+      throw const FormatException('请先退出登录，再更换 D1 票库');
+    }
+    final primary = d1Factory(current ?? target, token);
+    try {
+      final snapshot = await primary.read();
+      final binding = primary.verifiedConnection;
+      if (hasResetProgress) {
+        d1Connection = binding;
+        _d1 = primary;
+        await _rememberCredential(_d1CredentialKey(binding), token);
+        return true;
+      }
+      if (connection != null && current == null) {
+        final github = _github;
+        if (github == null || pending) {
+          throw const FormatException('请先连接并同步 GitHub 票库');
+        }
+        final paired = await _bindPair(
+          CloudPair(github, connection!, primary, binding),
+          await github.read(),
+          snapshot,
+          chooseSource,
+        );
+        if (paired == null) return false;
+        await _activateD1(primary, paired, github, connection);
+        return true;
+      }
+      final link = linkedCloud(snapshot);
+      if (link != null && !sameD1Target(link.d1, binding)) {
+        throw const FormatException('保存的 D1 关联与此数据库身份不符');
+      }
+      if (current != null) {
+        _d1 = primary;
+        await _rememberCredential(_d1CredentialKey(binding), token);
+        await _sync(firstSnapshot: snapshot);
+        return true;
+      }
+      final initial = await _bindLocal(
+        primary,
+        snapshot,
+        choose: choose,
+        pick: pick,
+      );
+      if (initial == null) return false;
+      final github = link != null && link.githubToken.isNotEmpty
+          ? remoteFactory(link.github, link.githubToken)
+          : null;
+      await _activateD1(primary, initial, github, link?.github);
+      return true;
+    } finally {
+      if (!identical(_d1, primary)) primary.close();
+    }
+  });
+
+  Future<ArchiveSnapshot?> _bindPair(
+    CloudPair pair,
+    ArchiveSnapshot repo,
+    ArchiveSnapshot snapshot,
+    ChooseCloudSource? choose,
+  ) async {
+    pair.check(repo, snapshot);
+    final source = linkedCloud(repo) != null || linkedCloud(snapshot) != null
+        ? CloudSource.d1
+        : await choose?.call(
+            repo.records.where((row) => !row.deleted).length,
+            snapshot.records.where((row) => !row.deleted).length,
+          );
+    return source == null ? null : pair.bind(repo, snapshot, source);
+  }
+
+  Future<bool> _useLinkedD1(
+    GitHubArchive github,
+    GitHubConnection binding,
+    ArchiveSnapshot repo,
+    LinkedCloud link, {
+    ChooseLocalArchive? choose,
+    PickConflicts? pick,
+  }) async {
+    if (!sameGitHubTarget(link.github, binding) ||
+        (d1Connection != null && !sameD1Target(link.d1, d1Connection!))) {
+      throw const FormatException('保存的 GitHub 关联与此仓库身份不符');
+    }
+    if (pending) throw const FormatException('请先备份本机待确认的修改，再连接已关联的 D1 票库');
+    final primary = _d1 ?? d1Factory(link.d1, link.d1Token);
+    try {
+      var snapshot = await primary.read();
+      final pair = CloudPair(github, binding, primary, link.d1);
+      pair.check(repo, snapshot);
+      if (unlinkedArchive(snapshot)) {
+        throw const FormatException('D1 关联已解除，请直接登录 D1');
+      }
+      if (linkedCloud(snapshot) == null) {
+        snapshot = await pair.bind(repo, snapshot, CloudSource.d1);
+      }
+      final initial = hasCloud
+          ? snapshot
+          : await _bindLocal(primary, snapshot, choose: choose, pick: pick);
+      if (initial == null) return false;
+      await _activateD1(primary, initial, github, binding);
+      return true;
+    } finally {
+      if (!identical(_d1, primary)) primary.close();
+    }
+  }
+
+  Future<void> _activateD1(
+    D1Archive primary,
+    ArchiveSnapshot snapshot,
+    GitHubArchive? github,
+    GitHubConnection? githubTarget,
+  ) async {
+    if (!identical(_d1, primary)) _d1?.close();
+    if (!identical(_github, github)) _github?.close();
+    _d1 = primary;
+    d1Connection = primary.verifiedConnection;
+    _github = github;
+    connection = githubTarget;
+    _archiveSession++;
+    _adopt(snapshot);
+    await _persistSynced();
+    await _rememberCredential(_d1CredentialKey(d1Connection!), primary.token);
+    if (github != null && githubTarget != null) {
+      await _rememberCredential(_credentialKey(githubTarget), github.token);
+    }
+  }
+
+  Future<ArchiveSnapshot?> _bindLocal(
+    ArchiveRemote remote,
+    ArchiveSnapshot snapshot, {
+    ChooseLocalArchive? choose,
+    PickConflicts? pick,
+  }) async {
+    final localCount = _records.where((row) => !row.deleted).length;
+    final cloudCount = snapshot.records.where((row) => !row.deleted).length;
+    final choice = localCount > 0 && cloudCount > 0
+        ? await choose?.call(localCount, cloudCount)
+        : BindingChoice.merge;
+    if (choice == null) return null;
+    final tickets = switch (choice) {
+      BindingChoice.merge when _records.isEmpty => ArchiveMerge(
+        snapshot.records,
+        [],
+      ),
+      BindingChoice.merge => mergeTickets(
+        [],
+        await remote.canonicalRecords(_records),
+        snapshot.records,
+        catalog: catalog,
+      ),
+      BindingChoice.replaceCloud => ArchiveMerge(List.of(_records), []),
+      BindingChoice.replaceLocal => ArchiveMerge(snapshot.records, []),
+    };
+    final shared = mergeSettings({}, settings, snapshot.settings);
+    var merged = tickets.records, mergedSettings = shared.settings;
+    if (tickets.conflicts.isNotEmpty || shared.conflicts.isNotEmpty) {
+      final choices = await pick?.call(tickets, shared);
+      if (choices == null) return null;
+      merged = tickets.resolve(choices);
+      mergedSettings = shared.resolve(choices);
+    }
+    merged = await remote.canonicalRecords(
+      choice == BindingChoice.replaceLocal || _records.isEmpty
+          ? merged
+          : deduplicateTickets(merged, catalog),
+    );
+    final replace = choice == BindingChoice.replaceCloud;
+    if (replace && remote is D1Archive) {
+      return remote.replace(snapshot, merged, mergedSettings);
+    }
+    final generation = replace ? newTicketId() : snapshot.generation;
+    final head = replace && remote is GitHubArchive
+        ? await remote.replaceTickets(
+            merged,
+            snapshot,
+            mergedSettings,
+            generation,
+          )
+        : await remote.write(merged, snapshot, mergedSettings);
+    return ArchiveSnapshot(
+      records: merged,
+      settings: mergedSettings,
+      head: head,
+      tree: snapshot.tree,
+      generation: generation,
+      repositoryId: snapshot.repositoryId,
+      databaseId: snapshot.databaseId,
+    );
+  }
+
   Future<void> sync() => _run(_sync);
 
-  Future<ArchiveSnapshot> _readBound(GitHubArchive remote) async {
+  Future<ArchiveSnapshot> _readBound(ArchiveRemote remote) async {
     final snapshot = await remote.read();
-    if (snapshot.repositoryId != connection?.repositoryId) {
+    if (remote is D1Archive
+        ? snapshot.databaseId != d1Connection?.id
+        : snapshot.repositoryId != connection?.repositoryId) {
       throw const FormatException('仓库身份已改变，已保留本机票库');
     }
     return snapshot;
@@ -573,7 +831,7 @@ class AppStore extends ChangeNotifier {
   }
 
   Future<ArchiveSnapshot> _currentSnapshot(
-    GitHubArchive remote, {
+    ArchiveRemote remote, {
     ArchiveSnapshot? firstSnapshot,
   }) async {
     final snapshot = firstSnapshot ?? await _readBound(remote);
@@ -585,6 +843,13 @@ class AppStore extends ChangeNotifier {
       resetDetected = true;
       throw const FormatException('云端票库已重置，请先导出本机备份，再采用云端票库');
     }
+    if (remote is GitHubArchive && linkedCloud(snapshot) != null) {
+      throw const FormatException('此 GitHub 仓库已关联 D1，请同步后再编辑');
+    }
+    if (remote is D1Archive && isPaired && unlinkedArchive(snapshot)) {
+      throw const FormatException('两边票库的关联已解除，请重新登录');
+    }
+    if (remote is D1Archive) await _discoverGitHub(snapshot);
     return snapshot;
   }
 
@@ -593,7 +858,7 @@ class AppStore extends ChangeNotifier {
     syncError = failure is FormatException
         ? failure.message
         : failure.toString();
-    status = 'GitHub 票库暂时只读';
+    status = '云端票库暂时只读';
   }
 
   Future<void> _persistSynced() async {
@@ -601,22 +866,26 @@ class AppStore extends ChangeNotifier {
     try {
       await _persist();
     } catch (_) {
-      syncError = 'GitHub 已保存，本机缓存更新失败';
+      syncError = '云端已保存，本机缓存更新失败';
     }
   }
 
   Future<void> _sync({ArchiveSnapshot? firstSnapshot}) async {
     final remote = _remote;
     if (remote == null) return;
+    if (hasResetProgress) throw const FormatException('请先继续或放弃此前的票库重置');
     _clearReview();
     syncError = null;
     status = '正在同步';
     notifyListeners();
     try {
-      final snapshot = await _currentSnapshot(
-        remote,
-        firstSnapshot: firstSnapshot,
-      );
+      final loaded = firstSnapshot ?? await _readBound(remote);
+      final link = remote is GitHubArchive ? linkedCloud(loaded) : null;
+      if (remote is GitHubArchive && link != null) {
+        await _useLinkedD1(remote, connection!, loaded, link);
+        return;
+      }
+      final snapshot = await _currentSnapshot(remote, firstSnapshot: loaded);
       if (!pending) {
         _adopt(snapshot);
         await _persistSynced();
@@ -661,6 +930,22 @@ class AppStore extends ChangeNotifier {
     }
   }
 
+  Future<void> _discoverGitHub(ArchiveSnapshot snapshot) async {
+    final link = linkedCloud(snapshot);
+    if (link == null) return;
+    if (d1Connection == null ||
+        !sameD1Target(link.d1, d1Connection!) ||
+        (connection != null && !sameGitHubTarget(connection!, link.github))) {
+      throw const FormatException('保存的云端关联与当前票库不符');
+    }
+    if (connection == null) _archiveSession++;
+    connection = link.github;
+    if (_github == null && link.githubToken.isNotEmpty) {
+      _github = remoteFactory(link.github, link.githubToken);
+      await _rememberCredential(_credentialKey(link.github), link.githubToken);
+    }
+  }
+
   Future<void> resolveConflicts(Map<String, bool> choices) => _run(() async {
     final merge = conflicts, reviewed = _reviewedRemote, remote = _remote;
     if (merge == null || reviewed == null || remote == null) return;
@@ -691,12 +976,15 @@ class AppStore extends ChangeNotifier {
       _run(() async {
         final binding = connection;
         final selected = target ?? binding;
-        if (demo || selected == null || (token == null && _remote == null)) {
+        if (d1Connection != null || hasResetProgress) {
+          throw const FormatException('请从「重置仓库」处理当前云端票库');
+        }
+        if (demo || selected == null || (token == null && _github == null)) {
           throw StateError('请先授权要重置的 GitHub 私有仓库');
         }
         _checkBinding(selected);
         final remote = token == null
-            ? _remote!
+            ? _github!
             : remoteFactory(selected, token);
         final previousStatus = status;
         status = '正在重置 GitHub 仓库…';
@@ -705,6 +993,9 @@ class AppStore extends ChangeNotifier {
           final snapshot = await remote.resetTarget(
             fallbackSettings: binding == null ? const {} : settings,
           );
+          if (linkedCloud(snapshot) != null) {
+            throw const FormatException('此 GitHub 票库已绑定 D1，请连接后一起重置');
+          }
           if (binding?.repositoryId != null &&
               binding!.repositoryId != snapshot.repositoryId) {
             throw const FormatException('仓库身份已改变，已停止重置');
@@ -735,6 +1026,130 @@ class AppStore extends ChangeNotifier {
           if (token != null) remote.close();
         }
       });
+
+  CloudPair _connectedPair() {
+    if (_github == null ||
+        _d1 == null ||
+        connection == null ||
+        d1Connection == null) {
+      throw const FormatException('请先连接两边票库');
+    }
+    return CloudPair(_github!, connection!, _d1!, d1Connection!);
+  }
+
+  Future<void> backupToGitHub() => _run(() async {
+    _requireWritable();
+    await _connectedPair().backup();
+    status = '已备份到 GitHub';
+    syncError = null;
+  });
+
+  Future<CloudResetPreview> prepareD1Reset() => _run(() async {
+    if (demo || !d1Connected || hasResetProgress) {
+      throw const FormatException('请先连接 D1 并处理现有重置');
+    }
+    if (isPaired) return _connectedPair().resetTargets();
+    final primary = await _readBound(_d1!);
+    if (linkedCloud(primary) != null) {
+      throw const FormatException('此 D1 票库已绑定 GitHub，请先同步以恢复关联');
+    }
+    return (github: null, d1: primary);
+  });
+
+  Future<void> resetD1Archive(
+    CloudResetPreview confirmed, {
+    CloudSource? keep,
+  }) => _run(() async {
+    if (demo || _d1 == null || confirmed.d1 == null || hasResetProgress) {
+      throw const FormatException('D1 票库已变化，请重新确认');
+    }
+    if (isPaired) {
+      final pair = _connectedPair(), repo = confirmed.github;
+      if (repo == null) throw const FormatException('票库关联已变化，请重新确认');
+      await _saveResetJournal(
+        pair.prepareReset(repo, confirmed.d1!, keep: keep),
+      );
+      await _continuePairedReset(pair);
+      return;
+    }
+    final primary = _d1!, snapshot = await _readBound(_d1!);
+    if (snapshot.head != confirmed.d1!.head || linkedCloud(snapshot) != null) {
+      throw const FormatException('D1 票库已有变化，请重新确认');
+    }
+    final id = newTicketId();
+    ArchiveSnapshot empty;
+    try {
+      empty = await primary.replace(
+        snapshot,
+        [],
+        snapshot.settings,
+        resetId: id,
+      );
+    } catch (_) {
+      final current = await _readBound(primary);
+      if (current.head != id ||
+          current.generation != id ||
+          current.records.isNotEmpty ||
+          !sameValue(current.settings, snapshot.settings)) {
+        rethrow;
+      }
+      empty = current;
+    }
+    _adopt(empty);
+    status = '票库已重置';
+    await _persist();
+  });
+
+  Future<void> continueCloudReset() => _run(() async {
+    if (demo || !hasResetProgress) throw const FormatException('没有待继续的重置');
+    await _continuePairedReset(_connectedPair());
+  });
+
+  Future<void> abandonCloudReset() => _run(() async {
+    await _saveResetJournal(null);
+    _online = false;
+    status = '重置续接已放弃，请重新同步';
+  });
+
+  Future<void> _saveResetJournal(Map<String, dynamic>? journal) async {
+    final previous = _resetJournal;
+    _resetJournal = journal;
+    try {
+      await _persist();
+    } catch (_) {
+      _resetJournal = previous;
+      rethrow;
+    }
+  }
+
+  Future<void> _continuePairedReset(CloudPair pair) async {
+    final journal = _resetJournal!;
+    final result = await pair.continueReset(journal, _saveResetJournal);
+    final keep = journal['keep'];
+    final droppedKey = switch (keep) {
+      'github' => _d1CredentialKey(d1Connection!),
+      'd1' => _credentialKey(connection!),
+      _ => null,
+    };
+    if (keep == 'github') {
+      _d1?.close();
+      _d1 = null;
+      d1Connection = null;
+    } else if (keep == 'd1') {
+      _github?.close();
+      _github = null;
+      connection = null;
+    }
+    _adopt(keep == 'github' ? result.github : result.d1);
+    _archiveSession++;
+    _resetJournal = null;
+    status = '票库已重置';
+    await _persist();
+    if (droppedKey != null && AppleServices.available) {
+      await AppleServices.deleteCredential(droppedKey);
+    }
+  }
+
   Future<void> acceptRemoteReset() => _run(() async {
     if (demo || _remote == null || !resetDetected) {
       throw StateError('没有待采用的云端重置');
@@ -744,6 +1159,16 @@ class AppStore extends ChangeNotifier {
     if (snapshot.generation == _generation) {
       resetDetected = false;
       throw const FormatException('云端重置状态已变化，请重新同步');
+    }
+    if (_remote is D1Archive &&
+        connection != null &&
+        unlinkedArchive(snapshot)) {
+      if (AppleServices.available) {
+        await AppleServices.deleteCredential(_credentialKey(connection!));
+      }
+      _github?.close();
+      _github = null;
+      connection = null;
     }
     _adopt(snapshot);
     status = '已采用云端票库';
@@ -774,17 +1199,29 @@ class AppStore extends ChangeNotifier {
   Future<void> clearLocalArchive({bool signOut = false}) => _run(() async {
     if (demo) throw StateError('请先退出示例模式');
     final target = connection;
-    if (AppleServices.available && target != null) {
-      await AppleServices.deleteCredential(_credentialKey(target));
+    final d1 = d1Connection;
+    if (AppleServices.available) {
+      if (target != null) {
+        await AppleServices.deleteCredential(_credentialKey(target));
+      }
+      if (d1 != null) {
+        await AppleServices.deleteCredential(_d1CredentialKey(d1));
+      }
     }
-    _remote?.close();
-    _remote = null;
+    _github?.close();
+    _d1?.close();
+    _github = null;
+    _d1 = null;
     connection = null;
+    d1Connection = null;
+    _resetJournal = null;
     _archiveSession++;
     _records = [];
     _base = [];
     _baseSettings = {};
-    if (signOut) settings = sharedSettings();
+    settings = signOut
+        ? sharedSettings()
+        : sharedSettings({...settings}..remove('connections'));
     _head = '';
     _generation = '';
     pending = false;
@@ -792,12 +1229,13 @@ class AppStore extends ChangeNotifier {
     _online = connected;
     syncError = null;
     _clearReview();
-    status = signOut ? '已退出 GitHub，本机票库已清空' : '本机票库已清空，个人资料已保留';
+    status = signOut ? '已退出登录，本机票库已清空' : '本机票库已清空，个人资料已保留';
     await _persist();
   });
   @override
   void dispose() {
-    _remote?.close();
+    _github?.close();
+    _d1?.close();
     super.dispose();
   }
 }

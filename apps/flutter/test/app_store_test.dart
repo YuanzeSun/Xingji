@@ -485,6 +485,89 @@ void main() {
   }
 
   test(
+    'D1 can be used alone, and signing out clears only the local cache',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final d1 = _MemoryD1();
+      final app = AppStore(
+        await SharedPreferences.getInstance(),
+        catalog,
+        [],
+        {},
+        d1Factory: (_, _) => d1,
+      );
+      addTearDown(app.dispose);
+      await app.connectD1(d1.connection, d1.token);
+      await app.save(ticket());
+      expect(app.hasCloud, true);
+      expect(app.connection, isNull);
+      expect(d1.snapshot.records, hasLength(1));
+      expect(
+        (await app.exportBackup()).toJson()['connections']['d1']['token'],
+        d1.token,
+      );
+      d1.offline = true;
+      await expectLater(app.sync(), throwsStateError);
+      expect(app.canWrite, false);
+      expect(app.records, hasLength(1));
+      await app.clearLocalArchive(signOut: true);
+      expect(app.hasCloud, false);
+      expect(app.records, isEmpty);
+      expect(d1.snapshot.records, hasLength(1));
+    },
+  );
+
+  test('either linked login uses D1 and ordinary edits never update the GitHub backup', () async {
+    SharedPreferences.setMockInitialValues({});
+    final d1 = _MemoryD1(), github = _MemoryRemote();
+    final prefs = await SharedPreferences.getInstance();
+    AppStore newStore() => AppStore(
+      prefs,
+      catalog,
+      [],
+      {},
+      d1Factory: (_, _) => d1,
+      remoteFactory: (_, _) => github,
+    );
+    final owner = newStore(), fromGitHub = newStore(), fromD1 = newStore();
+    addTearDown(owner.dispose);
+    addTearDown(fromGitHub.dispose);
+    addTearDown(fromD1.dispose);
+    await owner.connectD1(d1.connection, d1.token);
+    await owner.save(ticket());
+    await owner.connect(
+      github.connection,
+      github.token,
+      chooseSource: (_, _) async => CloudSource.d1,
+    );
+    expect(owner.isPaired, true);
+    final cached = jsonDecode(prefs.getString(AppStore.storageKey)!) as Map;
+    expect(cached['settings']['connections'], isNull);
+    expect(cached['baseSettings']['connections'], isNull);
+    final backup = (await owner.exportBackup()).toJson();
+    expect(backup['connections']['github']['token'], github.token);
+    expect(backup['connections']['d1']['token'], d1.token);
+    final staleHead = github.snapshot.head;
+    await owner.save(owner.records.single.withChanges({'gate': '09A'}));
+    expect(github.snapshot.head, staleHead);
+    await fromGitHub.connect(github.connection, github.token);
+    expect(fromGitHub.isPaired, true);
+    expect(fromGitHub.records.single.text('gate'), '09A');
+    github.offline = true;
+    await fromD1.connectD1(d1.connection, d1.token);
+    expect(fromD1.isPaired, true);
+    expect(fromD1.records.single.text('gate'), '09A');
+    await fromD1.save(fromD1.records.single.withChanges({'gate': '12A'}));
+    expect(github.snapshot.head, staleHead);
+    github.offline = false;
+    await fromD1.backupToGitHub();
+    expect(github.snapshot.records.single.text('gate'), '12A');
+    await fromD1.clearLocalArchive(signOut: true);
+    expect(fromD1.hasCloud, false);
+    expect(linkedCloud(d1.snapshot), isNotNull);
+  });
+
+  test(
     'reset-only authorization preserves an unrelated local ticket library',
     () async {
       SharedPreferences.setMockInitialValues({});
@@ -680,9 +763,69 @@ class _MemoryRemote extends GitHubArchive {
   @override
   Future<ArchiveSnapshot> reset(
     ArchiveSnapshot before,
-    Map<String, dynamic> settings,
-  ) async {
-    update(settings, records: [], generation: 'reset');
+    Map<String, dynamic> settings, {
+    String? resetId,
+  }) async {
+    update(settings, records: [], generation: resetId ?? 'reset');
     return snapshot;
+  }
+}
+
+class _MemoryD1 extends D1Archive {
+  _MemoryD1()
+    : super(
+        D1Connection('https://archive.example.workers.dev', id: id),
+        'test-d1',
+      );
+  static const id = '0123456789abcdef0123456789abcdef';
+  ArchiveSnapshot snapshot = ArchiveSnapshot(
+    databaseId: id,
+    head: 'start',
+    tree: '',
+    records: [],
+    settings: {'flightMcpKey': ''},
+    generation: 'initial',
+  );
+  bool offline = false;
+
+  @override
+  Future<ArchiveSnapshot> read() async {
+    if (offline) throw StateError('offline');
+    return snapshot;
+  }
+
+  @override
+  Future<String> write(
+    List<TicketRecord> records,
+    ArchiveSnapshot before,
+    Map<String, dynamic> settings,
+  ) async => (await _commit(before, records, settings)).head;
+
+  @override
+  Future<ArchiveSnapshot> replace(
+    ArchiveSnapshot before,
+    List<TicketRecord> records,
+    Map<String, dynamic> settings, {
+    String? resetId,
+  }) => _commit(before, records, settings, resetId: resetId ?? newTicketId());
+
+  Future<ArchiveSnapshot> _commit(
+    ArchiveSnapshot before,
+    List<TicketRecord> records,
+    Map<String, dynamic> settings, {
+    String? resetId,
+  }) async {
+    if (offline) throw StateError('offline');
+    if (before.head != snapshot.head) {
+      throw ArchiveApiException('stale D1 head', 409);
+    }
+    return snapshot = ArchiveSnapshot(
+      databaseId: id,
+      head: resetId ?? newTicketId(),
+      tree: '',
+      records: records,
+      settings: settings,
+      generation: resetId ?? before.generation,
+    );
   }
 }
