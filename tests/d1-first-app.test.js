@@ -31,7 +31,6 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
 
     document.querySelector('[data-action="disconnect-d1"]').click();
     await until(() => document.querySelector('.cloud-setup #d1-form'));
-    assert.equal(sessionStorage.getItem('xingji-d1-token'), null);
     assert.equal(await db.get('d1Token'), '');
     assert.equal(await db.get('d1', null), null);
     assert.deepEqual(await db.get('records'), []);
@@ -53,7 +52,7 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
     sourceForm.querySelector('[data-action="close-modal"]').click();
     await until(() => document.querySelector('#github-form button[type="submit"]')?.disabled === false);
     assert.equal(github.head, before);
-    assert.equal(sessionStorage.getItem('xingji-github-token'), null);
+    assert.equal(await db.get('githubToken', ''), '');
     connect(window, 'github');
     await chooseSource('d1');
     await confirm('确认覆盖 GitHub');

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRecord } from '../src/model.js';
 import { D1Store } from '../src/d1.js';
+import * as db from '../src/db.js';
 import { MemoryGitHub } from './helpers/cloud.js';
 import { memoryD1, endpoint, token } from './helpers/d1.js';
 import { browser, until, connect, useServers } from './helpers/d1-app.js';
@@ -28,7 +29,7 @@ test('an already signed-in D1 device discovers a new GitHub backup without migra
     const writes = d1.calls.filter(call => call.method === 'POST').length;
     document.querySelector('[data-action="sync"]').click();
     await until(() => document.querySelector('[data-action="backup-github"]')?.disabled === false);
-    assert.equal(sessionStorage.getItem('xingji-github-token'), 'other-device');
+    assert.equal(await db.get('githubToken'), 'other-device');
     assert.equal(github.calls.some(call => call.method === 'PATCH'), false);
     assert.equal(d1.calls.filter(call => call.method === 'POST').length, writes);
   } finally { window.dispatchEvent(new window.Event('offline')); window.close(); }

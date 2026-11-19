@@ -1,5 +1,43 @@
 import { escape as e } from './html.js';
 import { arithmeticField } from './arithmetic-confirm.js';
+import { assertLinkTargets } from './archive-migration.js';
+import { sameSettings, unlinkedSettings, wasUnlinked } from './shared-settings.js';
+
+export async function prepareArchiveReset(github, d1, settings) {
+  const [snapshot, d1Snapshot] = await Promise.all([github?.resetTarget(d1 ? {} : settings), d1?.read()]);
+  if (github && d1) {
+    if (wasUnlinked(d1Snapshot)) throw new Error('仓库关联已解除，请先重新登录。');
+    assertLinkTargets(github, d1, snapshot, d1Snapshot);
+  } else if (d1Snapshot?.settings.connections?.github || snapshot?.settings.connections?.d1) {
+    throw new Error('票库已关联另一边，请先重新登录以恢复两边的连接。');
+  }
+  return { snapshot, d1Snapshot, unlinkStarted: wasUnlinked(snapshot) && !!d1 };
+}
+
+export async function resetArchiveTargets(github, d1, request, progress, { unlink, settings }) {
+  let d1Result, d1Settings;
+  if (d1) {
+    const before = request.d1Snapshot;
+    d1Settings = unlink ? unlinkedSettings(before.settings) : before.settings;
+    const latest = await d1.read();
+    if (latest.head !== before.head) {
+      if (!progress.d1Attempted || latest.generation === before.generation ||
+          latest.records.length || !sameSettings(latest.settings, d1Settings)) {
+        throw new Error('D1 票库已有变化，请关闭窗口后重新确认');
+      }
+      d1Result = latest;
+    }
+  }
+  if (github) {
+    if (!progress.github) progress.github = await github.resetRepository(request.snapshot.head, d1 ? {} : settings, { unlink });
+    else if (await github.head() !== progress.github.head) throw new Error('GitHub 仓库已有变化，请关闭窗口后重新确认');
+  }
+  if (d1 && !d1Result) {
+    progress.d1Attempted = true;
+    d1Result = await d1.replace(request.d1Snapshot, [], d1Settings);
+  }
+  return { github: progress.github, d1: d1Result };
+}
 
 export function archiveResetMarkup(request, captured, challenge) {
   const remote = request.code === 'ARCHIVE_RESET';

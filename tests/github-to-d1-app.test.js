@@ -20,6 +20,17 @@ test('GitHub first: D1 adopts the latest GitHub data and later JSON imports only
     await until(() => document.querySelector('#archive-source-form'));
     assert.equal(d1.calls.filter(call => call.method === 'POST').length, 0);
     await chooseSource('github');
+    github.push(github.records(), { connections: {
+      github: { id: 77, owner: 'user', repo: 'data', branch: 'main', token: 'github-credential' },
+      d1: { id: '0'.repeat(32), url: 'https://different.workers.dev', token: 'other-d1' }
+    } });
+    await confirm('确认覆盖 D1');
+    await until(() => document.querySelector('#d1-form')?.parentElement.textContent.includes('已关联另一份 D1 票库'));
+    assert.equal(d1.calls.filter(call => call.method === 'POST').length, 0);
+
+    github.push(github.records(), { flightMcpKey: 'github-key' });
+    connect(window, 'd1');
+    await chooseSource('github');
     github.push([createRecord({ id: 'latest-github', service: 'G22' })]);
     await confirm('确认覆盖 D1');
     await until(() => document.querySelector('[data-cloud-label]')?.textContent === '手动备份' && writable());

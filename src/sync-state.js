@@ -7,25 +7,53 @@ const keys = ['records', 'base', 'settings', 'settingsBase', 'github', 'd1', 'sy
 export { sameRecords };
 const binding = config => config ? `${config.id}:${config.branch}` : '';
 export const activeBinding = ({ d1, config }) => d1 ? `d1:${d1.id}:${d1.url}` : binding(config);
-function unpack(raw) {
-  return { records: raw.records || [], base: raw.base || [], settings: sharedSettings(raw.settings), settingsBase: sharedSettings(raw.settingsBase), config: raw.github || null, d1: raw.d1 || null, meta: { revision: 0, head: '', verified: false, pending: false, ...raw.syncMeta }, lastSync: raw.lastSync || null };
+const sessionKeys = [...keys, 'githubToken', 'd1Token', 'showDemo'];
+
+function unpack(raw, session = false) {
+  return {
+    records: raw.records || [],
+    base: raw.base || [],
+    settings: sharedSettings(raw.settings),
+    settingsBase: sharedSettings(raw.settingsBase),
+    config: raw.github || null,
+    d1: raw.d1 || null,
+    meta: { revision: 0, head: '', verified: false, pending: false, ...raw.syncMeta },
+    lastSync: raw.lastSync || null,
+    ...(session ? { credentials: { github: raw.github ? raw.githubToken || '' : '', d1: raw.d1 ? raw.d1Token || '' : '' }, showDemo: raw.showDemo === true } : {})
+  };
 }
-export async function readSyncState() {
+export async function readSyncState({ session = false } = {}) {
+  const fields = session ? sessionKeys : keys;
   for (let attempt = 0; attempt < 4; attempt++) {
-    const raw = await db.atomic(keys), snapshot = unpack(raw);
+    const raw = await db.atomic(fields), snapshot = unpack(raw, session);
     if (!hasLegacyCodes(snapshot.records) && !hasLegacyCodes(snapshot.base)) return snapshot;
     const records = await upgradeCodeRecords(snapshot.records), base = await upgradeCodeRecords(snapshot.base);
-    const migrated = await db.atomic(keys, current => {
+    const migrated = await db.atomic(fields, current => {
       if (JSON.stringify(current.records) !== JSON.stringify(raw.records) || JSON.stringify(current.base) !== JSON.stringify(raw.base)) return { result: null };
-      const latest = unpack(current), meta = { ...latest.meta, revision: latest.meta.revision + 1 };
+      const latest = unpack(current, session), meta = { ...latest.meta, revision: latest.meta.revision + 1 };
       return { write: { records, base, syncMeta: meta }, result: { ...latest, records, base, meta } };
     });
     if (migrated) return migrated;
   }
   throw new Error('条码转换期间其他标签页持续修改，请刷新重试');
 }
-export async function bindRepository(config, expectedD1 = null, credential, cloudLinkReady) {
-  return db.atomic(keys, raw => {
+
+export function sameArchiveBaseline(current, expected) {
+  return activeBinding(current) === activeBinding(expected) &&
+    binding(current.config) === binding(expected.config) &&
+    current.meta.revision === expected.meta.revision && current.meta.head === expected.meta.head;
+}
+
+function archiveFields(current, remote) {
+  const records = clone(remote.records), settings = sharedSettings(remote.settings);
+  const syncMeta = {
+    revision: current.meta.revision + 1, head: remote.head, generation: remote.generation || '', verified: true, pending: false
+  };
+  return { records, settings, base: clone(records), settingsBase: clone(settings), syncMeta, lastSync: now() };
+}
+
+export function bindRepository(config, expectedD1 = null, credential, cloudLinkReady) {
+  return db.atomic(sessionKeys, raw => {
     const current = unpack(raw);
     if (activeBinding({ d1: current.d1 }) !== activeBinding({ d1: expectedD1 })) throw new Error('主存储已变化，请刷新后重新连接');
     if (current.config && binding(current.config) !== binding(config)) throw new Error('本机缓存已绑定其他仓库，不能混入当前票库');
@@ -33,7 +61,7 @@ export async function bindRepository(config, expectedD1 = null, credential, clou
     const write = { github: bound };
     if (credential !== undefined) write.githubToken = credential;
     if (cloudLinkReady !== undefined) write.cloudLinkReady = cloudLinkReady;
-    return { write, result: { ...current, config: bound } };
+    return { write, result: unpack({ ...raw, ...write }, true) };
   });
 }
 export function signOutCloud() {
@@ -43,44 +71,39 @@ export function signOutCloud() {
       records: [], base: [], settings: {}, settingsBase: {},
       syncMeta: { revision: (raw.syncMeta?.revision || 0) + 1 }, lastSync: null
     };
-    return { write, result: unpack(write) };
+    return { write, result: unpack(write, true) };
   });
 }
 
 export function keepUnlinkedArchive(captured, provider, archive, credential) {
-  return db.atomic(keys, raw => {
+  return db.atomic(sessionKeys, raw => {
     const current = unpack(raw);
-    if (activeBinding(current) !== activeBinding(captured) || current.config?.id !== captured.config?.id ||
-        current.config?.branch !== captured.config?.branch || current.meta.revision !== captured.meta.revision || current.meta.head !== captured.meta.head) {
+    if (!sameArchiveBaseline(current, captured)) {
       throw new Error('本机票库已变化，请重新登录');
     }
     const github = provider === 'github';
-    const records = clone(archive.records), settings = sharedSettings(archive.settings);
-    const syncMeta = { revision: current.meta.revision + 1, head: archive.head, generation: archive.generation, verified: true, pending: false };
     const write = {
+      ...archiveFields(current, archive),
       github: github ? current.config : null, d1: github ? null : current.d1,
       githubToken: github ? credential : '', d1Token: github ? '' : credential,
-      records, base: clone(records), settings, settingsBase: clone(settings), syncMeta, lastSync: now(),
       cloudLinkReady: false, showDemo: false
     };
-    return { write, result: unpack(write) };
+    return { write, result: unpack(write, true) };
   });
 }
 
-export async function activateD1(captured, config, remote, { credential, github, cloudLinkReady } = {}) {
-  return db.atomic(keys, raw => {
+export function activateD1(captured, config, remote, { credential, github, cloudLinkReady } = {}) {
+  return db.atomic(sessionKeys, raw => {
     const current = unpack(raw);
     if (activeBinding(current) !== activeBinding(captured) || current.meta.revision !== captured.meta.revision || current.meta.head !== captured.meta.head) throw new Error('本机票库已变化，请重新核对后连接');
-    const records = clone(remote.records), settings = sharedSettings(remote.settings), lastSync = now();
-    const meta = { revision: current.meta.revision + 1, head: remote.head, generation: remote.generation || '', verified: true, pending: false };
-    const write = { d1: config, records, base: clone(records), settings, settingsBase: clone(settings), syncMeta: meta, lastSync };
+    const write = { d1: config, ...archiveFields(current, remote) };
     if (credential !== undefined) write.d1Token = credential;
     if (cloudLinkReady !== undefined) write.cloudLinkReady = cloudLinkReady;
     if (github) {
       write.github = clone(github.config);
       write.githubToken = github.token;
     }
-    return { write, result: unpack({ ...raw, ...write }) };
+    return { write, result: unpack({ ...raw, ...write }, true) };
   });
 }
 
@@ -132,17 +155,21 @@ export async function acknowledgeSync(captured, remote) {
   });
 }
 
-export async function replaceWithRemote(captured, remote) {
-  return db.atomic([...keys,'githubToken'], raw => {
-    const current = unpack({...raw,settings:preservedSettings(raw.settings),settingsBase:preservedSettings(raw.settingsBase)});
-    if (current.d1 || binding(current.config) !== binding(captured.config) || current.meta.revision !== captured.meta.revision || current.meta.head !== captured.meta.head) throw new Error('本机票库已变化，请重新检查后确认重置');
-    const records = clone(remote.records), settings = sharedSettings(remote.settings), lastSync = now();
-    const meta = { revision: current.meta.revision + 1, head: remote.head, generation: remote.generation || '', verified: true, pending: false };
-    return { clear:true, write: { github:current.config,githubToken:raw.githubToken || '',showDemo:false,records, base: clone(records), settings, settingsBase: clone(settings), syncMeta: meta, lastSync }, result: { ...current, records, base: clone(records), settings, settingsBase: clone(settings), meta, lastSync } };
+function unpackReset(raw, session = false) {
+  return unpack({ ...raw, settings: preservedSettings(raw.settings), settingsBase: preservedSettings(raw.settingsBase) }, session);
+}
+
+export function replaceWithRemote(captured, remote) {
+  return db.atomic([...keys, 'githubToken'], raw => {
+    const current = unpackReset(raw);
+    if (current.d1 || !sameArchiveBaseline(current, captured)) throw new Error('本机票库已变化，请重新检查后确认重置');
+    const write = {
+      ...archiveFields(current, remote), github: current.config, githubToken: raw.githubToken || '', showDemo: false
+    };
+    return { clear: true, write, result: unpack(write, true) };
   });
 }
 
 export async function readResetState() {
-  const raw=await db.atomic(keys);
-  return unpack({...raw,settings:preservedSettings(raw.settings),settingsBase:preservedSettings(raw.settingsBase)});
+  return unpackReset(await db.atomic(sessionKeys), true);
 }

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as db from '../src/db.js';
 import { createRecord } from '../src/model.js';
 import { fullBackup, readFullBackup } from '../src/archive-backup.js';
 import { sharedSettings } from '../src/shared-settings.js';
@@ -43,8 +44,8 @@ test('restored tickets and settings sync before proposing the only missing accou
     assert.deepEqual(github.settings(), settings);
     assert.deepEqual(github.records().map(row => row.id), ['restored']);
     assert.equal(d1.calls.filter(call => call.method === 'POST').length, 0);
-    assert.equal(sessionStorage.getItem('xingji-github-token'), 'test-key');
-    assert.equal(sessionStorage.getItem('xingji-d1-token'), null);
+    assert.equal(await db.get('githubToken'), 'test-key');
+    assert.equal(await db.get('d1Token', ''), '');
     document.querySelector('[data-connect-from-backup]').click();
     const form = document.querySelector('#d1-form');
     assert.equal(form.elements.token.value, token);

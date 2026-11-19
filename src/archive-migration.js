@@ -11,23 +11,33 @@ function transferSettings(settings, github, d1) {
   });
 }
 
-export async function copyGitHubToD1(github, d1, destination) {
-  const source = await github.read();
-  return d1.replace(destination, source.records, transferSettings(source.settings, github, d1));
+export async function bindArchivePair(github, d1, source, previews) {
+  // The source can have newer tickets, but another device may also have linked it since the preview.
+  const githubSnapshot = source === 'github' ? await github.read() : previews.githubSnapshot;
+  const d1Snapshot = source === 'd1' ? await d1.read() : previews.d1Snapshot;
+  assertLinkTargets(github, d1, githubSnapshot, d1Snapshot);
+  if (hasCloudLink(github, d1, githubSnapshot, d1Snapshot)) return publishCloudLink(github, d1);
+
+  if (source === 'github') {
+    const settings = transferSettings(githubSnapshot.settings, github, d1);
+    const remote = await d1.replace(d1Snapshot, githubSnapshot.records, settings);
+    return publishCloudLink(github, d1, { d1Snapshot: remote, newBinding: true });
+  }
+  const settings = transferSettings(d1Snapshot.settings, github, d1);
+  await github.write(d1Snapshot.records, { ...githubSnapshot, generation: crypto.randomUUID() }, settings,
+    'Back up the Xingji archive from Cloudflare D1');
+  return publishCloudLink(github, d1, { d1Snapshot, newBinding: true });
 }
 
-export async function backUpToGitHub(d1, github, firstSnapshot = null) {
+export async function backUpToGitHub(d1, github) {
   const source = await d1.read();
   await github.verify();
-  const destination = firstSnapshot ? { ...firstSnapshot, generation: crypto.randomUUID() } : await github.read();
-  if (!firstSnapshot) {
-    assertLinkTargets(github, d1, destination, source);
-    if (wasUnlinked(destination) || wasUnlinked(source)) throw new Error('仓库关联已解除，请重新登录后再绑定。');
-  }
+  const destination = await github.read();
+  assertActiveCloudLink(github, d1, destination, source);
   const settings = transferSettings(source.settings, github, d1);
-  if (!firstSnapshot && destination.initialized && sameRecords(source.records, destination.records) && sameSettings(settings, destination.settings)) return { changed: false, source };
+  if (destination.initialized && sameRecords(source.records, destination.records) && sameSettings(settings, destination.settings)) return { changed: false };
   await github.write(source.records, destination, settings, 'Back up the Xingji archive from Cloudflare D1');
-  return { changed: true, source };
+  return { changed: true };
 }
 
 export function sameGitHubAccount(left, right) {
@@ -57,11 +67,21 @@ export function assertLinkTargets(github, d1, repo, archive) {
   }
 }
 
+export function hasCloudLink(github, d1, repo, archive) {
+  return sameD1Account(pairedD1(repo, github.config), d1.config) ||
+    sameGitHubAccount(pairedGitHub(archive, d1.config), github.config);
+}
+
+function assertActiveCloudLink(github, d1, repo, archive) {
+  assertLinkTargets(github, d1, repo, archive);
+  if (wasUnlinked(repo) || wasUnlinked(archive)) throw new Error('仓库关联已解除，请重新登录后再绑定。');
+}
+
 export async function publishCloudLink(github, d1, { githubSnapshot, d1Snapshot, newBinding = false } = {}) {
   await github.verify();
   const [repo, archive] = await Promise.all([githubSnapshot ?? github.read(), d1Snapshot ?? d1.read()]);
-  assertLinkTargets(github, d1, repo, archive);
-  if (!newBinding && (wasUnlinked(repo) || wasUnlinked(archive))) throw new Error('仓库关联已解除，请重新登录后再绑定。');
+  if (newBinding) assertLinkTargets(github, d1, repo, archive);
+  else assertActiveCloudLink(github, d1, repo, archive);
   const githubSettings = transferSettings(repo.settings, github, d1);
   const d1Settings = transferSettings(archive.settings, github, d1);
   if (!sameSettings(githubSettings, repo.settings)) {

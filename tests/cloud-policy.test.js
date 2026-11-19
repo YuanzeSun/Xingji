@@ -40,7 +40,6 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   assert.equal(form.elements.token.value, 'test-key');
   assert.equal(document.activeElement, form.elements.token); assert.equal(form.elements.token.selectionStart, 2);
   const db = await import('../src/db.js');
-  assert.equal(sessionStorage.getItem('xingji-github-token'), null);
   assert.equal(await db.get('githubToken', ''), '', 'unsubmitted credentials stay in the current page memory');
   form.elements.owner.dispatchEvent(new window.CompositionEvent('compositionstart', { bubbles: true }));
   document.dispatchEvent(new window.Event('visibilitychange'));
@@ -86,7 +85,6 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   const head = server.head;
   click('[data-action="disconnect"]');
   await wait(() => document.querySelector('.cloud-setup #github-form'));
-  assert.equal(sessionStorage.getItem('xingji-github-token'), null);
   assert.equal(await db.get('githubToken'), '');
   assert.equal(await db.get('github', null), null);
   assert.deepEqual(await db.get('records'), []);
@@ -102,7 +100,6 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   location.hash = 'archive';
   await wait(() => document.querySelector('.ticket-card'));
-  assert.equal(sessionStorage.getItem('xingji-github-token'), 'replacement-key');
   assert.equal(await db.get('githubToken'), 'replacement-key');
   dom.window.close();
 });

@@ -47,6 +47,15 @@ test('D1-first binding can keep GitHub data and one reset clears both archives',
     assert.equal(document.querySelectorAll('[data-action="reset-repository"]').length, 1);
 
     const beforeD1Settings = d1Settings(), beforeGitHubSettings = github.settings();
+    github.push(github.records(), { ...beforeGitHubSettings, connections: {
+      ...beforeGitHubSettings.connections,
+      d1: { id: '0'.repeat(32), url: 'https://different.workers.dev', token: 'other-d1' }
+    } });
+    reset().click();
+    await until(() => document.querySelector('[data-reset-prepare-error]')?.textContent.includes('已关联另一份 D1 票库'));
+    assert.equal(document.querySelector('[data-archive-reset]'), null);
+    document.querySelector('dialog [data-action="close-modal"]').click();
+    github.push(github.records(), beforeGitHubSettings);
     reset().click();
     await until(() => document.querySelector('[data-archive-reset]'));
     assert.match(document.querySelector('.reset-targets').textContent, /GitHub.*D1/s);
@@ -88,7 +97,6 @@ test('D1-first binding can keep GitHub data and one reset clears both archives',
     const db = await import('../src/db.js');
     assert.equal((await db.get('github')).id, 77);
     assert.equal(await db.get('d1', null), null);
-    assert.equal(sessionStorage.getItem('xingji-d1-token'), null);
     assert.equal(await db.get('d1Token'), '');
     assert.equal(await db.get('githubToken'), 'github-credential');
     assert.deepEqual(github.settings(), { ...beforeGitHubSettings, connections: { unlinked: true } });
@@ -122,7 +130,7 @@ test('D1-first binding can keep GitHub data and one reset clears both archives',
     answerArithmetic(document);
     d1.loseAcknowledgement = true;
     keepD1Form.querySelector('[type="submit"]').click();
-    await until(() => keepD1Form.querySelector('[data-reset-error]').textContent.includes('D1 重置尚未完成'));
+    await until(() => keepD1Form.querySelector('[data-reset-error]').textContent.includes('D1 重置尚未确认'));
     assert.deepEqual(d1Settings().connections, { unlinked: true });
     const resets = d1.calls.filter(call => call.method === 'POST').length;
     keepD1Form.querySelector('[type="submit"]').click();
@@ -130,7 +138,6 @@ test('D1-first binding can keep GitHub data and one reset clears both archives',
     assert.equal(d1.calls.filter(call => call.method === 'POST').length, resets);
     assert.equal((await db.get('d1')).id, id);
     assert.equal(await db.get('github', null), null);
-    assert.equal(sessionStorage.getItem('xingji-github-token'), null);
     assert.equal(await db.get('githubToken'), '');
     assert.equal(await db.get('d1Token'), token);
   } finally { window.dispatchEvent(new window.Event('offline')); window.close(); }
