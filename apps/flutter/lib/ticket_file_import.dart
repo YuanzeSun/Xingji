@@ -10,9 +10,20 @@ import 'import_review.dart';
 import 'platform_services.dart';
 import 'wallet_pass.dart';
 
-bool _isFlight(RecognitionResult result) =>
-    result.barcodes.any((bytes) => decodeBoardingBytes(bytes) != null) ||
-    _isFlightText(result.lines.map((line) => line.text).join('\n'));
+bool _isFlight(RecognitionResult result) {
+  if (result.barcodes.any((bytes) => decodeBoardingBytes(bytes) != null)) {
+    return true;
+  }
+  final text = result.lines.map((line) => line.text).join('\n');
+  if (RegExp(r'二等座|一等座|硬座|硬卧|限乘|报\s*销\s*凭\s*证|中国铁路').hasMatch(text)) {
+    return false;
+  }
+  return RegExp(
+        r'航班|登\s*[机機]|出发机场|到达机场|乘机|\b(?:FLIGHT|BOARDING|AIRPORT)\b',
+        caseSensitive: false,
+      ).hasMatch(text) ||
+      (result.paperColor.isEmpty && _isFlightText(text));
+}
 
 bool _isFlightText(String text) => RegExp(
   r'航班|登机|出发机场|到达机场|乘机|\b(?:FLIGHT|BOARDING PASS|AIRPORT)\b|\b[A-Z]{2}\s*\d{2,5}[A-Z]?\b',
@@ -24,80 +35,30 @@ bool _hasJourney(TicketRecord record) =>
     ['origin', 'destination'].every((key) => record.text(key).isNotEmpty);
 
 Future<List<TicketRecord>> recognizeTicketImage(
-  Uint8List? bytes,
+  Uint8List bytes,
   ReferenceCatalog catalog, {
   bool? flight,
-  RecognitionResult? live,
-  bool scanPhotoBarcode = false,
 }) async {
   final provider = SystemRecognition();
-  final liveCodes =
-      live?.barcodes
-          .where((code) => decodeBoardingBytes(code) != null)
-          .toList() ??
-      [];
-  var photo = RecognitionResult();
-  if (bytes != null) {
-    try {
-      photo = await provider.recognize(
-        bytes,
-        flight: flight ?? true,
-        barcodes: scanPhotoBarcode || liveCodes.isEmpty,
-      );
-    } on PlatformException catch (error) {
-      if (error.code != 'vision_failed') rethrow;
-    }
-  }
-  final photoCodes = photo.barcodes
-      .where((code) => decodeBoardingBytes(code) != null)
-      .toList();
-  final livePayloads = liveCodes.map(base64Encode).toSet();
-  final anotherBarcode =
-      livePayloads.isNotEmpty &&
-      photoCodes.any((code) => !livePayloads.contains(base64Encode(code)));
-  final liveLines = anotherBarcode
-      ? const <RecognitionLine>[]
-      : live?.lines ?? const <RecognitionLine>[];
-  final liveText = recognizedTicketText(liveLines);
-  final reading = RecognitionResult(
-    lines: photo.lines,
-    barcodes: photoCodes.isNotEmpty || liveCodes.isEmpty
-        ? photo.barcodes
-        : liveCodes,
-    symbolData: photo.symbolData,
-  );
-  final hasBarcode = reading.barcodes.any(
-    (code) => decodeBoardingBytes(code) != null,
-  );
+  final reading = await provider.recognize(bytes, flight: flight ?? true);
+  final isFlight = flight ?? _isFlight(reading);
   final fallback = parseRecognition(
     reading,
     catalog,
-    flight:
-        hasBarcode || (flight ?? _isFlight(reading) || _isFlightText(liveText)),
-    supplementalText: liveText,
-  ).where(_hasJourney).toList();
-  // An image model extracts one ticket, so its fields cannot be assigned to
-  // individual coupons from a multi-leg barcode.
-  if (fallback.length > 1) return fallback;
+    flight: isFlight,
+    scannedImage: true,
+  );
+  if (isFlight || fallback.any((ticket) => ticket.isFlight)) return fallback;
 
-  final photoText = recognizedTicketText(photo.lines);
-  final text = [
-    if (photoText.isNotEmpty) photoText,
-    if (liveText.isNotEmpty) liveText,
-  ].join('\n');
+  final text = recognizedTicketText(reading.lines);
   try {
     final capabilities = await provider.capabilities();
-    final fields =
-        bytes != null && capabilities['appleIntelligenceImage'] == true
-        ? await provider.extractTicketImage(
-            bytes,
-            text,
-            flight: hasBarcode ? true : flight,
-          )
+    final fields = capabilities['appleIntelligenceImage'] == true
+        ? await provider.extractTicketImage(bytes, text, flight: false)
         : text.isNotEmpty && capabilities['appleIntelligence'] == true
         ? _groundedFields(await provider.extractTicketText(text), text)
         : null;
-    if (_recognizedTicket(fields, fallback.firstOrNull, catalog, flight: flight)
+    if (_recognizedTicket(fields, fallback.firstOrNull, catalog, flight: false)
         case final ticket? when _hasJourney(ticket)) {
       return [ticket];
     }
@@ -106,7 +67,7 @@ Future<List<TicketRecord>> recognizeTicketImage(
   } on MissingPluginException {
     // The local result is usable on hosts without a model channel.
   }
-  return fallback;
+  return fallback.where(_hasJourney).toList();
 }
 
 Future<List<TicketRecord>> recognizeTicketText(
@@ -271,10 +232,14 @@ Future<List<TicketRecord>> readTicketAttachment(
   final tickets = <TicketRecord>[];
   for (final page in pages) {
     final flight = _isFlight(page);
-    final records = parseRecognition(page, catalog, flight: flight);
+    final records = parseRecognition(
+      page,
+      catalog,
+      flight: flight,
+      scannedImage: !page.hasTextLayer,
+    );
     for (final ticket in records) {
-      if (ticket.text('service').isEmpty &&
-          ['origin', 'destination'].any((key) => ticket.text(key).isEmpty)) {
+      if (!_hasJourney(ticket) && ticket.text('boardingTime').isEmpty) {
         continue;
       }
       tickets.add(

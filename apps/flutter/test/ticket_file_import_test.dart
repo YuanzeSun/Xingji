@@ -31,7 +31,7 @@ void main() {
   );
 
   test(
-    'a boarding barcode still sends the image to Intelligence and stays locked',
+    'a flight photo uses the barcode and planned boarding time only',
     () async {
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -55,35 +55,24 @@ void main() {
         call,
       ) async {
         methods.add(call.method);
-        if (call.method == 'capabilities') {
-          return {'appleIntelligence': true, 'appleIntelligenceImage': true};
-        }
         expect(call.arguments['bytes'], orderedEquals(input));
-        if (call.method == 'recognizeImage') {
-          return {
-            'barcodes': [
-              {'rawBytes': base64Encode(utf8.encode(barcode))},
-            ],
-            'lines': [
-              {
-                'text': 'GATE A12',
-                'x': 0.1,
-                'y': 0.3,
-                'width': 0.2,
-                'height': 0.04,
-                'confidence': 0.99,
-              },
-            ],
-          };
-        }
-        expect(call.method, 'extractTicketImage');
-        expect(call.arguments['text'], contains('GATE A12'));
+        expect(call.method, 'recognizeImage');
         return {
-          'type': 'flight',
-          'service': 'CA999',
-          'seat': '36C',
-          'gate': 'CLOSED',
-          'departureDate': '2026-11-18',
+          'barcodes': [
+            {'rawBytes': base64Encode(utf8.encode(barcode))},
+          ],
+          'lines': [
+            {
+              'text':
+                  'GATE A12\n日期 2026-11-18\n'
+                  '实际登机时间 09:40\n登机时间 08:55\n起飞时间 09:25',
+              'x': 0.1,
+              'y': 0.3,
+              'width': 0.2,
+              'height': 0.04,
+              'confidence': 0.99,
+            },
+          ],
         };
       });
       addTearDown(
@@ -96,17 +85,22 @@ void main() {
         catalog,
         flight: true,
       )).single;
-      expect(methods, ['recognizeImage', 'capabilities', 'extractTicketImage']);
+      expect(methods, ['recognizeImage']);
       expect(record.text('service'), 'CA181');
       expect(record.text('seat'), '8A');
       expect(record.barcodeLocked('seat'), isTrue);
-      expect(record.text('gate'), 'A12');
-      expect(record.departure?.calendarText, '2026-11-18');
+      expect(record.text('gate'), isEmpty);
+      expect(record.text('boardingTime'), '08:55');
+      expect(record.text('actualBoardingTime'), isEmpty);
+      expect(record.text('departureTime'), isEmpty);
+      expect(record.fieldSources['boardingTime'], 'ocr');
+      expect(record.departure?.year, isNull);
+      expect(record.departure?.dayOfYear, date.dayOfYear);
     },
   );
 
   test(
-    'an image model cannot fill a blank gate with a closure status',
+    'a barcode remains usable when the photo contains no readable text',
     () async {
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -114,16 +108,10 @@ void main() {
         call,
       ) async {
         return switch (call.method) {
-          'capabilities' => {'appleIntelligenceImage': true},
           'recognizeImage' => {
             'barcodes': [
               {'rawBytes': base64Encode(boardingCode('181'))},
             ],
-          },
-          'extractTicketImage' => {
-            'type': 'flight',
-            'gate': 'CLOSED',
-            'boardingTime': '07:30',
           },
           _ => fail('Unexpected method ${call.method}'),
         };
@@ -134,7 +122,7 @@ void main() {
       );
       final record = (await recognizeTicketImage(Uint8List(4), catalog)).single;
       expect(record.text('gate'), isEmpty);
-      expect(record.text('boardingTime'), '07:30');
+      expect(record.text('boardingTime'), isEmpty);
     },
   );
 
@@ -229,115 +217,36 @@ void main() {
     },
   );
 
-  test(
-    'an already decoded live code needs no photo or model to open review',
-    () async {
-      final record = (await recognizeTicketImage(
-        null,
-        catalog,
-        live: RecognitionResult(
-          barcodes: [boardingCode('181')],
-          lines: [RecognitionLine('日期 2026-11-19', 0, 0, 1, .2, .9)],
-        ),
-      )).single;
-      expect(record.barcodeLocked('service'), isTrue);
-      expect(record.text('service'), 'CA181');
-      expect(record.departure?.year, isNull);
-      expect(
-        record.departure?.dayOfYear,
-        JourneyDate.calendar(2026, 11, 18).dayOfYear,
-      );
-    },
-  );
-
-  test(
-    'a partial photo reading retains boarding time from the live view',
-    () async {
-      final messenger =
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      messenger.setMockMethodCallHandler(SystemRecognition.channel, (
-        call,
-      ) async {
-        if (call.method == 'capabilities') return {};
-        expect(call.method, 'recognizeImage');
-        expect(call.arguments['barcodes'], isFalse);
-        return {
-          'lines': [
-            {
-              'text': '登机口 A12',
-              'x': .2,
-              'y': .7,
-              'width': .28,
-              'height': .04,
-              'confidence': .99,
-            },
-          ],
-        };
-      });
-      addTearDown(
-        () =>
-            messenger.setMockMethodCallHandler(SystemRecognition.channel, null),
-      );
-      final record = (await recognizeTicketImage(
-        Uint8List(4),
-        catalog,
-        live: RecognitionResult(
-          barcodes: [boardingCode('181')],
-          lines: [RecognitionLine('计划登机时间 09:20', .2, .7, .28, .04, .99)],
-        ),
-      )).single;
-      expect(record.text('boardingTime'), '09:20');
-      expect(record.text('gate'), 'A12');
-      expect(record.text('service'), 'CA181');
-      expect(record.barcodeLocked('seat'), isTrue);
-    },
-  );
-
-  test(
-    'a retake with a different boarding pass uses the new photo and barcode',
-    () async {
-      final messenger =
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      messenger.setMockMethodCallHandler(SystemRecognition.channel, (
-        call,
-      ) async {
-        if (call.method == 'capabilities') return {};
-        expect(call.method, 'recognizeImage');
-        expect(call.arguments['barcodes'], isTrue);
-        return {
-          'barcodes': [
-            {'rawBytes': base64Encode(boardingCode('182'))},
-          ],
-          'lines': [
-            {
-              'text': 'BOARDING 12:20',
-              'x': .2,
-              'y': .7,
-              'width': .28,
-              'height': .04,
-              'confidence': .99,
-            },
-          ],
-        };
-      });
-      addTearDown(
-        () =>
-            messenger.setMockMethodCallHandler(SystemRecognition.channel, null),
-      );
-      final record = (await recognizeTicketImage(
-        Uint8List(4),
-        catalog,
-        live: RecognitionResult(
-          barcodes: [boardingCode('181')],
-          lines: [RecognitionLine('登机口 B01', .2, .7, .28, .04, .99)],
-        ),
-        scanPhotoBarcode: true,
-      )).single;
-      expect(record.text('service'), 'CA182');
-      expect(record.text('boardingTime'), '12:20');
-      expect(record.text('gate'), isEmpty);
-    },
-  );
+  test('each new photo is decoded directly for its own barcode', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemRecognition.channel, (call) async {
+      expect(call.method, 'recognizeImage');
+      expect(call.arguments['barcodes'], isTrue);
+      return {
+        'barcodes': [
+          {'rawBytes': base64Encode(boardingCode('182'))},
+        ],
+        'lines': [
+          {
+            'text': 'BOARDING 12:20',
+            'x': .2,
+            'y': .7,
+            'width': .28,
+            'height': .04,
+            'confidence': .99,
+          },
+        ],
+      };
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemRecognition.channel, null),
+    );
+    final record = (await recognizeTicketImage(Uint8List(4), catalog)).single;
+    expect(record.text('service'), 'CA182');
+    expect(record.text('boardingTime'), '12:20');
+    expect(record.text('gate'), isEmpty);
+  });
 
   test('a PDF can carry train and flight pages in the same import', () async {
     final messenger =
@@ -347,6 +256,7 @@ void main() {
       expect(call.arguments['bytes'], isA<Uint8List>());
       return [
         {
+          'hasTextLayer': true,
           'lines': [
             {
               'text': '车次 G21\n北京南站 南京南站\n出发日期 2026-11-18\n15:00开',
@@ -359,6 +269,7 @@ void main() {
           ],
         },
         {
+          'hasTextLayer': true,
           'lines': [
             {
               'text': 'FLIGHT CA181\nPEK HND\n计划起飞时间 2026-11-19 08:30',

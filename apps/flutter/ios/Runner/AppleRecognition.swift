@@ -142,7 +142,48 @@ enum AppleRecognition {
         // The importer can use a boarding pass barcode by itself.
       }
     }
-    return recognitionResult(text.results ?? [], payloads: payloads)
+    var reading = recognitionResult(text.results ?? [], payloads: payloads)
+    if readText, !payloads.contains(where: isBoardingPayload), let color = paperColor(image) {
+      reading["paperColor"] = color
+    }
+    return reading
+  }
+
+  private static func paperColor(_ image: CGImage) -> String? {
+    let width = 72, height = 48, bytesPerRow = width * 4
+    var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+    return pixels.withUnsafeMutableBytes { memory -> String? in
+      guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+            let context = CGContext(
+        data: memory.baseAddress, width: width, height: height, bitsPerComponent: 8,
+        bytesPerRow: bytesPerRow, space: space,
+        bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue
+      ) else { return nil }
+      context.setFillColor(CGColor(gray: 1, alpha: 1))
+      let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+      context.fill(bounds)
+      context.interpolationQuality = .high
+      context.draw(image, in: bounds)
+      var red = 0, blue = 0, bright = 0
+      for y in 7..<41 {
+        for x in 7..<65 {
+          let index = y * bytesPerRow + x * 4
+          let r = Int(memory[index]), g = Int(memory[index + 1]), b = Int(memory[index + 2])
+          let darkest = min(r, g, b)
+          if max(r, g, b) + darkest < 210 { continue }
+          bright += 1
+          if darkest >= 248 { continue }
+          if r - g >= 9 && r - b >= 4 { red += 1 }
+          if b - r >= 10 && g - r >= 6 { blue += 1 }
+        }
+      }
+      let count = 58 * 34
+      if red > blue * 3 && (red * 100 > count * 45 || red * 100 > count * 27 && red * 10 > bright * 6) {
+        return "red"
+      }
+      if blue * 100 > count * 25 && blue > red * 3 { return "blue" }
+      return nil
+    }
   }
 
   static func recognitionResult(

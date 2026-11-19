@@ -33,13 +33,20 @@ class RecognitionResult {
   final List<RecognitionLine> lines;
   final List<Uint8List> barcodes;
   final List<Map<String, dynamic>> symbolData;
+  final String paperColor;
+  final bool hasTextLayer;
+
   RecognitionResult({
     this.lines = const [],
     this.barcodes = const [],
     this.symbolData = const [],
+    this.paperColor = '',
+    this.hasTextLayer = false,
   });
   factory RecognitionResult.fromJson(Map<String, dynamic> value) =>
       RecognitionResult(
+        paperColor: value['paperColor'] as String? ?? '',
+        hasTextLayer: value['hasTextLayer'] == true,
         lines: (value['lines'] as List? ?? [])
             .map(
               (row) => RecognitionLine.fromJson(Map<String, dynamic>.from(row)),
@@ -70,7 +77,8 @@ abstract interface class RecognitionService {
 }
 
 const _scheduledBoardingLabels =
-    r'(?:计划)?登机(?:时间|时刻)?(?:\s*[/／]?\s*BOARDING(?:\s+TIME)?)?|BOARDING(?:\s+TIME)?';
+    r'(?:计划)?登\s*[机機](?:\s*[时時][间間刻])?(?:\s*[/／]?\s*BOARDING(?:\s+TIME)?)?'
+    r'|BOARDING(?:\s+(?:TIME|BEGINS|AT))?|BOARD\s+TIME';
 const _scheduledDepartureLabels =
     r'(?:计划)?起飞(?:时间|时刻)?(?:\s*[/／]?\s*(?:DEPARTURE(?:\s+TIME)?|STD))?|DEPARTURE(?:\s+TIME)?|STD';
 const _flightGateLabels = r'登机口(?:\s*[/／]?\s*GATE)?|GATE';
@@ -85,8 +93,8 @@ String recognizedTicketText(List<RecognitionLine> source) {
     ..sort((a, b) => a.y == b.y ? a.x.compareTo(b.x) : a.y.compareTo(b.y));
   final labels = RegExp(
     r'^(?:航班号?|车次|出发站|到达站|出发机场|到达机场|出发日期|乘车日期|'
-    r'计划到达|座位号?|实际登机时间|航站楼|'
-    r'FLIGHT(?: NO)?|TRAIN(?: NO)?|FROM|TO|ARRIVAL|SEAT|ACTUAL BOARDING TIME|TERMINAL|'
+    r'计划到达|座位号?|(?:实际|预计)登机时间|航站楼|'
+    r'FLIGHT(?: NO)?|TRAIN(?: NO)?|FROM|TO|ARRIVAL|SEAT|(?:ACTUAL|ESTIMATED) BOARDING TIME|TERMINAL|'
     '$_scheduledBoardingLabels|$_scheduledDepartureLabels|$_flightGateLabels'
     r')\s*[:：]?$',
     caseSensitive: false,
@@ -141,27 +149,8 @@ List<TicketRecord> parseRecognition(
   RecognitionResult result,
   ReferenceCatalog catalog, {
   required bool flight,
-  String supplementalText = '',
+  bool scannedImage = false,
 }) {
-  final fields = {
-    if (supplementalText.isNotEmpty)
-      ...readTravelFields(supplementalText, catalog, flight: flight),
-    ...readTravelFields(
-      recognizedTicketText(result.lines),
-      catalog,
-      flight: flight,
-    ),
-  };
-  final values = <String, dynamic>{
-    'type': flight ? 'flight' : 'rail',
-    'template': flight ? 'air-boarding-pass' : 'rail-receipt',
-    ...fields,
-    'fieldSources': {
-      for (final name in fields.keys)
-        if (name != 'template') name: 'ocr',
-    },
-  };
-
   final boarding = <String, Uint8List>{
     for (final bytes in result.barcodes)
       if (decodeBoardingBytes(bytes) != null) base64Encode(bytes): bytes,
@@ -169,6 +158,41 @@ List<TicketRecord> parseRecognition(
   if (boarding.length > 1) {
     throw const FormatException('包含多个不同登机牌条码，请分别导入');
   }
+  if (scannedImage && (flight || boarding.isNotEmpty)) {
+    final time = _plannedBoardingTime(result.lines);
+    if (boarding.isNotEmpty) {
+      return boardingRecords(
+        boarding.values.single,
+        catalog,
+        supplement: {if (time != null) 'boardingTime': time},
+      );
+    }
+    if (time == null) return [];
+    return [
+      TicketRecord.create({
+        'type': 'flight',
+        'boardingTime': time,
+        'fieldSources': {'boardingTime': 'ocr'},
+      }),
+    ];
+  }
+  final fields = readTravelFields(
+    recognizedTicketText(result.lines),
+    catalog,
+    flight: flight,
+  );
+  final values = <String, dynamic>{
+    'type': flight ? 'flight' : 'rail',
+    'template': flight
+        ? 'air-boarding-pass'
+        : _printedRailTemplate(result.lines, result.paperColor, fields),
+    ...fields,
+    'fieldSources': {
+      for (final name in fields.keys)
+        if (name != 'template') name: 'ocr',
+    },
+  };
+
   if (boarding.isNotEmpty) {
     return boardingRecords(
       boarding.values.single,
@@ -189,6 +213,57 @@ List<TicketRecord> parseRecognition(
     if (codes.isNotEmpty) values['ticketCode'] = codes.values.single;
   }
   return [catalog.normalize(TicketRecord.create(values))];
+}
+
+String? _plannedBoardingTime(List<RecognitionLine> lines) {
+  final notices = RegExp(
+    r'实际|预计|关门|截止|ACTUAL|ESTIMATED|CLOS(?:E|ES|ED|ING)|'
+    r'\b(?:ATD|ATA|ETD|ETA|ENDS?|MINUTES?|MINS)\b',
+    caseSensitive: false,
+  );
+  final boarding = RegExp(
+    '^(?:SCHEDULED\\s+)?(?:$_scheduledBoardingLabels)'
+    r'\s*[:：]?\s*(\d{1,2})\s*[:.：]?\s*([0-5]\d)'
+    r'\s*(AM|PM)?(?![\d:/A-Z])',
+    caseSensitive: false,
+  );
+  final times = <String>{};
+  for (final line in recognizedTicketText(lines).split('\n')) {
+    if (notices.hasMatch(line)) continue;
+    for (final match in boarding.allMatches(line.trim())) {
+      var hour = int.parse(match[1]!);
+      final period = match[3]?.toUpperCase();
+      if (hour > 23 || (period != null && (hour == 0 || hour > 12))) continue;
+      if (period != null) hour = hour % 12 + (period == 'PM' ? 12 : 0);
+      times.add('${hour.toString().padLeft(2, '0')}:${match[2]}');
+    }
+  }
+  return times.length == 1 ? times.single : null;
+}
+
+String _printedRailTemplate(
+  List<RecognitionLine> lines,
+  String paperColor,
+  Map<String, dynamic> fields,
+) {
+  final text = lines
+      .map((line) => line.text)
+      .join()
+      .replaceAll(RegExp(r'\s'), '');
+  if (RegExp(r'退票(?:手续)?费').hasMatch(text)) return 'rail-refund-receipt';
+  if (RegExp(r'仅供报销|报销凭证|报销使用|凭证遗失不补|退票改签.{0,4}交回车站').hasMatch(text)) {
+    return 'rail-receipt';
+  }
+  if (RegExp(r'经典红票|2015年前').hasMatch(text)) return 'rail-red-classic';
+  if (RegExp(r'红色软纸票|红票').hasMatch(text) || paperColor == 'red') {
+    final year = JourneyDate.fromJson(fields['departureDate'])?.year;
+    return year != null && year < 2015 ? 'rail-red-classic' : 'rail-red';
+  }
+  if (RegExp(r'磁介质|蓝票|限乘当[日目]|当[日目]当次|当次车').hasMatch(text) ||
+      paperColor == 'blue') {
+    return 'rail-blue';
+  }
+  return 'rail-receipt';
 }
 
 /// Read labelled fields and a few standard ticket formats from already-recognized
@@ -284,10 +359,36 @@ Map<String, dynamic> readTravelFields(
   }
 
   if (fields['origin'] == null || fields['destination'] == null) {
-    // A standalone pair of known station or airport names is an explicit route.
-    // Do not choose the first two place names from the whole document.
     final pairs = <(String, String)>{};
+    final printedPairs = <(String, String, String)>{};
     for (final line in lines) {
+      if (!flight) {
+        final printed = RegExp(
+          r'^([\u3400-\u9fff\s]+?)\s*([GDCZTKLSY]\s*\d{1,5}|\d{3,4})(?:次)?'
+          r'\s*(?:[→—-]+\s*)?([\u3400-\u9fff\s]+)$',
+          caseSensitive: false,
+        ).firstMatch(line);
+        if (printed != null) {
+          final spaces = RegExp(r'\s+');
+          final a = catalog.resolve(
+            printed[1]!.replaceAll(spaces, ''),
+            '',
+            flight: false,
+          );
+          final b = catalog.resolve(
+            printed[3]!.replaceAll(spaces, ''),
+            '',
+            flight: false,
+          );
+          final number = printed[2]!.replaceAll(spaces, '').toUpperCase();
+          if (a != null &&
+              b != null &&
+              a.identity != b.identity &&
+              (service == null || fields['service'] == number)) {
+            printedPairs.add((a.name, b.name, number));
+          }
+        }
+      }
       final parts = line.split(RegExp(r'\s*(?:→|->|—|至)\s*|\s+'));
       if (parts.length != 2) continue;
       final a = catalog.resolve(parts.first, '', flight: flight);
@@ -296,7 +397,12 @@ Map<String, dynamic> readTravelFields(
         pairs.add((a.name, b.name));
       }
     }
-    if (pairs.length == 1) {
+    if (printedPairs.length == 1) {
+      final (origin, destination, number) = printedPairs.single;
+      fields['origin'] ??= origin;
+      fields['destination'] ??= destination;
+      fields['service'] ??= number;
+    } else if (pairs.length == 1) {
       fields['origin'] ??= pairs.single.$1;
       fields['destination'] ??= pairs.single.$2;
     }
@@ -359,7 +465,7 @@ Map<String, dynamic> readTravelFields(
   }
   if (!flight) {
     final railTime = one(
-      RegExp('($clock)\\s*开').allMatches(text).map((match) => match[1]!),
+      RegExp('($clock)\\s*(?:开|发车)').allMatches(text).map((match) => match[1]!),
     );
     if (railTime != null) fields['departureTime'] ??= railTime.padLeft(5, '0');
     final seat = RegExp(
@@ -382,8 +488,17 @@ Map<String, dynamic> readTravelFields(
           .map((match) => match[1]!),
     );
     put('price', price);
-    if (lines.any((line) => line.contains('退票费')))
-      fields['template'] = 'rail-refund-receipt';
+    fields['ticketNumber'] ??= one(
+      RegExp(
+        r'^\s*([A-Z]\d{5,10})(?=\s|$)',
+        multiLine: true,
+      ).allMatches(text).map((match) => match[1]!),
+    );
+    fields['gate'] ??= one(
+      RegExp(r'检\s*票(?:\s*口)?\s*:?\s*([A-Z]?\d+[A-Z]?)')
+          .allMatches(text)
+          .map((match) => match[1]!),
+    );
   }
   fields.removeWhere((_, value) => value == null);
   return fields;

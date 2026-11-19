@@ -89,6 +89,74 @@ void main() {
   });
 
   test(
+    'scanned train layouts distinguish red, blue, and reimbursement tickets',
+    () {
+      for (final (color, footer, year, expected) in [
+        ('red', '限乘当日当次车', 2012, 'rail-red-classic'),
+        ('red', '限乘当日当次车', 2017, 'rail-red'),
+        ('blue', '限 乘 当 日 当 次 车', 2019, 'rail-blue'),
+        ('', '限乘当日当次车', 2019, 'rail-blue'),
+        ('blue', '仅 供 报 销 使 用', 2023, 'rail-receipt'),
+        ('blue', '报销凭证\n退 票 费', 2023, 'rail-refund-receipt'),
+      ]) {
+        final ticket = parseRecognition(
+          RecognitionResult(
+            paperColor: color,
+            lines: [
+              RecognitionLine(
+                'X000001 检票:16A\n北 京 南 站 G21 南 京 南 站\n'
+                '${year}年11月18日 15:00开 05车08F号\n￥503.0元 二等座\n$footer',
+                0,
+                0,
+                1,
+                1,
+                .99,
+              ),
+            ],
+          ),
+          catalog,
+          flight: false,
+          scannedImage: true,
+        ).single;
+        expect(ticket.text('template'), expected);
+        expect(ticket.text('origin'), '北京南');
+        expect(ticket.text('destination'), '南京南');
+        expect(ticket.text('service'), 'G21');
+        expect(ticket.text('departureTime'), '15:00');
+        expect(ticket.text('gate'), '16A');
+        expect(ticket.text('seat'), '08F');
+      }
+    },
+  );
+
+  test('scanned flight text leaves an editable boarding time only', () {
+    List<TicketRecord> read(List<RecognitionLine> lines) => parseRecognition(
+      RecognitionResult(lines: lines),
+      catalog,
+      flight: true,
+      scannedImage: true,
+    );
+    final lines = [
+      RecognitionLine('BOARDING TIME', .2, .3, .18, .03, .99),
+      RecognitionLine('DEPARTURE', .55, .3, .18, .03, .99),
+      RecognitionLine('4:15 PM', .2, .35, .11, .03, .99),
+      RecognitionLine('16:50', .55, .35, .11, .03, .99),
+      RecognitionLine('ACTUAL BOARDING TIME 16:25', .2, .5, .4, .04, .99),
+      RecognitionLine('CA181', .2, .6, .15, .03, .99),
+    ];
+    final record = read(lines).single;
+    expect(record.text('type'), 'flight');
+    expect(record.text('boardingTime'), '16:15');
+    expect(record.text('service'), isEmpty);
+    expect(record.text('departureTime'), isEmpty);
+    expect(read(lines.skip(4).toList()), isEmpty);
+    expect(
+      read([...lines, RecognitionLine('登机时间:16:30', .2, .8, .4, .03, .99)]),
+      isEmpty,
+    );
+  });
+
+  test(
     'VariFlight negotiates session and maps MCP event results for review',
     () async {
       var requests = 0;

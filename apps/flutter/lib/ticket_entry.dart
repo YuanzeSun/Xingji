@@ -52,8 +52,9 @@ Future<void> openTicketEntry(
               'service',
               'origin',
               'destination',
+              'boardingTime',
             ].every((key) => ticket.text(key).isEmpty)) {
-      throw const FormatException('未识别到车次、航班号或起讫地点');
+      throw const FormatException('未能读取票据。机票请对准登机牌条码或二维码，火车票请拍清完整票面。');
     }
     if (ticket == null) {
       await reviewImport(context, store, records);
