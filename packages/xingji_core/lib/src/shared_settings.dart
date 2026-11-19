@@ -137,6 +137,9 @@ Map<String, dynamic> archiveConnections([Object? value = const {}]) {
       'token': secret(d1),
     };
   }
+  if (connections.isEmpty && value['unlinked'] == true) {
+    return {'unlinked': true};
+  }
   return connections;
 }
 
