@@ -1,5 +1,6 @@
 import { openCameraStream, stopCameraStream } from './camera-stream.js';
 import { videoCrop, frameMetrics, frameMotion, frameQuality, scanCandidate, createScanConsensus } from './scan-engine.js';
+import { createRecord, DEFAULT_RAIL_TEMPLATE } from './model.js';
 
 export { prepareScanImage } from './scan-image.js';
 
@@ -89,24 +90,28 @@ export function mountScanner(root, {
       try {
         if (worker) result = await worker.recognize(prepareImage(canvas, requestedType), { type: requestedType,
           refineRailDate: requestedType !== 'flight' && !boarding, decodedBoardingCodes: codes });
-      } catch (error) { if (!boarding) throw error; }
+      } catch (error) { if (!boarding && !manual) throw error; }
       if (!current()) return;
-      const candidate = boarding
-        ? (result && scanCandidate(result.text, Math.max(result.confidence || 0, 90), requestedType, { ...result, boardingCodes: codes })) || boarding
-        : scanCandidate(result.text, result.confidence, requestedType, result);
+      const candidate = (result && scanCandidate(result.text, boarding ? Math.max(result.confidence || 0, 90) : result.confidence, requestedType, {
+        ...result, boardingCodes: codes ?? result.boardingCodes, allowPartial: manual
+      })) || boarding;
       // The snapshot cannot change while OCR runs. Agreement between reads
       // remains the gate for opening automatic text-only results.
       const confirmed = manual || candidate?.boardingCodeSource === 'original' ? candidate : consensus.observe(candidate, result.confidence);
-      if (!confirmed) {
+      if (!confirmed && !manual) {
         recognitionErrors = 0;
-        if (manual) capturedFrame = null;
         message(candidate ? `已读到 ${candidate.service}，正在核对…`
-          : manual ? '未读到完整票面，请调整位置后重拍' : '请让整张票面进入框内，或点击拍照识别');
+          : '可点击拍照识别，保留照片并补齐信息');
         return;
       }
+      const flight = requestedType === 'flight';
+      const record = confirmed || createRecord({
+        type: flight ? 'flight' : 'rail', template: flight ? 'air-boarding-pass' : DEFAULT_RAIL_TEMPLATE,
+        sources: [{ kind: 'scan', label: '相机拍照' }], provenance: 'reconstruction'
+      });
       const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('扫描图像未能生成，请重试')), 'image/png'));
       if (!current()) return;
-      release(); onResult?.(confirmed, blob);
+      release(); onResult?.(record, blob, { photoOnly: !confirmed });
     } catch (error) {
       if (!current()) return;
       capturedFrame = null; consensus.reset(); recognitionErrors++;
@@ -124,11 +129,11 @@ export function mountScanner(root, {
     try {
       const sample = capturedFrame ? null : frame();
       if (capturedFrame) {
-        if (!busy && (worker || workerUnavailable && capturedFrame.candidate)) void recognize(capturedFrame, request);
+        if (!busy && (worker || workerUnavailable)) void recognize(capturedFrame, request);
       } else if (sample) {
         const timestamp = now();
         firstFrameAt ??= timestamp;
-        shutter.disabled = workerUnavailable;
+        shutter.disabled = false;
         if (type !== 'rail' && !readingCode && sample.metrics.contrast > 2) void scanBoardingFrame(sample.snapshot(.16), request);
         const quality = frameQuality(sample.metrics), motion = frameMotion(fingerprint, sample.metrics.fingerprint);
         fingerprint = sample.metrics.fingerprint;
@@ -149,10 +154,10 @@ export function mountScanner(root, {
     try {
       const sample = frame();
       if (!sample) { message('请等相机画面出现后再拍照'); return; }
-      capturedFrame = { canvas: sample.snapshot(.16), manual: true };
+      capturedFrame = { canvas: sample.snapshot(.24), manual: true };
       shutter.disabled = true; consensus.reset();
       guide.classList.add('reading');
-      if (!busy && worker) void recognize(capturedFrame, generation);
+      if (!busy && (worker || workerUnavailable)) void recognize(capturedFrame, generation);
       else message('已拍照，等待文字识别…');
     } catch { message('未能拍下当前画面，请重试'); }
   }
@@ -177,18 +182,9 @@ export function mountScanner(root, {
         worker = engine;
       } catch {
         if (disposed || !active || request !== generation) return;
-        if (type === 'rail') {
-          release();
-          message('文字识别暂不可用，请重试');
-          retry.textContent = '重试识别'; retry.hidden = false;
-          return;
-        }
         workerUnavailable = true;
-        shutter.disabled = true;
-        if (!capturedFrame?.candidate) {
-          capturedFrame = null;
-          guide.classList.remove('reading');
-          message('文字识别暂不可用，可重试或扫描登机牌条码');
+        if (!capturedFrame) {
+          message('文字识别暂不可用，可拍照后手动填写');
           retry.textContent = '重试识别'; retry.hidden = false;
         }
       }
@@ -202,9 +198,6 @@ export function mountScanner(root, {
     const button = event.target.closest('[data-scan-type]'); if (!button) return;
     if (type === button.dataset.scanType) return;
     type = button.dataset.scanType; typeEpoch++; resetFrames();
-    if (type === 'rail' && workerUnavailable) {
-      pause(); message('文字识别暂不可用，请重试'); retry.textContent = '重试识别';
-    }
     guide.style.setProperty('--ticket-ratio', type === 'flight' ? 2.46 : 1.58);
     for (const b of root.querySelectorAll('[data-scan-type]')) { b.classList.toggle('selected', b === button); b.setAttribute('aria-pressed', String(b === button)); }
   };

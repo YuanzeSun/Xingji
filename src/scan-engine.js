@@ -101,9 +101,18 @@ export function frameQuality(metrics) {
   if (metrics.contrast < 16 || metrics.sharpness < 4) return '让票面放满框内，等待对焦';
   return '';
 }
-export function scanCandidate(text, confidence, expectedType, { layout = '', boardingReadings = [], boardingPayloads = [], boardingCodes = [] } = {}) {
+export function scanCandidate(text, confidence, expectedType, {
+  layout = '', boardingReadings = [], boardingPayloads = [], boardingCodes = [], allowPartial = false
+} = {}) {
   if (!Number.isFinite(confidence) || confidence < 40) return null;
-  const records = parseScanText(text, '相机自动扫描', { singleTicket: true, layout, boardingReadings, boardingPayloads, boardingCodes }).filter(r => (expectedType === 'auto' || r.type === expectedType) && r.service && ((calendarDate(r.departureDate).length === 10 && (r.origin || r.destination || r.departureTime || r.seatClass)) || (r.origin && r.destination)));
+  const records = parseScanText(text, allowPartial ? '相机拍照' : '相机自动扫描', {
+    singleTicket: true, layout, boardingReadings, boardingPayloads, boardingCodes
+  }).filter(record => {
+    if (expectedType !== 'auto' && record.type !== expectedType) return false;
+    if (allowPartial) return true;
+    return record.service && (record.origin && record.destination ||
+      calendarDate(record.departureDate).length === 10 && (record.origin || record.destination || record.departureTime || record.seatClass));
+  });
   if(records.length===1)return records[0];
   if(records.length>1&&records[0].boardingCode&&records.every(record=>record.boardingCode?.rawBytes===records[0].boardingCode.rawBytes))return {...records[0],boardingCandidates:records};
   return null;

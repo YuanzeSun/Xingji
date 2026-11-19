@@ -23,7 +23,7 @@ function harness(options = {}) {
     readBoardingFrame: async () => [],
     schedule: fn => { tasks.push(fn); return fn; }, unschedule: fn => { const i = tasks.indexOf(fn); if (i >= 0) tasks.splice(i, 1); },
     readFrame: () => frame, now: () => clock, prepareImage: image => image,
-    onResult: (record, blob) => captured.push({ record, blob }), ...options
+    onResult: (record, blob, options) => captured.push({ record, blob, ...options }), ...options
   });
   return { dom, root, dispose, frame, get stopped() { return stopped; }, get terminated() { return terminated; }, get reads() { return reads; }, get captured() { return captured; }, async ticks(n) { for (let i = 0; i < n; i++) { await wait(); clock += 350; tasks.shift()?.(); await wait(); } } };
 }
@@ -139,6 +139,54 @@ test('a manual photo supersedes an automatic read already in progress', async ()
     assert.equal(h.captured[0].record.service, 'G104');
     assert.equal(await h.captured[0].blob.text(), 'manual frame');
   } finally { h.dispose(); h.dom.window.close(); }
+});
+
+test('a manual photo keeps recognizable fields when the route or date is incomplete', async () => {
+  const text = '车次：G103\n出发：北京南';
+  assert.equal(scanCandidate(text, 90, 'rail'), null);
+  const h = harness({ loadRecognizer: async () => ({
+    recognize: async () => ({ text, confidence: 90 }), terminate: async () => {}
+  }) });
+  try {
+    await h.ticks(1);
+    h.root.querySelector('#scanner-shutter').click();
+    await h.ticks(1);
+    const { record, photoOnly, blob } = h.captured[0];
+    assert.equal(record.service, 'G103');
+    assert.equal(record.origin, '北京南');
+    assert.equal(record.destination, '');
+    assert.equal(record.fieldSources.service, 'ocr');
+    assert.equal(photoOnly, false);
+    assert.equal(blob.type, 'image/png');
+  } finally { h.dispose(); h.dom.window.close(); }
+});
+
+test('a manual photo still opens as a draft when OCR has no result or fails', async () => {
+  for (const outcome of ['empty', 'recognition error', 'model unavailable']) {
+    const h = harness({ type: 'flight', loadRecognizer: async () => {
+      if (outcome === 'model unavailable') throw new Error(outcome);
+      return {
+        recognize: async () => {
+          if (outcome === 'recognition error') throw new Error(outcome);
+          return { text: '', confidence: 0 };
+        }, terminate: async () => {}
+      };
+    } });
+    try {
+      await h.ticks(1);
+      const shutter = h.root.querySelector('#scanner-shutter');
+      assert.equal(shutter.disabled, false, outcome);
+      shutter.click();
+      await h.ticks(1);
+      const { record, photoOnly, blob } = h.captured[0];
+      assert.equal(photoOnly, true, outcome);
+      assert.equal(record.type, 'flight');
+      assert.equal(record.service, '');
+      assert.equal(record.fieldSources.service, undefined);
+      assert.equal(await blob.text(), 'frame');
+      assert.equal(h.stopped, 1);
+    } finally { h.dispose(); h.dom.window.close(); }
+  }
 });
 
 test('flight camera scanning waits for the combined OCR and barcode result and returns locked decoded fields',async()=>{

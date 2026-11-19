@@ -433,17 +433,21 @@ function scanTicket() {
   if (!task) return;
   openModal(scannerMarkup('auto'), true);
   modalRoot.querySelector('dialog').classList.add('scanner-modal');
-  const dispose = mountScanner(modalRoot.querySelector('#live-scanner'), { type: 'auto', onResult(record, blob) {
-    finishCameraImport(task, record, blob).catch(fail);
+  const dispose = mountScanner(modalRoot.querySelector('#live-scanner'), { type: 'auto', onResult(record, blob, options) {
+    finishCameraImport(task, record, blob, options).catch(fail);
   } });
   scannerCleanup = () => { dispose(); imports.finish(task); };
 }
 
-async function finishCameraImport(task, record, image) {
+async function finishCameraImport(task, record, image, { photoOnly = false } = {}) {
   const accepted = await acceptsImport(task);
   if (!imports.finish(task)) return;
   closeModal(true);
-  if (accepted) reviewImportCandidates(record.boardingCandidates || [record], { image, task });
+  if (!accepted) return;
+  const ready = photoOnly ? applyProfileDefaults(record, state.settings.profile) : record;
+  const opening = mayOpenImport(task);
+  reviewImportCandidates(ready.boardingCandidates || [ready], { image, task, photoOnly });
+  if (opening && photoOnly) toast('已保留照片，请对照原图填写');
 }
 
 function journeyMapPage() {
@@ -760,7 +764,7 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
   const generatorSettings = preserve && draft.type==='flight' ? readBoardingGenerator(modalRoot) : undefined;
   draft.flightStatus = draft.type === 'flight' ? normalizeFlightStatus(draft.flightStatus) : '';
   const personalEdited = preserve ? new Set(editor?.personalEdited || []) : new Set(record.lockedFields || []);
-  const typeFixed = importIndex !== null || state.records.some(record => record.id === draft.id);
+  const typeFixed = (importIndex !== null && !entry?.photoOnly) || state.records.some(record => record.id === draft.id);
   editor = { original, draft, importIndex, fromBatch, context, dirty: preserve, personalEdited };
   const flight = draft.type === 'flight';
   const basics = flight ? ['origin','destination','service','departureDate','departureTime','arrivalTime','arrivalDate','boardingTime','passenger','identity','airline','seat','seatClass','price','gate'] : ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seatClass','seat','price','gate','railPlatform'];
@@ -801,7 +805,10 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
     if (!lookupApplying && changedKey === 'type') {
       if (typeFixed || barcodeFieldLocked(draft,'type')) { form.elements.type.value=draft.type; return; }
       if (['rail','flight'].includes(event.target.value) && event.target.value !== draft.type) {
-        editRecord(newPersonalRecord(event.target.value));
+        const next = newPersonalRecord(event.target.value);
+        if (entry?.photoOnly) {
+          editRecord({ ...next, id: draft.id, sources: draft.sources, provenance: draft.provenance }, importIndex);
+        } else editRecord(next);
         editor.dirty=true;
         return;
       }
@@ -1008,8 +1015,8 @@ async function handleFiles(files, { backupOnly = false } = {}) {
     }
   } finally { if (imports.finish(task)) applyAccessPolicy(); }
 }
-function reviewImportCandidates(records, { batch = false, image, task } = {}) {
-  addCandidates(records.map(record => ({ record, image })), { batch, task });
+function reviewImportCandidates(records, { batch = false, image, task, photoOnly = false } = {}) {
+  addCandidates(records.map(record => ({ record, image, photoOnly })), { batch, task });
 }
 function addCandidates(entries, { batch = false, task } = {}) {
   const offset = imports.entries.length;
