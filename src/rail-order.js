@@ -9,7 +9,7 @@ const stationPattern = new RegExp([...stationNames].sort((a, b) => b.length - a.
 const datePattern = /((?:19|20)\d{2})\s*[年./-]\s*(\d{1,2})\s*[月./-]\s*(\d{1,2})日?/g;
 const trainPattern = /(?<![A-Z0-9])([GDCZTKYL]\s*[0-9OIl]{1,5})(?![A-Z0-9])/gi;
 const timePattern = /(?<!\d)([0-2]?\d:[0-5]\d)(?!\d)/g;
-const seatClassPattern = /商务座|特等座|优选一等座|一等座|二等座|高级软卧|一等卧|二等卧|软卧|硬卧|软座|硬座|动卧|无座/;
+const seatClassPattern = /商务座|特等座|优选一等座|一等座|二等座|高级软卧|一等卧|二等卧|软卧|硬卧|软座|硬座|动卧/;
 const normal = text => String(text || '').normalize('NFKC').replace(/\r/g, '').replace(/[：﹕]/g, ':').replace(/(?<=[\u3400-\u9fff])[ \t]+(?=[\u3400-\u9fff])/g, '').replace(/([0-2]?\d)[ \t]*:[ \t]*(\d{2})/g, '$1:$2');
 const trainCode = value => { const code = value.replace(/\s/g, '').toUpperCase(); return code[0] + code.slice(1).replace(/O/g, '0').replace(/[IL]/g, '1'); };
 const unique = values => [...new Set(values.filter(Boolean))];
@@ -53,12 +53,12 @@ function passengerFields(text) {
   const ticketPrice = labelled(fareText, '票价|票面价').match(/(?:[¥￥]\s*)?(\d+(?:\.\d{1,2})?)/)?.[1];
   const amounts = [...fareText.matchAll(/[¥￥]\s*(\d+(?:\.\d{1,2})?)/g)].map(match => match[1]);
   const ticketNumber = labelled(text, '电子客票号|客票号|票号').match(/[A-Z0-9-]{6,30}/i)?.[0] || '';
-  return { passenger, identity, carriage, seat, seatClass: classes.length === 1 ? classes[0] : '', price: ticketPrice || only(amounts), ticketNumber, ticketMarks: marksFromText(text) };
+  return { passenger, identity, carriage, seat, seatClass: classes.length === 1 ? classes[0] : '', railStanding: /无\s*座|站票/.test(text), price: ticketPrice || only(amounts), ticketNumber, ticketMarks: marksFromText(text) };
 }
 function passengerBlocks(text) {
   const nameStarts = [...text.matchAll(/(?:^|\n)\s*(?:(?:乘车人(?:姓名)?|旅客姓名|姓名)\s*:?|[\u3400-\u9fff·*＊]{2,12}?(?=中国居民身份证|居民身份证|身份证|成人票|学生票|儿童票))/g)];
   if (nameStarts.length > 1) return nameStarts.map((match, i) => text.slice(match.index, nameStarts[i + 1]?.index));
-  const paid = text.split(/\n[^\n]*(?:已支付|未支付|已完成|已退票|已改签)[^\n]*(?:\n|$)/).filter(block => seatClassPattern.test(block) || /\d\s*车|乘车人|旅客姓名/.test(block));
+  const paid = text.split(/\n[^\n]*(?:已支付|未支付|已完成|已退票|已改签)[^\n]*(?:\n|$)/).filter(block => seatClassPattern.test(block) || /\d\s*车|乘车人|旅客姓名|无座/.test(block));
   return paid.length > 1 ? paid : [text];
 }
 // Returns null for other documents so that the existing paper-ticket and flight parsers still apply.

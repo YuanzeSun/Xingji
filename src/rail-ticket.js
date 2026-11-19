@@ -29,6 +29,34 @@ function stationFor(value, raw) {
   }
   return matches.size === 1 ? [...matches.values()][0] : null;
 }
+
+export function railStationFromRegion(text) {
+  const names = new Set();
+  for (const line of text.normalize('NFKC').split('\n')) {
+    const region = line.trim();
+    if (/^[\p{Script=Han}\s]{2,22}$/u.test(region)) {
+      const name = region.replace(/\s/g, '').replace(/站$/, '');
+      if (stationNames.has(name)) names.add(name);
+    } else if (/^[A-Za-z'’\s]{4,30}$/.test(region)) {
+      const station = stationFor(region, text);
+      if (station) names.add(station[0]);
+    }
+  }
+  return names.size === 1 ? [...names][0] : '';
+}
+
+export function printedRailNumber(text, footer = false) {
+  const candidates = new Set();
+  for (const line of text.normalize('NFKC').toUpperCase().split('\n')) {
+    const words = line.trim().replace(/^(?:票号|底部售票码|售票码)\s*[:：]\s*/, '').split(/\s+/);
+    const pattern = footer ? /^(?=.{17,25}$)\d{5,}[A-Z]?\d{8,}[A-Z]?\d{0,4}$/ : /^(?:[A-Z]\d{5,10}|\d{1,3}[A-Z]\d{5,9})$/;
+    for (const token of [words[0], words.join('')]) {
+      const value = token.match(/^[A-Z0-9]+/)?.[0] || '';
+      if (pattern.test(value)) candidates.add(value);
+    }
+  }
+  return candidates.size === 1 ? [...candidates][0] : '';
+}
 const trainCode = (value, route = false) => {
   const code = value.replace(/\s|次/g, '').toUpperCase();
   const match = code.match(route ? /^([GDCZTKYLSP]?)([0-9OIL]{1,5})$/ : /^([GDCZTKYLS])([0-9OIL]{1,5})$/);
@@ -105,9 +133,15 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
   const seat = seatRow.match(/([0-9OIl]{1,2})\s*[车#%*]\s*[*#]?\s*([0-9OIl]{1,3}[A-F]?)(?:[号#%]\s*|\s+|(?=[上中下]\s*铺)|$)(?:([上中下])\s*铺)?/i);
   const digits = value => value.replace(/O/gi, '0').replace(/[Il]/g, '1');
   const price = compact.match(/[¥￥Y]\s*(\d{1,4}(?:\s*\.\s*\d{1,2})?)(?:元|%|\s|$)/);
-  const seatClass = compact.match(/商务座|特等座|一等座|二等座|高级软卧|软卧|硬卧|软座|硬座|无座/)?.[0] || '';
+  const seatClass = compact.match(/商务座|特等座|一等座|二等座|高级软卧|软卧|硬卧|软座|硬座/)?.[0] || '';
   const identity = raw.match(/(\d{6,14}[*xX]{2,8}\d{2,4})\s+([\p{Script=Han}]{2,8})/u);
   let origin = pair[0]?.row[0] || '', destination = pair[1]?.row[0] || '';
+  for (const side of ['origin', 'destination']) {
+    const explicit = raw.match(new RegExp((side === 'origin' ? '出发站' : '到达站') + '[：:]\\s*([^\\n]+)'));
+    const name = explicit && railStationFromRegion(explicit[1]);
+    if (name && side === 'origin') origin = name;
+    else if (name) destination = name;
+  }
   if (!pair.length && unique.length === 1) {
     const word = anchorFor(unique[0]), page = layout.split('\n').map(line=>line.split('\t')).find(row=>row[0]==='1');
     const width = +page?.[8];
@@ -127,15 +161,17 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
     if (!origin || !destination) {
       const route = compact.match(new RegExp('([\\u3400-\\u9fff][\\u3400-\\u9fff \\t]{1,18})\\s*' + service + '(?:次)?\\s*([\\u3400-\\u9fff][\\u3400-\\u9fff \\t]{1,18})'));
       if (route) {
-        origin ||= route[1].replace(/\s/g, '').replace(/站$/, '');
-        destination ||= route[2].replace(/\s/g, '').replace(/站$/, '');
+        origin ||= railStationFromRegion(route[1]);
+        destination ||= railStationFromRegion(route[2]);
       }
     }
   }
-  const record = createRecord({ type: 'rail', template: railTemplateFromText(raw, { paperColor, departureDate }), origin, destination, originCode: pair[0]?.row[3] || '', destinationCode: pair[1]?.row[3] || '', service,
+  const record = createRecord({ type: 'rail', template: railTemplateFromText(raw, { paperColor, departureDate }), origin, destination,
+    originCode: pair[0]?.row[0] === origin ? pair[0].row[3] : '', destinationCode: pair[1]?.row[0] === destination ? pair[1].row[3] : '', service,
     departureDate: validDate(departureDate) ? departureDate : '', departureTime: time ? `${time[1].padStart(2, '0')}:${time[2]}` : '',
-    carriage: seat ? digits(seat[1]) : '', seat: seat ? digits(seat[2]).toUpperCase() + (seat[3] ? '号' + seat[3] + '铺' : '') : '', seatClass, price: price ? price[1].replace(/\s/g, '') : '', identity: identity?.[1] || '', passenger: identity?.[2] || '',
-    ticketNumber: raw.match(/^\s*([A-Z]\d{5,10})(?=\s|$)/m)?.[1] || '',
+    carriage: seat ? digits(seat[1]) : '', seat: seat ? digits(seat[2]).toUpperCase() + (seat[3] ? '号' + seat[3] + '铺' : '') : '', seatClass, railStanding: /无\s*座|站票/.test(seatRow) || /(?:席别|座位)[：:\s]*无\s*座|(?:商务座|一等座|二等座|硬座|软座)[：:\s]*无\s*座|^\s*无\s*座\s*$/m.test(compact), price: price ? price[1].replace(/\s/g, '') : '', identity: identity?.[1] || '', passenger: identity?.[2] || '',
+    ticketNumber: printedRailNumber(raw.split('\n').slice(0, 3).join('\n')),
+    saleCode: printedRailNumber(raw.split('\n').filter(line => line.trim()).slice(-3).join('\n'), true),
     gate: raw.match(/检票(?:口)?\s*[:：]?\s*([A-Z]?\d+[A-Z]?)/)?.[1] || '', ticketMarks: marksFromText(raw),
     sources: [{ kind: 'scan', label }], provenance: 'reconstruction' });
   return record;

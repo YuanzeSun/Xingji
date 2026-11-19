@@ -3,24 +3,8 @@ import { dateRectangle, readPrintedDate } from './scan-date.js';
 import { isRailOrderText, railOrderService } from './rail-order.js';
 import { railTimeWords } from './ocr-layout.js';
 import { isFlightScreenshotText } from './flight-screenshot.js';
-import { refineRailService, refineRailTemplate, refineRailReceipt, railReadScore, preferEnhancedRailRead } from './rail-ocr.js';
+import { refineRailService, refineRailTemplate, refineRailReceipt, refineRailFields, railReadScore, preferEnhancedRailRead } from './rail-ocr.js';
 import { prepareRailPhoto, prepareOCRImage, railPhotoColor, cropColoredRailPaper } from './scan-image.js';
-import { isBoardingPassText, plannedBoardingTime } from './boarding-pass.js';
-
-const readBoardingCodes = async image => (await import('./code-reader.js')).readBoardingCodesFromImage(image);
-
-async function readBoardingTime(worker, image, data) {
-  if (!data.text) return '';
-  const time = data.confidence >= 40 ? plannedBoardingTime(data.text, data.tsv) : '';
-  if (time) return time;
-  try {
-    await worker.setParameters({ tessedit_pageseg_mode: '11' });
-    const { data: sparse } = await worker.recognize(image, {}, { text: true, tsv: true });
-    if (sparse.confidence >= 40) return plannedBoardingTime(sparse.text, sparse.tsv);
-  } catch { /* The barcode is still usable when text recognition fails. */ }
-  finally { await worker.setParameters({ tessedit_pageseg_mode: '3' }).catch(() => {}); }
-  return '';
-}
 
 async function rereadRailPhoto(worker, photo, first) {
   let best = { image: photo, data: first };
@@ -41,8 +25,7 @@ async function rereadRailPhoto(worker, photo, first) {
 }
 
 export async function createRecognizer(progress = () => {}, {
-  workerFactory=createWorker,
-  readCodes=readBoardingCodes
+  workerFactory=createWorker
 } = {}) {
   const base = new URL('./', location.href);
   let rejectStartup;
@@ -58,28 +41,19 @@ export async function createRecognizer(progress = () => {}, {
   const worker = await Promise.race([creating, startupError]).finally(() => { rejectStartup = undefined; });
   await worker.setParameters({ user_defined_dpi: '300', preserve_interword_spaces: '1', tessedit_pageseg_mode: '3' });
   return {
-    async recognize(image, { refineRailDate = false, type = '', decodedBoardingCodes } = {}) {
-      const source = image;
-      const codeRead=decodedBoardingCodes ? Promise.resolve(decodedBoardingCodes)
-        : type==='rail' ? Promise.resolve([]) : Promise.resolve().then(()=>readCodes(source)).catch(()=>[]);
-      let data;
-      try {
-        image = await prepareOCRImage(source);
-        ({ data } = await worker.recognize(image, {}, { text: true, tsv: true }));
-      }
-      catch(error){if(!(await codeRead).length)throw error;data={text:'',tsv:'',confidence:0};}
-      const boardingCodes = await codeRead;
-      if (type === 'flight' || boardingCodes.length || isBoardingPassText(data.text) || isFlightScreenshotText(data.text)) {
-        const scheduledBoardingTime = await readBoardingTime(worker, image, data);
-        return { text: '', flightImage: true, scheduledBoardingTime, boardingCodes, confidence: boardingCodes.length ? 90 : data.confidence };
+    async recognize(image) {
+      image = await prepareOCRImage(image);
+      let { data } = await worker.recognize(image, {}, { text: true, tsv: true });
+      if (/BOARDING\s*(?:PASS|CARD)|登\s*[机機]\s*牌|航班(?:号)?[：:\s]*[A-Z]{2}\s*\d|\bFLIGHT\b/i.test(data.text) || isFlightScreenshotText(data.text)) {
+        return { text: '', flightImage: true };
       }
       const photo = image;
-      if (refineRailDate) await refineRailService(worker, image, data);
-      if (refineRailDate && !isRailOrderText(data.text) && !/BOARDING|\bFLIGHT\b|航班|航空公司/i.test(data.text)) {
+      await refineRailService(worker, image, data);
+      if (!isRailOrderText(data.text)) {
         ({ image, data } = await rereadRailPhoto(worker, photo, data));
       }
       const paperColor = railPhotoColor(image) || (image !== photo ? railPhotoColor(photo) : '');
-      if (refineRailDate && !isRailOrderText(data.text)) {
+      if (!isRailOrderText(data.text)) {
         await refineRailTemplate(worker, image, data, paperColor);
         await refineRailReceipt(worker, image, data);
       }
@@ -104,7 +78,7 @@ export async function createRecognizer(progress = () => {}, {
           layout = rows.map(row => row.join('\t')).join('\n');
         } finally { await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '3' }); }
       }
-      if (refineRailDate && !order) {
+      if (!order) {
         const rectangle = dateRectangle(data.tsv, image.width || Infinity, image.height || Infinity);
         if (rectangle) {
           try {
@@ -116,18 +90,14 @@ export async function createRecognizer(progress = () => {}, {
           finally { await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '3' }); }
         }
       }
-      return { text, layout, paperColor, railImage: true, confidence: data.confidence };
+      const railFields = order ? {} : await refineRailFields(worker, image, { text, tsv: layout }, paperColor);
+      return { text, layout, paperColor, railFields };
     },
     terminate: () => worker.terminate()
   };
 }
 export async function recognize(file, progress = () => {}, { details = false } = {}) {
-  const decodedBoardingCodes = readBoardingCodes(file).catch(() => []);
-  const worker = await createRecognizer(progress).catch(async error => {
-    if (!(await decodedBoardingCodes).length) throw error;
-    return null;
-  });
-  if (!worker) return details ? { text: '', flightImage: true, boardingCodes: await decodedBoardingCodes, confidence: 90 } : '';
-  try { const result = await worker.recognize(file, { refineRailDate: true, decodedBoardingCodes }); return details ? result : result.text; }
+  const worker = await createRecognizer(progress);
+  try { const result = await worker.recognize(file); return details ? result : result.text; }
   finally { await worker.terminate(); }
 }

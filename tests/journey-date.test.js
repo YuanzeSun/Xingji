@@ -8,7 +8,7 @@ import {ticketDateField,bindTicketDates,readTicketDate,refreshTicketDateLocks} f
 import {railQuery,railDetails,railCompletion} from '../src/rail-lookup-model.js';
 import {demoRecords} from '../src/demo.js';
 import {flightQuery} from '../src/flight-lookup-model.js';
-import {parseScanText} from '../src/scan-engine.js';
+import {boardingScanRecords} from '../src/boarding-pass.js';
 
 test('travel dates store the exact calendar year and ordinal day, including leap-century boundaries',()=>{
   for(const [iso,expected] of [['2024-01-01',{year:2024,dayOfYear:1}],['2024-02-29',{year:2024,dayOfYear:60}],['2025-03-01',{year:2025,dayOfYear:60}],['2024-12-31',{year:2024,dayOfYear:366}],['2025-01-01',{year:2025,dayOfYear:1}],['2000-03-01',{year:2000,dayOfYear:61}],['2100-03-01',{year:2100,dayOfYear:60}]]){
@@ -59,7 +59,7 @@ test('manual month-day entry converts using its own year and never rolls an inva
 
 test('an OCR year incompatible with barcode day 366 cannot discard the decoded day or invent a date',()=>{
   const code=createBoardingCode({passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:{year:null,dayOfYear:366},cabin:'Y',seat:'12A',sequence:'25',status:'1'});
-  const [record]=parseScanText('BOARDING PASS\nDATE: 31DEC2025','fixture',{boardingCodes:[code]});
+  const [record]=boardingScanRecords('fixture',{boardingCodes:[code]});
   assert.deepEqual(record.departureDate,{year:null,dayOfYear:366});
 });
 

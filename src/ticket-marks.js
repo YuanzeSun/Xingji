@@ -47,5 +47,18 @@ export function marksFromText(text) {
     const shape = 'circle';
     if (!marks.some(m => m.text === match[2] && m.shape === shape)) marks.push({ text: match[2], shape });
   }
+  if (/(?:商务座|特等座|一等座|二等座|软卧|硬卧|软座|硬座)[ \t]*孩(?:\s|$)/.test(text) &&
+      !marks.some(mark => mark.text === '孩')) marks.push({ text: '孩', shape: 'plain' });
   return normalizeMarks(marks.slice(0, 4));
+}
+
+export function marksFromRailRegion(text) {
+  const marks = marksFromText(text);
+  for (const line of text.split('\n')) {
+    const mark = line.trim().match(/^[（(○\s]*([网学孩惠折赠支微团残兑])[）)○\s]*$/)?.[1];
+    if (mark && !marks.some(value => value.text === mark)) {
+      marks.push({ text: mark, shape: mark === '孩' ? 'plain' : 'circle', offsetX: 0, offsetY: 0 });
+    }
+  }
+  return marks.slice(0, 4);
 }

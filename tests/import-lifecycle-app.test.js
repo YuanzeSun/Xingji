@@ -40,7 +40,7 @@ test('imports stay with their archive and original image, and never replace an u
       if (url !== ocrURL) return next(url, context);
       return {
         format: 'module', shortCircuit: true,
-        source: 'export async function recognize(file) { return { text: "中国东方航空 登机牌 BOARDING PASS\\n姓名 NAME 航班 FLIGHT 日期 DATE\\n测试旅客 " + (file.name === "first.png" ? "MU5403" : "MU5407") + " 2025.05.03\\nSHA TFU\\n航程 ROUTE\\nSHA - TFU\\nGATE BOARDING DEPARTURE SEAT\\nD21 09:55 10:35 32A" }; }'
+        source: 'export async function recognize(file) { return { text: "车次：" + (file.name === "first.png" ? "G103" : "G107") + "\\n出发站：北京南\\n到达站：上海虹桥\\n日期：2025-05-03\\n旅客姓名：测试旅客" }; }'
       };
     }
   });

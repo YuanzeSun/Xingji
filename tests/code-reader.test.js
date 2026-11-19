@@ -13,7 +13,7 @@ import { BOARDING_SHARED_FIELDS } from '../src/boarding-code-state.js';
 import { JSDOM } from 'jsdom';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
 import {boardingPresentation} from '../src/boarding-language.js';
-import {parseScanText} from '../src/scan-engine.js';
+import {boardingScanRecords} from '../src/boarding-pass.js';
 import {seatClassField,bindSeatClassFields} from '../src/seat-class-field.js';
 import {barcodeFieldLocked} from '../src/barcode-fields.js';
 import { symbolImage } from '../src/barcode-symbols.js';
@@ -99,8 +99,8 @@ test('every supported boarding-code format becomes PDF417 and loses only the ele
     const [before]=await readBarcodes(image,{formats:[format]}),[after]=await readBarcodes(code.image,{formats:['PDF417']});
     const expected=before.bytes.slice();expected[22]=32;
     assert.equal(before.bytes[22],69);assert.deepEqual(after.bytes,expected,format);assert.deepEqual(codeBytes(code.data.rawBytes),expected,format);
-    const boardingCodes=await readBoardingCodes(image),[scanned]=parseScanText('BOARDING PASS\nDATE: 18MAY2026\nBOARDING TIME: 09:55','synthetic',{boardingCodes});
-    assert.equal(scanned.boardingCode.format,'PDF417');assert.equal(scanned.boardingCodeSource,'original');assert.equal(scanned.boardingTime,'09:55');assert.equal(scanned.fieldSources.boardingTime,'ocr');assert.equal(barcodeFieldLocked(scanned,'seat'),true);assert.equal(barcodeFieldLocked(scanned,'boardingTime'),false);assert.deepEqual(codeBytes(scanned.boardingCode.rawBytes),expected);
+    const boardingCodes=await readBoardingCodes(image),[scanned]=boardingScanRecords('synthetic',{boardingCodes});
+    assert.equal(scanned.boardingCode.format,'PDF417');assert.equal(scanned.boardingCodeSource,'original');assert.equal(scanned.boardingTime,'');assert.equal(scanned.fieldSources.boardingTime,undefined);assert.equal(barcodeFieldLocked(scanned,'seat'),true);assert.equal(barcodeFieldLocked(scanned,'boardingTime'),false);assert.deepEqual(codeBytes(scanned.boardingCode.rawBytes),expected);
   }
 });
 
@@ -121,7 +121,7 @@ test('tagged Chinese names, ticket numbers and gates autofill from QR while reco
     assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'ZHANG/SAN');assert.equal(form.querySelector('[data-bcbp="electronic"]').value,'');assert.equal(form.querySelector('[data-bcbp-fields]').disabled,true);
     for(const origin of ['PEK','LHR']){const presentation=boardingPresentation({...draft,origin,originCode:origin});assert.equal(presentation.language,origin==='PEK'?'zh':'en');assert.equal(presentation.passenger,'张三');}
     const expected=bytes.slice();expected[22]=32;assert.deepEqual(codeBytes(draft.boardingCode.rawBytes),expected);
-    const payloads=await readBoardingPayloads(image),[scanned]=parseScanText('BOARDING PASS','synthetic',{boardingPayloads:payloads});
+    const payloads=await readBoardingPayloads(image),[scanned]=boardingScanRecords('synthetic',{boardingPayloads:payloads});
     assert.equal(scanned.passenger,'张三');assert.equal(scanned.ticketNumber,'1230000000001');assert.equal(scanned.gate,'A101');assert.equal(scanned.boardingTime,'');
     assert.equal(scanned.seatClass,'Z');assert.equal(scanned.airline,'中国国际航空');
   }finally{cleanup();dom.window.close();}

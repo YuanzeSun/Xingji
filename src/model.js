@@ -31,7 +31,7 @@ export const TEMPLATES = {
   'rail-refund-receipt': '退票费凭证',
   'air-boarding-pass': '登机牌'
 };
-export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
+export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
 export const now = () => new Date().toISOString();
 export const clone = value => structuredClone(value);
 export const sameRecords = (a, b) => JSON.stringify([...a].sort((x, y) => x.id.localeCompare(y.id))) === JSON.stringify([...b].sort((x, y) => x.id.localeCompare(y.id)));
@@ -64,6 +64,7 @@ export function validateRecord(input) {
     if (JOURNEY_DATE_FIELDS.includes(field)) {out[field]=storedJourneyDate(input[field]);continue;}
     if (field === 'fieldSources') { out.fieldSources = normalizeFieldSources(input.fieldSources,FIELDS); continue; }
     if (field === 'lookupValues') { out.lookupValues = normalizeLookupValues(input.lookupValues); continue; }
+    if (field === 'railStanding') { out.railStanding = input.type === 'rail' && input.railStanding === true; continue; }
     if (field === 'deleted') { out.deleted = input.deleted === true; continue; }
     if (field === 'ticketMarks') { out.ticketMarks = normalizeMarks(input.ticketMarks); continue; }
     if (field === 'ticketCode') { out.ticketCode = normalizeTicketCode(input.ticketCode); continue; }
@@ -74,6 +75,8 @@ export function validateRecord(input) {
     out[field] = (input[field] || '').slice(0, 1000);
   }
   out.seatClass = normalizeSeatClass(out.seatClass, out.type);
+  if (out.type === 'rail' && ['无座', '站票'].includes(out.seatClass)) throw new Error('请填写席别，并单独选择无座');
+  if (out.railStanding) out.seat = '';
   out.aircraft = normalizeAircraft(out.aircraft);
   out.flightStatus = out.type === 'flight' ? normalizeFlightStatus(out.flightStatus) : '';
   out.railBureau = normalizeRailBureau(out.railBureau);
@@ -94,7 +97,7 @@ export function validateRecord(input) {
   out.mergedIds = [...new Set((Array.isArray(input.mergedIds) ? input.mergedIds : []).filter(id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id) && id !== out.id))].sort();
   if (out.deleted) {
     // Keep only an ID marker for synchronization; there is no recoverable ticket.
-    for (const field of FIELDS) if (!['type', 'template', 'deleted'].includes(field)) out[field] = ['lookupValues','fieldSources'].includes(field) ? {} : field === 'ticketMarks' ? [] : '';
+    for (const field of FIELDS) if (!['type', 'template', 'deleted'].includes(field)) out[field] = ['lookupValues','fieldSources'].includes(field) ? {} : field === 'ticketMarks' ? [] : field === 'railStanding' ? false : '';
     out.sources = []; out.lockedFields = [];
     return out;
   }
@@ -167,7 +170,7 @@ const railConflictLabels = {
   railMileage: '铁路里程', railRunner: '担当客运段', railCarOwner: '车辆归属单位'
 };
 const railDuplicateFields = ['service', 'departureDate', 'origin', 'originCode', 'destination', 'destinationCode',
-  'passenger', 'template', ...Object.keys(railConflictLabels)];
+  'passenger', 'template', 'railStanding', ...Object.keys(railConflictLabels)];
 function railFieldConflicts(key, left, right) {
   if (!left || !right) return false;
   if (key === 'arrivalDate') {
@@ -205,6 +208,7 @@ export function duplicateOf(records, candidate, rejectConflict = null) {
     const conflictingFields = new Set();
     const compatible = matches.filter(record => {
       const fields = Object.keys(railConflictLabels).filter(key => railFieldConflicts(key, record[key], candidate[key]));
+      if ((record.railStanding && candidate.seat) || (candidate.railStanding && record.seat)) fields.push('seat');
       if (fields.length && rejectConflict(record)) for (const key of fields) conflictingFields.add(key);
       return !fields.length;
     });

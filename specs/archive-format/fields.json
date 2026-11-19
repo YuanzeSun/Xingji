@@ -27,6 +27,7 @@
     "carriage",
     "seat",
     "seatClass",
+    "railStanding",
     "price",
     "orderNumber",
     "ticketNumber",

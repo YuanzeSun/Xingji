@@ -1,6 +1,53 @@
 import {calendarDate} from './journey-date.js';
-import { railTrainRectangle, railFareRectangle, parsePrintedRailTicket } from './rail-ticket.js';
+import { railTrainRectangle, railFareRectangle, parsePrintedRailTicket, railStationFromRegion, printedRailNumber } from './rail-ticket.js';
 import { printedRailTemplate } from './rail-template.js';
+import { marksFromRailRegion } from './ticket-marks.js';
+
+export async function refineRailFields(worker, image, data, paperColor) {
+  const { width, height } = image;
+  if (!height || width / height < 1.1 || width / height > 2.3) return {};
+  const record = parsePrintedRailTicket(data.text, 'OCR', { layout: data.tsv, paperColor });
+  if (record === false || (!record && !paperColor)) return {};
+  const fields = {};
+  const read = (x, y, w, h) => worker.recognize(image, { rectangle: {
+    left: Math.floor(x * width), top: Math.floor(y * height),
+    width: Math.floor(w * width), height: Math.floor(h * height)
+  } }).then(result => result.data);
+  try {
+    await worker.setParameters({ tessedit_pageseg_mode: '6' });
+    for (const [side, x] of [['origin', .04], ['destination', .59]]) {
+      if (record?.[side]) continue;
+      const { text, confidence } = await read(x, .135, .37, .215);
+      const station = confidence >= 38 && railStationFromRegion(text);
+      if (station && station !== (fields.origin || record?.origin) &&
+        station !== record?.destination) fields[side] = station;
+    }
+    if (!record?.ticketMarks?.length) {
+      const { text } = await read(.37, .355, .26, .23);
+      let marks = marksFromRailRegion(text);
+      if (!marks.length) {
+        await worker.setParameters({ tessedit_pageseg_mode: '11', tessedit_char_whitelist: '网学孩惠折赠支微团残兑()（）' });
+        const isolated = await read(.43, .397, .17, .133);
+        if (isolated.confidence >= 62) marks = marksFromRailRegion(isolated.text);
+      }
+      if (marks.length) fields.ticketMarks = marks;
+    }
+    if (!record?.ticketNumber || !record?.saleCode) {
+      await worker.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ' });
+      for (const [key, footer, x, y, w, h] of [
+        ['ticketNumber', false, .025, .01, .43, .16],
+        ['saleCode', true, .017, .86, .68, .13]
+      ]) {
+        if (record?.[key]) continue;
+        const { text, confidence } = await read(x, y, w, h);
+        const number = confidence >= 55 && printedRailNumber(text, footer);
+        if (number) fields[key] = number;
+      }
+    }
+  } catch { /* A failed field read must not discard the rest of the ticket. */ }
+  finally { await worker.setParameters({ tessedit_pageseg_mode: '3', tessedit_char_whitelist: '' }); }
+  return fields;
+}
 
 export async function refineRailTemplate(worker, image, data, paperColor) {
   if (paperColor === 'red' || printedRailTemplate(data.text) || !parsePrintedRailTicket(data.text, 'OCR', { layout: data.tsv })) return;

@@ -9,7 +9,7 @@ export function splitBerth(value = '') {
 export function seatField(record) {
   const { number, berth } = splitBerth(record.seat);
   const sleeper = /卧/.test(record.seatClass) || (!record.seatClass && !!berth);
-  const required = requiredTicketFields(record.type, record.template, record.flightStatus).includes('seat');
+  const required = requiredTicketFields(record.type, record.template, record.flightStatus, record.railStanding).includes('seat');
   return `<div class="field seat-field"><span>座位 / 铺位${required ? '<b class="required-mark" aria-label="必填">*</b>' : ''}${fieldSourceBadge('seat',record)}</span><div class="seat-controls"><input data-seat-number ${required ? 'required aria-required="true"' : ''} aria-label="座位或铺位编号" value="${e(number)}" placeholder="如 015、08F" /><select data-berth aria-label="铺位"${sleeper ? '' : ' hidden'}><option value="">铺位未收录</option>${['上铺', '中铺', '下铺'].map(value => `<option value="${value}"${value === berth ? ' selected' : ''}>${value}</option>`).join('')}</select></div><input type="hidden" name="seat" value="${e(record.seat)}" /></div>`;
 }
 
