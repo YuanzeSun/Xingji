@@ -112,10 +112,6 @@
 @media(max-width:620px){.search-result-actions{gap:8px}.search-result-actions>label{flex:1}.search-result-actions select{width:100%;min-width:0;text-overflow:ellipsis}.search-result-actions .button{flex-shrink:0}}
 #search-error[hidden]{display:none}
 .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-@media(min-width:951px){
-  .archive-page-header>div:first-child{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-  .archive-page-header{justify-content:flex-end}
-}
 .city-context{font-size:13px;color:#617264;line-height:1.9}
 .city-context p{margin:8px 0 14px;padding:10px 13px;background:#edf1e7;border-radius:5px;overflow-wrap:anywhere}
 .city-context strong{color:var(--green);font-weight:500}
