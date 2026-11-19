@@ -116,7 +116,6 @@ void main() {
           ),
           catalog,
           flight: false,
-          scannedImage: true,
         ).single;
         expect(ticket.text('template'), expected);
         expect(ticket.text('origin'), '北京南');
@@ -129,31 +128,33 @@ void main() {
     },
   );
 
-  test('scanned flight text leaves an editable boarding time only', () {
-    List<TicketRecord> read(List<RecognitionLine> lines) => parseRecognition(
-      RecognitionResult(lines: lines),
+  test('rail photo regions recover station names, serials and marks on a standing ticket', () {
+    final record = parseRecognition(
+      RecognitionResult(
+        paperColor: 'blue',
+        lines: [RecognitionLine('G21\n05车无座 二等座\n仅供报销使用', 0, 0, 1, 1, .88)],
+        railRegions: {
+          'origin': '北 京 南 站',
+          'destination': 'Nanjingnan',
+          'ticketNumber': 'X 000001',
+          'saleCode': '000000000000000000001 南京南站售',
+          'ticketMarks': '网\n孩',
+        },
+      ),
       catalog,
-      flight: true,
-      scannedImage: true,
-    );
-    final lines = [
-      RecognitionLine('BOARDING TIME', .2, .3, .18, .03, .99),
-      RecognitionLine('DEPARTURE', .55, .3, .18, .03, .99),
-      RecognitionLine('4:15 PM', .2, .35, .11, .03, .99),
-      RecognitionLine('16:50', .55, .35, .11, .03, .99),
-      RecognitionLine('ACTUAL BOARDING TIME 16:25', .2, .5, .4, .04, .99),
-      RecognitionLine('CA181', .2, .6, .15, .03, .99),
-    ];
-    final record = read(lines).single;
-    expect(record.text('type'), 'flight');
-    expect(record.text('boardingTime'), '16:15');
-    expect(record.text('service'), isEmpty);
-    expect(record.text('departureTime'), isEmpty);
-    expect(read(lines.skip(4).toList()), isEmpty);
-    expect(
-      read([...lines, RecognitionLine('登机时间:16:30', .2, .8, .4, .03, .99)]),
-      isEmpty,
-    );
+      flight: false,
+    ).single;
+    expect(record.text('origin'), '北京南');
+    expect(record.text('destination'), '南京南');
+    expect(record.text('ticketNumber'), 'X000001');
+    expect(record.text('saleCode'), '000000000000000000001');
+    expect((record['ticketMarks'] as List).map((mark) => mark['text']), [
+      '网',
+      '孩',
+    ]);
+    expect(record.railStanding, true);
+    expect(record.text('seatClass'), '二等座');
+    expect(record.missingFields, isNot(contains('seat')));
   });
 
   test(

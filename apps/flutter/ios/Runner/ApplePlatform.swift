@@ -4,10 +4,12 @@ import Security
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import VisionKit
 
 @MainActor
 final class ApplePlatform: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate, PHPickerViewControllerDelegate {
   private var pickerResult: FlutterResult?
+  private var closingBoardingScanner = false
 
   func install(on messenger: FlutterBinaryMessenger) {
     AppleRecognition.checkModelAvailability()
@@ -31,6 +33,7 @@ final class ApplePlatform: NSObject, UIImagePickerControllerDelegate, UINavigati
       }
       AppleRecognition.recognize(image.data, languages: args["languages"] as? [String] ?? [],
                                  barcodes: args["barcodes"] as? Bool ?? true,
+                                 readText: args["readText"] as? Bool ?? true,
                                  flight: args["flight"] as? Bool ?? false, result: reply)
     case "recognizePDF":
       guard let file = args["bytes"] as? FlutterStandardTypedData else {
@@ -103,6 +106,13 @@ final class ApplePlatform: NSObject, UIImagePickerControllerDelegate, UINavigati
         UIApplication.shared.open(url) { reply($0) }
       case "pickPhoto", "captureTicketPhoto":
         presentPicker(camera: call.method == "captureTicketPhoto", reply: reply)
+      case "scanBoardingCode":
+        if #available(iOS 16.0, *),
+           DataScannerViewController.isSupported, DataScannerViewController.isAvailable {
+          presentBoardingScanner(reply)
+        } else {
+          reply(FlutterError(code: "scanner_unavailable", message: "当前无法实时扫码，可以上传条码图片。", details: nil))
+        }
       case "pasteTicket":
         let clipboard = UIPasteboard.general
         if clipboard.hasStrings, let text = clipboard.string,
@@ -483,6 +493,79 @@ private struct UploadSourceSheet: View {
       Button { select("files") } label: { Label("上传文件", systemImage: "folder") }
     }
     .listStyle(.insetGrouped)
+  }
+}
+
+@available(iOS 16.0, *)
+extension ApplePlatform: DataScannerViewControllerDelegate {
+  private func presentBoardingScanner(_ reply: @escaping FlutterResult) {
+    guard pickerResult == nil, let presenter else {
+      reply(FlutterError(code: "picker_busy", message: "暂时无法打开扫码。", details: nil))
+      return
+    }
+    let scanner = DataScannerViewController(
+      recognizedDataTypes: [.barcode(symbologies: AppleRecognition.boardingSymbologies)],
+      qualityLevel: .accurate,
+      recognizesMultipleItems: true,
+      isHighFrameRateTrackingEnabled: true,
+      isHighlightingEnabled: true
+    )
+    pickerResult = reply
+    closingBoardingScanner = false
+    scanner.title = "对准登机牌条码或二维码"
+    scanner.delegate = self
+    scanner.navigationItem.leftBarButtonItem = UIBarButtonItem(
+      systemItem: .cancel,
+      primaryAction: UIAction { [weak self, weak scanner] _ in
+        if let scanner { self?.finishBoardingScanner(scanner, result: nil) }
+      }
+    )
+    let navigation = UINavigationController(rootViewController: scanner)
+    navigation.modalPresentationStyle = .fullScreen
+    presenter.present(navigation, animated: true) {
+      do { try scanner.startScanning() }
+      catch {
+        self.finishBoardingScanner(scanner, result: FlutterError(
+          code: "scanner_unavailable", message: "无法扫码，请检查相机权限或上传条码图片。", details: nil))
+      }
+    }
+  }
+
+  private func finishBoardingScanner(_ scanner: DataScannerViewController, result: Any?) {
+    guard !closingBoardingScanner, pickerResult != nil else { return }
+    closingBoardingScanner = true
+    scanner.stopScanning()
+    scanner.dismiss(animated: true) { self.finishPicker(result) }
+  }
+
+  private func readBoardingCodes(_ scanner: DataScannerViewController, items: [RecognizedItem]) {
+    let payloads = Set(items.compactMap { item -> Data? in
+      guard case let .barcode(barcode) = item,
+            let bytes = AppleRecognition.payload(of: barcode.observation),
+            AppleRecognition.isBoardingPayload(bytes)
+      else { return nil }
+      return bytes
+    })
+    if payloads.count == 1, let bytes = payloads.first {
+      finishBoardingScanner(scanner, result: FlutterStandardTypedData(bytes: bytes))
+    }
+  }
+
+  func dataScanner(_ scanner: DataScannerViewController, didAdd added: [RecognizedItem], allItems: [RecognizedItem]) {
+    readBoardingCodes(scanner, items: allItems)
+  }
+
+  func dataScanner(_ scanner: DataScannerViewController, didUpdate updated: [RecognizedItem], allItems: [RecognizedItem]) {
+    readBoardingCodes(scanner, items: allItems)
+  }
+
+  func dataScanner(_ scanner: DataScannerViewController, didRemove removed: [RecognizedItem], allItems: [RecognizedItem]) {
+    readBoardingCodes(scanner, items: allItems)
+  }
+
+  func dataScanner(_ scanner: DataScannerViewController, becameUnavailableWithError error: DataScannerViewController.ScanningUnavailable) {
+    finishBoardingScanner(scanner, result: FlutterError(
+      code: "scanner_unavailable", message: "实时扫码暂不可用，可以上传条码图片。", details: nil))
   }
 }
 

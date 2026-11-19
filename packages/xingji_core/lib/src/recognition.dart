@@ -35,6 +35,7 @@ class RecognitionResult {
   final List<Map<String, dynamic>> symbolData;
   final String paperColor;
   final bool hasTextLayer;
+  final Map<String, String> railRegions;
 
   RecognitionResult({
     this.lines = const [],
@@ -42,33 +43,33 @@ class RecognitionResult {
     this.symbolData = const [],
     this.paperColor = '',
     this.hasTextLayer = false,
+    this.railRegions = const {},
   });
-  factory RecognitionResult.fromJson(Map<String, dynamic> value) =>
-      RecognitionResult(
-        paperColor: value['paperColor'] as String? ?? '',
-        hasTextLayer: value['hasTextLayer'] == true,
-        lines: (value['lines'] as List? ?? [])
-            .map(
-              (row) => RecognitionLine.fromJson(Map<String, dynamic>.from(row)),
-            )
-            .toList(),
-        barcodes: (value['barcodes'] as List? ?? [])
-            .map(
-              (row) =>
-                  Uint8List.fromList(base64Decode(row['rawBytes'] as String)),
-            )
-            .toList(),
-        symbolData: (value['barcodes'] as List? ?? [])
-            .where((row) => row['codeData'] is Map)
-            .map((row) {
-              final data = normalizeCodeData(row['codeData']);
-              if (data['rawBytes'] != row['rawBytes']) {
-                throw const FormatException('条码字节与重建数据不一致');
-              }
-              return data;
-            })
-            .toList(),
-      );
+  factory RecognitionResult.fromJson(
+    Map<String, dynamic> value,
+  ) => RecognitionResult(
+    paperColor: value['paperColor'] as String? ?? '',
+    hasTextLayer: value['hasTextLayer'] == true,
+    railRegions: Map<String, String>.from(value['railRegions'] as Map? ?? {}),
+    lines: (value['lines'] as List? ?? [])
+        .map((row) => RecognitionLine.fromJson(Map<String, dynamic>.from(row)))
+        .toList(),
+    barcodes: (value['barcodes'] as List? ?? [])
+        .map(
+          (row) => Uint8List.fromList(base64Decode(row['rawBytes'] as String)),
+        )
+        .toList(),
+    symbolData: (value['barcodes'] as List? ?? [])
+        .where((row) => row['codeData'] is Map)
+        .map((row) {
+          final data = normalizeCodeData(row['codeData']);
+          if (data['rawBytes'] != row['rawBytes']) {
+            throw const FormatException('条码字节与重建数据不一致');
+          }
+          return data;
+        })
+        .toList(),
+  );
 }
 
 abstract interface class RecognitionService {
@@ -149,7 +150,6 @@ List<TicketRecord> parseRecognition(
   RecognitionResult result,
   ReferenceCatalog catalog, {
   required bool flight,
-  bool scannedImage = false,
 }) {
   final boarding = <String, Uint8List>{
     for (final bytes in result.barcodes)
@@ -158,29 +158,10 @@ List<TicketRecord> parseRecognition(
   if (boarding.length > 1) {
     throw const FormatException('包含多个不同登机牌条码，请分别导入');
   }
-  if (scannedImage && (flight || boarding.isNotEmpty)) {
-    final time = _plannedBoardingTime(result.lines);
-    if (boarding.isNotEmpty) {
-      return boardingRecords(
-        boarding.values.single,
-        catalog,
-        supplement: {if (time != null) 'boardingTime': time},
-      );
-    }
-    if (time == null) return [];
-    return [
-      TicketRecord.create({
-        'type': 'flight',
-        'boardingTime': time,
-        'fieldSources': {'boardingTime': 'ocr'},
-      }),
-    ];
-  }
-  final fields = readTravelFields(
-    recognizedTicketText(result.lines),
-    catalog,
-    flight: flight,
-  );
+  final text = recognizedTicketText(result.lines);
+  final fields = readTravelFields(text, catalog, flight: flight);
+  if (!flight)
+    _fillPrintedRailRegions(fields, result.railRegions, text, catalog);
   final values = <String, dynamic>{
     'type': flight ? 'flight' : 'rail',
     'template': flight
@@ -215,30 +196,81 @@ List<TicketRecord> parseRecognition(
   return [catalog.normalize(TicketRecord.create(values))];
 }
 
-String? _plannedBoardingTime(List<RecognitionLine> lines) {
-  final notices = RegExp(
-    r'实际|预计|关门|截止|ACTUAL|ESTIMATED|CLOS(?:E|ES|ED|ING)|'
-    r'\b(?:ATD|ATA|ETD|ETA|ENDS?|MINUTES?|MINS)\b',
-    caseSensitive: false,
-  );
-  final boarding = RegExp(
-    '^(?:SCHEDULED\\s+)?(?:$_scheduledBoardingLabels)'
-    r'\s*[:：]?\s*(\d{1,2})\s*[:.：]?\s*([0-5]\d)'
-    r'\s*(AM|PM)?(?![\d:/A-Z])',
-    caseSensitive: false,
-  );
-  final times = <String>{};
-  for (final line in recognizedTicketText(lines).split('\n')) {
-    if (notices.hasMatch(line)) continue;
-    for (final match in boarding.allMatches(line.trim())) {
-      var hour = int.parse(match[1]!);
-      final period = match[3]?.toUpperCase();
-      if (hour > 23 || (period != null && (hour == 0 || hour > 12))) continue;
-      if (period != null) hour = hour % 12 + (period == 'PM' ? 12 : 0);
-      times.add('${hour.toString().padLeft(2, '0')}:${match[2]}');
+void _fillPrintedRailRegions(
+  Map<String, dynamic> fields,
+  Map<String, String> regions,
+  String text,
+  ReferenceCatalog catalog,
+) {
+  for (final side in ['origin', 'destination']) {
+    final known = catalog.resolve(
+      fields[side] as String? ?? '',
+      '',
+      flight: false,
+    );
+    if (known != null) continue;
+    final candidates = <String>{};
+    for (final line in (regions[side] ?? '').split('\n')) {
+      final raw = line.trim();
+      if (!RegExp(r"^[A-Za-z\u3400-\u9fff\s'’]{2,30}$").hasMatch(raw)) continue;
+      final match = catalog.resolve(
+        raw.replaceAll(RegExp(r'\s+'), ''),
+        '',
+        flight: false,
+      );
+      if (match != null &&
+          match.name != fields[side == 'origin' ? 'destination' : 'origin']) {
+        candidates.add(match.name);
+      }
     }
+    if (candidates.length == 1) fields[side] = candidates.single;
   }
-  return times.length == 1 ? times.single : null;
+
+  String? number(String input, RegExp pattern) {
+    final candidates = <String>{};
+    for (final line in input.toUpperCase().split('\n')) {
+      final words = line.trim().split(RegExp(r'\s+'));
+      for (final token in [if (words.isNotEmpty) words.first, words.join()]) {
+        final value = RegExp(r'^[A-Z0-9]+').firstMatch(token)?[0];
+        if (value != null && pattern.hasMatch(value)) candidates.add(value);
+      }
+    }
+    return candidates.length == 1 ? candidates.single : null;
+  }
+
+  const serial = r'^(?:[A-Z]\d{5,10}|\d{1,3}[A-Z]\d{5,9})$';
+  const sale = r'^(?=.{17,25}$)\d{5,}[A-Z]?\d{8,}[A-Z]?\d{0,4}$';
+  final lines = text
+      .split('\n')
+      .where((line) => line.trim().isNotEmpty)
+      .toList();
+  fields['ticketNumber'] ??=
+      number(regions['ticketNumber'] ?? '', RegExp(serial)) ??
+      number(lines.take(3).join('\n'), RegExp(serial));
+  fields['saleCode'] ??=
+      number(regions['saleCode'] ?? '', RegExp(sale)) ??
+      number(lines.reversed.take(3).join('\n'), RegExp(sale));
+
+  final marks = <String>{
+    ...RegExp(r'[（(]\s*([网学孩惠折赠支微团残兑])\s*[）)]')
+        .allMatches(text)
+        .map((match) => match[1]!),
+    for (final line in (regions['ticketMarks'] ?? '').split('\n'))
+      if (RegExp(r'^[（(○\s]*([网学孩惠折赠支微团残兑])[）)○\s]*$').firstMatch(line)
+          case final mark?)
+        mark[1]!,
+  };
+  if (marks.isNotEmpty)
+    fields['ticketMarks'] = [
+      for (final mark in marks.take(4))
+        {
+          'text': mark,
+          'shape': mark == '孩' ? 'plain' : 'circle',
+          'offsetX': 0,
+          'offsetY': 0,
+        },
+    ];
+  fields.removeWhere((_, value) => value == null);
 }
 
 String _printedRailTemplate(
@@ -478,7 +510,7 @@ Map<String, dynamic> readTravelFields(
           '${seat.single[2]}${seat.single[3] == null ? '' : '号${seat.single[3]}'}';
     }
     fields['seatClass'] ??= one(
-      RegExp(r'商务座|特等座|一等座|二等座|硬卧|软卧|硬座|软座|无座')
+      RegExp(r'商务座|特等座|一等座|二等座|硬卧|软卧|硬座|软座')
           .allMatches(text)
           .map((match) => match[0]!),
     );
@@ -488,6 +520,14 @@ Map<String, dynamic> readTravelFields(
           .map((match) => match[1]!),
     );
     put('price', price);
+    if (RegExp(r'无\s*座|站票').hasMatch(text)) {
+      fields['railStanding'] = true;
+      fields.remove('seat');
+      if (['无座', '站票'].contains(fields['seatClass']))
+        fields.remove('seatClass');
+      fields['carriage'] ??= RegExp(r'(\d{1,2})\s*车(?:厢)?\s*无\s*座')
+          .firstMatch(text)?[1];
+    }
     fields['ticketNumber'] ??= one(
       RegExp(
         r'^\s*([A-Z]\d{5,10})(?=\s|$)',

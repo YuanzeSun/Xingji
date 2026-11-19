@@ -90,7 +90,7 @@ enum AppleRecognition {
   static let boardingSymbologies: [VNBarcodeSymbology] = [.pdf417, .microPDF417, .aztec, .qr, .dataMatrix, .code128]
 
   static func recognize(
-    _ data: Data, languages: [String], barcodes: Bool,
+    _ data: Data, languages: [String], barcodes: Bool, readText: Bool,
     flight: Bool = false, result: @escaping FlutterResult
   ) {
     DispatchQueue.global(qos: .userInitiated).async {
@@ -109,7 +109,9 @@ enum AppleRecognition {
           }
           return
         }
-        let response = try vision(image, languages: languages, barcodes: barcodes, flight: flight)
+        let ticket = readText && !flight ? (rectifyRailPhoto(image) ?? image) : image
+        let response = try vision(ticket, languages: languages, barcodes: barcodes,
+                                  readText: readText, flight: flight, railRegions: readText && !flight)
         DispatchQueue.main.async { result(response) }
       } catch {
         DispatchQueue.main.async {
@@ -121,7 +123,7 @@ enum AppleRecognition {
 
   private static func vision(
     _ image: CGImage, languages: [String], barcodes: Bool,
-    readText: Bool = true, flight: Bool = false
+    readText: Bool = true, flight: Bool = false, railRegions: Bool = false
   ) throws -> [String: Any] {
     let text = VNRecognizeTextRequest()
     text.recognitionLevel = .accurate
@@ -146,7 +148,63 @@ enum AppleRecognition {
     if readText, !payloads.contains(where: isBoardingPayload), let color = paperColor(image) {
       reading["paperColor"] = color
     }
+    if railRegions, image.width > image.height,
+       Double(image.width) / Double(image.height) <= 2.3 {
+      reading["railRegions"] = readRailRegions(handler, languages: selected)
+    }
     return reading
+  }
+
+  private static func rectifyRailPhoto(_ image: CGImage) -> CGImage? {
+    let request = VNDetectRectanglesRequest()
+    request.minimumAspectRatio = 0.43
+    request.maximumAspectRatio = 0.83
+    request.minimumSize = 0.24
+    request.minimumConfidence = 0.65
+    request.maximumObservations = 1
+    let handler = VNImageRequestHandler(cgImage: image)
+    guard (try? handler.perform([request])) != nil, let ticket = request.results?.first,
+          ticket.boundingBox.width * ticket.boundingBox.height >= 0.18,
+          ticket.boundingBox.insetBy(dx: -0.06, dy: -0.06).contains(CGPoint(x: 0.5, y: 0.5))
+    else { return nil }
+    let input = CIImage(cgImage: image)
+    func point(_ normalized: CGPoint) -> CIVector {
+      CIVector(x: normalized.x * input.extent.width, y: normalized.y * input.extent.height)
+    }
+    let fixed = input.applyingFilter("CIPerspectiveCorrection", parameters: [
+      "inputTopLeft": point(ticket.topLeft), "inputTopRight": point(ticket.topRight),
+      "inputBottomLeft": point(ticket.bottomLeft), "inputBottomRight": point(ticket.bottomRight),
+    ])
+    guard fixed.extent.width >= 300, fixed.extent.height >= 100,
+          (1.1...2.3).contains(fixed.extent.width / fixed.extent.height)
+    else { return nil }
+    return CIContext().createCGImage(fixed, from: fixed.extent)
+  }
+
+  private static func readRailRegions(_ handler: VNImageRequestHandler, languages: [String]) -> [String: String] {
+    // Vision's region coordinates start at the bottom of the ticket.
+    let rectangles: [String: CGRect] = [
+      "origin": CGRect(x: 0.04, y: 0.65, width: 0.37, height: 0.215),
+      "destination": CGRect(x: 0.59, y: 0.65, width: 0.37, height: 0.215),
+      "ticketMarks": CGRect(x: 0.43, y: 0.43, width: 0.28, height: 0.205),
+      "ticketNumber": CGRect(x: 0.035, y: 0.85, width: 0.40, height: 0.135),
+      "saleCode": CGRect(x: 0.025, y: 0.01, width: 0.58, height: 0.11),
+    ]
+    var fields: [String: String] = [:]
+    for (key, rect) in rectangles {
+      let request = VNRecognizeTextRequest()
+      request.regionOfInterest = rect
+      request.recognitionLevel = .accurate
+      request.usesLanguageCorrection = false
+      if !languages.isEmpty { request.recognitionLanguages = languages }
+      if (try? handler.perform([request])) == nil { continue }
+      let text = request.results?.compactMap { item -> String? in
+        guard let candidate = item.topCandidates(1).first, candidate.confidence >= 0.45 else { return nil }
+        return candidate.string
+      }.joined(separator: "\n") ?? ""
+      if !text.isEmpty { fields[key] = text }
+    }
+    return fields
   }
 
   private static func paperColor(_ image: CGImage) -> String? {

@@ -12,7 +12,7 @@ import 'platform_services.dart';
 import 'ticket_file_import.dart';
 import 'sync_review.dart';
 
-enum TicketEntry { camera, upload, write, paste }
+enum TicketEntry { upload, write, paste }
 
 Future<void> openTicketEntry(
   BuildContext context,
@@ -30,8 +30,6 @@ Future<void> openTicketEntry(
   try {
     final List<TicketRecord>? records;
     switch (entry) {
-      case TicketEntry.camera:
-        records = await _scan(context, store.catalog);
       case TicketEntry.upload:
         records = await _upload(context, store.catalog);
       case TicketEntry.paste:
@@ -52,9 +50,8 @@ Future<void> openTicketEntry(
               'service',
               'origin',
               'destination',
-              'boardingTime',
             ].every((key) => ticket.text(key).isEmpty)) {
-      throw const FormatException('未能读取票据。机票请对准登机牌条码或二维码，火车票请拍清完整票面。');
+      throw const FormatException('未能读取票据。机票请在录入时读取登机牌条码或二维码。');
     }
     if (ticket == null) {
       await reviewImport(context, store, records);
@@ -71,45 +68,31 @@ Future<void> openTicketEntry(
   }
 }
 
-Future<TicketEntry?> _chooseEntry(
-  BuildContext context,
-) => showModalBottomSheet<TicketEntry>(
-  context: context,
-  showDragHandle: true,
-  builder: (context) => SafeArea(
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final (choice, title, icon) in const [
-            (TicketEntry.camera, '扫描', CupertinoIcons.camera),
-            (TicketEntry.upload, '上传', CupertinoIcons.arrow_up_doc),
-            (TicketEntry.write, '手动填写', CupertinoIcons.pencil),
-            (TicketEntry.paste, '粘贴', CupertinoIcons.doc_on_clipboard),
-          ])
-            ListTile(
-              leading: Icon(icon, color: ink),
-              title: Text(title),
-              enabled: choice != TicketEntry.camera || AppleServices.available,
-              onTap: choice == TicketEntry.camera && !AppleServices.available
-                  ? null
-                  : () => Navigator.pop(context, choice),
-            ),
-        ],
+Future<TicketEntry?> _chooseEntry(BuildContext context) =>
+    showModalBottomSheet<TicketEntry>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final (choice, title, icon) in const [
+                (TicketEntry.write, '录入', CupertinoIcons.pencil),
+                (TicketEntry.upload, '上传', CupertinoIcons.arrow_up_doc),
+                (TicketEntry.paste, '粘贴', CupertinoIcons.doc_on_clipboard),
+              ])
+                ListTile(
+                  leading: Icon(icon, color: ink),
+                  title: Text(title),
+                  onTap: () => Navigator.pop(context, choice),
+                ),
+            ],
+          ),
+        ),
       ),
-    ),
-  ),
-);
-
-Future<List<TicketRecord>?> _scan(
-  BuildContext context,
-  ReferenceCatalog catalog,
-) async {
-  final image = await AppleServices.captureTicketPhoto();
-  if (image == null || !context.mounted) return null;
-  return _recognizing(context, () => recognizeTicketImage(image, catalog));
-}
+    );
 
 Future<List<TicketRecord>?> _upload(
   BuildContext context,

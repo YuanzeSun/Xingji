@@ -31,7 +31,7 @@ void main() {
   );
 
   test(
-    'a flight photo uses the barcode and planned boarding time only',
+    'the flight form reads only the barcode even if Vision returns text',
     () async {
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -56,6 +56,7 @@ void main() {
       ) async {
         methods.add(call.method);
         expect(call.arguments['bytes'], orderedEquals(input));
+        expect(call.arguments['readText'], isFalse);
         expect(call.method, 'recognizeImage');
         return {
           'barcodes': [
@@ -80,20 +81,16 @@ void main() {
             messenger.setMockMethodCallHandler(SystemRecognition.channel, null),
       );
 
-      final record = (await recognizeTicketImage(
-        input,
-        catalog,
-        flight: true,
-      )).single;
+      final record = (await readBoardingPhoto(input, catalog)).single;
       expect(methods, ['recognizeImage']);
       expect(record.text('service'), 'CA181');
       expect(record.text('seat'), '8A');
       expect(record.barcodeLocked('seat'), isTrue);
       expect(record.text('gate'), isEmpty);
-      expect(record.text('boardingTime'), '08:55');
+      expect(record.text('boardingTime'), isEmpty);
       expect(record.text('actualBoardingTime'), isEmpty);
       expect(record.text('departureTime'), isEmpty);
-      expect(record.fieldSources['boardingTime'], 'ocr');
+      expect(record.fieldSources['boardingTime'], isNull);
       expect(record.departure?.year, isNull);
       expect(record.departure?.dayOfYear, date.dayOfYear);
     },
@@ -120,7 +117,7 @@ void main() {
         () =>
             messenger.setMockMethodCallHandler(SystemRecognition.channel, null),
       );
-      final record = (await recognizeTicketImage(Uint8List(4), catalog)).single;
+      final record = (await readBoardingPhoto(Uint8List(4), catalog)).single;
       expect(record.text('gate'), isEmpty);
       expect(record.text('boardingTime'), isEmpty);
     },
@@ -242,9 +239,9 @@ void main() {
     addTearDown(
       () => messenger.setMockMethodCallHandler(SystemRecognition.channel, null),
     );
-    final record = (await recognizeTicketImage(Uint8List(4), catalog)).single;
+    final record = (await readBoardingPhoto(Uint8List(4), catalog)).single;
     expect(record.text('service'), 'CA182');
-    expect(record.text('boardingTime'), '12:20');
+    expect(record.text('boardingTime'), isEmpty);
     expect(record.text('gate'), isEmpty);
   });
 

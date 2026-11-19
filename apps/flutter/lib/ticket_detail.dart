@@ -122,6 +122,7 @@ class _TicketDetailState extends State<TicketDetail> {
           'railTrainsets',
           'railPowerSupply',
           'railMileage',
+          'ticketMarks',
         ],
         'orderNumber',
         'ticketNumber',
@@ -144,8 +145,16 @@ class _TicketDetailState extends State<TicketDetail> {
           ? (flight ? '舱位' : '席别')
           : key == 'gate'
           ? (flight ? '登机口' : '检票口')
+          : key == 'ticketMarks'
+          ? '票面标识'
           : fieldLabels[key] ?? key;
       String value(String key) {
+        if (key == 'seat' && record.railStanding) return '无座';
+        if (key == 'ticketMarks') {
+          return (record['ticketMarks'] as List)
+              .map((mark) => mark['text'])
+              .join('、');
+        }
         if (!journeyDateFields.contains(key)) return record.text(key);
         final date = JourneyDate.fromJson(record[key]);
         return date?.year == null ? '' : date!.label;

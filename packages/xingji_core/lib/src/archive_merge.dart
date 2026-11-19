@@ -234,6 +234,7 @@ Set<String> changedRailDuplicateIds(
     'destinationCode',
     'passenger',
     'template',
+    'railStanding',
     ..._railConflictFields.keys,
   ];
   final changed = <String>{};
@@ -294,6 +295,10 @@ List<TicketRecord> _duplicateMatches(
     final fields = _railConflictFields.keys
         .where((key) => _railFieldConflicts(key, row[key], candidate[key]))
         .toList();
+    if (row.railStanding && candidate.text('seat').isNotEmpty ||
+        candidate.railStanding && row.text('seat').isNotEmpty) {
+      fields.add('seat');
+    }
     if (fields.isEmpty) {
       compatible.add(row);
     } else {

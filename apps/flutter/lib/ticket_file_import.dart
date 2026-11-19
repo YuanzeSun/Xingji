@@ -36,19 +36,14 @@ bool _hasJourney(TicketRecord record) =>
 
 Future<List<TicketRecord>> recognizeTicketImage(
   Uint8List bytes,
-  ReferenceCatalog catalog, {
-  bool? flight,
-}) async {
+  ReferenceCatalog catalog,
+) async {
   final provider = SystemRecognition();
-  final reading = await provider.recognize(bytes, flight: flight ?? true);
-  final isFlight = flight ?? _isFlight(reading);
-  final fallback = parseRecognition(
-    reading,
-    catalog,
-    flight: isFlight,
-    scannedImage: true,
-  );
-  if (isFlight || fallback.any((ticket) => ticket.isFlight)) return fallback;
+  final reading = await provider.recognize(bytes, barcodes: false);
+  if (_isFlight(reading)) {
+    throw const FormatException('请在录入机票时读取登机牌条码或二维码');
+  }
+  final fallback = parseRecognition(reading, catalog, flight: false);
 
   final text = recognizedTicketText(reading.lines);
   try {
@@ -67,7 +62,102 @@ Future<List<TicketRecord>> recognizeTicketImage(
   } on MissingPluginException {
     // The local result is usable on hosts without a model channel.
   }
-  return fallback.where(_hasJourney).toList();
+  return fallback.where(_hasRailPhotoFields).toList();
+}
+
+bool _hasRailPhotoFields(TicketRecord record) =>
+    _hasJourney(record) ||
+    [
+      'origin',
+      'destination',
+      'ticketNumber',
+      'saleCode',
+    ].any((key) => record.text(key).isNotEmpty) ||
+    (record['ticketMarks'] as List).isNotEmpty;
+
+TicketRecord mergeRailPhoto(TicketRecord draft, TicketRecord photo) {
+  final changes = <String, dynamic>{}, sources = draft.fieldSources;
+  bool present(Object? value) =>
+      value != null &&
+      value != false &&
+      value != '' &&
+      (value is! List || value.isNotEmpty);
+  for (final key in [
+    'template',
+    'origin',
+    'destination',
+    'service',
+    'departureDate',
+    'departureTime',
+    'carriage',
+    'seat',
+    'seatClass',
+    'railStanding',
+    'passenger',
+    'price',
+    'gate',
+    'ticketNumber',
+    'saleCode',
+    'issuer',
+    'ticketMarks',
+  ]) {
+    final source = sources[key];
+    if (!present(photo[key]) ||
+        source == 'manual' ||
+        draft.lockedFields.contains(key)) {
+      continue;
+    }
+    if (key == 'railStanding' &&
+        draft.text('seat').isNotEmpty &&
+        draft.lockedFields.contains('seat')) {
+      continue;
+    }
+    if (key == 'template'
+        ? source != null && source != 'default' && source != 'ocr'
+        : present(draft[key]) && source != 'ocr' && source != 'profile') {
+      continue;
+    }
+    changes[key] = photo[key];
+    sources[key] = 'ocr';
+  }
+  if (changes.containsKey('origin')) {
+    changes['originCode'] = photo['originCode'];
+  }
+  if (changes.containsKey('destination')) {
+    changes['destinationCode'] = photo['destinationCode'];
+  }
+  if (changes.keys.any(
+    ['origin', 'destination', 'service', 'departureDate'].contains,
+  )) {
+    changes['railJourney'] = '';
+    changes['railRoute'] = '';
+  }
+  return draft.withChanges({
+    ...changes,
+    'fieldSources': sources,
+    'sources': [...draft['sources'], ...photo['sources']],
+  });
+}
+
+Future<List<TicketRecord>> readBoardingPhoto(
+  Uint8List bytes,
+  ReferenceCatalog catalog,
+) async {
+  final result = await SystemRecognition().recognize(
+    bytes,
+    flight: true,
+    readText: false,
+  );
+  final candidates = {
+    for (final bytes in result.barcodes)
+      if (decodeBoardingBytes(bytes) != null) base64Encode(bytes): bytes,
+  };
+  if (candidates.length != 1) {
+    throw FormatException(
+      candidates.isEmpty ? '未读到有效登机牌码，请对准条码或二维码' : '照片包含多个登机牌码，请分别读取',
+    );
+  }
+  return boardingRecords(candidates.values.single, catalog);
 }
 
 Future<List<TicketRecord>> recognizeTicketText(
@@ -232,12 +322,8 @@ Future<List<TicketRecord>> readTicketAttachment(
   final tickets = <TicketRecord>[];
   for (final page in pages) {
     final flight = _isFlight(page);
-    final records = parseRecognition(
-      page,
-      catalog,
-      flight: flight,
-      scannedImage: !page.hasTextLayer,
-    );
+    if (flight && !page.hasTextLayer) continue;
+    final records = parseRecognition(page, catalog, flight: flight);
     for (final ticket in records) {
       if (!_hasJourney(ticket) && ticket.text('boardingTime').isEmpty) {
         continue;

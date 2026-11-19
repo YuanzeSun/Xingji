@@ -48,6 +48,9 @@ class TicketRecord {
             input['template'].toString().startsWith('air-'))
       throw const FormatException('票面与交通方式不匹配');
     final data = Map<String, dynamic>.from(cloneJson(input));
+    data['railStanding'] =
+        data['type'] == 'rail' && data['railStanding'] == true;
+    if (data['railStanding'] == true) data['seat'] = '';
     for (final key in journeyDateFields) {
       JourneyDate.fromJson(data[key]);
     }
@@ -84,6 +87,7 @@ class TicketRecord {
       'offsetX': '0',
       'offsetY': '0',
       'deleted': false,
+      'railStanding': false,
       'sources': [],
       'mergedIds': [],
       'lockedFields': [],
@@ -108,6 +112,7 @@ class TicketRecord {
   String get id => text('id');
   bool get isFlight => text('type') == 'flight';
   bool get deleted => _data['deleted'] == true;
+  bool get railStanding => _data['railStanding'] == true;
   bool get isJourney =>
       !deleted &&
       text('template') != 'rail-refund-receipt' &&
@@ -154,15 +159,18 @@ class TicketRecord {
             'departureTime',
             'passenger',
             'identity',
-            'seat',
+            if (!railStanding) 'seat',
             'seatClass',
-            if (!isFlight) 'carriage',
+            if (!isFlight && !railStanding) 'carriage',
           ];
     return required
         .where(
           (key) => key == 'departureDate'
               ? departure?.dayOfYear == null
-              : text(key).trim().isEmpty,
+              : text(key).trim().isEmpty ||
+                    key == 'seatClass' &&
+                        !isFlight &&
+                        ['无座', '站票'].contains(text(key).trim()),
         )
         .toList();
   }

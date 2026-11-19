@@ -52,6 +52,7 @@ class SystemRecognition implements RecognitionService {
     Uint8List image, {
     bool flight = false,
     bool barcodes = true,
+    bool readText = true,
   }) async {
     final result = await channel.invokeMapMethod<String, dynamic>(
       'recognizeImage',
@@ -60,6 +61,7 @@ class SystemRecognition implements RecognitionService {
         'languages': ['zh-Hans', 'en'],
         'barcodes': barcodes,
         'flight': flight,
+        'readText': readText,
       },
     );
     if (result == null) throw const FormatException('没有收到识别结果');
@@ -131,6 +133,9 @@ abstract final class AppleServices {
 
   static Future<Uint8List?> captureTicketPhoto() =>
       channel.invokeMethod<Uint8List>('captureTicketPhoto');
+
+  static Future<Uint8List?> scanBoardingCode() =>
+      channel.invokeMethod<Uint8List>('scanBoardingCode');
 
   static Future<(int, int)?> pickMonthDay(DateTime initial) async {
     final result = await channel.invokeListMethod<int>('pickMonthDay', {

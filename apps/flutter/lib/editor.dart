@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoButton;
+import 'package:flutter/services.dart' show Uint8List;
 import 'package:material_ui/material_ui.dart';
 import 'package:xingji_core/xingji_core.dart';
 
@@ -13,6 +14,7 @@ import 'platform_services.dart';
 import 'input_formatters.dart';
 import 'seat_input.dart';
 import 'sync_review.dart';
+import 'ticket_file_import.dart';
 
 const _barcodeBlue = Color(0xFF32658D);
 final _chineseName = RegExp(r'[\u3400-\u9fff]');
@@ -81,6 +83,8 @@ class _TicketEditorState extends State<TicketEditor> {
       dirty = false,
       confirmingExit = false;
   bool electronicMarker = false;
+  bool readingPhoto = false;
+  Uint8List? railPhoto;
   int revision = 0;
   late final int archiveSession;
   String error = '';
@@ -164,6 +168,134 @@ class _TicketEditorState extends State<TicketEditor> {
     ))
       entry.key: entry.value.text,
   };
+
+  Future<void> _readTicket({required bool useCamera}) async {
+    if (readingPhoto || !store.canWrite) return;
+    final startedRevision = revision, readFlight = flight;
+    bool current() =>
+        mounted &&
+        revision == startedRevision &&
+        archiveSession == store.archiveSession &&
+        store.canWrite;
+    setState(() => readingPhoto = true);
+    try {
+      final bytes = useCamera
+          ? (readFlight
+                ? await AppleServices.scanBoardingCode()
+                : await AppleServices.captureTicketPhoto())
+          : await AppleServices.pickPhoto();
+      if (bytes == null || !current()) return;
+      if (!readFlight) {
+        setState(() => railPhoto = bytes);
+        final records = await recognizeTicketImage(bytes, store.catalog);
+        if (!mounted || !current()) return;
+        if (records.isEmpty) {
+          showError(context, '已保留照片，请对照原图填写');
+          return;
+        }
+        final next = mergeRailPhoto(
+          TicketRecord.fromJson(values()),
+          records.first,
+        );
+        setState(() {
+          _replace(next);
+          dirty = true;
+        });
+        return;
+      }
+      final records = useCamera
+          ? boardingRecords(bytes, store.catalog)
+          : await readBoardingPhoto(bytes, store.catalog);
+      if (records.isEmpty) throw const FormatException('未读到有效登机牌码');
+      if (!mounted || !current()) return;
+      final selected = records.length == 1
+          ? records.single
+          : await showDialog<TicketRecord>(
+              context: context,
+              builder: (dialog) => SimpleDialog(
+                title: const Text('选择航段'),
+                children: [
+                  for (final record in records)
+                    SimpleDialogOption(
+                      onPressed: () => Navigator.pop(dialog, record),
+                      child: Text(
+                        '${record.text('service')} · ${record.text('originCode')} → ${record.text('destinationCode')}',
+                      ),
+                    ),
+                ],
+              ),
+            );
+      if (selected == null || !current()) return;
+      final draft = TicketRecord.fromJson(values());
+      final next = draft.withChanges({
+        for (final key in selected.fieldSources.keys) key: selected[key],
+        'boardingCode': selected['boardingCode'],
+        'boardingCodeSource': 'original',
+        'boardingLegIndex': selected.text('boardingLegIndex'),
+        if (draft.departure?.year case final year?)
+          if (selected.departure?.dayOfYear case final day?)
+            if (day <=
+                DateTime.utc(
+                      year,
+                      12,
+                      31,
+                    ).difference(DateTime.utc(year)).inDays +
+                    1)
+              'departureDate': JourneyDate(year, day).toJson(),
+        'fieldSources': {...draft.fieldSources, ...selected.fieldSources},
+      });
+      setState(() {
+        _replace(next);
+        dirty = true;
+      });
+    } catch (failure) {
+      if (mounted && current()) showError(context, failure);
+    } finally {
+      if (mounted) setState(() => readingPhoto = false);
+    }
+  }
+
+  Widget _photoControls() => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (flight) const SectionTitle('登机牌条码或电子登机牌二维码'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: readingPhoto
+                  ? null
+                  : () => _readTicket(useCamera: true),
+              icon: const Icon(Icons.photo_camera_outlined),
+              label: Text(flight ? '相机扫码' : '拍照识别'),
+            ),
+            OutlinedButton(
+              onPressed: readingPhoto
+                  ? null
+                  : () => _readTicket(useCamera: false),
+              child: Text(flight ? '上传条码图片' : '选择火车票照片'),
+            ),
+          ],
+        ),
+        if (readingPhoto) const LinearProgressIndicator(),
+        if (railPhoto case final photo? when !flight)
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text('拍照原图'),
+            children: [
+              Image.memory(
+                photo,
+                errorBuilder: (context, error, trace) =>
+                    const SizedBox.shrink(),
+              ),
+            ],
+          ),
+      ],
+    ),
+  );
   void changed(String key) {
     dirty = true;
     if (!fieldLabels.containsKey(key)) return;
@@ -230,9 +362,9 @@ class _TicketEditorState extends State<TicketEditor> {
           'departureTime',
           'passenger',
           'identity',
-          'seat',
+          if (flight || data['railStanding'] != true) 'seat',
           'seatClass',
-          if (!flight) 'carriage',
+          if (!flight && data['railStanding'] != true) 'carriage',
         };
   String _profileBarcodeName(String passenger) {
     final profile = personalProfile(store.settings['profile'] as Map? ?? {});
@@ -566,6 +698,7 @@ class _TicketEditorState extends State<TicketEditor> {
                           selected: {data['type']},
                           onSelectionChanged: (selection) => setState(() {
                             dirty = true;
+                            railPhoto = null;
                             _replace(
                               TicketRecord.create({'type': selection.single}),
                             );
@@ -588,6 +721,7 @@ class _TicketEditorState extends State<TicketEditor> {
                         ),
                       ),
                     if (!flight) ...[
+                      if (AppleServices.available) _photoControls(),
                       ArchiveChoiceField<String>(
                         label: '票面样式',
                         value: data['template'] == 'rail-refund-receipt'
@@ -602,6 +736,7 @@ class _TicketEditorState extends State<TicketEditor> {
                         onChanged: (value) => setState(() {
                           dirty = true;
                           data['template'] = value;
+                          (data['fieldSources'] as Map)['template'] = 'manual';
                         }),
                       ),
                       if ([
@@ -617,10 +752,13 @@ class _TicketEditorState extends State<TicketEditor> {
                             data['template'] = value
                                 ? 'rail-refund-receipt'
                                 : 'rail-receipt';
+                            (data['fieldSources'] as Map)['template'] =
+                                'manual';
                           }),
                         ),
                     ],
                     const SectionTitle('行程'),
+                    if (flight && AppleServices.available) _photoControls(),
                     if (flight)
                       ArchiveChoiceField<String>(
                         label: '机票状态',
@@ -723,24 +861,44 @@ class _TicketEditorState extends State<TicketEditor> {
                       uppercase: flight,
                     ),
                     const SizedBox(height: 16),
-                    if (!flight)
-                      _pair(
-                        _field('carriage'),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SeatInput(
-                              controller: fields['seat']!,
-                              seatClass: value('seatClass'),
-                              required: requiredFields.contains('seat'),
-                              locked: locked('seat'),
-                              onChanged: () => setState(() => changed('seat')),
-                            ),
-                            _source('seat'),
-                          ],
+                    if (!flight) ...[
+                      SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('无座'),
+                        value: data['railStanding'] == true,
+                        onChanged: (standing) => setState(() {
+                          data['railStanding'] = standing;
+                          if (standing) fields['seat']!.clear();
+                          (data['fieldSources'] as Map)['railStanding'] =
+                              'manual';
+                          data['lockedFields'] = {
+                            ...List<String>.from(data['lockedFields']),
+                            'railStanding',
+                          }.toList();
+                          dirty = true;
+                        }),
+                      ),
+                      if (data['railStanding'] == true)
+                        _field('carriage')
+                      else
+                        _pair(
+                          _field('carriage'),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SeatInput(
+                                controller: fields['seat']!,
+                                seatClass: value('seatClass'),
+                                required: requiredFields.contains('seat'),
+                                locked: locked('seat'),
+                                onChanged: () =>
+                                    setState(() => changed('seat')),
+                              ),
+                              _source('seat'),
+                            ],
+                          ),
                         ),
-                      )
-                    else
+                    ] else
                       _pair(
                         _field('seat', label: '座位'),
                         _field('boardingTime', time: true),
@@ -751,6 +909,53 @@ class _TicketEditorState extends State<TicketEditor> {
                       _field(flight ? 'terminal' : 'railPlatform'),
                     ),
                     const SectionTitle('更多信息'),
+                    if (!flight) ...[
+                      const Text('票面标识', style: TextStyle(color: muted)),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          for (final label in [
+                            '网',
+                            '学',
+                            '孩',
+                            '惠',
+                            '折',
+                            '赠',
+                            '支',
+                            '微',
+                            '团',
+                            '残',
+                            '兑',
+                          ])
+                            FilterChip(
+                              label: Text(label),
+                              selected: (data['ticketMarks'] as List).any(
+                                (mark) => mark['text'] == label,
+                              ),
+                              onSelected: (enabled) => setState(() {
+                                final marks = List<Map>.from(
+                                  data['ticketMarks'],
+                                );
+                                marks.removeWhere(
+                                  (mark) => mark['text'] == label,
+                                );
+                                if (enabled && marks.length < 4) {
+                                  marks.add({
+                                    'text': label,
+                                    'shape': label == '孩' ? 'plain' : 'circle',
+                                    'offsetX': 0,
+                                    'offsetY': 0,
+                                  });
+                                }
+                                data['ticketMarks'] = marks;
+                                (data['fieldSources'] as Map)['ticketMarks'] =
+                                    'manual';
+                                dirty = true;
+                              }),
+                            ),
+                        ],
+                      ),
+                    ],
                     for (final pair
                         in (flight
                             ? [
