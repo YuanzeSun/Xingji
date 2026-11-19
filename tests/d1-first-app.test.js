@@ -93,21 +93,17 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
     await until(() => github.records().length === 2 && button()?.disabled === false);
     assert.equal(github.settings().flightMcpKey, 'new-d1-key');
     const saved = github.head;
-    document.querySelector('[data-action=disconnect]').click();
-    await until(() => document.querySelector('#github-form') && button().disabled);
-    assert.equal(document.querySelector('[data-d1-cloud-label]').textContent, '已同步');
-    connect(window, 'github');
-    await until(() => button()?.disabled === false && !document.querySelector('#github-form'));
-    assert.equal(github.head, saved);
-
-    document.querySelector('[data-action="disconnect"]').click();
-    await until(() => document.querySelector('#github-form') && button()?.disabled);
-    assert.equal((await db.get('github')).id, 77, 'the signed-out backup binding is kept while D1 remains active');
-    const callsBeforeLastSignOut = [github.calls.length, d1.calls.length];
-    document.querySelector('[data-action="disconnect-d1"]').click();
+    assert.equal(document.querySelector('[data-action="disconnect"]'), null);
+    assert.equal(document.querySelector('[data-action="disconnect-d1"]'), null);
+    const beforeSignOut = [github.calls.length, d1.calls.length];
+    document.querySelector('[data-action="disconnect-all"]').click();
     await until(() => document.querySelector('.cloud-setup #d1-form'));
     assert.equal(await db.get('github', null), null);
     assert.deepEqual(await db.get('records'), []);
-    assert.deepEqual([github.calls.length, d1.calls.length], callsBeforeLastSignOut);
+    assert.deepEqual([github.calls.length, d1.calls.length], beforeSignOut);
+    connect(window, 'github');
+    await until(() => button()?.disabled === false);
+    assert.equal(github.head, saved);
+    assert.equal(document.querySelector('[data-d1-cloud-label]').textContent, '已同步');
   } finally { window.dispatchEvent(new window.Event('offline')); window.close(); }
 });

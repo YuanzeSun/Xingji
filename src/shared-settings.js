@@ -27,3 +27,6 @@ export const maskedKey = value => value ? value.length > 8 ? `已设置 · 尾�
 export function preservedSettings(value = {}) {
   return sharedSettings({flightMcpKey:value?.flightMcpKey ?? '',profile:value?.profile,connections:value?.connections});
 }
+
+export const unlinkedSettings = settings => sharedSettings({ ...settings, connections: { unlinked: true } });
+export const wasUnlinked = snapshot => snapshot?.settings?.connections?.unlinked === true;

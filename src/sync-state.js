@@ -35,17 +35,33 @@ export async function bindRepository(config, expectedD1 = null, credential) {
     return { write, result: { ...current, config: bound } };
   });
 }
-export function signOutCloud(provider, otherSession) {
-  return db.atomic([...keys, 'githubToken', 'd1Token'], raw => {
-    const other = provider === 'd1' ? 'github' : 'd1';
-    const write = { [provider + 'Token']: '' };
-    const otherSignedIn = raw[other]?.id && (raw[other + 'Token'] ?? otherSession);
-    if (otherSignedIn) return { write, result: unpack(raw) };
-    Object.assign(write, {
+export function signOutCloud() {
+  return db.atomic(['syncMeta'], raw => {
+    const write = {
       github: null, d1: null, githubToken: '', d1Token: '', showDemo: false, cloudLinkReady: false,
       records: [], base: [], settings: {}, settingsBase: {},
       syncMeta: { revision: (raw.syncMeta?.revision || 0) + 1 }, lastSync: null
-    });
+    };
+    return { write, result: unpack(write) };
+  });
+}
+
+export function keepUnlinkedArchive(captured, provider, archive, credential) {
+  return db.atomic(keys, raw => {
+    const current = unpack(raw);
+    if (activeBinding(current) !== activeBinding(captured) || current.config?.id !== captured.config?.id ||
+        current.config?.branch !== captured.config?.branch || current.meta.revision !== captured.meta.revision || current.meta.head !== captured.meta.head) {
+      throw new Error('本机票库已变化，请重新登录');
+    }
+    const github = provider === 'github';
+    const records = clone(archive.records), settings = sharedSettings(archive.settings);
+    const syncMeta = { revision: current.meta.revision + 1, head: archive.head, generation: archive.generation, verified: true, pending: false };
+    const write = {
+      github: github ? current.config : null, d1: github ? null : current.d1,
+      githubToken: github ? credential : '', d1Token: github ? '' : credential,
+      records, base: clone(records), settings, settingsBase: clone(settings), syncMeta, lastSync: now(),
+      cloudLinkReady: false, showDemo: false
+    };
     return { write, result: unpack(write) };
   });
 }
