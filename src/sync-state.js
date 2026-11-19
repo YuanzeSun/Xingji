@@ -42,7 +42,7 @@ export function signOutCloud(provider, otherSession) {
     const otherSignedIn = raw[other]?.id && (raw[other + 'Token'] ?? otherSession);
     if (otherSignedIn) return { write, result: unpack(raw) };
     Object.assign(write, {
-      github: null, d1: null, githubToken: '', d1Token: '', showDemo: false,
+      github: null, d1: null, githubToken: '', d1Token: '', showDemo: false, cloudLinkReady: false,
       records: [], base: [], settings: {}, settingsBase: {},
       syncMeta: { revision: (raw.syncMeta?.revision || 0) + 1 }, lastSync: null
     });
@@ -50,7 +50,7 @@ export function signOutCloud(provider, otherSession) {
   });
 }
 
-export async function activateD1(captured, config, remote, { credential, github } = {}) {
+export async function activateD1(captured, config, remote, { credential, github, cloudLinkReady } = {}) {
   return db.atomic(keys, raw => {
     const current = unpack(raw);
     if (activeBinding(current) !== activeBinding(captured) || current.meta.revision !== captured.meta.revision || current.meta.head !== captured.meta.head) throw new Error('本机票库已变化，请重新核对后连接');
@@ -58,6 +58,7 @@ export async function activateD1(captured, config, remote, { credential, github 
     const meta = { revision: current.meta.revision + 1, head: remote.head, generation: remote.generation || '', verified: true, pending: false };
     const write = { d1: config, records, base: clone(records), settings, settingsBase: clone(settings), syncMeta: meta, lastSync };
     if (credential !== undefined) write.d1Token = credential;
+    if (cloudLinkReady !== undefined) write.cloudLinkReady = cloudLinkReady;
     if (github) {
       write.github = clone(github.config);
       write.githubToken = github.token;

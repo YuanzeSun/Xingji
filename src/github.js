@@ -42,34 +42,43 @@ export class GitHubStore {
     const comparison = await this.request(`/compare/${encodeURIComponent(previous)}...${encodeURIComponent(head)}`);
     if (!['ahead', 'identical'].includes(comparison.status)) throw new Error('云端历史被回退或分叉，已停止写入并保留本机缓存');
   }
-  async read() {
+  async readBlob(sha) {
+    const blob = await this.request(`/git/blobs/${sha}`);
+    if (blob.encoding !== 'base64' || typeof blob.content !== 'string') throw new Error('云端文件内容不完整，保留本机缓存');
+    return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(atob(blob.content.replace(/\s/g, '')), c => c.charCodeAt(0)));
+  }
+  async readArchiveIndex() {
     const head = await this.head();
     const commit = await this.request(`/git/commits/${head}`);
     const tree = await this.request(`/git/trees/${commit.tree.sha}?recursive=1`);
     if (tree.truncated) throw new Error('仓库文件目录过大，请使用独立的数据仓库');
-    const paths = tree.tree.filter(e => /^archive\/(\d{4}|unknown)\.json$/.test(e.path) && e.type === 'blob');
+    const shards = tree.tree.filter(e => /^archive\/(\d{4}|unknown)\.json$/.test(e.path) && e.type === 'blob');
     const index = tree.tree.find(entry => entry.path === 'archive/index.json' && entry.type === 'blob');
-    const empty = { records: [], settings: sharedSettings(), head, tree: commit.tree.sha, paths: paths.map(item => item.path), contents: {}, initialized: false, generation: '' };
-    const textOf = async item => {
-      const blob = await this.request(`/git/blobs/${item.sha}`);
-      if (blob.encoding !== 'base64' || typeof blob.content !== 'string') throw new Error('云端文件内容不完整，保留本机缓存');
-      return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(atob(blob.content.replace(/\s/g, '')), c => c.charCodeAt(0)));
+    const manifest = index ? JSON.parse(await this.readBlob(index.sha)) : null;
+    if (index && (manifest?.format !== 'xingji-index' || manifest.schemaVersion !== 1 ||
+        !manifest.files || typeof manifest.files !== 'object' || Array.isArray(manifest.files) ||
+        !Number.isSafeInteger(manifest.recordCount))) throw new Error('云端票库索引无效');
+    if (manifest?.generation !== undefined && (typeof manifest.generation !== 'string' ||
+        !/^[A-Za-z0-9-]{0,100}$/.test(manifest.generation))) throw new Error('云端票库重置标识无效');
+    const snapshot = {
+      records: [], settings: sharedSettings(manifest?.settings), head, tree: commit.tree.sha,
+      paths: shards.map(item => item.path), contents: {}, initialized: !!index, generation: manifest?.generation || ''
     };
-    if (!index) {
-      if (paths.length) throw new ArchiveResetError(empty);
-      return empty;
+    return { snapshot, manifest, shards };
+  }
+  async read(index) {
+    const { snapshot, manifest, shards } = index ?? await this.readArchiveIndex();
+    if (!manifest) {
+      if (shards.length) throw new ArchiveResetError(snapshot);
+      return snapshot;
     }
-    const manifest = JSON.parse(await textOf(index));
-    const settings = sharedSettings(manifest.settings);
-    if (manifest.format !== 'xingji-index' || manifest.schemaVersion !== 1 || !manifest.files || typeof manifest.files !== 'object' || Array.isArray(manifest.files) || !Number.isSafeInteger(manifest.recordCount)) throw new Error('云端票库索引无效');
-    if (Object.keys(manifest.files).some(path => !empty.paths.includes(path))) throw new ArchiveResetError(empty);
-    if (JSON.stringify(Object.keys(manifest.files).sort()) !== JSON.stringify(empty.paths.sort())) throw new Error('云端票库文件不完整，已停止同步');
-    if (manifest.generation !== undefined && (typeof manifest.generation !== 'string' || !/^[A-Za-z0-9-]{0,100}$/.test(manifest.generation))) throw new Error('云端票库重置标识无效');
+    if (Object.keys(manifest.files).some(path => !snapshot.paths.includes(path))) throw new ArchiveResetError({ ...snapshot, initialized: false, settings: sharedSettings(), generation: '' });
+    if (JSON.stringify(Object.keys(manifest.files).sort()) !== JSON.stringify([...snapshot.paths].sort())) throw new Error('云端票库文件不完整，已停止同步');
     const records = [], contents = {};
     // Bound API concurrency to avoid burst throttling on decades of history.
-    for (let i = 0; i < paths.length; i += 4) {
-      const groups = await Promise.all(paths.slice(i, i + 4).map(async item => {
-        const content = await textOf(item);
+    for (let i = 0; i < shards.length; i += 4) {
+      const groups = await Promise.all(shards.slice(i, i + 4).map(async item => {
+        const content = await this.readBlob(item.sha);
         if (await digest(content) !== manifest.files[item.path]) throw new Error('云端票库文件校验失败，保留本机缓存');
         const rows = readArchive(JSON.parse(content));
         if (rows.some(record => yearOf(record) !== item.path.slice(8, -5))) throw new Error('云端票据年份与文件不匹配');
@@ -80,7 +89,7 @@ export class GitHubStore {
     }
     if (new Set(records.map(r => r.id)).size !== records.length) throw new Error('远端票库包含重复ID，请先导出检查');
     if (records.length !== manifest.recordCount) throw new Error('云端票据数量与索引不匹配');
-    return { records, settings, head, tree: commit.tree.sha, paths: paths.map(p => p.path), contents, initialized: true, generation: manifest.generation || '' };
+    return { ...snapshot, records, contents };
   }
   async resetTarget(fallbackSettings = {}) {
     await this.verify();
@@ -126,8 +135,8 @@ export class GitHubStore {
     return commit.sha;
   }
 }
-export async function synchronize(store, base, local, resolutions = {}, { baseHead = '', baseGeneration = '', baseSettings, localSettings } = {}) {
-  const snapshot = await store.read();
+export async function synchronize(store, base, local, resolutions = {}, { baseHead = '', baseGeneration = '', baseSettings, localSettings, remoteSnapshot } = {}) {
+  const snapshot = remoteSnapshot ?? await store.read();
   if (baseHead && snapshot.initialized === false) throw new ArchiveResetError(snapshot);
   if (baseHead && (snapshot.generation || '') !== baseGeneration) throw new ArchiveResetError(snapshot, true);
   if (baseHead && store.assertDescendant) await store.assertDescendant(baseHead, snapshot.head);

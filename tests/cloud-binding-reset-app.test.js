@@ -27,15 +27,18 @@ test('D1-first binding can keep GitHub data and one reset clears both archives',
     firstForm.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     assert.equal(d1.calls.length, before);
 
-    const githubHead = github.head;
+    const unpairedHead = github.head;
     connect(window, 'github');
     await chooseSource('github');
     await confirm('确认覆盖 D1');
     await until(() => document.querySelector('[data-action="backup-github"]')?.disabled === false);
-    assert.equal(github.head, githubHead);
+    const githubHead = github.head;
+    assert.notEqual(githubHead, unpairedHead);
+    assert.deepEqual(github.records().map(row => row.id), ['github-original']);
     assert.deepEqual(d1Records(), ['github-original']);
     assert.equal(d1Settings().flightMcpKey, 'github-mcp');
     assert.equal(d1Settings().connections.d1.token, token);
+    assert.deepEqual(github.settings().connections, d1Settings().connections);
 
     document.querySelector('[data-action="disconnect-d1"]').click();
     await until(() => document.querySelector('#d1-form'));
