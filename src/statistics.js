@@ -1,7 +1,6 @@
 import {tripChartMarkup,bindTripChart} from './statistics-chart.js';
 import { escape as e } from './html.js';
 import { journeyStatistics, statisticsOptions, todayDate, tripSeries, countryName } from './statistics-model.js';
-import { bindDatePickers } from './date-field.js';
 import { rankingViews, rankingChartMarkup } from './statistics-ranking.js';
 
 const empty = text => `<p class="statistics-empty">${text}</p>`;
@@ -18,7 +17,7 @@ const rankings = {
 export function mountStatistics(container, records, { options = {} } = {}) {
   Object.assign(options, statisticsOptions(options));
   const rankingCharts = options.rankingCharts ??= {};
-  let statistics;
+  let statistics, dateDialog;
   let series = [],chartCleanup=()=>{};
   const scrollPositions = { year: null, month: null };
   function rankingPanel(kind) {
@@ -33,7 +32,8 @@ export function mountStatistics(container, records, { options = {} } = {}) {
     const yearChoices = data.years.length ? Array.from({ length: Number(data.years.at(-1)) - Number(data.years[0]) + 1 }, (_, i) => String(Number(data.years[0]) + i)) : [todayDate().slice(0, 4)];
     if (!yearChoices.includes(options.year)) options.year = yearChoices.at(-1);
     series = data.records.length ? tripSeries(data.records, options) : [];
-    container.innerHTML = `<section class="statistics-range" aria-label="统计日期范围"><div><label>起始日期<input type="date" data-date-control data-stat-from value="${e(options.dateFrom)}" min="1800-01-01" max="2200-12-31" aria-label="统计起始日期"/></label><span class="statistics-range-dash">—</span><label>截止日期<input type="date" data-date-control data-stat-to value="${e(options.dateTo)}" min="1800-01-01" max="2200-12-31" aria-label="统计截止日期"/></label><button type="button" class="text-button" data-stat-reset aria-label="恢复默认日期" title="恢复默认日期"><span class="statistics-reset-symbol" aria-hidden="true">↺</span><span class="statistics-reset-label">恢复默认</span></button></div><p class="form-error" role="alert" ${data.error ? '' : 'hidden'}>${e(data.error)}</p></section>${data.error ? '' : `
+    const rangeButton = (key, label, attr) => `<div class="statistics-range-field"><span>${label}</span><button type="button" class="statistics-date-button" ${attr} data-stat-date="${key}" aria-label="${label}，${e(options[key] || '不限')}" aria-haspopup="dialog">${e(options[key] || '不限')}</button></div>`;
+    container.innerHTML = `<section class="statistics-range" aria-label="统计日期范围"><div>${rangeButton('dateFrom', '起始日期', 'data-stat-from')}<span class="statistics-range-dash">—</span>${rangeButton('dateTo', '截止日期', 'data-stat-to')}<button type="button" class="text-button" data-stat-reset aria-label="恢复默认日期" title="恢复默认日期"><span class="statistics-reset-symbol" aria-hidden="true">↺</span><span class="statistics-reset-label">恢复默认</span></button></div><p class="form-error" role="alert" ${data.error ? '' : 'hidden'}>${e(data.error)}</p></section>${data.error ? '' : `
       <section class="statistics-summary" aria-label="所选日期范围的乘坐记录">${[['火车', data.rail, '次'], ['飞机', data.flight, '次'], ['机场', data.airports.length, '个'], ['火车站', data.stations.length, '个']].map(([label, count, unit]) => `<div><span>${label}</span><strong>${count}<small>${unit}</small></strong></div>`).join('')}</section>
       <section class="statistics-mileage" aria-label="铁路里程"><span>铁路里程</span><strong>${data.railMileageTrips ? data.railMileage.toLocaleString('zh-CN',{maximumFractionDigits:3}) : '—'} <small>km</small></strong><span>${data.railMileageTrips} / ${data.rail} 程已收录里程</span></section>
       <section class="statistics-panel statistics-trend"><header><h2>乘坐次数</h2><div class="statistics-period-controls"><div role="group" aria-label="统计图时间粒度">${[['year', '按年'], ['month', '按月']].map(([value, label]) => `<button data-stat-scale="${value}" aria-pressed="${options.period === value}">${label}</button>`).join('')}</div><label ${options.period === 'month' ? '' : 'hidden'}><span class="visually-hidden">月度图年份</span><select data-stat-year aria-label="月度图年份">${[...yearChoices].reverse().map(year => `<option ${options.year === year ? 'selected' : ''}>${e(year)}</option>`).join('')}</select></label></div></header>${tripChartMarkup(series,{zoom:options.chartZoom,viewportWidth:container.clientWidth || 720})}</section>
@@ -42,7 +42,6 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       <section class="statistics-panel"><header><h2>去过的大洲和国家</h2></header><h3>大洲 <span>${data.continents.length}</span></h3>${data.continents.length ? `<ul class="statistics-chips">${data.continents.map(row => `<li>${e(row.name)}</li>`).join('')}</ul>` : empty('暂无已识别的大洲')}<h3>国家 <span>${data.countries.length}</span></h3>${data.countries.length ? `<ul class="statistics-chips countries">${data.countries.map(row => `<li>${e(row.name)}</li>`).join('')}</ul>` : empty('暂无已识别的国家')}</section></div>
       <div class="statistics-columns">${placesPanel('去过的机场', data.airports, 'airport')}${placesPanel('去过的火车站', data.stations, 'station')}</div>
       <section class="statistics-panel" data-stat-routes><header><h2>乘坐过的航线</h2><div class="statistics-route-controls"><label><input type="checkbox" data-stat-merge-routes ${options.mergeDirections ? 'checked' : ''}/>合并双向航线</label><span>${data.routes.length} 条</span></div></header>${data.routes.length ? `<div class="statistics-table-scroll"><table class="statistics-routes"><thead><tr><th>航线</th><th>次数</th></tr></thead><tbody>${data.routes.map(route => `<tr><td><div class="statistics-route-pair"><span class="statistics-route-endpoint">${e(route.from.name)} <code>${e(route.from.code)}</code></span><span class="statistics-route-arrow" role="img" aria-label="${options.mergeDirections ? '双向' : '前往'}">${options.mergeDirections ? '↔' : '→'}</span><span class="statistics-route-endpoint">${e(route.to.name)} <code>${e(route.to.code)}</code></span></div></td><td>${route.count}</td></tr>`).join('')}</tbody></table></div>` : empty('暂无可识别的航线')}</section>`}`;
-    bindDatePickers(container);
     chartCleanup=bindTripChart(container,series,options,{onZoom:()=>{const scroll=container.querySelector('.statistics-chart-scroll');if(scroll)scrolled({target:scroll});}});
     const scroll = container.querySelector('.statistics-chart-scroll');
     if (scroll) {
@@ -71,11 +70,41 @@ export function mountStatistics(container, records, { options = {} } = {}) {
     options.year = series[Math.max(0, Math.min(series.length - 1, index))].key.slice(0, 4);
     container.querySelector('[data-stat-year]').value = options.year;
   }
+  function updateDate(key, value) {
+    options[key] = value;
+    scrollPositions.year = scrollPositions.month = null;
+    render();
+    container.querySelector(`[data-stat-date="${key}"]`).focus();
+  }
+  function openDate(button) {
+    if (dateDialog?.open) return;
+    const key = button.dataset.statDate, label = key === 'dateFrom' ? '起始日期' : '截止日期';
+    const dialog = dateDialog = container.ownerDocument.createElement('dialog');
+    dialog.className = 'modal statistics-date-dialog';
+    dialog.setAttribute('aria-label', label);
+    dialog.innerHTML = `<form method="dialog" class="detail-body"><label class="field"><span>${label}</span><input type="date" name="date" min="1800-01-01" max="2200-12-31" value="${e(options[key] || todayDate())}" required /></label><div class="button-row"><button type="button" class="text-button" data-clear-date>不限</button><button type="button" class="button secondary" data-cancel-date>取消</button><button type="submit" class="button primary">应用</button></div></form>`;
+    const form = dialog.querySelector('form');
+    const finish = value => {
+      dialog.close();
+      if (value !== undefined) updateDate(key, value);
+    };
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      if (form.checkValidity()) finish(form.elements.date.value);
+    });
+    dialog.querySelector('[data-clear-date]').addEventListener('click', () => finish(''));
+    dialog.querySelector('[data-cancel-date]').addEventListener('click', () => finish());
+    dialog.addEventListener('close', () => {
+      dialog.remove();
+      if (dateDialog === dialog) dateDialog = null;
+      if (button.isConnected) button.focus();
+    });
+    container.append(dialog);
+    dialog.showModal();
+  }
   const change = event => {
     const target = event.target;
-    if (target.matches('[data-stat-from]')) options.dateFrom = target.value;
-    else if (target.matches('[data-stat-to]')) options.dateTo = target.value;
-    else if (target.matches('[data-stat-option]') && ['railUnits','railPowerSupplies','aircraftSubtypes'].includes(target.dataset.statOption)) {
+    if (target.matches('[data-stat-option]') && ['railUnits','railPowerSupplies','aircraftSubtypes'].includes(target.dataset.statOption)) {
       options[target.dataset.statOption]=target.checked;
       const scroll=container.querySelector('.statistics-chart-scroll'); if(scroll) scrollPositions[options.period]=scroll.scrollLeft;
       const key=target.dataset.statOption; render(); container.querySelector(`[data-stat-option="${key}"]`).focus(); return;
@@ -85,12 +114,11 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       const scroll=container.querySelector('.statistics-chart-scroll'); if(scroll) scrollPositions[options.period]=scroll.scrollLeft;
       render(); container.querySelector('[data-stat-merge-routes]').focus(); return;
     }
-    else if (target.matches('[data-stat-year]')) { options.year = target.value; scrollToYear(); return; }
-    else return;
-    scrollPositions.year = scrollPositions.month = null;
-    render();
+    else if (target.matches('[data-stat-year]')) { options.year = target.value; scrollToYear(); }
   };
   const click = event => {
+    const date = event.target.closest('[data-stat-date]');
+    if (date) { openDate(date); return; }
     const view = event.target.closest('[data-stat-view]');
     if (view) {
       if (view.getAttribute('aria-pressed') === 'true') return;
@@ -116,5 +144,5 @@ export function mountStatistics(container, records, { options = {} } = {}) {
   const keydown = event => { if (['Enter', ' '].includes(event.key) && event.target.closest('[data-stat-period]')) { event.preventDefault(); readPoint(event); } };
   container.addEventListener('change', change); container.addEventListener('click', click); container.addEventListener('focusin', readPoint); container.addEventListener('pointerover', readPoint); container.addEventListener('keydown', keydown); container.addEventListener('scroll', scrolled, true);
   render();
-  return () => { chartCleanup(); container.removeEventListener('change', change); container.removeEventListener('click', click); container.removeEventListener('focusin', readPoint); container.removeEventListener('pointerover', readPoint); container.removeEventListener('keydown', keydown); container.removeEventListener('scroll', scrolled, true); };
+  return () => { dateDialog?.remove(); chartCleanup(); container.removeEventListener('change', change); container.removeEventListener('click', click); container.removeEventListener('focusin', readPoint); container.removeEventListener('pointerover', readPoint); container.removeEventListener('keydown', keydown); container.removeEventListener('scroll', scrolled, true); };
 }

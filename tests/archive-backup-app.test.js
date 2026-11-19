@@ -64,7 +64,7 @@ test('restored tickets and settings sync before proposing the only missing accou
     await restore(fullBackup([], newSettings, connections));
     await until(() => !document.querySelector('dialog'));
     assert.deepEqual((await d1Store.read()).settings, { ...newSettings, connections: migrated.settings.connections });
-    assert.deepEqual(github.settings(), settings);
+    assert.deepEqual(github.settings(), { ...settings, connections: migrated.settings.connections });
     assert.equal(document.querySelector('[data-connect-from-backup]'), null);
   } finally { window.dispatchEvent(new window.Event('offline')); window.close(); }
 });

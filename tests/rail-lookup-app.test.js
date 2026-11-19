@@ -1,3 +1,4 @@
+import { applyStatisticsDate, bindTestDialogs } from './helpers/stat-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
@@ -72,7 +73,8 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     assert.equal(document.querySelector('.rail-stock-card'),null,'do not display the previous trainset metadata for a manually changed ID');
     document.querySelector('[data-action="close-modal"]').click();
     document.querySelector('[data-action="navigate"][data-page="statistics"]').click();await wait(()=>document.querySelector('[data-stat-ranking="rail-bureaus"]'));
-    const end=document.querySelector('[data-stat-to]');end.value=ticket.departureDate;end.dispatchEvent(new window.Event('change',{bubbles:true}));
+    bindTestDialogs(window);
+    applyStatisticsDate(document, '[data-stat-to]', ticket.departureDate);
     assert.match(document.querySelector('[data-stat-ranking="rail-bureaus"]').textContent,/北京局1 次/);
     assert.match(document.querySelector('[data-stat-ranking="rail-models"]').textContent,/CR400AF1 次/);
     assert.doesNotMatch(document.querySelector('#statistics-root').textContent,/查看图表数据/);

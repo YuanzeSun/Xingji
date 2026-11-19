@@ -1,3 +1,4 @@
+import { applyStatisticsDate, bindTestDialogs } from './helpers/stat-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
@@ -10,6 +11,7 @@ test('statistics navigation reads the current archive, preserves its range acros
   for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData', 'Image']) Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
   Object.defineProperty(globalThis, 'navigator', { value: window.navigator, configurable: true });
   Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true }); window.scrollTo = () => {};
+  bindTestDialogs(window);
   const rows = [createRecord({ origin: '北京南', destination: '上海虹桥', departureDate: '2020-01-01' }), createRecord({ type: 'flight', template: 'air-boarding-pass', origin: 'PEK', destination: 'HND', departureDate: '2024-01-01', aircraft: 'A320' }), createRecord({ departureDate: '2200-01-01' })];
   const server = await prepareCloud(rows);
   const wait = async fn => { for (let i = 0; i < 200; i++) { if (fn()) return; await new Promise(resolve => setTimeout(resolve, 5)); } assert.fail('Statistics page did not settle'); };
@@ -18,11 +20,21 @@ test('statistics navigation reads the current archive, preserves its range acros
     await import('../src/app.js'); await wait(() => document.querySelector('[data-page="statistics"]'));
     click('statistics'); await wait(() => document.querySelector('.statistics-summary'));
     assert.equal(location.hash, '#statistics'); assert.match(document.querySelector('.statistics-summary').textContent, /火车1次飞机1次/);
-    const from = document.querySelector('[data-stat-from]'); from.value = '2024-01-01'; from.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const from = document.querySelector('[data-stat-from]');
+    from.click();
+    const dialog = document.querySelector('.statistics-date-dialog');
+    const date = dialog.querySelector('input[type="date"]');
+    date.dispatchEvent(new window.Event('change', { bubbles: true }));
+    assert.equal(dialog.open, true);
+    assert.equal(from.textContent, '不限');
+    assert.match(document.querySelector('.statistics-summary').textContent, /火车1次飞机1次/);
+    dialog.querySelector('[data-cancel-date]').click();
+    assert.equal(from.textContent, '不限');
+    applyStatisticsDate(document, '[data-stat-from]', '2024-01-01');
     assert.match(document.querySelector('.statistics-summary').textContent, /火车0次飞机1次/);
     click('archive'); await wait(() => document.querySelector('.ticket-grid'));
     click('statistics'); await wait(() => document.querySelector('.statistics-summary'));
-    assert.equal(document.querySelector('[data-stat-from]').value, '2024-01-01');
+    assert.equal(document.querySelector('[data-stat-from]').textContent, '2024-01-01');
     assert.equal(server.calls.some(call => ['POST', 'PATCH', 'DELETE'].includes(call.method)), false);
     assert.equal(server.records().length, 3);
   } finally { window.dispatchEvent(new window.Event('offline')); dom.window.close(); }

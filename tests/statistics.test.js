@@ -1,3 +1,4 @@
+import { applyStatisticsDate, bindTestDialogs } from './helpers/stat-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
@@ -69,11 +70,12 @@ test('year and month series fill zero periods without allocating year-only recor
 test('statistics controls refresh every dimension, offer monthly data and show errors without stale figures', () => {
   const dom = new JSDOM('<div id="root"></div>'), root = dom.window.document.querySelector('#root');
   const options = { ...range }, rows = [rail({ departureDate: '2022-01-01' }), flight({ departureDate: '2024-03-01' })];
+  bindTestDialogs(dom.window);
   const cleanup = mountStatistics(root, rows, { options });
   const change = (selector, value) => { const control = root.querySelector(selector); control.value = value; control.dispatchEvent(new dom.window.Event('change', { bubbles: true })); };
   try {
-    assert.equal(root.querySelector('[data-stat-from]').value, '');
-    assert.equal(root.querySelector('[data-stat-to]').value, range.dateTo);
+    assert.equal(root.querySelector('[data-stat-from]').textContent, '不限');
+    assert.equal(root.querySelector('[data-stat-to]').textContent, range.dateTo);
     root.querySelector('[data-stat-scale="month"]').click();
     assert.equal(root.querySelector('[data-stat-year]').value, '2024');
     change('[data-stat-year]', '2023');
@@ -88,13 +90,13 @@ test('statistics controls refresh every dimension, offer monthly data and show e
     assert.ok(parseInt(chart.style.minWidth) > 720);
     const dot = root.querySelector('[data-stat-period="2023-01"]'); dot.dispatchEvent(new dom.window.FocusEvent('focusin', { bubbles: true }));
     assert.match(root.querySelector('output').textContent, /火车 0 次/);
-    change('[data-stat-from]', '2024-01-01');
+    applyStatisticsDate(root, '[data-stat-from]', '2024-01-01');
     assert.match(root.querySelector('.statistics-summary').textContent, /火车0次飞机1次/);
-    change('[data-stat-to]', '2023-12-31');
+    applyStatisticsDate(root, '[data-stat-to]', '2023-12-31');
     assert.equal(root.querySelector('.statistics-summary'), null);
     assert.match(root.querySelector('[role="alert"]').textContent, /起始日期/);
     root.querySelector('[data-stat-reset]').click();
-    assert.equal(root.querySelector('[data-stat-from]').value, ''); assert.ok(root.querySelector('.statistics-summary'));
+    assert.equal(root.querySelector('[data-stat-from]').textContent, '不限'); assert.ok(root.querySelector('.statistics-summary'));
   } finally { cleanup(); dom.window.close(); }
 });
 
@@ -223,7 +225,8 @@ test('each ranking switches charts independently and keeps its grouping and date
     assert.equal(picked('aircraft'), 'donut');
     assert.equal(card('aircraft').querySelector('.statistics-ring strong').textContent, '7');
     assert.doesNotMatch(card('aircraft').textContent, /737-800/);
-    change('[data-stat-to]', { value: '2024-02-29' });
+    bindTestDialogs(dom.window);
+    applyStatisticsDate(root, '[data-stat-to]', '2024-02-29');
     assert.equal(picked('aircraft'), 'donut');
     assert.match(card('aircraft').textContent, /暂无记录/);
     cleanup();
