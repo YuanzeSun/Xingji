@@ -9,6 +9,7 @@ import 'package:xingji/apple_navigation_bar.dart';
 import 'package:xingji/app_store.dart';
 import 'package:xingji/editor.dart';
 import 'package:xingji/platform_services.dart';
+import 'package:xingji/ticket_entry.dart';
 import 'package:xingji/ticket_face.dart';
 import 'package:xingji/ticket_detail.dart';
 import 'package:xingji/settings_page.dart';
@@ -380,6 +381,50 @@ void main() {
     await dialog;
     expect(tester.widget<AppleNavigationBar>(bar).interactive, true);
   });
+
+  testWidgets(
+    'scan opens the single-photo camera on the first and later taps',
+    (tester) async {
+      final app = (await tester.runAsync(store))!;
+      addTearDown(app.dispose);
+      final messenger = tester.binding.defaultBinaryMessenger;
+      final pickerCalls = <String>[];
+      messenger.setMockMethodCallHandler(AppleServices.channel, (call) async {
+        pickerCalls.add(call.method);
+        return null;
+      });
+      messenger.setMockMethodCallHandler(
+        SystemRecognition.channel,
+        (call) async => fail(
+          'Unexpected recognition call before taking a photo: ${call.method}',
+        ),
+      );
+      addTearDown(() {
+        messenger.setMockMethodCallHandler(AppleServices.channel, null);
+        messenger.setMockMethodCallHandler(SystemRecognition.channel, null);
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () =>
+                    openTicketEntry(context, app, choice: TicketEntry.camera),
+                child: const Text('扫描'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('扫描'));
+      await tester.pumpAndSettle();
+      expect(pickerCalls, ['captureTicketPhoto']);
+      await tester.tap(find.text('扫描'));
+      await tester.pumpAndSettle();
+      expect(pickerCalls, ['captureTicketPhoto', 'captureTicketPhoto']);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('plus opens the four entry choices and paste fills the editor', (
     tester,

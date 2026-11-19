@@ -105,25 +105,7 @@ Future<List<TicketRecord>?> _scan(
   BuildContext context,
   ReferenceCatalog catalog,
 ) async {
-  final provider = SystemRecognition();
-  if (await provider.supports('liveBoarding')) {
-    if (!context.mounted) return null;
-    final capture = await provider.scanLiveBoarding();
-    if (capture == null || !context.mounted) return null;
-    final hasBoarding = capture.reading.barcodes.any(
-      (code) => decodeBoardingBytes(code) != null,
-    );
-    final image = capture.retryWithDocumentCamera && !hasBoarding
-        ? await AppleServices.scanDocument()
-        : capture.image;
-    if (!context.mounted || (image == null && !hasBoarding)) return null;
-    return _recognizing(
-      context,
-      () => recognizeTicketImage(image, catalog, live: capture.reading),
-    );
-  }
-  if (!context.mounted) return null;
-  final image = await AppleServices.scanDocument();
+  final image = await AppleServices.captureTicketPhoto();
   if (image == null || !context.mounted) return null;
   return _recognizing(context, () => recognizeTicketImage(image, catalog));
 }

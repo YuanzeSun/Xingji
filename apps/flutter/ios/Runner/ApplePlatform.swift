@@ -3,25 +3,14 @@ import PhotosUI
 import Security
 import SwiftUI
 import UIKit
-import Vision
-import VisionKit
+import UniformTypeIdentifiers
 
 @MainActor
-final class ApplePlatform: NSObject, @MainActor VNDocumentCameraViewControllerDelegate, PHPickerViewControllerDelegate {
+final class ApplePlatform: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate, PHPickerViewControllerDelegate {
   private var pickerResult: FlutterResult?
-  private var liveClosing = false
-  private var takingLivePhoto = false
-  private var livePhotoFailed = false
-
-  private var liveBoardingAvailable: Bool {
-    if #available(iOS 16.0, *) {
-      return !livePhotoFailed && DataScannerViewController.isSupported && DataScannerViewController.isAvailable
-    }
-    return false
-  }
 
   func install(on messenger: FlutterBinaryMessenger) {
-    AppleRecognition.logModelAvailability()
+    AppleRecognition.checkModelAvailability()
     FlutterMethodChannel(name: "dev.yuanzesun.xingji/recognition", binaryMessenger: messenger)
       .setMethodCallHandler { [weak self] call, reply in self?.recognition(call, reply) }
     FlutterMethodChannel(name: "dev.yuanzesun.xingji/apple", binaryMessenger: messenger)
@@ -32,8 +21,7 @@ final class ApplePlatform: NSObject, @MainActor VNDocumentCameraViewControllerDe
     let args = call.arguments as? [String: Any] ?? [:]
     switch call.method {
     case "capabilities":
-      reply(["ocr": true, "barcode": true, "camera": VNDocumentCameraViewController.isSupported,
-             "liveBoarding": liveBoardingAvailable,
+      reply(["ocr": true, "barcode": true, "camera": UIImagePickerController.isSourceTypeAvailable(.camera),
              "appleIntelligence": AppleRecognition.modelAvailable,
              "appleIntelligenceImage": AppleRecognition.imageModelAvailable])
     case "recognizeImage":
@@ -44,12 +32,6 @@ final class ApplePlatform: NSObject, @MainActor VNDocumentCameraViewControllerDe
       AppleRecognition.recognize(image.data, languages: args["languages"] as? [String] ?? [],
                                  barcodes: args["barcodes"] as? Bool ?? true,
                                  flight: args["flight"] as? Bool ?? false, result: reply)
-    case "scanLiveBoarding":
-      if #available(iOS 16.0, *), liveBoardingAvailable {
-        presentLiveBoarding(reply)
-      } else {
-        reply(FlutterError(code: "live_scan_unavailable", message: "此设备暂时不能实时扫描登机条码。", details: nil))
-      }
     case "recognizePDF":
       guard let file = args["bytes"] as? FlutterStandardTypedData else {
         reply(FlutterError(code: "missing_pdf", message: "没有收到 PDF 文件。", details: nil))
@@ -119,8 +101,8 @@ final class ApplePlatform: NSObject, @MainActor VNDocumentCameraViewControllerDe
           return
         }
         UIApplication.shared.open(url) { reply($0) }
-      case "pickPhoto", "scanDocument":
-        presentPicker(camera: call.method == "scanDocument", reply: reply)
+      case "pickPhoto", "captureTicketPhoto":
+        presentPicker(camera: call.method == "captureTicketPhoto", reply: reply)
       case "pasteTicket":
         let clipboard = UIPasteboard.general
         if clipboard.hasStrings, let text = clipboard.string,
@@ -205,14 +187,18 @@ final class ApplePlatform: NSObject, @MainActor VNDocumentCameraViewControllerDe
       return
     }
     if camera {
-      guard VNDocumentCameraViewController.isSupported else {
-        reply(FlutterError(code: "no_camera", message: "当前设备不支持文稿扫描，请从照片或文件导入。", details: nil))
+      guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+        reply(FlutterError(code: "no_camera", message: "当前相机不可用，请从照片或文件导入。", details: nil))
         return
       }
-      let scanner = VNDocumentCameraViewController()
-      scanner.delegate = self
+      let picker = UIImagePickerController()
+      picker.sourceType = .camera
+      picker.mediaTypes = [UTType.image.identifier]
+      picker.cameraCaptureMode = .photo
+      picker.delegate = self
+      picker.modalPresentationStyle = .fullScreen
       pickerResult = reply
-      presenter.present(scanner, animated: true)
+      presenter.present(picker, animated: true)
     } else {
       var configuration = PHPickerConfiguration(photoLibrary: .shared())
       configuration.filter = .images
@@ -232,20 +218,16 @@ final class ApplePlatform: NSObject, @MainActor VNDocumentCameraViewControllerDe
     reply?(value)
   }
 
-  func documentCameraViewControllerDidCancel(_ controller: VNDocumentCameraViewController) {
-    controller.dismiss(animated: true) { self.finishPicker(nil) }
+  func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+    picker.dismiss(animated: true) { self.finishPicker(nil) }
   }
 
-  func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) {
-    controller.dismiss(animated: true) {
-      self.finishPicker(FlutterError(code: "camera_failed", message: "无法扫描文稿。请检查相机权限，或改用照片。", details: nil))
-    }
-  }
-
-  func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
-    controller.dismiss(animated: true) {
-      guard scan.pageCount == 1, let data = scan.imageOfPage(at: 0).jpegData(compressionQuality: 0.95) else {
-        self.finishPicker(FlutterError(code: "scan_pages", message: "请每次扫描一页票据。", details: nil))
+  func imagePickerController(_ picker: UIImagePickerController,
+    didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+    picker.dismiss(animated: true) {
+      guard let image = info[.originalImage] as? UIImage,
+            let data = image.jpegData(compressionQuality: 0.95) else {
+        self.finishPicker(FlutterError(code: "photo_failed", message: "无法读取拍摄的票面，请重试。", details: nil))
         return
       }
       self.finishPicker(FlutterStandardTypedData(bytes: data))
@@ -501,117 +483,6 @@ private struct UploadSourceSheet: View {
       Button { select("files") } label: { Label("上传文件", systemImage: "folder") }
     }
     .listStyle(.insetGrouped)
-  }
-}
-
-@available(iOS 16.0, *)
-extension ApplePlatform: DataScannerViewControllerDelegate {
-  fileprivate func presentLiveBoarding(_ reply: @escaping FlutterResult) {
-    guard pickerResult == nil, let presenter else {
-      reply(FlutterError(code: "picker_busy", message: "暂时无法打开系统扫描。", details: nil))
-      return
-    }
-    let scanner = DataScannerViewController(
-      recognizedDataTypes: [
-        .barcode(symbologies: AppleRecognition.boardingSymbologies),
-        .text(languages: ["zh-Hans", "en"]),
-      ],
-      qualityLevel: .accurate,
-      recognizesMultipleItems: true,
-      isHighFrameRateTrackingEnabled: true,
-      isHighlightingEnabled: true
-    )
-    scanner.title = "对准票据"
-    scanner.delegate = self
-    pickerResult = reply
-    liveClosing = false
-    takingLivePhoto = false
-    let navigation = UINavigationController(rootViewController: scanner)
-    navigation.modalPresentationStyle = .fullScreen
-    scanner.navigationItem.leftBarButtonItem = UIBarButtonItem(
-      systemItem: .cancel,
-      primaryAction: UIAction { [weak self, weak scanner] _ in
-        if let scanner { self?.finishLive(scanner, nil) }
-      }
-    )
-    scanner.navigationItem.rightBarButtonItem = UIBarButtonItem(
-      title: "拍照识别",
-      primaryAction: UIAction { [weak self, weak scanner] _ in
-        if let scanner { self?.captureLive(scanner, prior: [:]) }
-      }
-    )
-    presenter.present(navigation, animated: true) {
-      do { try scanner.startScanning() }
-      catch {
-        self.finishLive(scanner, FlutterError(code: "camera_unavailable", message: "无法扫描，请检查行迹的相机权限。", details: nil))
-      }
-    }
-  }
-
-  private func captureLive(_ scanner: DataScannerViewController, prior: [String: Any]) {
-    guard !liveClosing, !takingLivePhoto else { return }
-    takingLivePhoto = true
-    Task {
-      do {
-        let image = try await scanner.capturePhoto()
-        guard let bytes = image.jpegData(compressionQuality: 0.95) else {
-          throw CocoaError(.fileReadCorruptFile)
-        }
-        var output = prior
-        output["image"] = FlutterStandardTypedData(bytes: bytes)
-        finishLive(scanner, output)
-      } catch {
-        var fallback = prior
-        let hasCode = !(prior["barcodes"] as? [[String: String]] ?? []).isEmpty
-        livePhotoFailed = !hasCode
-        fallback["retryWithDocumentCamera"] = true
-        finishLive(scanner, fallback)
-      }
-    }
-  }
-
-  private func finishLive(_ scanner: DataScannerViewController, _ result: Any?) {
-    guard pickerResult != nil, !liveClosing else { return }
-    liveClosing = true
-    scanner.stopScanning()
-    scanner.dismiss(animated: true) { self.finishPicker(result) }
-  }
-
-  private func readLive(_ scanner: DataScannerViewController, items: [RecognizedItem]) {
-    guard !liveClosing, !takingLivePhoto else { return }
-    var payloads = Set<Data>()
-    var text: [VNRecognizedTextObservation] = []
-    for item in items {
-      switch item {
-      case .barcode(let barcode):
-        if let data = AppleRecognition.payload(of: barcode.observation),
-           AppleRecognition.isBoardingPayload(data) {
-          payloads.insert(data)
-        }
-      case .text(let item):
-        text.append(item.observation)
-      @unknown default:
-        break
-      }
-    }
-    guard payloads.count == 1 else { return }
-    captureLive(scanner, prior: AppleRecognition.recognitionResult(text, payloads: Array(payloads)))
-  }
-
-  func dataScanner(_ scanner: DataScannerViewController, didAdd added: [RecognizedItem], allItems: [RecognizedItem]) {
-    readLive(scanner, items: allItems)
-  }
-
-  func dataScanner(_ scanner: DataScannerViewController, didUpdate updated: [RecognizedItem], allItems: [RecognizedItem]) {
-    readLive(scanner, items: allItems)
-  }
-
-  func dataScanner(_ scanner: DataScannerViewController, didRemove removed: [RecognizedItem], allItems: [RecognizedItem]) {
-    readLive(scanner, items: allItems)
-  }
-
-  func dataScanner(_ scanner: DataScannerViewController, becameUnavailableWithError error: DataScannerViewController.ScanningUnavailable) {
-    finishLive(scanner, FlutterError(code: "camera_unavailable", message: "当前相机不可用，请稍后再试。", details: nil))
   }
 }
 

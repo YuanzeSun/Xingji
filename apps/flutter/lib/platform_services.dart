@@ -41,25 +41,6 @@ class SystemRecognition implements RecognitionService {
     ];
   }
 
-  Future<
-    ({
-      Uint8List? image,
-      RecognitionResult reading,
-      bool retryWithDocumentCamera,
-    })?
-  >
-  scanLiveBoarding() async {
-    final result = await channel.invokeMapMethod<String, dynamic>(
-      'scanLiveBoarding',
-    );
-    if (result == null) return null;
-    return (
-      image: result['image'] as Uint8List?,
-      reading: RecognitionResult.fromJson(result),
-      retryWithDocumentCamera: result['retryWithDocumentCamera'] == true,
-    );
-  }
-
   @override
   Future<bool> available() async {
     final features = await capabilities();
@@ -148,8 +129,8 @@ abstract final class AppleServices {
   static Future<Map<String, dynamic>?> pasteTicket() =>
       channel.invokeMapMethod<String, dynamic>('pasteTicket');
 
-  static Future<Uint8List?> scanDocument() =>
-      channel.invokeMethod<Uint8List>('scanDocument');
+  static Future<Uint8List?> captureTicketPhoto() =>
+      channel.invokeMethod<Uint8List>('captureTicketPhoto');
 
   static Future<(int, int)?> pickMonthDay(DateTime initial) async {
     final result = await channel.invokeListMethod<int>('pickMonthDay', {

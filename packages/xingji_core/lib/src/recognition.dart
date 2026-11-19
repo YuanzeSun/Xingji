@@ -69,14 +69,30 @@ abstract interface class RecognitionService {
   Future<RecognitionResult> recognize(Uint8List image);
 }
 
+const _scheduledBoardingLabels =
+    r'(?:计划)?登机(?:时间|时刻)?(?:\s*[/／]?\s*BOARDING(?:\s+TIME)?)?|BOARDING(?:\s+TIME)?';
+const _scheduledDepartureLabels =
+    r'(?:计划)?起飞(?:时间|时刻)?(?:\s*[/／]?\s*(?:DEPARTURE(?:\s+TIME)?|STD))?|DEPARTURE(?:\s+TIME)?|STD';
+const _flightGateLabels = r'登机口(?:\s*[/／]?\s*GATE)?|GATE';
+const _flightGateCode = r'(?:[A-Z]{1,2}|(?=[A-Z0-9/-]*\d)[A-Z0-9/-]{1,16})';
+
+bool isPrintedFlightGate(String value) =>
+    RegExp('^$_flightGateCode\$', caseSensitive: false).hasMatch(value.trim());
+
 /// Preserve Vision lines and reunite short labels with their nearby values.
 String recognizedTicketText(List<RecognitionLine> source) {
   final lines = [...source]
     ..sort((a, b) => a.y == b.y ? a.x.compareTo(b.x) : a.y.compareTo(b.y));
   final labels = RegExp(
     r'^(?:航班号?|车次|出发站|到达站|出发机场|到达机场|出发日期|乘车日期|'
-    r'计划起飞|计划到达|起飞时间|座位号?|登机口|登机时间|航站楼|'
-    r'FLIGHT(?: NO)?|TRAIN(?: NO)?|FROM|TO|DEPARTURE|ARRIVAL|SEAT|GATE|BOARDING TIME|TERMINAL)\s*[:：]?$',
+    r'计划到达|座位号?|实际登机时间|航站楼|'
+    r'FLIGHT(?: NO)?|TRAIN(?: NO)?|FROM|TO|ARRIVAL|SEAT|ACTUAL BOARDING TIME|TERMINAL|'
+    '$_scheduledBoardingLabels|$_scheduledDepartureLabels|$_flightGateLabels'
+    r')\s*[:：]?$',
+    caseSensitive: false,
+  );
+  final flightGateLabel = RegExp(
+    '^(?:$_flightGateLabels)\$',
     caseSensitive: false,
   );
   final result = [for (final line in lines) line.text];
@@ -84,6 +100,7 @@ String recognizedTicketText(List<RecognitionLine> source) {
     final name = label.text.trim().replaceFirst(RegExp(r'[:：]$'), '');
     // PDF text-layer rows already span the document and don't carry field geometry.
     if (label.width >= .95 || !labels.hasMatch(name)) continue;
+    final isFlightGate = flightGateLabel.hasMatch(name);
     final candidates = <(String, double)>[];
     for (final value in lines) {
       final text = value.text.trim();
@@ -91,6 +108,7 @@ String recognizedTicketText(List<RecognitionLine> source) {
           text.isEmpty ||
           text.length > 50 ||
           labels.hasMatch(text) ||
+          (isFlightGate && !isPrintedFlightGate(text)) ||
           value.width >= .95) {
         continue;
       }
@@ -123,12 +141,17 @@ List<TicketRecord> parseRecognition(
   RecognitionResult result,
   ReferenceCatalog catalog, {
   required bool flight,
+  String supplementalText = '',
 }) {
-  final fields = readTravelFields(
-    recognizedTicketText(result.lines),
-    catalog,
-    flight: flight,
-  );
+  final fields = {
+    if (supplementalText.isNotEmpty)
+      ...readTravelFields(supplementalText, catalog, flight: flight),
+    ...readTravelFields(
+      recognizedTicketText(result.lines),
+      catalog,
+      flight: flight,
+    ),
+  };
   final values = <String, dynamic>{
     'type': flight ? 'flight' : 'rail',
     'template': flight ? 'air-boarding-pass' : 'rail-receipt',
@@ -246,7 +269,11 @@ Map<String, dynamic> readTravelFields(
           ? r'[A-Z][0-9]{0,2}|[\u3400-\u9fff]{2,8}'
           : r'[\u3400-\u9fff]{2,8}',
     ),
-    ('gate', '检票口|登机口|GATE', r'[A-Z0-9/-]{1,16}'),
+    (
+      'gate',
+      flight ? _flightGateLabels : '检票口|登机口|GATE',
+      flight ? '$_flightGateCode\$' : r'[A-Z0-9/-]{1,16}',
+    ),
     ('terminal', '航站楼|TERMINAL', r'[A-Z0-9-]{1,12}'),
     ('pnr', '订座编号|PNR', r'[A-Z0-9]{5,8}'),
     ('ticketNumber', '电子客票号|客票号|票号|TICKET NO', r'[A-Z0-9-]{6,30}'),
@@ -277,23 +304,28 @@ Map<String, dynamic> readTravelFields(
 
   const date = r'(?:19|20)\d{2}[年./-]\d{1,2}[月./-]\d{1,2}日?';
   const clock = r'(?:[01]?\d|2[0-3]):[0-5]\d(?!\d)';
+  const printedClock = '$clock|(?:[01]\\d|2[0-3])[0-5]\\d(?!\\d)';
   for (final (key, labels) in [
-    ('departure', '计划起飞|计划出发|计划发车|起飞时间|发车时间|开车时间|出发时间|出发日期|乘车日期|DEPARTURE'),
+    (
+      'departure',
+      '$_scheduledDepartureLabels|计划出发|计划发车|发车时间|开车时间|出发时间|出发日期|乘车日期',
+    ),
     ('arrival', '计划到达|计划降落|到达时间|ARRIVAL'),
     ('actualDeparture', '实际起飞|实际离地|实际出发|ACTUAL DEPARTURE'),
     ('actualArrival', '实际到达|实际降落|ACTUAL ARRIVAL'),
-    ('boarding', '登机时间|BOARDING TIME'),
+    ('boarding', _scheduledBoardingLabels),
     ('actualBoarding', '实际登机时间|ACTUAL BOARDING TIME'),
   ]) {
     final prefix = '(?:$labels)(?:日期|时间|时刻)?';
+    const valuePattern = '$date(?:[ T]+(?:$printedClock))?|$printedClock';
     final value =
-        labelled(prefix, '$date(?:[ T]+$clock)?|$clock') ??
+        labelled(prefix, valuePattern) ??
         // Chinese ticket labels frequently have no delimiter before a date/time.
         one(
           lines.map(
             (line) =>
                 RegExp(
-                  '^$prefix($date(?:[ T]+$clock)?|$clock)',
+                  '^$prefix($valuePattern)',
                   caseSensitive: false,
                 ).firstMatch(line)?[1] ??
                 '',
@@ -306,8 +338,13 @@ Map<String, dynamic> readTravelFields(
         fields['${key}Date'] = parsed.toJson();
       }
     }
-    final time = RegExp(clock).firstMatch(value)?[0];
-    if (time != null) fields['${key}Time'] = time.padLeft(5, '0');
+    final time = RegExp(printedClock)
+        .firstMatch(value.substring(day?.length ?? 0))?[0];
+    if (time != null) {
+      fields['${key}Time'] = time.contains(':')
+          ? time.padLeft(5, '0')
+          : '${time.substring(0, 2)}:${time.substring(2)}';
+    }
   }
   final uniqueDate = one(
     RegExp(date).allMatches(text).map((match) => match[0]!),

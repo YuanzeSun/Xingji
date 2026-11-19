@@ -39,9 +39,9 @@ Pages 通过 GitHub Actions 中的 **Publish Xingji Pages** 手动发布。从 `
 
 ## 平台能力接口
 
-`SystemRecognition` 使用 `dev.yuanzesun.xingji/recognition` 平台通道。iOS 使用 Apple Vision 识别文字和条码，从文稿扫描器、系统照片选择器或文件导入。缺少原生实现的平台返回能力不可用。
+`SystemRecognition` 使用 `dev.yuanzesun.xingji/recognition` 平台通道。iOS 使用 Apple Vision 识别文字和条码，票面可以通过单张拍照、系统照片选择器或文件导入。缺少原生实现的平台返回能力不可用。
 
-`capabilities` 返回 `ocr`、`barcode`、`camera`、`liveBoarding`、`appleIntelligence` 和 `appleIntelligenceImage`。端侧模型文字提取需要 iOS 26 或更新版本，图文提取需要 iOS 27 或更新版本。每次识别都会读取系统模型的当前可用状态。
+`capabilities` 返回 `ocr`、`barcode`、`camera`、`appleIntelligence` 和 `appleIntelligenceImage`。App 启动和回到前台时在后台检查系统模型资格及图像支持，并预热可用的系统模型。扫描读取最近一次检查结果。端侧模型文字提取需要 iOS 26 或更新版本，图文提取需要 iOS 27 或更新版本并要求模型支持图像。
 
 `recognizeImage` 接收 `{ bytes: Uint8List, languages: ["zh-Hans", "en"], barcodes: true }`，同时运行文字识别与条码检测，返回：
 
@@ -62,7 +62,7 @@ Pages 通过 GitHub Actions 中的 **Publish Xingji Pages** 手动发布。从 `
 | macOS | Xcode 构建与签名；Vision 接入；文件面板、权限及 Keychain；票面导出与触控板验收 |
 | Android | 准备 SDK / JDK 与设备后构建；系统识别提供方；相机与文件权限；安全凭证存储、返回手势和系统栏验收 |
 
-图文模型可用时，行迹用票面图片和 Vision 文字补全字段。只有文字模型可用时，模型从 Vision 文字提取字段。模型关闭、尚未就绪或请求失败时，行迹用 Vision 结果和本地规则继续识别。BCBP 读出的字段保持锁定。可从「＋ → 扫描」实时检测条码和拍照，从「＋ → 粘贴」读取剪贴板上的文字或图片。PDF 文字层和 .pkpass 按结构化来源读取。
+图文模型可用时，行迹用票面图片和 Vision 文字补全字段。只有文字模型可用时，模型从 Vision 文字提取字段。模型关闭、尚未就绪或请求失败时，行迹用 Vision 结果和本地规则继续识别。BCBP 读出的字段保持锁定。「＋ → 扫描」直接打开系统相机。拍摄一张票面后，从照片中同时读取条码和文字。「＋ → 粘贴」读取剪贴板上的文字或图片。PDF 文字层和 .pkpass 按结构化来源读取。
 
 ## iOS 地图与文件导入
 

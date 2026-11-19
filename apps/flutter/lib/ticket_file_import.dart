@@ -28,6 +28,7 @@ Future<List<TicketRecord>> recognizeTicketImage(
   ReferenceCatalog catalog, {
   bool? flight,
   RecognitionResult? live,
+  bool scanPhotoBarcode = false,
 }) async {
   final provider = SystemRecognition();
   final liveCodes =
@@ -41,15 +42,28 @@ Future<List<TicketRecord>> recognizeTicketImage(
       photo = await provider.recognize(
         bytes,
         flight: flight ?? true,
-        barcodes: liveCodes.isEmpty,
+        barcodes: scanPhotoBarcode || liveCodes.isEmpty,
       );
     } on PlatformException catch (error) {
       if (error.code != 'vision_failed') rethrow;
     }
   }
+  final photoCodes = photo.barcodes
+      .where((code) => decodeBoardingBytes(code) != null)
+      .toList();
+  final livePayloads = liveCodes.map(base64Encode).toSet();
+  final anotherBarcode =
+      livePayloads.isNotEmpty &&
+      photoCodes.any((code) => !livePayloads.contains(base64Encode(code)));
+  final liveLines = anotherBarcode
+      ? const <RecognitionLine>[]
+      : live?.lines ?? const <RecognitionLine>[];
+  final liveText = recognizedTicketText(liveLines);
   final reading = RecognitionResult(
-    lines: photo.lines.isEmpty ? live?.lines ?? [] : photo.lines,
-    barcodes: liveCodes.isEmpty ? photo.barcodes : liveCodes,
+    lines: photo.lines,
+    barcodes: photoCodes.isNotEmpty || liveCodes.isEmpty
+        ? photo.barcodes
+        : liveCodes,
     symbolData: photo.symbolData,
   );
   final hasBarcode = reading.barcodes.any(
@@ -58,13 +72,19 @@ Future<List<TicketRecord>> recognizeTicketImage(
   final fallback = parseRecognition(
     reading,
     catalog,
-    flight: hasBarcode || (flight ?? _isFlight(reading)),
+    flight:
+        hasBarcode || (flight ?? _isFlight(reading) || _isFlightText(liveText)),
+    supplementalText: liveText,
   ).where(_hasJourney).toList();
   // An image model extracts one ticket, so its fields cannot be assigned to
   // individual coupons from a multi-leg barcode.
   if (fallback.length > 1) return fallback;
 
-  final text = recognizedTicketText(reading.lines);
+  final photoText = recognizedTicketText(photo.lines);
+  final text = [
+    if (photoText.isNotEmpty) photoText,
+    if (liveText.isNotEmpty) liveText,
+  ].join('\n');
   try {
     final capabilities = await provider.capabilities();
     final fields =
@@ -217,6 +237,8 @@ TicketRecord _mergeTicketFields(
       if (RegExp(pattern).hasMatch(code)) changes[key] = code;
     } else if (key == 'price') {
       if (RegExp(r'^\d+(?:\.\d{1,2})?$').hasMatch(value)) changes[key] = value;
+    } else if (key == 'gate' && record.isFlight) {
+      if (isPrintedFlightGate(value)) changes[key] = value.toUpperCase();
     } else {
       changes[key] = value;
     }

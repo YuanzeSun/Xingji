@@ -12,6 +12,7 @@ class SceneDelegate: FlutterSceneDelegate {
 
   override func sceneWillEnterForeground(_ scene: UIScene) {
     super.sceneWillEnterForeground(scene)
+    AppleRecognition.checkModelAvailability()
     lifecycleLog.info("Scene entered foreground")
   }
 
