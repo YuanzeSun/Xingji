@@ -44,10 +44,11 @@ export async function createRecognizer(progress = () => {}, {
   });
   await worker.setParameters({ user_defined_dpi: '300', preserve_interword_spaces: '1', tessedit_pageseg_mode: '3' });
   return {
-    async recognize(image, { refineRailDate = false, type = '' } = {}) {
+    async recognize(image, { refineRailDate = false, type = '', decodedBoardingCodes } = {}) {
       const source = image;
       image=await prepareOCRImage(source);
-      const codeRead=type==='rail' ? Promise.resolve([]) : Promise.resolve().then(()=>readCodes(source)).catch(()=>[]);
+      const codeRead=decodedBoardingCodes ? Promise.resolve(decodedBoardingCodes)
+        : type==='rail' ? Promise.resolve([]) : Promise.resolve().then(()=>readCodes(source)).catch(()=>[]);
       let data;
       try { ({data}=await worker.recognize(image, {}, { text: true, tsv: true })); }
       catch(error){if(!(await codeRead).length)throw error;data={text:'',tsv:'',confidence:0};}

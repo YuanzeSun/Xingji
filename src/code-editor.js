@@ -119,11 +119,11 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     refreshBarcodeFieldLocks(form,draft);
     reset();showSaved();showDifferences();status.textContent='已读取并重建 '+code.format+'，重新编码后信息已核对';error.textContent='';changed({filled,previousRecord});
   }
-  async function read(file, automatic = false) {
+  async function read(file, automatic = false, options) {
     if (!isCurrent()) return;
     reset(); const request = generation; loading = true; status.textContent = '正在读取并重建条码…'; error.textContent = '';
     try {
-      const rebuild = await loadRebuilder(), result = await rebuild(file, draft.type);
+      const rebuild = await loadRebuilder(), result = await rebuild(file, draft.type, options);
       if (disposed || request !== generation || !section.isConnected || !isCurrent()) return;
       loading = false;
       if (!result.codes.length) { status.textContent = ''; if (!automatic || result.issues.length) {  error.textContent = result.issues[0] || '未识别到可重建的码，请选择显示完整二维码或条码的图片'; } return; }
@@ -152,7 +152,8 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     try { const response = await fetch(referenceURL); if (!response.ok) throw new Error('本次图片无法读取'); const file = await response.blob(); if (!disposed && request === generation) await read(file, automatic); }
     catch (failure) { if (!disposed && request === generation) { loading = false; status.textContent = ''; error.textContent = failure.message;  } }
   }
-  const camera = bindCodeCamera(section, image => read(image, true), { asCanvas: draft.type === 'flight', ...cameraOptions, onCancel: () => { reset(); status.textContent = ''; } });
+  const flightCamera = draft.type === 'flight';
+  const camera = bindCodeCamera(section, (image, options) => read(image, true, options), { asCanvas: flightCamera, ...cameraOptions, onCancel: () => { reset(); status.textContent = ''; } });
   photo.addEventListener('change', () => { const file = photo.files?.[0]; if (file) { camera.stop(); read(file); } });
   find('code-use-scan')?.addEventListener('click', () => readReference());
   find('code-remove').addEventListener('click', () => {

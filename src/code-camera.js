@@ -9,13 +9,13 @@ export function bindCodeCamera(section, onCapture, {
   const panel = section.querySelector('[data-code-camera]'), video = panel.querySelector('video');
   const status = panel.querySelector('[data-code-camera-status]'), trigger = section.querySelector('[data-code-start]');
   const doc = section.ownerDocument, win = doc.defaultView;
-  let stream, timer, generation = 0, disposed = false, reading = -1;
+  let stream, timer, generation = 0, disposed = false, reading = -1, frame = 0;
   function stop() {
-    generation++; unschedule(timer); timer = null;
+    generation++; frame = 0; unschedule(timer); timer = null;
     stopCameraStream(stream);
     stream = null; if (video.srcObject) video.pause(); video.srcObject = null; panel.hidden = true; trigger.disabled = false;
   }
-  async function capture(request = generation) {
+  async function capture(request = generation, manual = false) {
     if (disposed || !stream || reading === request || request !== generation) return;
     reading = request; unschedule(timer); timer = null;
     try {
@@ -25,13 +25,13 @@ export function bindCodeCamera(section, onCapture, {
         canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
         const image = asCanvas ? canvas : await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
         if (disposed || request !== generation) return;
-        if (image && await onCapture(image)) { if (request === generation) stop(); return; }
+        if (image && await onCapture(image, { cameraFrame: manual ? 0 : ++frame })) { if (request === generation) stop(); return; }
       }
       if (request === generation) status.textContent = '将完整的码对准相机，保持清晰、稳定';
     } catch (error) { if (request === generation) status.textContent = error.message || '暂未读到码，请调整距离重试'; }
     finally {
       if (reading === request) reading = -1;
-      if (!disposed && stream && request === generation) timer = schedule(() => capture(request), 900);
+      if (!disposed && stream && request === generation) timer = schedule(() => capture(request), asCanvas ? 200 : 900);
     }
   }
   async function start() {
@@ -45,7 +45,7 @@ export function bindCodeCamera(section, onCapture, {
       stream = incoming; video.srcObject = stream; video.muted = true; await video.play();
       if (request !== generation) return;
       status.textContent = '将码对准相机，识别后自动录入';
-      timer = schedule(() => capture(request), 350);
+      timer = schedule(() => capture(request), asCanvas ? 80 : 350);
     } catch (error) {
       if (disposed || request !== generation) return;
       stop(); panel.hidden = false;
@@ -56,7 +56,7 @@ export function bindCodeCamera(section, onCapture, {
   const pause = () => { if (!panel.hidden) cancel(); };
   const visibility = () => { if (doc.visibilityState === 'hidden') pause(); };
   trigger.addEventListener('click', start);
-  panel.querySelector('[data-code-shutter]').addEventListener('click', () => capture());
+  panel.querySelector('[data-code-shutter]').addEventListener('click', () => capture(generation, true));
   panel.querySelector('[data-code-stop]').addEventListener('click', cancel);
   doc.addEventListener('visibilitychange', visibility);
   win.addEventListener('pagehide', pause);
