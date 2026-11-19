@@ -27,6 +27,7 @@ const ticketFields = <String>[
   "carriage",
   "seat",
   "seatClass",
+  "railStanding",
   "price",
   "orderNumber",
   "ticketNumber",
@@ -67,7 +68,7 @@ const ticketFields = <String>[
   "provenance",
   "offsetX",
   "offsetY",
-  "deleted",
+  "deleted"
 ];
 const lookupFields = <String>[
   "railBureau",
@@ -94,19 +95,14 @@ const lookupFields = <String>[
   "origin",
   "destination",
   "originCode",
-  "destinationCode",
+  "destinationCode"
 ];
-const ticketTemplates = <String, String>{
+const ticketTemplates = <String,String>{
   "rail-red-classic": "红色软纸票 · 2015年前",
   "rail-red": "红色软纸票 · 2015版",
   "rail-blue": "蓝色磁介质票 · 2015版",
   "rail-receipt": "蓝色报销凭证 · 热敏版",
   "rail-refund-receipt": "退票费凭证",
-  "air-boarding-pass": "登机牌",
+  "air-boarding-pass": "登机牌"
 };
-const journeyDateFields = <String>[
-  'departureDate',
-  'arrivalDate',
-  'actualDepartureDate',
-  'actualArrivalDate',
-];
+const journeyDateFields = <String>['departureDate','arrivalDate','actualDepartureDate','actualArrivalDate'];
