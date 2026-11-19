@@ -38,7 +38,12 @@ export function memoryD1(records = [], settings = {}) {
     async fetch(url, options) {
       calls.push({ url, method: options?.method || 'GET', body: options?.body && JSON.parse(options.body) });
       if (!this.available) throw new TypeError('Network error');
-      return worker.fetch(new Request(url, options), { ARCHIVE, ARCHIVE_TOKEN: token });
+      const result = await worker.fetch(new Request(url, options), { ARCHIVE, ARCHIVE_TOKEN: token });
+      if (this.loseAcknowledgement && options?.method === 'POST' && result.ok) {
+        this.loseAcknowledgement = false;
+        throw new TypeError('Connection lost after the D1 commit');
+      }
+      return result;
     }
   };
 }

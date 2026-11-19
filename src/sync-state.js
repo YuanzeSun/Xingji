@@ -24,7 +24,7 @@ export async function readSyncState() {
   }
   throw new Error('条码转换期间其他标签页持续修改，请刷新重试');
 }
-export async function bindRepository(config, expectedD1 = null, credential) {
+export async function bindRepository(config, expectedD1 = null, credential, cloudLinkReady) {
   return db.atomic(keys, raw => {
     const current = unpack(raw);
     if (activeBinding({ d1: current.d1 }) !== activeBinding({ d1: expectedD1 })) throw new Error('主存储已变化，请刷新后重新连接');
@@ -32,6 +32,7 @@ export async function bindRepository(config, expectedD1 = null, credential) {
     const bound = clone(config);
     const write = { github: bound };
     if (credential !== undefined) write.githubToken = credential;
+    if (cloudLinkReady !== undefined) write.cloudLinkReady = cloudLinkReady;
     return { write, result: { ...current, config: bound } };
   });
 }

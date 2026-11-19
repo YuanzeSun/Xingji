@@ -120,8 +120,14 @@ test('D1-first binding can keep GitHub data and one reset clears both archives',
     keepD1Form.querySelector('[name="keep-cloud"][value="d1"]').click();
     keepD1Form.elements['confirm-reset'].click();
     answerArithmetic(document);
+    d1.loseAcknowledgement = true;
+    keepD1Form.querySelector('[type="submit"]').click();
+    await until(() => keepD1Form.querySelector('[data-reset-error]').textContent.includes('D1 重置尚未完成'));
+    assert.deepEqual(d1Settings().connections, { unlinked: true });
+    const resets = d1.calls.filter(call => call.method === 'POST').length;
     keepD1Form.querySelector('[type="submit"]').click();
     await until(() => !document.querySelector('dialog') && document.querySelector('h1')?.textContent === '我的票据');
+    assert.equal(d1.calls.filter(call => call.method === 'POST').length, resets);
     assert.equal((await db.get('d1')).id, id);
     assert.equal(await db.get('github', null), null);
     assert.equal(sessionStorage.getItem('xingji-github-token'), null);

@@ -15,7 +15,7 @@ import { renderCodeData } from './barcode-data.js';
 import { createRecord, validateRecord, mergeThreeWay, TEMPLATES, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, readArchive, applyImport, formatDate } from './model.js';
 import * as db from './db.js';
 import { readSyncState, readResetState, activeBinding, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, stageBackup, stageRecords, stageSettings, acknowledgeSync, replaceWithRemote } from './sync-state.js';
-import { sharedSettings, maskedKey, unlinkedSettings, wasUnlinked } from './shared-settings.js';
+import { sharedSettings, sameSettings, maskedKey, unlinkedSettings, wasUnlinked } from './shared-settings.js';
 import { watchAppUpdates } from './app-update.js';
 import { supportsDesktopMcp } from './device.js';
 import { archiveResetMarkup } from './archive-reset.js';
@@ -895,6 +895,7 @@ async function restoreLinkedD1(captured, github, snapshot) {
     throw new Error('GitHub 已与 D1 绑定，但暂时无法连接 D1。' + error.message);
   }
   if (wasUnlinked(remote)) throw new Error('D1 关联已解除，请直接登录 D1。');
+  assertLinkTargets(github, { config }, snapshot, remote);
   useSnapshot(await activateD1(captured, config, remote, { credential, github, cloudLinkReady: true }));
   sessionStorage.setItem('xingji-github-token', github.token);
   sessionStorage.setItem('xingji-d1-token', credential);
@@ -920,7 +921,8 @@ async function restoreLinkedGitHub(d1, snapshot) {
   try {
     if (!secret) throw new Error('缺少 GitHub 凭证');
     await github.verify();
-    await github.head();
+    const { snapshot: repo } = await github.readArchiveIndex();
+    assertLinkTargets(github, d1, repo, snapshot);
     return github;
   } catch (error) {
     state.githubError = 'D1 已连接，GitHub 备份需要重新登录。' + error.message;
@@ -928,6 +930,13 @@ async function restoreLinkedGitHub(d1, snapshot) {
   }
 }
 
+async function recoverGitHubBackup(captured, d1, remote) {
+  if (captured.config || !pairedGitHub(remote, d1.config)) return;
+  const github = await restoreLinkedGitHub(d1, remote);
+  useSnapshot(await bindRepository(github.config, captured.d1, github.token, true));
+  if (github.token) sessionStorage.setItem('xingji-github-token', github.token);
+  announce();
+}
 async function completeExistingCloudLink() {
   if (!state.d1 || !state.config?.id || !d1Token() || !token() || state.syncMeta.pending) return;
   try {
@@ -984,8 +993,7 @@ async function connectGitHub(event) {
           return true;
         }
       }
-      useSnapshot(await bindRepository(config, captured.d1, secret));
-      if (captured.d1) await db.set('cloudLinkReady', false);
+      useSnapshot(await bindRepository(config, captured.d1, secret, captured.d1 ? false : undefined));
     }
     sessionStorage.setItem('xingji-github-token', secret);
     state.connectionDraft = null;
@@ -1044,7 +1052,7 @@ async function backupGitHub() {
     if (!await requireArithmetic('备份到 GitHub', `用 D1 当前的票据、个人资料、MCP 和账号设置覆盖 ${object} 中的行迹数据。凭证会进入 Git 历史。`, '确认备份')) return;
     const { changed } = await withCloudLock(async () => {
       const captured = await readSyncState();
-      if (activeBinding(captured) !== activeBinding({ d1, config }) || captured.config?.id !== config.id || captured.meta.pending || !canWrite() || state.saving) throw new Error('云端状态已变化，请重新发起备份');
+      if (activeBinding(captured) !== activeBinding({ d1, config }) || !sameGitHubAccount(captured.config, config) || captured.meta.pending || !canWrite() || state.saving) throw new Error('云端状态已变化，请重新发起备份');
       return backUpToGitHub(new D1Store(d1, d1Token()), new GitHubStore(clone(config), token()));
     });
     toast(changed ? '已将 D1 票库备份到 GitHub' : 'GitHub 已有相同的备份');
@@ -1122,11 +1130,12 @@ async function doSync(resolutions = {}) {
       const signal = syncAbort.signal;
       const cached = meta.verified ? { id: d1?.id, records: captured.base, settings: captured.settingsBase, head: meta.head, generation: meta.generation || '' } : null;
       const store = d1 ? new D1Store(d1, d1Token(), fetch, { signal, cached }) : new GitHubStore(clone(captured.config), token(), fetch, { signal });
-      let result, githubRemote;
+      let result, remoteSnapshot;
       if (d1) {
         if (!meta.pending && meta.verified && !Object.keys(resolutions).length) {
           const remote = await store.read();
           if (remote.generation !== cached.generation) throw new ArchiveResetError(remote, true);
+          await recoverGitHubBackup(captured, store, remote);
           result = { ...remote, conflicts: [] };
         }
       } else {
@@ -1139,18 +1148,16 @@ async function doSync(resolutions = {}) {
       }
       if (!result) for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          if (!d1 && !githubRemote) {
-            githubRemote = await readPrimaryGitHub(captured, store);
-            if (!githubRemote) return true;
-          }
+          remoteSnapshot = d1 ? await store.read() : await readPrimaryGitHub(captured, store);
+          if (!remoteSnapshot) return true;
+          if (d1 && remoteSnapshot.generation === (meta.generation || '')) await recoverGitHubBackup(captured, store, remoteSnapshot);
           result = await synchronize(store, captured.base, captured.records, resolutions, {
             baseHead: meta.head, baseGeneration: meta.generation || '', baseSettings: captured.settingsBase,
-            localSettings: captured.settings, remoteSnapshot: githubRemote
+            localSettings: captured.settings, remoteSnapshot
           });
           break;
         } catch (error) {
           if (attempt >= 2 || ![409, 422].includes(error.status)) throw error;
-          githubRemote = null;
         }
       }
       if (result.conflicts.length) { state.pendingConflicts = result.conflicts; state.connectionStatus = 'conflict'; return false; }
@@ -1174,6 +1181,7 @@ async function doSync(resolutions = {}) {
         }
         if (!captured.meta.pending) {
           try {
+            await recoverGitHubBackup(captured, new D1Store(captured.d1, d1Token()), error.snapshot);
             useSnapshot(await activateD1(captured, captured.d1, error.snapshot));
             Object.assign(state, { connectionStatus: 'online', pendingConflicts: [], d1Replacement: null, syncMessage: '' });
             announce();
@@ -1244,7 +1252,7 @@ async function showArchiveReset(manual = false) {
   const challenge = createArithmeticChallenge(), remoteReset = request.code === 'ARCHIVE_RESET';
   openModal(modalHead(remoteReset ? '采用新票库' : title) + archiveResetMarkup(request, captured, challenge));
   const form = modalRoot.querySelector('[data-archive-reset]'), submit = form.querySelector('[type="submit"]');
-  let githubResult;
+  let githubResult, d1ResetAttempted = false;
   const unlinkOption = form.elements['unlink-clouds'], keepOptions = form.querySelector('[data-keep-cloud]');
   unlinkOption?.addEventListener('change', () => {
     keepOptions.hidden = keepOptions.disabled = !unlinkOption.checked;
@@ -1283,18 +1291,30 @@ async function showArchiveReset(manual = false) {
           if (remote.head !== request.snapshot.head) throw new Error('新票库已有变化，请重新确认');
           return replaceWithRemote(captured, remote);
         }
-        if (d1 && (await d1.read()).head !== request.d1Snapshot.head) {
-          throw new Error('D1 票库已有变化，请关闭窗口后重新确认');
+        let d1Result, d1Settings;
+        if (d1) {
+          const before = request.d1Snapshot;
+          d1Settings = unlink ? unlinkedSettings(before.settings) : before.settings;
+          const latest = await d1.read();
+          if (latest.head !== before.head) {
+            if (!d1ResetAttempted || latest.generation === before.generation ||
+                latest.records.length || !sameSettings(latest.settings, d1Settings)) {
+              throw new Error('D1 票库已有变化，请关闭窗口后重新确认');
+            }
+            d1Result = latest;
+          }
         }
         if (github) {
           if (!githubResult) githubResult = await github.resetRepository(request.snapshot.head, d1 ? {} : captured.settings, { unlink });
           else if (await github.head() !== githubResult.head) throw new Error('GitHub 仓库已有变化，请关闭窗口后重新确认');
         }
         if (d1) {
-          const settings = unlink ? unlinkedSettings(request.d1Snapshot.settings) : request.d1Snapshot.settings;
-          const remote = await d1.replace(request.d1Snapshot, [], settings);
-          if (unlink) return keepUnlinkedArchive(captured, keep, keep === 'd1' ? remote : githubResult, keep === 'd1' ? d1.token : github.token);
-          return activateD1(captured, captured.d1, remote);
+          if (!d1Result) {
+            d1ResetAttempted = true;
+            d1Result = await d1.replace(request.d1Snapshot, [], d1Settings);
+          }
+          if (unlink) return keepUnlinkedArchive(captured, keep, keep === 'd1' ? d1Result : githubResult, keep === 'd1' ? d1.token : github.token);
+          return activateD1(captured, captured.d1, d1Result);
         }
         return replaceWithRemote(captured, githubResult);
       });
