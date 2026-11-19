@@ -171,6 +171,7 @@ function syncLabel() {
   return state.syncMeta.pending ? '等待云端确认' : '已同步';
 }
 const bothClouds = () => !!(state.config?.id && state.d1?.id);
+const firstBindingHelp = '首次绑定时，选择保留哪边的票库，并覆盖另一边。绑定后由 D1 日常同步，GitHub 可手动备份。';
 function connectionForm() {
   const draft = state.connectionDraft, config = state.config || draft || {}, bound = !!state.config?.id;
   if (token()) {
@@ -178,19 +179,22 @@ function connectionForm() {
     return `<p class="body-copy">${e(config.owner)}/${e(config.repo)}</p>${exit}`;
   }
   const label = bound ? '重新登录 GitHub' : state.d1 ? '绑定为备份仓库' : '连接并同步';
-  return `<form id="github-form"><div class="form-grid"><label class="field"><span>GitHub用户名</span><input name="owner" value="${e(config.owner)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>私有仓库名</span><input name="repo" value="${e(config.repo)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label></div><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token ?? token())}" autocomplete="off" required /></label><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${label}</button></div></form><div class="setup-help"><p>创建 GitHub 私有仓库并勾选添加 README。创建细粒度访问凭证时，仅授权该仓库，并将 Contents 设为 Read and write。</p><p><a href="https://github.com/new" target="_blank" rel="noopener noreferrer">创建私有仓库 ↗</a><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">创建访问凭证 ↗</a></p></div>`;
+  return `<form id="github-form"><div class="form-grid"><label class="field"><span>GitHub用户名</span><input name="owner" value="${e(config.owner)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>私有仓库名</span><input name="repo" value="${e(config.repo)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label></div><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token ?? token())}" autocomplete="off" required /></label><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${label}</button></div></form><div class="setup-help">${state.d1 && !bound ? `<p>${firstBindingHelp}</p>` : ''}<p>创建 GitHub 私有仓库并勾选添加 README。创建细粒度访问凭证时，仅授权该仓库，并将 Contents 设为 Read and write。</p><p><a href="https://github.com/new" target="_blank" rel="noopener noreferrer">创建私有仓库 ↗</a><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">创建访问凭证 ↗</a></p></div>`;
 }
 function captureConnectionDraft(form) {
   state.connectionDraft = { ...state.connectionDraft, owner: form.elements.owner.value, repo: form.elements.repo.value, token: form.elements.token.value };
 }
 function d1ConnectionPanel() {
   const draft = state.d1Draft, bound = !!state.d1;
-  const help = state.config && !bound ? '首次绑定时选择以哪边的票库为准。绑定后由 D1 日常同步。' : '部署行迹 Worker 后，填写 Worker 地址和访问凭证。';
+  const help = bothClouds()
+    ? 'D1 负责日常同步，GitHub 可手动备份。换设备时，登录任一账号即可恢复关联。两个账号需一起退出，届时会清除本机缓存。要解除关联，请在「重置仓库」中勾选「同时解除关联」，再选择继续使用哪边。'
+    : !bound && state.config ? firstBindingHelp
+    : !bound ? '部署行迹 Worker 后，填写 Worker 地址和访问凭证。' : '';
   const exit = bothClouds() ? '' : '<div class="button-row"><button class="text-button" type="button" data-action="disconnect-d1">退出 D1</button></div>';
   const controls = d1Token()
     ? `<p class="body-copy">${e(state.d1?.url)}</p>${exit}`
     : `<form id="d1-form"><label class="field"><span>Worker 地址</span><input type="url" name="url" placeholder="https://your-archive.workers.dev" value="${e(state.d1?.url ?? draft?.url)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token)}" required autocomplete="off" /></label><p class="form-error" role="alert">${e(state.d1Error)}</p><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${bound ? '重新登录 D1' : '连接 D1'}</button></div></form>`;
-  return `<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('database')}</span><div><h2>Cloudflare D1</h2><p data-d1-cloud-label>${bound ? e(syncLabel()) : '可作为主票库'}</p></div></div>${controls}<div class="setup-help"><p>${help}</p><p><a href="https://github.com/YuanzeSun/Xingji/blob/main/docs/cloudflare-d1.md" target="_blank" rel="noopener noreferrer">D1 部署 ↗</a></p></div></section>`;
+  return `<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('database')}</span><div><h2>Cloudflare D1</h2><p data-d1-cloud-label>${bound ? e(syncLabel()) : '可作为主票库'}</p></div></div>${controls}<div class="setup-help">${help ? `<p>${help}</p>` : ''}<p><a href="https://github.com/YuanzeSun/Xingji/blob/main/docs/cloudflare-d1.md" target="_blank" rel="noopener noreferrer">D1 部署 ↗</a></p></div></section>`;
 }
 function githubExtras() {
   if (!state.d1 || !state.config) return '';
@@ -215,7 +219,7 @@ function guestDemoNotice() {
   return `<section class="guest-demo-notice" aria-label="示例模式提示"><div>${icon('info')}<p>正在体验<strong>示例模式</strong>，登录后即可开始记录自己的旅程。</p></div><button type="button" class="button primary" data-action="exit-demo">退出示例并登录${icon('arrow')}</button></section>`;
 }
 function connectionPage() {
-  return `<main class="cloud-setup"><div class="cloud-setup-brand">${icon('ticket')} 行迹</div><section class="guest-demo-entry" aria-labelledby="guest-demo-title"><div class="guest-demo-heading">${icon('ticket')}<strong id="guest-demo-title">体验示例模式</strong></div><p>直接浏览示例票据与行程。</p><button type="button" class="button primary" data-action="enter-demo">进入示例模式${icon('arrow')}</button></section><section class="panel"><h1>连接 GitHub</h1><p class="cloud-setup-description">连接私有仓库后使用票据存档。暂时断联时，可查看已同步的本地缓存。</p>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError || (!state.d1 && state.syncMessage) || '')}</p>${githubExtras()}${state.records.some(r => !r.deleted) ? '<button class="text-button" data-action="backup">导出本机票据</button>' : ''}</section>${d1ConnectionPanel()}${cloudActions()}${pageFooter()}</main>`;
+  return `<main class="cloud-setup"><div class="cloud-setup-brand">${icon('ticket')} 行迹</div><section class="guest-demo-entry" aria-labelledby="guest-demo-title"><div class="guest-demo-heading">${icon('ticket')}<strong id="guest-demo-title">体验示例模式</strong></div><p>直接浏览示例票据与行程。</p><button type="button" class="button primary" data-action="enter-demo">进入示例模式${icon('arrow')}</button></section><section class="panel"><h1>连接 GitHub</h1><p class="cloud-setup-description">GitHub 和 D1 都可单独使用。若两个账号已绑定，登录任一账号即可恢复两个连接，并从 D1 读取主票库。</p>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError || (!state.d1 && state.syncMessage) || '')}</p>${githubExtras()}${state.records.some(r => !r.deleted) ? '<button class="text-button" data-action="backup">导出本机票据</button>' : ''}</section>${d1ConnectionPanel()}${cloudActions()}${pageFooter()}</main>`;
 }
 function connectionNotice() {
   if (state.showDemo || canWrite() && !state.syncMeta.pending) return '';
@@ -875,7 +879,7 @@ async function chooseBindingSource(github, d1, d1Snapshot) {
   const destination = fromGitHub ? 'D1' : 'GitHub';
   const details = fromGitHub ? d1.config.url : repo;
   if (!await requireArithmetic('确认覆盖 ' + destination,
-    `用 ${name} 的票据、个人资料、MCP 和账号设置整体替换 ${details} 的行迹数据。连接凭证会保存在两边，也会进入 Git 历史。绑定后一起退出，解除关联可在重置仓库时进行。日常同步使用 D1。`, '覆盖并绑定')) return null;
+    `用 ${name} 的票据、个人资料、MCP 和账号设置覆盖 ${details} 的行迹数据。两套连接凭证会保存在两边，并留在 Git 历史中。绑定后由 D1 日常同步，GitHub 可手动备份。`, '覆盖并绑定')) return null;
   return bindArchivePair(github, d1, source, previews);
 }
 
