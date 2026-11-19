@@ -14,7 +14,7 @@ import { upgradeCodeRecords } from './code-upgrade.js';
 import { renderCodeData } from './barcode-data.js';
 import { createRecord, validateRecord, mergeThreeWay, TEMPLATES, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, readArchive, applyImport, formatDate } from './model.js';
 import * as db from './db.js';
-import { readSyncState, readResetState, activeBinding, activateD1, bindRepository, signOutGitHub, stageBackup, stageRecords, stageSettings, acknowledgeSync, replaceWithRemote } from './sync-state.js';
+import { readSyncState, readResetState, activeBinding, activateD1, bindRepository, signOutCloud, stageBackup, stageRecords, stageSettings, acknowledgeSync, replaceWithRemote } from './sync-state.js';
 import { sharedSettings, maskedKey } from './shared-settings.js';
 import { watchAppUpdates } from './app-update.js';
 import { supportsDesktopMcp } from './device.js';
@@ -979,33 +979,35 @@ function clearArchiveView() {
   });
   resetPromptHead = '';
 }
-async function disconnectCloud(fromD1) {
+function invalidateCloudSession() {
+  authEpoch++;
+  syncAbort?.abort();
+  clearTimeout(syncTimer);
+  state.connectionStatus = 'auth';
+  state.syncMessage = '';
+}
+function clearSignedOutArchive() {
+  forgetGitHubSession();
+  forgetD1Session();
+  clearArchiveView();
+  state.showDemo = false;
+  state.d1Replacement = null;
+}
+async function disconnectCloud(provider) {
   if (state.connecting || state.saving || state.busy || state.flightChecking || state.resetting || state.githubBackingUp) return;
-  if (fromD1 || !state.d1) {
-    authEpoch++;
-    syncAbort?.abort();
-    clearTimeout(syncTimer);
-    state.connectionStatus = 'auth';
-    state.syncMessage = '';
-  }
-  if (fromD1) {
-    await withCloudLock(async () => {
-      await db.set('d1Token', '');
-      forgetD1Session();
-      announce({ d1SignedOut: true });
-    });
-    render();
-    toast('已退出 D1，本机缓存仅可查看');
-    return;
-  }
+  const fromD1 = provider === 'd1';
+  if (fromD1 || !state.d1) invalidateCloudSession();
   await withCloudLock(async () => {
-    useSnapshot(await signOutGitHub());
-    forgetGitHubSession();
-    if (!state.d1) clearArchiveView();
-    announce({ githubSignedOut: true });
+    useSnapshot(await signOutCloud(provider, !!(fromD1 ? token() : d1Token())));
+    if (!hasCloud()) clearSignedOutArchive();
+    else if (fromD1) forgetD1Session();
+    else forgetGitHubSession();
+    announce({ signedOut: provider });
   });
   render();
-  toast(state.d1 ? '已退出 GitHub' : '已退出 GitHub，本机票库已清空');
+  const name = fromD1 ? 'D1' : 'GitHub';
+  const result = !hasCloud() ? '，本机票库已清空' : fromD1 ? '，本机缓存仅可查看' : '';
+  toast('已退出 ' + name + result);
 }
 async function doSync(resolutions = {}) {
   if (state.resetting) return false;
@@ -1336,8 +1338,8 @@ const actions = {
   'backup-github': backupGitHub,
   'adopt-d1': adoptD1Replacement,
   'review-conflicts': () => { if (modalRoot.querySelector('dialog') && !closeModal()) return; showConflicts(state.pendingConflicts || []); },
-  disconnect: () => disconnectCloud(false),
-  'disconnect-d1': () => disconnectCloud(true),
+  disconnect: () => disconnectCloud('github'),
+  'disconnect-d1': () => disconnectCloud('d1'),
   'flight-refresh': checkFlights,
   'flight-result': showFlightResult,
   'flight-to-import': () => { const text = state.flightResult?.content?.filter(c => c.type === 'text').map(c => c.text).join('\n') || JSON.stringify(state.flightResult); closeModal(true); navigate('import'); document.querySelector('#import-text').value = text; },
@@ -1372,22 +1374,12 @@ document.addEventListener('visibilitychange', () => {
 });
 channel?.addEventListener('message', async event => {
   const snapshot = await readSyncState();
-  if (event.data?.githubSignedOut) {
-    forgetGitHubSession();
-    if (!snapshot.d1) {
-      authEpoch++;
-      syncAbort?.abort();
-      clearArchiveView();
-    }
-  }
-  if (event.data?.d1SignedOut) {
-    authEpoch++;
-    syncAbort?.abort();
-    clearTimeout(syncTimer);
-    forgetD1Session();
-    state.connectionStatus = 'auth';
-    state.syncMessage = '';
-  } else if (snapshot.d1 && !d1Token()) {
+  const signedOut = event.data?.signedOut;
+  if (signedOut === 'd1' || (signedOut === 'github' && !snapshot.d1)) invalidateCloudSession();
+  if (signedOut && !snapshot.config && !snapshot.d1) clearSignedOutArchive();
+  else if (signedOut === 'github') forgetGitHubSession();
+  else if (signedOut === 'd1') forgetD1Session();
+  if (signedOut !== 'd1' && snapshot.d1 && !d1Token()) {
     const savedSecret = await db.get('d1Token', '');
     if (savedSecret) {
       sessionStorage.setItem('xingji-d1-token', savedSecret);
@@ -1409,7 +1401,8 @@ async function boot() {
     useSnapshot(snapshot);
     if (snapshot.config && secret) sessionStorage.setItem('xingji-github-token', secret);
     if (!snapshot.config) forgetGitHubSession();
-    if (d1Secret) sessionStorage.setItem('xingji-d1-token', d1Secret);
+    if (snapshot.d1 && d1Secret) sessionStorage.setItem('xingji-d1-token', d1Secret);
+    if (!snapshot.d1) forgetD1Session();
     state.showDemo = showDemo === true; state.page = location.hash.slice(1) || 'archive'; render();
     doSync();
   } catch (error) {

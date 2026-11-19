@@ -29,6 +29,21 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
     assert.equal(await db.get('d1Token'), token);
     assert.equal(d1.calls.filter(call => call.method === 'POST').length, 0);
 
+    document.querySelector('[data-action="disconnect-d1"]').click();
+    await until(() => document.querySelector('.cloud-setup #d1-form'));
+    assert.equal(sessionStorage.getItem('xingji-d1-token'), null);
+    assert.equal(await db.get('d1Token'), '');
+    assert.equal(await db.get('d1', null), null);
+    assert.deepEqual(await db.get('records'), []);
+    assert.deepEqual(await db.get('base'), []);
+    assert.deepEqual(await db.get('settings'), {});
+    assert.deepEqual(await db.get('settingsBase'), {});
+    assert.equal(document.querySelector('#d1-form [name="url"]').value, '');
+    assert.equal(d1.calls.filter(call => call.method === 'POST').length, 0);
+
+    connect(window, 'd1');
+    await until(() => document.querySelector('[data-d1-cloud-label]')?.textContent === '已同步');
+    assert.deepEqual((await db.get('records')).map(record => record.id), ['d1-ticket']);
     connect(window, 'github');
     await until(() => document.querySelector('#archive-source-form'));
     const sourceForm = document.querySelector('#archive-source-form');
@@ -84,5 +99,15 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
     connect(window, 'github');
     await until(() => button()?.disabled === false && !document.querySelector('#github-form'));
     assert.equal(github.head, saved);
+
+    document.querySelector('[data-action="disconnect"]').click();
+    await until(() => document.querySelector('#github-form') && button()?.disabled);
+    assert.equal((await db.get('github')).id, 77, 'the signed-out backup binding is kept while D1 remains active');
+    const callsBeforeLastSignOut = [github.calls.length, d1.calls.length];
+    document.querySelector('[data-action="disconnect-d1"]').click();
+    await until(() => document.querySelector('.cloud-setup #d1-form'));
+    assert.equal(await db.get('github', null), null);
+    assert.deepEqual(await db.get('records'), []);
+    assert.deepEqual([github.calls.length, d1.calls.length], callsBeforeLastSignOut);
   } finally { window.dispatchEvent(new window.Event('offline')); window.close(); }
 });
