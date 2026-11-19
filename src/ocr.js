@@ -1,38 +1,48 @@
 import { createWorker } from 'tesseract.js';
 import { dateRectangle, readPrintedDate } from './scan-date.js';
 import { isRailOrderText, railOrderService } from './rail-order.js';
-import { railTimeWords, ocrWords } from './ocr-layout.js';
+import { railTimeWords } from './ocr-layout.js';
 import { isFlightScreenshotText } from './flight-screenshot.js';
-import { prepareFlightScreenshot } from './flight-screenshot-image.js';
-import { refineRailService, refineRailReceipt, railReadScore, preferEnhancedRailRead } from './rail-ocr.js';
-import { prepareRailPhoto, prepareOCRImage } from './scan-image.js';
-import { isBoardingPassText } from './boarding-pass.js';
-async function refineFlightSchedule(worker, image, data) {
-  const word=ocrWords(data.tsv).find(word=>/^(?:19|20)\d{2}[-./年]/.test(word.text));
-  if(!word || word.left>=image.width*.4)return;
-  const dateLine=data.text.split('\n').find(line=>line.includes(word.text))||'';
-  if(/(?:19|20)\d{2}[-./年]\d{1,2}[-./月]\d{1,2}/.test(dateLine)&&(dateLine.match(/(?:[01]?\d|2[0-3]):[0-5]\d/g)||[]).length===2)return;
-  const pad=Math.max(5,Math.round(word.height*.25)),left=Math.max(0,word.left-pad),top=Math.max(0,word.top-pad),right=Math.min(image.width,Math.max(word.left+word.width,image.width*.56));
+import { refineRailService, refineRailTemplate, refineRailReceipt, railReadScore, preferEnhancedRailRead } from './rail-ocr.js';
+import { prepareRailPhoto, prepareOCRImage, railPhotoColor, cropColoredRailPaper } from './scan-image.js';
+import { isBoardingPassText, plannedBoardingTime } from './boarding-pass.js';
+
+const readBoardingCodes = async image => (await import('./code-reader.js')).readBoardingCodesFromImage(image);
+
+async function readBoardingTime(worker, image, data) {
+  if (!data.text) return '';
+  const time = data.confidence >= 40 ? plannedBoardingTime(data.text, data.tsv) : '';
+  if (time) return time;
   try {
-    await worker.setParameters({tessedit_char_whitelist:'0123456789年月日-/:.+ ',tessedit_pageseg_mode:'7'});
-    const refined=await worker.recognize(image,{rectangle:{left,top,width:right-left,height:Math.min(image.height-top,word.height+pad*2)}});
-    const schedule=refined.data.text.trim();
-    if(!/(?:19|20)\d{2}[-./年]\d{1,2}[-./月]\d{1,2}/.test(schedule) || (schedule.match(/\d{1,2}:\d{2}/g)||[]).length!==2 || refined.data.confidence<45)return;
-    let replaced=false;
-    data.tsv=data.tsv.split('\n').flatMap(line=>{
-      const row=line.split('\t');
-      if(row[0]!=='5'||+row[6]>=right||Math.abs(+row[7]+ +row[9]/2-word.top-word.height/2)>word.height*.8)return [line];
-      if(replaced)return [];
-      replaced=true;row[6]=left;row[7]=top;row[8]=right-left;row[9]=word.height;row[11]='计划 '+schedule;
-      return [row.join('\t')];
-    }).join('\n');
-    data.text=data.text.split('\n').map(line=>line.includes(word.text)?'计划 '+schedule:line).join('\n');
-  } catch { /* Keep the whole-image read when the date row cannot be refined. */ }
-  finally { await worker.setParameters({tessedit_char_whitelist:'',tessedit_pageseg_mode:'3'}); }
+    await worker.setParameters({ tessedit_pageseg_mode: '11' });
+    const { data: sparse } = await worker.recognize(image, {}, { text: true, tsv: true });
+    if (sparse.confidence >= 40) return plannedBoardingTime(sparse.text, sparse.tsv);
+  } catch { /* The barcode is still usable when text recognition fails. */ }
+  finally { await worker.setParameters({ tessedit_pageseg_mode: '3' }).catch(() => {}); }
+  return '';
 }
+
+async function rereadRailPhoto(worker, photo, first) {
+  let best = { image: photo, data: first };
+  const cropped = railReadScore(first) < 11 ? cropColoredRailPaper(photo) : null;
+  for (const mode of ['6', '11']) {
+    if (railReadScore(best.data) >= 11) break;
+    try {
+      const image = mode === '6' ? cropped || photo : await prepareRailPhoto(cropped || best.image);
+      if (!image) continue;
+      await worker.setParameters({ tessedit_pageseg_mode: mode });
+      const { data } = await worker.recognize(image, {}, { text: true, tsv: true });
+      await refineRailService(worker, image, data);
+      if (preferEnhancedRailRead(best.data, data)) best = { image, data };
+    } catch { /* Retain the best read already collected. */ }
+    finally { await worker.setParameters({ tessedit_pageseg_mode: '3' }); }
+  }
+  return best;
+}
+
 export async function createRecognizer(progress = () => {}, {
   workerFactory=createWorker,
-  readCodes=async image=>(await import('./code-reader.js')).readBoardingCodesFromImage(image)
+  readCodes=readBoardingCodes
 } = {}) {
   const base = new URL('./', location.href);
   let rejectStartup;
@@ -50,24 +60,29 @@ export async function createRecognizer(progress = () => {}, {
   return {
     async recognize(image, { refineRailDate = false, type = '', decodedBoardingCodes } = {}) {
       const source = image;
-      image=await prepareOCRImage(source);
       const codeRead=decodedBoardingCodes ? Promise.resolve(decodedBoardingCodes)
         : type==='rail' ? Promise.resolve([]) : Promise.resolve().then(()=>readCodes(source)).catch(()=>[]);
       let data;
-      try { ({data}=await worker.recognize(image, {}, { text: true, tsv: true })); }
-      catch(error){if(!(await codeRead).length)throw error;data={text:'',tsv:'',confidence:0};}
-      if (refineRailDate) await refineRailService(worker, image, data);
-      if (refineRailDate && !isRailOrderText(data.text) && !isFlightScreenshotText(data.text) && !/BOARDING|\bFLIGHT\b|航班|航空公司/i.test(data.text) && railReadScore(data) < 12) {
-        try {
-          const prepared = await prepareRailPhoto(image);
-          if (prepared) {
-            const alternative = await worker.recognize(prepared, {}, { text: true, tsv: true });
-            await refineRailService(worker, prepared, alternative.data);
-            if (preferEnhancedRailRead(data, alternative.data)) { image = prepared; data = alternative.data; }
-          }
-        } catch { /* The original image remains available for review. */ }
+      try {
+        image = await prepareOCRImage(source);
+        ({ data } = await worker.recognize(image, {}, { text: true, tsv: true }));
       }
-      if (refineRailDate) await refineRailReceipt(worker, image, data);
+      catch(error){if(!(await codeRead).length)throw error;data={text:'',tsv:'',confidence:0};}
+      const boardingCodes = await codeRead;
+      if (type === 'flight' || boardingCodes.length || isBoardingPassText(data.text) || isFlightScreenshotText(data.text)) {
+        const scheduledBoardingTime = await readBoardingTime(worker, image, data);
+        return { text: '', flightImage: true, scheduledBoardingTime, boardingCodes, confidence: boardingCodes.length ? 90 : data.confidence };
+      }
+      const photo = image;
+      if (refineRailDate) await refineRailService(worker, image, data);
+      if (refineRailDate && !isRailOrderText(data.text) && !/BOARDING|\bFLIGHT\b|航班|航空公司/i.test(data.text)) {
+        ({ image, data } = await rereadRailPhoto(worker, photo, data));
+      }
+      const paperColor = railPhotoColor(image) || (image !== photo ? railPhotoColor(photo) : '');
+      if (refineRailDate && !isRailOrderText(data.text)) {
+        await refineRailTemplate(worker, image, data, paperColor);
+        await refineRailReceipt(worker, image, data);
+      }
       let text = data.text, layout = data.tsv || '';
       const order = isRailOrderText(text);
       if (order && layout) {
@@ -89,7 +104,7 @@ export async function createRecognizer(progress = () => {}, {
           layout = rows.map(row => row.join('\t')).join('\n');
         } finally { await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '3' }); }
       }
-      if (refineRailDate && !order && /限乘|当日当次|车次|二等座|一等座|硬[卧座]|软[卧座]/.test(text)) {
+      if (refineRailDate && !order) {
         const rectangle = dateRectangle(data.tsv, image.width || Infinity, image.height || Infinity);
         if (rectangle) {
           try {
@@ -97,42 +112,22 @@ export async function createRecognizer(progress = () => {}, {
             const refined = await worker.recognize(image, { rectangle });
             const date = readPrintedDate(refined.data.text);
             if (date && refined.data.confidence >= 45) text = `日期：${date}\n` + text;
-          } finally { await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '3' }); }
+          } catch { /* Keep the full-ticket read if the date crop fails. */ }
+          finally { await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '3' }); }
         }
       }
-      let supplementalText='';
-      if(isFlightScreenshotText(text)){
-        try{
-          const prepared=await prepareFlightScreenshot(image);
-          if(prepared){
-            const recovered=await worker.recognize(prepared,{}, {text:true,tsv:true});
-            await refineFlightSchedule(worker,prepared,recovered.data);
-            if(/(?:[A-Z]{2}|[A-Z]\d|\d[A-Z])\s*\d{2,5}/i.test(recovered.data.text)){
-              supplementalText=text;
-              try{const alternative=await prepareFlightScreenshot(image,{preserveEdges:false});if(alternative)supplementalText+='\n'+(await worker.recognize(alternative)).data.text;}catch{ /* The primary read is still usable. */ }
-              text=isFlightScreenshotText(recovered.data.text)?recovered.data.text:'行程详情\n'+recovered.data.text;layout=recovered.data.tsv||'';
-            }
-          }
-        }catch{ /* Keep the original read if contrast recovery is unavailable. */ }
-      }
-      const boardingReadings=[],boardingCodes=await codeRead;
-      const rail=/限乘|当日当次|二等座|一等座|硬[卧座]|软[卧座]|报销凭证/.test(text);
-      if(boardingCodes.length || type==='flight' || !rail&&!isRailOrderText(text)&&!isFlightScreenshotText(text)&&(isBoardingPassText(text)||text.trim().length<80||data.confidence<60)){
-        try{
-          await worker.setParameters({tessedit_pageseg_mode:'11'});
-          const extra=await worker.recognize(image,{}, {text:true,tsv:true});
-          boardingReadings.push({text:extra.data.text,layout:extra.data.tsv||'',confidence:extra.data.confidence});
-        }catch{ /* A failed secondary read does not discard the original. */ }
-        finally{await worker.setParameters({tessedit_pageseg_mode:'3'});}
-      }
-      const confidence=Math.max(data.confidence,...boardingReadings.map(read=>read.confidence),boardingCodes.length?90:0);
-      return { text, layout, supplementalText, boardingReadings, boardingCodes, confidence };
+      return { text, layout, paperColor, railImage: true, confidence: data.confidence };
     },
     terminate: () => worker.terminate()
   };
 }
 export async function recognize(file, progress = () => {}, { details = false } = {}) {
-  const worker = await createRecognizer(progress);
-  try { const result = await worker.recognize(file, { refineRailDate: true }); return details ? result : result.text; }
+  const decodedBoardingCodes = readBoardingCodes(file).catch(() => []);
+  const worker = await createRecognizer(progress).catch(async error => {
+    if (!(await decodedBoardingCodes).length) throw error;
+    return null;
+  });
+  if (!worker) return details ? { text: '', flightImage: true, boardingCodes: await decodedBoardingCodes, confidence: 90 } : '';
+  try { const result = await worker.recognize(file, { refineRailDate: true, decodedBoardingCodes }); return details ? result : result.text; }
   finally { await worker.terminate(); }
 }

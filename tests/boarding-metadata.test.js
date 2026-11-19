@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readBCBP} from '../src/bcbp-reader.js';
 import {readBoardingCode} from '../src/bcbp.js';
-import {parsePrintedBoardingPass} from '../src/boarding-pass.js';
+import {boardingScanRecords} from '../src/boarding-pass.js';
 import {createRecord,archive,readArchive,applyImport} from '../src/model.js';
 import {barcodeFieldLocked} from '../src/barcode-fields.js';
 import {boardingJourneyMarkup,boardingMetadataDetails} from '../src/boarding-details.js';
@@ -22,9 +22,9 @@ test('standard optional sections and up to four legs remain separate with strict
 });
 
 test('one barcode creates distinct linked records, preserves unknown years and never copies OCR times to another leg',()=>{
-  const code=multilegCode(),rows=parsePrintedBoardingPass('BOARDING PASS\nFLIGHT CA1234\nDATE 2024-12-31\nBOARDING 17:30\nDEPARTURE 19:00','fixture',{boardingCodes:[code]});
+  const code=multilegCode(),rows=boardingScanRecords('fixture',{boardingCodes:[code],boardingTime:'17:30'});
   assert.equal(rows.length,2);assert.equal(rows[0].boardingLegIndex,'0');assert.equal(rows[1].boardingLegIndex,'1');assert.equal(rows[1].departureDate.year,null);assert.equal(rows[1].departureDate.dayOfYear,1);assert.equal(rows[1].departureTime,'');assert.equal(rows[1].boardingTime,'');assert.equal(rows[1].actualBoardingTime,'');
-  assert.equal(rows[0].actualBoardingTime,'18:21');assert.equal(rows[0].boardingTime,'17:30');assert.equal(rows[0].checkedBaggageCount,'2');assert.equal(rows[0].baggageTagNumbers,'0123456789–0123456790');assert.equal(rows[1].frequentFlyerCarrier,'CA');
+  assert.equal(rows[0].actualBoardingTime,'18:21');assert.equal(rows[0].boardingTime,'');assert.equal(rows[0].departureDate.year,null);assert.equal(rows[0].checkedBaggageCount,'2');assert.equal(rows[0].baggageTagNumbers,'0123456789–0123456790');assert.equal(rows[1].frequentFlyerCarrier,'CA');
   for(const key of ['actualBoardingTime','checkedBaggageCount','freeBaggageAllowance','frequentFlyerNumber','marketingCarrier'])assert.equal(barcodeFieldLocked(rows[0],key),true,key);
   const second=createRecord({...rows[1],departureDate:{year:2025,dayOfYear:1}});assert.equal(calendarDate(second.departureDate),'2025-01-01');assert.equal(readBoardingCode(second.boardingCode,second.boardingLegIndex).service,'UA857');
   assert.equal(applyImport(rows,rows).records.length,2);assert.equal(readArchive(archive([second]))[0].frequentFlyerNumber,second.frequentFlyerNumber);

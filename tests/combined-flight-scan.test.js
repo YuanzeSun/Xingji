@@ -7,6 +7,8 @@ import {parseScanText,scanCandidate,createScanConsensus} from '../src/scan-engin
 import {barcodeFieldLocked} from '../src/barcode-fields.js';
 import {archive,readArchive} from '../src/model.js';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
+import {multilegCode} from './helpers/multileg-boarding-code.js';
+import {plannedBoardingTime} from '../src/boarding-pass.js';
 
 const values={passenger:'EXAMPLE/TRAVELER',pnr:'ABC123',origin:'JFK',destination:'LHR',carrier:'BA',flightNumber:'321',date:'2026-05-18',cabin:'Y',seat:'12A',sequence:'42',status:'1',electronic:''};
 const code=()=>createBoardingCode(values);
@@ -29,7 +31,7 @@ test('a reported OCR language-load error rejects initialization instead of hangi
   }), error => /文字识别模型未能加载/.test(error.message) && error.cause === failure);
 }));
 
-test('OCR and barcode recognition start together and produce one locked barcode record with editable OCR supplements',async()=>withImage(async image=>{
+test('image scans use decoded boarding data and only supplement the scheduled boarding time with OCR',async()=>withImage(async image=>{
   let finishOCR,finishCode,reads=0,terminated=false,settled=false;const started=[];
   const engine=await createRecognizer(()=>{},{workerFactory:async()=>({setParameters:async()=>{},recognize:async()=>{started.push('ocr');if(++reads===1)return new Promise(resolve=>{finishOCR=resolve;});return {data:{text,confidence:95,tsv:''}};},terminate:async()=>{terminated=true;}}),readCodes:async source=>{assert.equal(source,image);started.push('barcode');return new Promise(resolve=>{finishCode=resolve;});}});
   try{
@@ -38,10 +40,13 @@ test('OCR and barcode recognition start together and produce one locked barcode 
     finishOCR({data:{text,confidence:95,tsv:''}});await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false,'OCR cannot finish the combined scan before the barcode is checked');
     finishCode([code()]);const recognized=await pending,record=scanCandidate(recognized.text,recognized.confidence,'flight',recognized);
     assert.equal(record.service,'BA321');assert.equal(record.passenger,'EXAMPLE/TRAVELER');assert.equal(record.originCode,'JFK');assert.equal(record.destinationCode,'LHR');assert.equal(record.seat,'12A');assert.equal(record.seatClass,'Y');assert.equal(record.airline,'英国航空');
-    assert.equal(calendarDate(record.departureDate),'2026-05-18');assert.equal(record.fieldSources.departureDate,'barcode');
-    assert.equal(record.departureTime,'10:35');assert.equal(record.boardingTime,'09:55');assert.equal(record.gate,'B2');assert.equal(record.identity,'P000001');assert.equal(record.ticketNumber,'1230000000002');assert.equal(record.terminal,'T1');assert.equal(record.price,'640');assert.equal(record.aircraft,'A320');
+    assert.equal(calendarDate(record.departureDate),'');assert.equal(record.departureDate.dayOfYear,138);assert.equal(record.fieldSources.departureDate,'barcode');
+    assert.equal(record.boardingTime,'09:55');
     for(const key of ['passenger','service','origin','destination','originCode','destinationCode','seat','seatClass','pnr','airline'])assert.equal(barcodeFieldLocked(record,key),true,key);
-    for(const key of ['departureTime','boardingTime','gate','identity','ticketNumber','terminal','price','aircraft']){assert.equal(barcodeFieldLocked(record,key),false,key);assert.equal(record.fieldSources[key],'ocr',key);}
+    assert.equal(barcodeFieldLocked(record,'boardingTime'),false);assert.equal(record.fieldSources.boardingTime,'ocr');
+    for(const key of ['departureTime','gate','identity','ticketNumber','terminal','price','aircraft']){
+      assert.equal(record[key],'',key);assert.equal(record.fieldSources[key],undefined,key);
+    }
     assert.equal(record.boardingCodeSource,'original');assert.equal(record.boardingCode.format,'PDF417');assert.equal(readBoardingCode(record.boardingCode).service,'BA321');
     const saved = readArchive(archive([record]))[0];
     assert.equal(saved.boardingCodeSource,'original');
@@ -50,16 +55,30 @@ test('OCR and barcode recognition start together and produce one locked barcode 
   }finally{await engine.terminate();assert.equal(terminated,true);}
 }));
 
-test('either recognition path can fail independently; unreadable OCR never prevents adopting a verified barcode',async()=>withImage(async image=>{
+test('an unreadable barcode does not fall back to OCR for other fields and a valid barcode survives OCR failure',async()=>withImage(async image=>{
   for(const failure of ['barcode','ocr']){
     const engine=await createRecognizer(()=>{},{workerFactory:async()=>({setParameters:async()=>{},recognize:async()=>{if(failure==='ocr')throw new Error('OCR unavailable');return {data:{text:'BOARDING PASS\nFLIGHT: BA321\nFROM: JFK\nTO: LHR\nSEAT: 12A',confidence:95,tsv:''}};},terminate:async()=>{}}),readCodes:async()=>{if(failure==='barcode')throw new Error('Barcode unavailable');return [code()];}});
     try{
       const recognized=await engine.recognize(image,{type:'flight'}),record=scanCandidate(recognized.text,recognized.confidence,'flight',recognized);
-      assert.equal(record.service,'BA321');assert.equal(calendarDate(record.departureDate),'');
-      assert.equal(!!record.boardingCode,failure==='ocr');assert.equal(barcodeFieldLocked(record,'service'),failure==='ocr');
+      if(failure==='barcode') assert.equal(record,null);
+      else {
+        assert.equal(record.service,'BA321');assert.equal(calendarDate(record.departureDate),'');
+        assert.ok(record.boardingCode);assert.equal(barcodeFieldLocked(record,'service'),true);
+      }
     }finally{await engine.terminate();}
   }
 }));
+
+test('planned boarding time is kept separate from departure, gate closure and actual boarding',()=>{
+  assert.equal(plannedBoardingTime('BOARDING TIME   DEPARTURE TIME\n09:55 10:35'),'09:55');
+  assert.equal(plannedBoardingTime('计划登机时间 09:55\n实际登机时间 10:07'),'09:55');
+  assert.equal(plannedBoardingTime('ACTUAL BOARDING TIME 10:07\nGATE CLOSES 10:20\nDEPARTURE TIME 10:35'),'');
+  const records=parseScanText(text,'photo',{
+    flightImage:true,boardingCodes:[multilegCode()],scheduledBoardingTime:'09:55'
+  });
+  assert.equal(records.length,2);
+  assert.ok(records.every(record=>!record.boardingTime));
+});
 
 test('a confirmed flight code is considered even when high-confidence OCR resembles a history screenshot',async()=>withImage(async image=>{
   let codeReads=0;
@@ -68,13 +87,13 @@ test('a confirmed flight code is considered even when high-confidence OCR resemb
   finally{await engine.terminate();}
 }));
 
-test('barcode Chinese fields take precedence while printed Chinese names supplement English-only domestic BCBP',()=>{
+test('both Chinese and English passenger names come from the barcode only',()=>{
   const bytes=new TextEncoder().encode(taggedBoardingPayload());bytes[22]=32;
   const tagged={...code(),rawBytes:btoa(String.fromCharCode(...bytes))};
   const [record]=parseScanText('BOARDING PASS\n姓名: 李四\nGATE: B2\nBOARDING TIME: 17:30','synthetic',{boardingCodes:[tagged]});
   assert.equal(record.passenger,'张三');assert.equal(record.gate,'A101');assert.equal(record.boardingTime,'17:30');assert.equal(barcodeFieldLocked(record,'passenger'),true);assert.equal(barcodeFieldLocked(record,'gate'),true);assert.equal(barcodeFieldLocked(record,'boardingTime'),false);
   const domestic=createBoardingCode({...values,passenger:'ZHANG/SAN',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234'});
-  const [printed]=parseScanText('BOARDING PASS\n姓名: 张三','synthetic',{boardingCodes:[domestic]});assert.equal(printed.passenger,'张三');assert.equal(printed.fieldSources.passenger,'ocr');assert.equal(barcodeFieldLocked(printed,'passenger'),false);
+  const [printed]=parseScanText('BOARDING PASS\n姓名: 张三','synthetic',{boardingCodes:[domestic]});assert.equal(printed.passenger,'ZHANG/SAN');assert.equal(printed.fieldSources.passenger,'barcode');assert.equal(barcodeFieldLocked(printed,'passenger'),true);
 });
 
 test('different codes for the same flight are not combined or accepted as matching camera frames',()=>{
@@ -84,8 +103,8 @@ test('different codes for the same flight are not combined or accepted as matchi
   assert.equal(consensus.observe(a,90),null);assert.equal(consensus.observe(b,90),null);assert.equal(consensus.observe(b,90).seat,'14B');
 });
 
-test('the primary printed year is kept when secondary OCR disagrees, and an absent year remains unknown',()=>{
-  const [record]=parseScanText('BOARDING PASS\nDATE: 19MAY2026','synthetic',{boardingCodes:[code()],boardingReadings:[{text:'BOARDING PASS\nDATE: 18MAY2025'}]});
-  assert.equal(calendarDate(record.departureDate),'2026-05-18');assert.equal(record.fieldSources.departureDate,'barcode');assert.equal(barcodeFieldLocked(record,'departureDate'),false);
+test('the year remains unknown even if the photo contains a full date',()=>{
+  const [record]=parseScanText('BOARDING PASS\nDATE: 19MAY2026','synthetic',{boardingCodes:[code()]});
+  assert.equal(calendarDate(record.departureDate),'');assert.equal(record.fieldSources.departureDate,'barcode');assert.equal(barcodeFieldLocked(record,'departureDate'),false);
   const [undated]=parseScanText('BOARDING PASS\nDATE: 18MAY','synthetic',{boardingCodes:[code()]});assert.equal(calendarDate(undated.departureDate),'');assert.equal(barcodeFieldLocked(undated,'departureDate'),false);
 });

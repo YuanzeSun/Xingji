@@ -138,5 +138,5 @@ test('split station words are joined without mixing in the large clock on the fo
 
 test('other ticket formats continue through their own parsers', () => {
   assert.equal(parseRailOrder('G103 二等座 日期:2026-11-15'), null);
-  assert.equal(parseScanText('中国东方航空 登机牌 BOARDING PASS\n日期:2026-11-15 航班:MU5403\n出发:SHA 到达:TFU')[0].type, 'flight');
+  assert.deepEqual(parseScanText('中国东方航空 登机牌 BOARDING PASS\n日期:2026-11-15 航班:MU5403\n出发:SHA 到达:TFU'), []);
 });

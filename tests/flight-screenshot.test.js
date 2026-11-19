@@ -2,10 +2,10 @@ import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseScanText } from '../src/scan-engine.js';
+import { parseFlightScreenshot } from '../src/flight-screenshot.js';
 import { parseText, parseSingleTicket, mapFlightResult } from '../src/importers.js';
 import { archive, readArchive, createRecord } from '../src/model.js';
 import { ticketSVG } from '../src/tickets.js';
-import { flightScreenshotPixels } from '../src/flight-screenshot-image.js';
 import { JSDOM } from 'jsdom';
 
 const detail=`航旅纵横
@@ -29,7 +29,7 @@ const detail=`航旅纵横
 const row=(text,left,top,width=100,height=24)=>`5\t1\t1\t1\t1\t1\t${left}\t${top}\t${width}\t${height}\t90\t${text}`;
 
 test('Umetrip details use the planned journey and keep aircraft metadata and visible masked values',()=>{
-  for(const read of [text=>parseScanText(text),text=>parseText(text),text=>[parseSingleTicket(text)]]){
+  for(const read of [text=>parseText(text),text=>[parseSingleTicket(text)]]){
     const records=read(detail);assert.equal(records.length,1);const r=records[0];
     assert.deepEqual([r.type,r.service,r.originCode,r.destinationCode],['flight','MF8123','PKX','XNN']);
     assert.deepEqual([calendarDate(r.departureDate),r.departureTime,r.arrivalTime],['2025-06-05','18:00','20:30']);
@@ -58,7 +58,7 @@ MU2544
 浦东机场T1   天河机场T3
 前序MU5103 预计11:20
 航班点评`;
-  const rows=parseScanText(text);
+  const rows=parseText(text);
   assert.deepEqual(rows.map(r=>r.service),['CZ381','CZ3706','MU2544']);
   assert.deepEqual(rows.map(r=>calendarDate(r.departureDate)),['','','2019-06-13']);
   assert.deepEqual(rows.map(r=>[r.originCode,r.destinationCode]),[['CAN','BNE'],['WUH','CAN'],['PVG','WUH']]);
@@ -68,23 +68,17 @@ MU2544
 
 test('OCR positions restore reversed columns and label-value tables without mistaking baggage weight for a seat or fare',()=>{
   const layout=[row('航旅纵横',30,20),row('MF8123',30,60),row('北京大兴-西宁草家堡T3',30,100,320),row('计划2025-06-0518:00-20:30',30,150,450),row('含税票价',30,210),row('座位号',250,210),row('已托运',500,210),row('1件9KG',500,250),row('GIA',250,250),row('100CNY',30,250),row('舱位经济舱(Z)',30,300),row('订座编号A1B2C3O',30,350)].reverse().join('\n');
-  const [r]=parseScanText('航旅纵横 MF8123','local',{layout,supplementalText:'0000*****1234 A1B2C3'});
+  const [r]=parseFlightScreenshot('航旅纵横 MF8123','text','local',{layout,supplementalText:'0000*****1234 A1B2C3'});
   assert.equal(r.service,'MF8123');assert.equal(r.destinationCode,'XNN');assert.equal(r.seat,'61A');assert.equal(r.price,'100');
   assert.equal(r.departureTime,'18:00');assert.equal(r.arrivalTime,'20:30');assert.equal(r.ticketNumber,'0000*****1234');assert.equal(r.pnr,'A1B2C3');
 });
 
 test('unknown dates, ambiguous cities and missing fields are left for review rather than invented',()=>{
-  const [r]=parseScanText('航旅纵横\nCA1234\n北京-上海\n06月05日\n18:00 20:30\n订座编号A1B2C3');
+  const [r]=parseText('航旅纵横\nCA1234\n北京-上海\n06月05日\n18:00 20:30\n订座编号A1B2C3');
   assert.equal(calendarDate(r.departureDate),'');assert.equal(r.originCode,'');assert.equal(r.destinationCode,'');
   assert.equal(r.aircraft,'');assert.equal(r.aircraftRegistration,'');assert.equal(r.seat,'');
-  const [overnight]=parseScanText('航旅纵横\nCA1234 2025-06-05\nPEK -> LHR\n23:00 06:30 +1天');
+  const [overnight]=parseText('航旅纵横\nCA1234 2025-06-05\nPEK -> LHR\n23:00 06:30 +1天');
   assert.equal(calendarDate(overnight.arrivalDate),'2025-06-06');
-});
-
-test('white text on colored screenshot headers and dark text on white cards both survive contrast recovery',()=>{
-  const data=new Uint8ClampedArray([20,80,200,255,20,80,200,255,245,245,245,255,20,80,200,255,255,255,255,255,100,100,100,255,255,255,255,255,255,255,255,255]);
-  const processed=flightScreenshotPixels({width:4,height:2,data});
-  assert.deepEqual([...processed.data].filter((_,i)=>i%4===0),[255,255,0,255,255,0,255,255]);
 });
 
 test('aircraft and registration survive backups and imports and render only when supplied in both boarding languages',()=>{
@@ -115,7 +109,7 @@ StH2025-06-0518:00-20:30
 100CNY   6G1A   1件9KG
 身份证000
 经济舱(Z)`;
-  const rows=parseScanText(text,'local',{supplementalText:'100CNY 61A 1件9KG\n波音737-85C(WL)\n编号B0000\n身份证(*000)'});
+  const rows=parseFlightScreenshot(text,'text','local',{supplementalText:'100CNY 61A 1件9KG\n波音737-85C(WL)\n编号B0000\n身份证(*000)'});
   assert.equal(rows.length,1);const r=rows[0];
   assert.deepEqual([r.service,r.originCode,r.destinationCode],['MF8123','PKX','XNN']);
   assert.deepEqual([calendarDate(r.departureDate),r.departureTime,r.arrivalTime],['2025-06-05','18:00','20:30']);

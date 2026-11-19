@@ -1,6 +1,7 @@
 import { openCameraStream, stopCameraStream } from './camera-stream.js';
 import { videoCrop, frameMetrics, frameMotion, frameQuality, scanCandidate, createScanConsensus } from './scan-engine.js';
-import { createRecord, DEFAULT_RAIL_TEMPLATE } from './model.js';
+import { createRecord } from './model.js';
+import { railTemplateFromText } from './rail-template.js';
 
 export { prepareScanImage } from './scan-image.js';
 
@@ -69,13 +70,13 @@ export function mountScanner(root, {
     try {
       const codes = await readBoardingFrame(canvas, ++boardingAttempts);
       if (!codes.length || disposed || request !== generation || requestedTypeEpoch !== typeEpoch || capturedFrame) return;
-      const candidate = scanCandidate('', 90, requestedType, { boardingCodes: codes });
+      const candidate = scanCandidate('', 90, requestedType, { boardingCodes: codes, flightImage: true });
       if (candidate?.boardingCodeSource !== 'original') return;
       capturedFrame = { canvas, codes, candidate };
       shutter.disabled = true;
       guide.classList.add('reading');
-      message('已读到登机牌条码，正在补全票面…');
-    } catch { /* The combined OCR pass can still attempt to read the frame. */ }
+      message('已读到登机牌码，正在识别计划登机时间…');
+    } catch { /* The next frame can be scanned or captured manually. */ }
     finally { if (request === generation) readingCode = false; }
   }
   async function recognize(capture, request) {
@@ -104,9 +105,10 @@ export function mountScanner(root, {
           : '可点击拍照识别，保留照片并补齐信息');
         return;
       }
-      const flight = requestedType === 'flight';
+      const flight = requestedType === 'flight' || requestedType === 'auto' && result?.flightImage;
       const record = confirmed || createRecord({
-        type: flight ? 'flight' : 'rail', template: flight ? 'air-boarding-pass' : DEFAULT_RAIL_TEMPLATE,
+        type: flight ? 'flight' : 'rail',
+        template: flight ? 'air-boarding-pass' : railTemplateFromText(result?.text, { paperColor: result?.paperColor }),
         sources: [{ kind: 'scan', label: '相机拍照' }], provenance: 'reconstruction'
       });
       const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('扫描图像未能生成，请重试')), 'image/png'));
@@ -138,7 +140,9 @@ export function mountScanner(root, {
         const quality = frameQuality(sample.metrics), motion = frameMotion(fingerprint, sample.metrics.fingerprint);
         fingerprint = sample.metrics.fingerprint;
         steady = !quality && motion <= 4.5 ? steady + 1 : 0;
-        if (worker && !busy && timestamp - lastRead >= AUTOMATIC_READ_INTERVAL) {
+        if (type === 'flight' && !busy && !capturedFrame) {
+          message('请将完整的登机牌条码或二维码放入框内');
+        } else if (worker && !busy && timestamp - lastRead >= AUTOMATIC_READ_INTERVAL) {
           if (sample.metrics.contrast > 2 && (steady >= 3 || timestamp - firstFrameAt >= STABILITY_WAIT)) {
             void recognize({ canvas: sample.snapshot(.06) }, request);
           } else if (lastRead === -Infinity) {
