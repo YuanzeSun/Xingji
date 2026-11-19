@@ -8,6 +8,7 @@ import {barcodeRequiredMark,boardingGeneratorMarkup,readBoardingGenerator,refres
 import {fieldSourceBadge,markFieldSources,refreshFieldSources} from './field-sources.js';
 import {readBoardingCode} from './bcbp.js';
 import {flightPassengerName} from './flight-passenger.js';
+import { bindIdentityInput, hasMaskedIdentity } from './identity.js';
 import {markManualFields,applyLookupValues,lookupContext,clearLookupValues} from './lookup-values.js';
 import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } from './arithmetic-confirm.js';
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
@@ -230,7 +231,7 @@ function captureConnectionDraft(form) {
 function d1ConnectionPanel() {
   const draft = state.d1Draft, bound = !!state.d1;
   const help = bothClouds()
-    ? 'D1 负责日常同步，GitHub 可手动备份。换设备时，登录任一账号即可恢复关联。两个账号需一起退出，届时会清除本机缓存。要解除关联，请在「重置仓库」中勾选「同时解除关联」，再选择继续使用哪边。'
+    ? '两边绑定后，新增和修改都保存到 D1。点击「立即备份到 GitHub」才会用 D1 的当前数据更新 GitHub。换设备时，登录任一账号都会打开同一份 D1 票库。'
     : !bound && state.config ? firstBindingHelp
     : !bound ? '部署行迹 Worker 后，填写 Worker 地址和访问凭证。' : '';
   const exit = bothClouds() ? '' : '<div class="button-row"><button class="text-button" type="button" data-action="disconnect-d1">退出 D1</button></div>';
@@ -256,8 +257,9 @@ function githubExtras() {
 }
 function cloudActions() {
   if (!hasCloud()) return '';
-  const exit = bothClouds() ? '<button class="text-button" type="button" data-action="disconnect-all">同时退出 GitHub 和 D1</button>' : '';
-  return `<div class="button-row">${exit}<button class="button danger" data-action="reset-repository">${state.archiveResetProgress ? '继续重置' : '重置仓库'}</button></div>`;
+  const exit = bothClouds() ? '<button class="button danger" type="button" data-action="disconnect-all">退出登录</button>' : '';
+  const help = exit ? '<p class="import-status">退出登录会同时退出两个账号并清除本机缓存，云端票据和关联仍会保留。要分开使用，请在「重置仓库」勾选「同时解除关联」。这会清空两边的票据，并让你选择本机继续使用哪边。</p>' : '';
+  return `<div class="button-row">${exit}<button class="button danger" data-action="reset-repository">${state.archiveResetProgress ? '继续重置' : '重置仓库'}</button></div>${help}`;
 }
 function authorCredit(className) {
   return `<span class="author-credit ${className}"><a href="https://github.com/YuanzeSun" target="_blank" rel="noopener noreferrer">by @YuanzeSun</a></span>`;
@@ -273,7 +275,7 @@ function guestDemoNotice() {
   return `<section class="guest-demo-notice" aria-label="示例模式提示"><div>${icon('info')}<p>正在体验<strong>示例模式</strong>，登录后即可开始记录自己的旅程。</p></div><button type="button" class="button primary" data-action="exit-demo">退出示例并登录${icon('arrow')}</button></section>`;
 }
 function connectionPage() {
-  return `<main class="cloud-setup"><div class="cloud-setup-brand">${icon('ticket')} 行迹</div><section class="guest-demo-entry" aria-labelledby="guest-demo-title"><div class="guest-demo-heading">${icon('ticket')}<strong id="guest-demo-title">体验示例模式</strong></div><p>直接浏览示例票据与行程。</p><button type="button" class="button primary" data-action="enter-demo">进入示例模式${icon('arrow')}</button></section><section class="panel"><h1>连接 GitHub</h1><p class="cloud-setup-description">GitHub 和 D1 都可单独使用。若两个账号已绑定，登录任一账号即可恢复两个连接，并从 D1 读取主票库。</p>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError || (!state.d1 && state.syncMessage) || '')}</p>${githubExtras()}${state.records.some(r => !r.deleted) ? '<button class="text-button" data-action="backup">导出本机票据</button>' : ''}</section>${d1ConnectionPanel()}${cloudActions()}${pageFooter()}</main>`;
+  return `<main class="cloud-setup"><div class="cloud-setup-brand">${icon('ticket')} 行迹</div><section class="guest-demo-entry" aria-labelledby="guest-demo-title"><div class="guest-demo-heading">${icon('ticket')}<strong id="guest-demo-title">体验示例模式</strong></div><p>直接浏览示例票据与行程。</p><button type="button" class="button primary" data-action="enter-demo">进入示例模式${icon('arrow')}</button></section>${d1ConnectionPanel()}<section class="panel"><h1>连接 GitHub</h1><p class="cloud-setup-description">GitHub 和 D1 都可单独使用。若两个账号已绑定，登录任一账号即可恢复两个连接，并从 D1 读取主票库。</p>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError || (!state.d1 && state.syncMessage) || '')}</p>${githubExtras()}${state.records.some(r => !r.deleted) ? '<button class="text-button" data-action="backup">导出本机票据</button>' : ''}</section>${cloudActions()}${pageFooter()}</main>`;
 }
 function connectionNotice() {
   if (!state.showDemo && state.archiveResetProgress) return '<div class="connection-notice" role="status"><div><strong>上次仓库重置尚未完成</strong></div><button class="button secondary small" data-action="resume-archive-reset">继续重置</button></div>';
@@ -314,7 +316,7 @@ function nav() {
 }
 function header(title, subtitle, actions = '') {
   const syncButton=className=>state.showDemo ? '' : `<button class="sync-button ${className}" data-action="sync" title="${e(syncLabel())}">${icon(state.syncing ? 'refresh' : 'cloud', state.syncing ? 'spin' : '')}<span>${e(syncLabel())}</span></button>`;
-  return `<div class="mobile-brand"><a href="#archive">${icon('ticket')} 行迹</a>${syncButton('')}</div><header class="page-header"><div><h1>${title}</h1>${subtitle ? '<p class="subtitle">' + subtitle + '</p>' : ''}</div><div class="header-actions">${syncButton('desktop-sync')}${demoToggle()}${actions}</div></header>`;
+  return `<div class="mobile-brand"><a href="#archive">${icon('ticket')} 行迹</a>${syncButton('')}</div><header class="page-header${state.page === 'archive' ? ' archive-page-header' : ''}"><div><h1>${title}</h1>${subtitle ? '<p class="subtitle">' + subtitle + '</p>' : ''}</div><div class="header-actions">${syncButton('desktop-sync')}${demoToggle()}${actions}</div></header>`;
 }
 const archiveSelected = new Set();
 function selectedArchiveRecords() {
@@ -457,7 +459,7 @@ function flightSettingsPanel() {
 function dataPage() {
   const count = state.records.filter(r => !r.deleted).length;
   return header('数据与同步', '管理个人资料、同步与外部连接。') + `<div class="data-layout">${personalProfilePanel(state.profileDraft || state.settings.profile,state.profileError)}
-    <div class="data-column"><section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h2>GitHub 私有仓库</h2><p data-cloud-label>${state.d1 ? '手动备份' : e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError)}</p>${githubExtras()}</section>${d1ConnectionPanel()}</div>
+    <div class="data-column">${d1ConnectionPanel()}<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h2>GitHub 私有仓库</h2><p data-cloud-label>${state.d1 ? '手动备份' : e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError)}</p>${githubExtras()}</section></div>
     <aside class="data-column">${flightSettingsPanel()}
     <section class="panel quiet-panel"><h3>${icon('ticket')}随身票夹</h3><p>在手机浏览器中选择“添加到主屏幕”，即可像应用一样打开。已有票据可离线查看。</p>${installPrompt ? '<button class="button secondary" data-action="install">安装行迹</button>' : ''}</section></aside>
     <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button></div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div><div data-restore-followup>${backupRestoreMarkup()}</div>${queuedBackupButton()}${cloudActions()}</section>
@@ -593,7 +595,10 @@ function bindPage() {
     if (!state.profileDirty) state.profileBase = clone(state.settings);
     state.profileDraft = profile; state.profileDirty = true;
   };
-  bindPersonalProfileForm(root.querySelector('#profile-form'),{change:updateProfileDraft,restructure:profile=>{updateProfileDraft(profile);render();},submit:savePersonalProfile});
+  bindPersonalProfileForm(root.querySelector('#profile-form'), {
+    documents: (state.profileDraft || state.settings.profile)?.documents,
+    change: updateProfileDraft, restructure: profile => { updateProfileDraft(profile); render(); }, submit: savePersonalProfile
+  });
   for (const id of ['import-files', 'camera-file']) document.querySelector('#' + id)?.addEventListener('change', event => handleFiles([...event.target.files]));
   const picker = root.querySelector('#import-json-file');
   if (picker) {
@@ -678,7 +683,7 @@ function field(key, r, options = {}) {
   if (key === 'seat' && r.type === 'rail') return seatField(r);
   const type = options.type || (['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime', 'actualBoardingTime'].includes(key) ? 'time' : 'text');
   const airportField = r.type === 'flight' && ['origin', 'destination', 'originCode', 'destinationCode'].includes(key);
-  const placeholders = { railBureau: '如：上海局', railModel: '如：25T、CR400BF-S', railPowerSupply:'如：DC600V、AC380V', railMileage:'如：1463', departureDate: '如 2026-11-15', arrivalDate: '如 2026-11-15', origin: r.type === 'rail' ? '如：北京南' : '如：PEK / 北京首都', destination: r.type === 'rail' ? '如：上海虹桥' : '如：HND / 东京羽田', service: r.type === 'rail' ? '如：G103' : '如：CA181', originCode: r.type === 'rail' ? '如：Beijingnan' : '如：PEK', destinationCode: r.type === 'rail' ? '如：Shanghaihongqiao' : '如：HND', identity: '完整号码或含 * 的号码', departureZone: '如：Asia/Shanghai', arrivalZone: '如：Asia/Tokyo' };
+  const placeholders = { railBureau: '如：上海局', railModel: '如：25T、CR400BF-S', railPowerSupply:'如：DC600V、AC380V', railMileage:'如：1463', departureDate: '如 2026-11-15', arrivalDate: '如 2026-11-15', origin: r.type === 'rail' ? '如：北京南' : '如：PEK / 北京首都', destination: r.type === 'rail' ? '如：上海虹桥' : '如：HND / 东京羽田', service: r.type === 'rail' ? '如：G103' : '如：CA181', originCode: r.type === 'rail' ? '如：Beijingnan' : '如：PEK', destinationCode: r.type === 'rail' ? '如：Shanghaihongqiao' : '如：HND', identity: '请输入完整证件号', departureZone: '如：Asia/Shanghai', arrivalZone: '如：Asia/Tokyo' };
   const required = requiredTicketFields(r.type, r.template, r.flightStatus).includes(key) || ['type', 'template'].includes(key);
   const requiredAttrs = required ? 'required aria-required="true"' : '';
   if(JOURNEY_DATE_FIELDS.includes(key))return ticketDateField(key,r,{label:ticketFieldLabel(key,r.type,labels[key]),required});
@@ -750,6 +755,7 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
   setImportReference(entry?.image);
   if (entry) imports.review = 'reviewing';
   const original = clone(originalOverride || record), draft = normalizePlaces(clone(record));
+  if (hasMaskedIdentity(draft.identity)) draft.identity = '';
   if(draft.type==='flight' && draft.boardingCodeSource==='original')draft.passenger=flightPassengerName(draft,readBoardingCode(draft.boardingCode,draft.boardingLegIndex) || {});
   const generatorSettings = preserve && draft.type==='flight' ? readBoardingGenerator(modalRoot) : undefined;
   draft.flightStatus = draft.type === 'flight' ? normalizeFlightStatus(draft.flightStatus) : '';
@@ -762,6 +768,7 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
   openModal(modalHead(importIndex !== null ? '核对这张票据' : state.records.some(r => r.id === draft.id) ? '编辑票据' : '添加一张票据', '红色 * 为保存票据必填') + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${field('type', draft, { options: [['rail', '火车票'], ['flight', '机票']] })}${flight ? '<input type="hidden" name="template" value="air-boarding-pass" />' : field('template', {...draft,template:isRefundReceipt(draft) ? 'rail-receipt' : draft.template}, { options: Object.entries(TEMPLATES).filter(([id]) => id !== 'rail-refund-receipt' && id.startsWith('rail-')).sort(([a],[b]) => Number(b === DEFAULT_RAIL_TEMPLATE) - Number(a === DEFAULT_RAIL_TEMPLATE)) })}${!flight && ['rail-receipt','rail-refund-receipt'].includes(draft.template) ? '<label class="checkbox-row receipt-refund-switch"><input type="checkbox" data-refund-receipt ' + (isRefundReceipt(draft) ? 'checked' : '') + ' />退票费凭证' + fieldSourceBadge('template',draft) + '</label>' : ''}${flight ? field('flightStatus', draft, { options: Object.entries(FLIGHT_STATUSES) }) + ticketCodeEditor(draft,!!localFileURL,'',{generator:false}) : ''}${basics.map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ticketCodeEditor(draft, !!localFileURL)}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div><p class="fine-print"></p>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div><div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="close-modal">取消</button><span class="save-note">${icon('database')}保存票据</span><div class="spacer"></div><button class="button primary" type="submit">${icon('check')}保存票据</button></div></form>`, true);
   // openModal replaces the DOM, but keeps the editor state deliberately.
   const form = document.querySelector('#editor-form');
+  bindIdentityInput(form.elements.identity);
   bindTicketDates(form,()=>draft);
   form.elements.type.toggleAttribute('data-transport-fixed', typeFixed);
   form.elements.type.disabled = typeFixed;
@@ -1009,6 +1016,10 @@ function addCandidates(entries, { batch = false, task } = {}) {
   imports.entries.push(...entries);
   imports.batch = imports.batch || batch || imports.entries.length > 1;
   entries.forEach(({ record }, index) => {
+    if (hasMaskedIdentity(record.identity)) {
+      record.identity = '';
+      markFieldSources(record, ['identity'], 'ocr');
+    }
     if (!missingTicketFields(record).length) imports.selected.add(offset + index);
   });
   if (mayOpenImport(task)) openCandidateReview();
@@ -1123,7 +1134,8 @@ function reviewFullBackup(backup, context) {
       render();
       toast(savedMessage('已恢复票库和设置'));
       if (isArchiveContext(context)) {
-        backupRestoreOffer = state.syncMeta.pending ? { ...context, connections: backup.connections } : null;
+        backupRestoreOffer = state.syncMeta.pending
+          ? { ...context, revision: state.syncMeta.revision, connections: backup.connections } : null;
         if (!backupRestoreOffer) offerBackupConnection(backup.connections);
         renderSyncState();
       }
@@ -1237,7 +1249,9 @@ async function restoreLinkedD1(captured, github, snapshot) {
   }
   if (wasUnlinked(remote)) throw new Error('D1 关联已解除，请直接登录 D1。');
   assertLinkTargets(github, { config }, snapshot, remote);
-  useSnapshot(await activateD1(captured, config, remote, { credential, github, cloudLinkReady: true }));
+  useSnapshot(await activateD1(captured, config, remote, {
+    credential, github, cloudLinkReady: !!sameGitHubAccount(pairedGitHub(remote, config), github.config)
+  }));
   state.connectionStatus = 'online';
   state.resetRequest = null;
   state.d1Replacement = null;
@@ -1382,10 +1396,9 @@ async function connectD1(form) {
 }
 async function backupGitHub() {
   if (!state.d1 || !state.config?.id || !token() || !canWrite() || state.saving || state.githubBackingUp) return;
-  const { d1, config } = state, object = `${config.owner}/${config.repo}`;
+  const { d1, config } = state;
   state.githubBackingUp = true; render();
   try {
-    if (!await requireArithmetic('备份到 GitHub', `用 D1 当前的票据、个人资料、MCP 和账号设置覆盖 ${object} 中的行迹数据。凭证会进入 Git 历史。`, '确认备份')) return;
     const { changed } = await withCloudLock(async () => {
       const captured = await readSyncState();
       if (activeBinding(captured) !== activeBinding({ d1, config }) || !sameGitHubAccount(captured.config, config) || captured.meta.pending || captured.archiveResetProgress || !canWrite() || state.saving) throw new Error('云端状态已变化，请重新发起备份');
@@ -1436,10 +1449,12 @@ async function clearCloudSession() {
 async function disconnectCloud() {
   if (state.connecting || state.saving || state.resetting || state.githubBackingUp) return;
   const paired = bothClouds();
+  const pending = state.syncMeta.pending ? '待同步的修改也会从本机清除。' : '';
+  if (!window.confirm((paired ? '退出 GitHub 和 D1？' : '退出登录？') + '本机会清除票库缓存。' + pending)) return;
   invalidateCloudSession();
   await withCloudLock(clearCloudSession);
   render();
-  toast(paired ? '已同时退出 GitHub 和 D1' : '已退出，本机票库已清空');
+  toast(paired ? '已退出两个账号并清除本机缓存' : '已退出，本机票库已清空');
 }
 async function doSync(resolutions = {}, { retryRejected = false } = {}) {
   if (state.resetting || state.archiveResetProgress) return false;
@@ -1568,9 +1583,11 @@ async function discardRejectedChanges() {
       !confirm('撤回本机待同步的修改？票夹会恢复到上次确认的版本。')) return;
   const captured = { config: state.config, d1: state.d1, meta: state.syncMeta };
   await withCloudLock(async () => {
-    useSnapshot(await discardRejectedChange(captured));
+    const snapshot = await discardRejectedChange(captured);
+    backupRestoreOffer = null;
+    useSnapshot(snapshot);
     state.connectionStatus = 'checking';
-    announce();
+    announce({ discardedChange: { binding: activeBinding(snapshot), revision: snapshot.meta.revision } });
   });
   render();
   await doSync();
@@ -1618,7 +1635,7 @@ async function showArchiveReset(manual = false) {
   const challenge = createArithmeticChallenge(), remoteReset = request.code === 'ARCHIVE_RESET';
   openModal(modalHead(remoteReset ? '采用新票库' : title) + archiveResetMarkup(request, captured, challenge));
   const form = modalRoot.querySelector('[data-archive-reset]'), submit = form.querySelector('[type="submit"]');
-  let d1Attempted = false;
+  let d1ResetId;
   const unlinkOption = form.elements['unlink-clouds'], keepOptions = form.querySelector('[data-keep-cloud]');
   unlinkOption?.addEventListener('change', () => {
     keepOptions.hidden = keepOptions.disabled = !unlinkOption.checked;
@@ -1657,9 +1674,9 @@ async function showArchiveReset(manual = false) {
         let latest = await d1.read();
         const before = request.d1Snapshot;
         if (latest.head === before.head) {
-          d1Attempted = true;
-          latest = await d1.replace(before, [], before.settings);
-        } else if (!d1Attempted || latest.generation === before.generation ||
+          d1ResetId ||= crypto.randomUUID();
+          latest = await d1.replace(before, [], before.settings, { resetId: d1ResetId });
+        } else if (!d1ResetId || latest.head !== d1ResetId || latest.generation !== d1ResetId ||
             latest.records.length || !sameSettings(latest.settings, before.settings)) {
           throw new Error('D1 票库已有变化，请关闭窗口后重新确认');
         }
@@ -1971,6 +1988,9 @@ channel?.addEventListener('message', async event => {
     const snapshot = await readSyncState({ session: true });
     const previous = { binding: activeBinding(state), github: state.config, token: token(), d1Token: d1Token() };
     const clearView = event.data?.clearView;
+    const discarded = event.data?.discardedChange;
+    if (backupRestoreOffer && discarded?.binding === backupRestoreOffer.binding &&
+        backupRestoreOffer.revision < discarded.revision) backupRestoreOffer = null;
     const resetChanged = state.archiveResetProgress?.id !== snapshot.archiveResetProgress?.id;
     const rejectionChanged = state.syncMeta.rejection !== snapshot.meta.rejection;
     if (clearView) {

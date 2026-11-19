@@ -86,4 +86,12 @@ test('D1 whole replacements are atomic and stale clients cannot delete or overwr
   assert.equal((await store.read()).generation, current.generation);
   await assert.rejects(store.write([], current, sharedSettings()), { status: 409 });
   assert.deepEqual((await store.read()).records.map(row => row.id), ['new', 'old']);
+  const resetId = crypto.randomUUID(), beforeReset = await store.read();
+  await assert.rejects(store.replace(beforeReset, [replacement], beforeReset.settings, { resetId }), { status: 400 });
+  await assert.rejects(store.replace(beforeReset, [], beforeReset.settings, { resetId: 'bad-id' }), { status: 400 });
+  const reset = await store.replace(beforeReset, [], beforeReset.settings, { resetId });
+  assert.equal(reset.head, resetId);
+  assert.equal(reset.generation, resetId);
+  await assert.rejects(store.replace(reset, [], reset.settings, { resetId }), { status: 400 });
+  assert.deepEqual(await store.read(), reset);
 });

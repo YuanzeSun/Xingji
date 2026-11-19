@@ -26,6 +26,7 @@ test('the app saves generated code edits immediately, persists provenance, and k
     for(const key of ['type','flightStatus','offsetX','offsetY'])assert.equal(document.querySelector(`[name="${key}"]`).closest('.field').querySelector('[data-field-source]'),null,key);
     assert.equal(document.querySelector('[data-field-source="seat"]').textContent,'手动输入');assert.doesNotMatch(document.querySelector('#editor-form').textContent,/已手动校正/);
     assert.match(document.querySelector('[data-code-editor] h3').textContent,/登机牌条码或电子登机牌二维码/);
+    assert.equal(document.querySelector('[data-code-examples]').hidden, true);
     assert.equal(document.querySelector('[name="template"]').type,'hidden');
     assert.ok(document.querySelector('[data-code-editor]').compareDocumentPosition(document.querySelector('[name="origin"]')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
     assert.ok(document.querySelector('[name="pnr"]').compareDocumentPosition(document.querySelector('[data-bcbp-generator]')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
@@ -49,6 +50,11 @@ test('the app saves generated code edits immediately, persists provenance, and k
     saved=server.records().find(record=>record.id==='original');assert.equal(saved.seat,'12A');assert.deepEqual(saved.boardingCode,original.boardingCode);assert.equal(saved.boardingCodeSource,'original');
     await open('original');assert.equal(document.querySelector('[name="type"]').disabled,true);assert.equal(document.querySelector('[name="service"]').readOnly,true);assert.equal(document.querySelector('[data-seat-preset]').disabled,true);assert.equal(document.querySelector('[name="departureDate"]').readOnly,false);
     document.querySelector('#code-remove').click();assert.equal(document.querySelector('[name="type"]').disabled,true);assert.equal(document.querySelector('[name="service"]').readOnly,false);assert.equal(document.querySelector('[data-seat-preset]').disabled,false);
+    const examples = document.querySelector('[data-code-examples]');
+    assert.equal(examples.hidden, false);
+    assert.match(examples.textContent, /纸质登机牌 · PDF417/);
+    assert.match(examples.textContent, /电子登机牌 · 二维码/);
+    assert.equal(examples.querySelectorAll('svg').length, 2);
     fill('seat','30C');submit();await wait(()=>!document.querySelector('dialog'));saved=server.records().find(record=>record.id==='original');assert.equal(saved.seat,'30C');assert.equal(saved.boardingCode,'');
   }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();}
 });

@@ -66,9 +66,10 @@ export class D1Store {
     } })).head;
   }
 
-  async replace(snapshot, records, settings) {
+  async replace(snapshot, records, settings, { resetId } = {}) {
     const result = await this.request({ body: {
-      id: snapshot.id, head: snapshot.head, records: records.map(validateRecord), removed: [], settings: sharedSettings(settings), replace: true
+      id: snapshot.id, head: snapshot.head, records: records.map(validateRecord), removed: [], settings: sharedSettings(settings), replace: true,
+      ...(resetId ? { resetId } : {})
     } });
     return { ...result, records, settings };
   }

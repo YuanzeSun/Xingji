@@ -1,5 +1,5 @@
 import * as db from './db.js';
-import { applyImport, clone, deduplicateRecords, mergeThreeWay, now, sameRecords } from './model.js';
+import { applyImport, clone, deduplicateRecords, mergeThreeWay, now, railDuplicateChanges, sameRecords } from './model.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings } from './shared-settings.js';
 import { upgradeCodeRecords, hasLegacyCodes } from './code-upgrade.js';
 
@@ -138,7 +138,8 @@ function stageChange(config, d1, change) {
 function mergedRecords(expected, proposed, current) {
   const { records, conflicts } = mergeThreeWay(expected, proposed, current);
   if (conflicts.length) throw new Error('另一标签页已修改同一处，请保留当前输入并重新打开票据核对');
-  return deduplicateRecords(records);
+  const recheckIds = new Set(railDuplicateChanges(current, records).map(record => record.id));
+  return deduplicateRecords(records, { recheckIds });
 }
 function mergedSettings(expected, proposed, current) {
   const { settings, conflicts } = mergeSettings(expected, proposed, current);

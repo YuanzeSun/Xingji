@@ -12,14 +12,27 @@ import { codeCameraMarkup, bindCodeCamera } from './code-camera.js';
 import { renderCodeData } from './barcode-data.js';
 import { normalizeTicketCode } from './ticket-code.js';
 import { normalizeBoardingCode } from './boarding-code.js';
+import { DEMO_BOARDING_CODE } from './demo-boarding-code.js';
+import { DEMO_TICKET_CODE } from './demo-code.js';
 import {boardingGeneratorMarkup,automaticBoardingCode,editBoardingGeneratorField,readBoardingGenerator,refreshBoardingGenerator,setBoardingGeneratorAvailability} from './boarding-code-generator.js';
 
 const configuration = record => record.type === 'flight' ? { field: 'boardingCode', title: '登机牌条码或电子登机牌二维码', normalize: normalizeBoardingCode } : { field: 'ticketCode', title: '二维码', normalize: normalizeTicketCode };
 const removable = (record,field) => !!record[field] && record.boardingCodeSource!=='generated';
 const thumbnail = (code, title) => code ? `${renderCodeData(code)}<span>已收录</span>` : `<span class="fine-print">尚未收录${title}</span>`;
+let boardingExamples;
+function boardingExamplesMarkup(hidden) {
+  boardingExamples ??= `<div class="boarding-code-sample"><span class="boarding-code-sample-image" aria-hidden="true">${renderCodeData(DEMO_BOARDING_CODE)}</span><span>纸质登机牌 · PDF417</span></div>
+    <div class="boarding-code-sample"><span class="boarding-code-sample-image" aria-hidden="true">${renderCodeData(DEMO_TICKET_CODE)}</span><span>电子登机牌 · 二维码</span></div>`;
+  return `<figure class="boarding-code-examples" data-code-examples ${hidden ? 'hidden' : ''}><figcaption>扫码示例</figcaption>${boardingExamples}</figure>`;
+}
 export function ticketCodeEditor(record, fromScan = false, prefix = '', {generator=true} = {}) {
   const { field, title, normalize } = configuration(record);
-  const markup = `<section data-code-editor data-code-prefix="${prefix}" class="editor-extra" id="code-editor"><h3>${title}${fieldSourceBadge(field,record)}</h3><div class="saved-code" id="saved-code">${thumbnail(normalize(record[field]), title)}</div><div class="code-actions">${fromScan ? '<button type="button" class="button small secondary" id="code-use-scan">读取本次图片中的码</button>' : ''}<button type="button" class="button small secondary" data-code-start>相机扫描</button><label class="button small secondary">上传图片<input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden /></label><button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>${codeCameraMarkup()}${generator ? boardingGeneratorMarkup(record) : ''}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
+  const flight = record.type === 'flight';
+  const controls = `<div class="saved-code" id="saved-code">${thumbnail(normalize(record[field]), title)}</div><div class="code-actions">${fromScan ? '<button type="button" class="button small secondary" id="code-use-scan">读取本次图片中的码</button>' : ''}<button type="button" class="button small secondary" data-code-start>相机扫描</button><label class="button small secondary">上传图片<input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden /></label><button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>`;
+  const scan = flight
+    ? `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}<p class="fine-print" data-code-guidance ${record[field] ? 'hidden' : ''}>请扫描自己登机牌上的完整码。</p></div>${boardingExamplesMarkup(record[field])}</div>`
+    : controls;
+  const markup = `<section data-code-editor data-code-prefix="${prefix}" class="editor-extra" id="code-editor"><h3>${title}${fieldSourceBadge(field,record)}</h3>${scan}${codeCameraMarkup()}${generator ? boardingGeneratorMarkup(record) : ''}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
   return markup.replace(/id="([^"]+)"/g, (_, id) => `id="${prefix}${id}"`);
 }
 export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', autoRead = false, profile, preserveGenerator = false, onMultiple, isCurrent = () => true, loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {} } = {}) {
@@ -29,7 +42,11 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
   let generation = 0, disposed = false, loading = false, pending = false, updateTimer;
   const consistency=find('code-consistency');
   function reset() { generation++; loading = false; pending = false; choices.replaceChildren(); choices.hidden = true; cancel.hidden = true; photo.value = ''; }
-  function showSaved() { find('saved-code').innerHTML = thumbnail(draft[field], title); find('code-remove').hidden = !removable(draft,field); }
+  function showSaved() {
+    find('saved-code').innerHTML = thumbnail(draft[field], title);
+    find('code-remove').hidden = !removable(draft,field);
+    for (const element of section.querySelectorAll('[data-code-examples], [data-code-guidance]')) element.hidden = !!draft[field];
+  }
   function currentRecord() {
     const record={...draft};
     for(const key of BOARDING_SHARED_FIELDS)if(form.elements[key] && !barcodeFieldLocked(draft,key))record[key]=JOURNEY_DATE_FIELDS.includes(key)?readTicketDate(form,key,draft):form.elements[key].value;

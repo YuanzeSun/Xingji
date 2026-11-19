@@ -216,9 +216,9 @@ test('each ranking switches charts independently and keeps its grouping and date
   };
   try {
     const trend = root.querySelector('.statistics-trend');
-    assert.equal(picked('rail-models'), 'bars');
+    for (const kind of ['rail-models', 'rail-bureaus', 'aircraft']) assert.equal(picked(kind), 'donut');
     card('rail-models').querySelector('[data-stat-view=columns]').click();
-    card('aircraft').querySelector('[data-stat-view=donut]').click();
+    card('rail-bureaus').querySelector('[data-stat-view=bars]').click();
     assert.equal(picked('rail-bureaus'), 'bars');
     assert.ok(card('rail-models').querySelector('.statistics-column-scroll'));
     assert.equal(root.querySelector('.statistics-trend'), trend);
@@ -245,5 +245,43 @@ test('each ranking switches charts independently and keeps its grouping and date
   } finally {
     cleanup();
     dom.window.close();
+  }
+});
+
+test('the automatic end date rolls over on return and a chosen date stays fixed', () => {
+  const NativeDate = globalThis.Date;
+  let clock = new NativeDate(2026, 10, 19, 23, 58);
+  globalThis.Date = class extends NativeDate {
+    constructor(...args) { super(...(args.length ? args : [clock.getTime()])); }
+  };
+  const dom = new JSDOM('<div id="statistics"></div>'), root = dom.window.document.querySelector('#statistics');
+  bindTestDialogs(dom.window);
+  const rows = [rail({ departureDate: '2026-11-19' }), rail({ departureDate: '2026-11-20' })], options = {};
+  const end = () => root.querySelector('[data-stat-to]').textContent;
+  const count = () => root.querySelector('.statistics-summary strong').textContent;
+  let cleanup = () => {};
+  try {
+    cleanup = mountStatistics(root, rows, { options });
+    assert.equal(end(), '2026-11-19');
+    assert.equal(count(), '1次');
+    cleanup();
+    clock = new NativeDate(2026, 10, 20, 0, 1);
+    cleanup = mountStatistics(root, rows, { options });
+    assert.equal(end(), '2026-11-20');
+    assert.equal(count(), '2次');
+    applyStatisticsDate(root, '[data-stat-to]', '2026-11-19');
+    clock = new NativeDate(2026, 10, 21, 0, 1);
+    dom.window.dispatchEvent(new dom.window.Event('focus'));
+    assert.equal(end(), '2026-11-19');
+    assert.equal(count(), '1次');
+    root.querySelector('[data-stat-reset]').click();
+    assert.equal(end(), '2026-11-21');
+    clock = new NativeDate(2026, 10, 22, 0, 1);
+    dom.window.dispatchEvent(new dom.window.Event('focus'));
+    assert.equal(end(), '2026-11-22');
+  } finally {
+    cleanup();
+    dom.window.close();
+    globalThis.Date = NativeDate;
   }
 });

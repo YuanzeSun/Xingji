@@ -37,7 +37,7 @@ test('multi-source rail records merge in storage data, enriching fields and reta
 });
 
 test('rail imports reject known conflicting fields and accept interchangeable formatting and missing fields', () => {
-  const before = rail('before', { ticketNumber: 'A123456', seat: '08F', price: '553.0', carriage: '05', identity: '1234****' });
+  const before = rail('before', { ticketNumber: 'A123456', seat: '08F', price: '553.0', carriage: '05', identity: '12345678' });
   const wrong = rail('wrong', { ticketNumber: 'A123457', seat: '12A', carriage: '09' });
   assert.throws(() => applyImport([before], [wrong]), /车厢、座位 \/ 铺位、票号.*冲突/);
   assert.throws(() => applyImport([], [before, wrong]), /票号.*冲突/);
@@ -47,6 +47,16 @@ test('rail imports reject known conflicting fields and accept interchangeable fo
   assert.equal(records.length, 1);
   assert.equal(records[0].ticketNumber, 'A123456');
   assert.equal(records[0].gate, '16A');
+});
+
+test('rail imports reject disagreement on the reported vehicle and mileage', () => {
+  const before = rail('before', { railModel: 'CR400BF-B', railTrainsets: 'CR400BF-B-5099', railMileage: '1023' });
+  const incoming = rail('incoming', { railModel: 'CR400AF', railTrainsets: 'CR400AF-2001', railMileage: '1000' });
+  assert.throws(() => applyImport([before], [incoming]), /车型、车组编号、铁路里程.*冲突/);
+  const compatible = rail('compatible', { railMileage: '1023.000', railPlatform: '13' });
+  const { records } = applyImport([before], [compatible]);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].railPlatform, '13');
 });
 
 test('different passengers, journeys and ambiguous unnamed tickets remain separate', () => {

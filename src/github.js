@@ -1,4 +1,4 @@
-import { applyImport, archive, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
+import { archive, assertRailDuplicateChanges, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings, unlinkedSettings } from './shared-settings.js';
 
 export class GitHubError extends Error { constructor(message, status, retryAt = 0) { super(message); this.status = status; this.retryAt = retryAt; } }
@@ -144,12 +144,7 @@ export async function synchronize(store, base, local, resolutions = {}, { baseHe
   if (baseHead && snapshot.initialized === false) throw new ArchiveResetError(snapshot);
   if (baseHead && (snapshot.generation || '') !== baseGeneration) throw new ArchiveResetError(snapshot, true);
   if (baseHead && store.assertDescendant) await store.assertDescendant(baseHead, snapshot.head);
-  if (!baseHead || snapshot.head !== baseHead) {
-    const known = new Set([...base, ...snapshot.records].flatMap(record => [record.id, ...(record.mergedIds || [])]));
-    const additions = local.filter(record => record.type === 'rail' && !record.deleted &&
-      ![record.id, ...(record.mergedIds || [])].some(id => known.has(id)));
-    if (additions.length) applyImport(snapshot.records, additions);
-  }
+  if (!baseHead || snapshot.head !== baseHead) assertRailDuplicateChanges(base, local, snapshot.records);
   const grouped = deduplicateRecords([...base, ...local, ...snapshot.records]), aliases = new Map();
   for (const record of grouped) for (const id of [record.id, ...(record.mergedIds || [])]) aliases.set(id, { id: record.id, ids: [record.id, ...(record.mergedIds || [])] });
   const align = rows => deduplicateRecords(rows).map(record => { const group = aliases.get(record.id); return { ...record, id: group.id, mergedIds: group.ids.filter(id => id !== group.id).sort() }; });

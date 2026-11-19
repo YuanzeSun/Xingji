@@ -3,7 +3,7 @@ import { normalizeSeatClass } from './seat-classes.js';
 import { normalizeAircraft } from './aircraft.js';
 import { railwayStop } from './places.js';
 import { boardingPresentation } from './boarding-language.js';
-import { maskIdentity } from './identity.js';
+import { maskRailIdentity } from './identity.js';
 import { escape as esc } from './html.js';
 // Coordinates follow the 12306 ticket specimens published on 2015-06-24.
 // Each historical ticket stock has its own layout and dimensions.
@@ -165,7 +165,7 @@ function trainService(value, x, y, size, classic = false) {
   return text(start, y, value, size, 'TicketRailSerif', 'stroke-width=".2"') + text(start + width + 4, y, '次', 35, 'TicketSong');
 }
 function passenger(r, x, y, nameX) {
-  const identity = maskIdentity(r.identity);
+  const identity = maskRailIdentity(r.identity);
   const identitySize = Math.min(30, (nameX - x - 16) / Math.max(1, [...identity].length * .62));
   return text(x, y, identity, identitySize, 'TicketOCR', 'letter-spacing="0"') + text(nameX, y, r.passenger, 35, railBody(r));
 }

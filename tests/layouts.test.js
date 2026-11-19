@@ -6,7 +6,7 @@ import { createRecord } from '../src/model.js';
 import { ticketSVG, ticketDimensions, exportPNG } from '../src/tickets.js';
 import { layoutFontFiles } from '../src/ticket-layouts.js';
 
-const record = (template, extra = {}) => createRecord({ id: 'layout-test', type: template.startsWith('air-') ? 'flight' : 'rail', template, origin: '北京南', destination: '天津', originCode: 'Beijingnan', destinationCode: 'Tianjin', service: 'C2021', departureDate: '2017-09-10', departureTime: '10:35', identity: '1101011990****1234', passenger: '示例旅客', seat: '02A', carriage: '01', price: '57.0', ...extra });
+const record = (template, extra = {}) => createRecord({ id: 'layout-test', type: template.startsWith('air-') ? 'flight' : 'rail', template, origin: '北京南', destination: '天津', originCode: 'Beijingnan', destinationCode: 'Tianjin', service: 'C2021', departureDate: '2017-09-10', departureTime: '10:35', identity: '110101199001011234', passenger: '示例旅客', seat: '02A', carriage: '01', price: '57.0', ...extra });
 test('airline layout has its own long boarding-pass aspect ratio and side stub', () => {
   const r = record('air-boarding-pass');
   const dimensions = ticketDimensions(r);

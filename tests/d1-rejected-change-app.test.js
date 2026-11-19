@@ -40,16 +40,29 @@ test('a rejected D1 write survives reload, can be corrected, and can be withdraw
       id: 'new', service: 'G22', origin: '北京南', destination: '南京南', departureDate: '2026-01-04',
       departureTime: '08:00', passenger: '测试旅客', identity: 'TEST1', carriage: '05', seat: '08F', seatClass: '二等座'
     });
-    const json = JSON.stringify(fullBackup([ticket], {}, {}));
-    const input = document.querySelector('#import-json-file');
-    Object.defineProperty(input, 'files', { value: [{ name: 'backup.json', size: json.length, text: async () => json }] });
-    input.dispatchEvent(new window.Event('change', { bubbles: true }));
-    await until(() => document.querySelector('[data-backup-restore]'));
-    click('[data-backup-restore] [type=submit]');
-    await until(() => rejectedNotice() && !document.querySelector('dialog'));
+    const json = JSON.stringify(fullBackup([ticket], { flightMcpKey: 'restored-key' }, {
+      github: { id: 77, owner: 'user', repo: 'data', branch: 'main', token: 'backup-github' }
+    }));
+    async function restore() {
+      const input = document.querySelector('#import-json-file');
+      Object.defineProperty(input, 'files', { value: [{ name: 'backup.json', size: json.length, text: async () => json }] });
+      input.dispatchEvent(new window.Event('change', { bubbles: true }));
+      await until(() => document.querySelector('[data-backup-restore]'));
+      click('[data-backup-restore] [type=submit]');
+      await until(() => rejectedNotice()?.disabled === false && !document.querySelector('dialog'));
+    }
+    await restore();
     assert.match(document.querySelector('#connection-state').textContent, /超过大小限制/);
     assert.equal((await readSyncState()).meta.pending, true);
     assert.equal(rejected, 1);
+
+    assert.match(document.querySelector('[data-restore-followup]').textContent, /同步后可以添加/);
+    globalThis.confirm = () => true;
+    rejectedNotice().click();
+    await until(() => document.querySelector('[data-action="import-json"]')?.disabled === false && !rejectedNotice());
+    assert.equal(document.querySelector('[data-restore-followup]').textContent.trim(), '');
+    assert.equal((await readSyncState()).settings.flightMcpKey, '');
+    await restore();
 
     window.close();
     window = browser();
@@ -59,7 +72,7 @@ test('a rejected D1 write survives reload, can be corrected, and can be withdraw
     window.dispatchEvent(new window.Event('online'));
     document.dispatchEvent(new window.Event('visibilitychange'));
     await new Promise(resolve => setImmediate(resolve));
-    assert.equal(rejected, 1, 'reloading and reconnecting must not resend a definitively rejected payload');
+    assert.equal(rejected, 2, 'reloading and reconnecting must not resend a definitively rejected payload');
     click('[data-page="archive"]');
     await until(() => document.querySelector('[data-action="view"][data-id="new"]'));
     await setSeat('09F');
@@ -69,7 +82,7 @@ test('a rejected D1 write survives reload, can be corrected, and can be withdraw
 
     await setSeat('08F');
     assert.ok(rejectedNotice());
-    assert.equal(rejected, 2);
+    assert.equal(rejected, 3);
     const writes = d1.calls.filter(call => call.method === 'POST').length;
     globalThis.confirm = () => true;
     rejectedNotice().click();

@@ -32,7 +32,6 @@ export async function createPairedReset(request, captured, unlink, keep) {
     d1: { id: captured.d1.id, url: captured.d1.url },
     beforeGitHub: github.head,
     beforeD1: d1.head,
-    beforeD1Generation: d1.generation,
     githubSettings: await settingsDigest(settingsAfterReset(github.settings, unlink)),
     d1Settings: await settingsDigest(settingsAfterReset(d1.settings, unlink))
   };
@@ -75,11 +74,10 @@ export async function continuePairedReset(github, d1, progress, save) {
   if (progress.step === 'd1') {
     if (d1Result.head === progress.beforeD1) {
       if (await github.head() !== progress.githubHead) throw new Error('GitHub 仓库已有变化，请放弃续接后重新核对。');
-      d1Result = await d1.replace(d1Result, [], settingsAfterReset(d1Result.settings, progress.unlink));
+      d1Result = await d1.replace(d1Result, [], settingsAfterReset(d1Result.settings, progress.unlink), { resetId: progress.id });
     } else {
-      // The D1 API reports its generation only after the commit. A lost reply can
-      // be accepted after a recorded attempt if the complete reset result matches.
-      const confirmed = d1Result.generation !== progress.beforeD1Generation && d1Result.records.length === 0 &&
+      // Both markers must match so later writes cannot look like the lost reset.
+      const confirmed = d1Result.head === progress.id && d1Result.generation === progress.id && d1Result.records.length === 0 &&
         await settingsDigest(d1Result.settings) === progress.d1Settings;
       if (!confirmed) throw new Error('D1 票库已有变化，请放弃续接后重新核对。');
     }

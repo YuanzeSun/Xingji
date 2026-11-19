@@ -34,3 +34,28 @@ test('reset recovery recognizes a GitHub commit before the checkpoint and stops 
   assert.equal(github.head, newGithubHead);
   assert.equal(d1.calls.filter(call => call.method === 'POST').length, writes);
 });
+
+test('resume rejects another device’s identical reset and any write after this reset', async () => {
+  for (const concurrentReset of [true, false]) {
+    const rows = [createRecord({ id: 'ticket' })];
+    const github = new MemoryGitHub(rows);
+    const db = memoryD1(rows);
+    const gh = new GitHubStore({ id: 77, owner: 'user', repo: 'data', branch: 'main' }, 'fixture', github.fetch);
+    const d1 = new D1Store({ url: endpoint, id: db.sqlite.prepare('SELECT id FROM archive_state').get().id }, token, db.fetch.bind(db));
+    const request = await prepareArchiveReset(gh, d1, {});
+    let progress = await createPairedReset(request, { config: gh.config, d1: d1.config }, false);
+    const save = async update => { progress = update; };
+    db.sqlite.exec("CREATE TRIGGER block_reset BEFORE DELETE ON tickets BEGIN SELECT RAISE(ABORT, 'blocked'); END");
+    await assert.rejects(continuePairedReset(gh, d1, progress, save), /503/);
+    assert.equal(progress.step, 'd1');
+    db.sqlite.exec('DROP TRIGGER block_reset');
+    const changed = await d1.replace(request.d1Snapshot, [], request.d1Snapshot.settings,
+      { resetId: concurrentReset ? crypto.randomUUID() : progress.id });
+    if (!concurrentReset) await d1.write([], changed, changed.settings);
+    const writes = db.calls.filter(call => call.method === 'POST').length;
+    await assert.rejects(continuePairedReset(gh, d1, progress, save), /D1 票库已有变化/);
+    assert.equal(progress.step, 'd1');
+    assert.equal(db.calls.filter(call => call.method === 'POST').length, writes);
+    db.sqlite.close();
+  }
+});

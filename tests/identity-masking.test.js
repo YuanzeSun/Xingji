@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { maskIdentity } from '../src/identity.js';
+import { maskIdentity, maskRailIdentity } from '../src/identity.js';
 import { createRecord, archive, readArchive } from '../src/model.js';
 import { ticketSVG, exportSVG } from '../src/tickets.js';
 import { DEMO_TICKET_CODE } from '../src/demo-code.js';
@@ -17,13 +17,28 @@ test('full identities are masked at display time, including a valid X checksum a
     ['1234','****'],['12','**'],['',''],[undefined,'']
   ]) {
     assert.equal(maskIdentity(input), expected);
-    assert.equal(maskIdentity(expected), expected);
   }
 });
 
-test('manually masked identities retain their chosen format and normalize full-width stars', () => {
-  for (const identity of ['1101011990****1234','110101********1234','E12****89','****','12*45']) assert.equal(maskIdentity(identity), identity);
-  assert.equal(maskIdentity('１１０１０１＊＊＊＊＊＊＊＊１２３４'), '110101********1234');
+test('partial identities with ASCII or full-width stars are never rendered as complete identities', () => {
+  for (const identity of ['1101011990****1234','110101********1234','E12****89','****','１２＊４５']) {
+    assert.equal(maskIdentity(identity), '');
+    assert.equal(maskRailIdentity(identity), '');
+  }
+});
+
+test('rail ticket masks the birth month and day, or the last two or four characters of other documents', () => {
+  for (const [input, expected] of [
+    ['00000020000101123x', '0000002000****123X'],
+    ['００００００ ２００００１０１ １２３４', '0000002000****1234'],
+    ['E01234567', 'E012345**'],
+    ['AB123456789', 'AB1234567**'],
+    ['AB1234567890', 'AB123456****'],
+    ['000000001011234', '00000000101****'],
+    ['A', '*'], ['12', '**'], ['', '']
+  ]) {
+    assert.equal(maskRailIdentity(input), expected);
+  }
 });
 
 test('all rail layouts mask the rendered number without modifying stored records, exports or barcode payloads', async () => {
@@ -34,7 +49,7 @@ test('all rail layouts mask the rendered number without modifying stored records
     const record = createRecord({ template, identity, origin:'北京南', destination:'天津', passenger:'示例旅客', service:'C2021', ticketCode:DEMO_TICKET_CODE });
     const before = structuredClone(record);
     for (const output of [ticketSVG(record), await exportSVG(record)]) {
-      assert.ok(output.includes('000000********1234'), template);
+      assert.ok(output.includes('0000002000****1234'), template);
       assert.ok(!output.includes(identity), template);
       assert.ok(output.includes('data-ticket-code'), template);
     }

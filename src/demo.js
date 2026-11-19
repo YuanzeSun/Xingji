@@ -44,7 +44,7 @@ export function demoRecords(today=localToday()){
   ];
   const marks={'demo-1':[{text:'网',shape:'circle'}],'demo-3':[{text:'网',shape:'plain'}],'demo-4':[{text:'网',shape:'circle'}],'demo-5':[{text:'网',shape:'circle'},{text:'学',shape:'circle'}],'demo-7':[{text:'网',shape:'plain'}]};
   return rows.map((row,index)=>{
-    const values={passenger:'示例旅客',identity:'11010119900101****',orderNumber:`EX0000000${index+1}`,ticketNumber:`X00000${index+1}`,saleCode:`00000000000000000000${index+1}`,ticketMarks:marks[row.id] || [],provenance:'commemorative',createdAt:verifiedAt,updatedAt:verifiedAt,...row};
+    const values={passenger:'示例旅客',identity:'110101199001010000',orderNumber:`EX0000000${index+1}`,ticketNumber:`X00000${index+1}`,saleCode:`00000000000000000000${index+1}`,ticketMarks:marks[row.id] || [],provenance:'commemorative',createdAt:verifiedAt,updatedAt:verifiedAt,...row};
     const source={kind:'demo',label:'示例行程；班次与线路采用公开资料，旅客、票号及部分字段为示例填充',at:verifiedAt};
     values.fieldSources=Object.fromEntries(Object.keys(values).filter(key=>FIELDS.includes(key)).map(key=>[key,'default']));
     if(row.type==='rail'){

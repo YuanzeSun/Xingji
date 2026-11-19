@@ -13,15 +13,33 @@ function transferSettings(settings, github, d1) {
 
 export async function bindArchivePair(github, d1, source, previews) {
   // The source can have newer tickets, but another device may also have linked it since the preview.
-  const githubSnapshot = source === 'github' ? await github.read() : previews.githubSnapshot;
+  let githubSnapshot = source === 'github' ? await github.read() : previews.githubSnapshot;
   const d1Snapshot = source === 'd1' ? await d1.read() : previews.d1Snapshot;
   assertLinkTargets(github, d1, githubSnapshot, d1Snapshot);
   if (hasCloudLink(github, d1, githubSnapshot, d1Snapshot)) return publishCloudLink(github, d1);
 
   if (source === 'github') {
-    const settings = transferSettings(githubSnapshot.settings, github, d1);
-    const remote = await d1.replace(d1Snapshot, githubSnapshot.records, settings);
-    return publishCloudLink(github, d1, { d1Snapshot: remote, newBinding: true });
+    let target = d1Snapshot;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const settings = sharedSettings({ ...githubSnapshot.settings, connections: undefined });
+      // Keep D1 standalone until GitHub commits the exact revision copied here.
+      target = await d1.replace(target, githubSnapshot.records, settings);
+      try {
+        await github.write(githubSnapshot.records, githubSnapshot, transferSettings(settings, github, d1),
+          'Store linked archive connections');
+      } catch (error) {
+        if (![409, 422].includes(error.status)) throw error;
+        const latest = await github.read();
+        if (attempt === 2 || latest.head === githubSnapshot.head || latest.generation !== githubSnapshot.generation ||
+            latest.settings.connections?.d1 || (wasUnlinked(latest) && !wasUnlinked(githubSnapshot))) {
+          throw new Error('GitHub 票库已有变化，请重新核对后绑定。');
+        }
+        await github.assertDescendant(githubSnapshot.head, latest.head);
+        githubSnapshot = latest;
+        continue;
+      }
+      return publishD1Link(github, d1, target);
+    }
   }
   const settings = transferSettings(d1Snapshot.settings, github, d1);
   await github.write(d1Snapshot.records, { ...githubSnapshot, generation: crypto.randomUUID() }, settings,
@@ -83,11 +101,15 @@ export async function publishCloudLink(github, d1, { githubSnapshot, d1Snapshot,
   if (newBinding) assertLinkTargets(github, d1, repo, archive);
   else assertActiveCloudLink(github, d1, repo, archive);
   const githubSettings = transferSettings(repo.settings, github, d1);
-  const d1Settings = transferSettings(archive.settings, github, d1);
   if (!sameSettings(githubSettings, repo.settings)) {
     await github.write(repo.records, repo, githubSettings, 'Store linked archive connections');
   }
-  if (sameSettings(d1Settings, archive.settings)) return archive;
-  const head = await d1.write(archive.records, archive, d1Settings);
-  return { ...archive, head, settings: d1Settings };
+  return publishD1Link(github, d1, archive);
+}
+
+async function publishD1Link(github, d1, archive) {
+  const settings = transferSettings(archive.settings, github, d1);
+  if (sameSettings(settings, archive.settings)) return archive;
+  const head = await d1.write(archive.records, archive, settings);
+  return { ...archive, head, settings };
 }

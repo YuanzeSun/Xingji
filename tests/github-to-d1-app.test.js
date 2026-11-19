@@ -11,6 +11,17 @@ test('GitHub first: D1 adopts the latest GitHub data and later JSON imports only
   const github = await prepareCloud([createRecord({ id: 'github-ticket', service: 'G21' })], { flightMcpKey: 'github-key' });
   const d1 = memoryD1([createRecord({ id: 'old-d1-ticket', service: 'D801' })]);
   useServers(github, d1);
+  const fetch = globalThis.fetch;
+  let addConcurrentTicket = false;
+  globalThis.fetch = async function (url, request) {
+    const response = await fetch.call(this, url, request);
+    if (addConcurrentTicket && response.ok && new URL(url).host !== 'api.github.com' && request?.method === 'POST' &&
+        JSON.parse(request.body).replace) {
+      addConcurrentTicket = false;
+      github.push([...github.records(), createRecord({ id: 'saved-during-copy', service: 'G23' })]);
+    }
+    return response;
+  };
   const picker = () => document.querySelector('#import-json-file');
   const writable = () => document.querySelector('[data-action="import-json"]')?.disabled === false;
   try {
@@ -32,13 +43,16 @@ test('GitHub first: D1 adopts the latest GitHub data and later JSON imports only
     connect(window, 'd1');
     await chooseSource('github');
     github.push([createRecord({ id: 'latest-github', service: 'G22' })]);
+    addConcurrentTicket = true;
     await confirm('确认覆盖 D1');
     await until(() => document.querySelector('[data-cloud-label]')?.textContent === '手动备份' && writable());
     const migrated = d1.calls.find(call => call.method === 'POST').body;
     assert.equal(migrated.replace, true);
     assert.deepEqual(migrated.records.map(record => record.id), ['latest-github']);
     assert.equal(migrated.settings.flightMcpKey, 'github-key');
-    assert.deepEqual(d1.sqlite.prepare('SELECT id FROM tickets').all().map(row => row.id), ['latest-github']);
+    assert.equal(migrated.settings.connections, undefined);
+    assert.equal(d1.calls.filter(call => call.body?.replace).length, 2);
+    assert.deepEqual(d1.sqlite.prepare('SELECT id FROM tickets ORDER BY id').all().map(row => row.id), ['latest-github', 'saved-during-copy']);
 
     const githubCalls = github.calls.length;
     const json = JSON.stringify(fullBackup([
@@ -48,9 +62,9 @@ test('GitHub first: D1 adopts the latest GitHub data and later JSON imports only
     picker().dispatchEvent(new window.Event('change', { bubbles: true }));
     await until(() => document.querySelector('[data-backup-restore] button[type=submit]'));
     document.querySelector('[data-backup-restore] button[type=submit]').click();
-    await until(() => d1.sqlite.prepare('SELECT count(*) AS count FROM tickets').get().count === 2 && !document.querySelector('dialog'));
+    await until(() => d1.sqlite.prepare('SELECT count(*) AS count FROM tickets').get().count === 3 && !document.querySelector('dialog'));
     assert.equal(github.calls.length, githubCalls);
-    assert.equal(github.records().length, 1);
+    assert.equal(github.records().length, 2);
 
     d1.available = false;
     document.querySelector('[data-action="sync"]').click();

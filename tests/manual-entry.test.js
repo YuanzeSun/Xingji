@@ -23,6 +23,11 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.equal(document.querySelector('[data-code-editor]').tagName,'SECTION');
   assert.equal(document.querySelector('[name="template"]').value,'rail-receipt');
   assert.equal(document.querySelector('[name="departureDateYear"]').type,'number');
+  const identity = document.querySelector('[name="identity"]');
+  const star = new window.InputEvent('beforeinput', { data: '＊', inputType: 'insertText', bubbles: true, cancelable: true });
+  assert.equal(identity.dispatchEvent(star), false);
+  fill('identity','0000002000****1234');
+  assert.equal(identity.value, '');
   for(const name of ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seat']){
     const input=name==='seat'?document.querySelector('[data-seat-number]'):document.querySelector(`[name="${name}"]`);
     assert.equal(input.required,true);
@@ -34,7 +39,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   submit();await wait(()=>document.querySelector('#editor-error').textContent.includes('日期'));
   assert.deepEqual(await db.get('records',[]),[]);
   fill('departureDate','2026-11-15');fill('departureTime','08:00');fill('passenger','示例旅客');fill('carriage','05');fill('seatClass','二等座');fill('identity','000000200001011234');fill('gate','5B');fill('seat','08F');fill('orderNumber','E000000001');
-  assert.match(document.querySelector('#editor-preview').textContent,/000000\*{8}1234/);
+  assert.match(document.querySelector('#editor-preview').textContent,/0000002000\*{4}1234/);
   submit();await wait(()=>!document.querySelector('dialog'));
   let records=await db.get('records',[]);assert.equal(records.length,1);assert.equal(records[0].gate,'5B');assert.equal(records[0].orderNumber,'E000000001');
   click('.manual-panel [data-action="new"]');await wait(()=>document.querySelector('#editor-form'));

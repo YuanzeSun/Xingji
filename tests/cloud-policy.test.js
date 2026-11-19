@@ -18,6 +18,7 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   Object.defineProperty(globalThis, 'navigator', { value: window.navigator, configurable: true });
   Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true });
   window.scrollTo = () => {}; window.HTMLDialogElement.prototype.showModal = function () { this.open = true; }; window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+  window.confirm = () => true;
   let online = true; Object.defineProperty(navigator, 'onLine', { get: () => online, configurable: true });
   const ticket = createRecord({ id: 'cloud-ticket', origin: '清河', destination: '天津', service: 'G103', departureDate: '2026-11-15' });
   const server = new MemoryGitHub([ticket], { flightMcpKey: 'test-mcp', profile: { chineseName: '云端旅客' } }); globalThis.fetch = server.fetch;
@@ -49,7 +50,8 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   form = document.querySelector('#github-form');
   server.authorized = false;
   form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-  await wait(() => document.querySelector('.form-error').textContent && !document.querySelector('#github-form [type="submit"]').disabled);
+  await wait(() => document.querySelector('#github-form')?.closest('.panel').querySelector('.form-error').textContent &&
+    !document.querySelector('#github-form [type="submit"]').disabled);
   form = document.querySelector('#github-form');
   assert.equal(form.elements.token.value, 'test-key');
   server.authorized = true;

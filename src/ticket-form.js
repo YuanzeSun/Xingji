@@ -1,5 +1,6 @@
 import {FLIGHT_TIME_LABELS} from './flight-times.js';
 import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
+import { requireCompleteIdentity } from './identity.js';
 const common = ['origin', 'destination', 'service', 'departureDate', 'departureTime', 'passenger', 'identity', 'seat', 'seatClass'];
 export const requiredTicketFields = (type, template, flightStatus = 'normal') => type === 'flight' && ['open', 'invalid'].includes(flightStatus) ? ['origin', 'destination', 'passenger'] : template === 'rail-refund-receipt'
   ? ['origin', 'destination', 'service', 'departureDate', 'passenger', 'identity', 'price']
@@ -15,6 +16,7 @@ const datePresent=value=>{try{return !!journeyDate(value)?.dayOfYear;}catch{retu
 export const missingTicketFields = record => requiredTicketFields(record.type, record.template, record.flightStatus).filter(key => JOURNEY_DATE_FIELDS.includes(key) ? !datePresent(record[key]) : !record[key]?.trim());
 
 export function validateTicketForm(record) {
+  requireCompleteIdentity(record.identity);
   const fields = missingTicketFields(record);
   if (!fields.length) return;
   const key = fields[0], error = new Error('请填写' + (key === 'price' && record.template === 'rail-refund-receipt' ? '退票费' : ticketFieldLabel(key, record.type)));
