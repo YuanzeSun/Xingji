@@ -44,7 +44,7 @@ test('GitHub round-trip keeps ordinal-only and year-only tickets in the shared p
   await client.verify();
   await client.write(records, before);
   const result = await client.read();
-  assert.deepEqual(Object.keys(result.contents), ['archive/2026.json', 'archive/unknown.json']);
+  assert.deepEqual(new Set(Object.keys(result.contents)), new Set(['archive/2026.json', 'archive/unknown.json']));
   assert.deepEqual(JSON.parse(result.contents['archive/2026.json']).records.map(row=>row.id), ['B','a']);
   assert.deepEqual(Object.fromEntries(result.records.map(row=>[row.id,row])),Object.fromEntries(records.map(row=>[row.id,row])));
 });

@@ -1878,7 +1878,6 @@ function showFlightResult() {
   openModal(modalHead(`${state.flightResultYear} 年历史行程返回`, '仅供本人校对，关闭后不会保存到票库。') + `<div class="detail-body"><pre class="raw-result">${e(raw)}</pre><p class="fine-print">查询结果不会自动入库。请核对后，在导入页识别并修订。</p></div><div class="modal-footer"><button class="button secondary" data-action="close-modal">关闭</button><button class="button primary" data-action="flight-to-import">将文字送往导入页</button></div>`);
 }
 const actions = {
-  'profile-reload': () => { state.profileDraft = null; state.profileBase = null; state.profileDirty = false; state.profileError = ''; render(); },
   navigate: button => navigate(button.dataset.page),
   'toggle-routes': button => { state.routesOpen = !state.routesOpen; button.closest('.route-shortcuts-section').dataset.expanded = String(state.routesOpen); button.setAttribute('aria-expanded', String(state.routesOpen)); },
   filter: button => { state.filters.type = button.dataset.type; state.limit = 48; render(); },
