@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'ticket_record.dart';
 import 'reference_catalog.dart';
 import 'journey_date.dart';
+import 'identity.dart';
 import 'boarding_decoder.dart';
 import 'code_data.dart';
 
@@ -251,7 +252,8 @@ Map<String, dynamic> readTravelFields(
     ('ticketNumber', '电子客票号|客票号|票号|TICKET NO', r'[A-Z0-9-]{6,30}'),
     ('orderNumber', '订单号|订单编号', r'[A-Z0-9]{6,30}'),
   ]) {
-    put(key, labelled(labels, value));
+    final read = labelled(labels, value);
+    if (key != 'identity' || !hasMaskedIdentity(read ?? '')) put(key, read);
   }
 
   if (fields['origin'] == null || fields['destination'] == null) {

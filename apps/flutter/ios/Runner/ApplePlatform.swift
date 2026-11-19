@@ -34,7 +34,8 @@ final class ApplePlatform: NSObject, @MainActor VNDocumentCameraViewControllerDe
     case "capabilities":
       reply(["ocr": true, "barcode": true, "camera": VNDocumentCameraViewController.isSupported,
              "liveBoarding": liveBoardingAvailable,
-             "appleIntelligence": AppleRecognition.modelAvailable])
+             "appleIntelligence": AppleRecognition.modelAvailable,
+             "appleIntelligenceImage": AppleRecognition.imageModelAvailable])
     case "recognizeImage":
       guard let image = args["bytes"] as? FlutterStandardTypedData else {
         reply(FlutterError(code: "missing_image", message: "没有收到票据图片。", details: nil))
@@ -560,8 +561,9 @@ extension ApplePlatform: DataScannerViewControllerDelegate {
         output["image"] = FlutterStandardTypedData(bytes: bytes)
         finishLive(scanner, output)
       } catch {
-        livePhotoFailed = true
         var fallback = prior
+        let hasCode = !(prior["barcodes"] as? [[String: String]] ?? []).isEmpty
+        livePhotoFailed = !hasCode
         fallback["retryWithDocumentCamera"] = true
         finishLive(scanner, fallback)
       }

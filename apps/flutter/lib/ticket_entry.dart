@@ -20,8 +20,13 @@ Future<void> openTicketEntry(
   TicketEntry? choice,
 }) async {
   if (!await checkArchiveWrite(context, store) || !context.mounted) return;
+  final archiveSession = store.archiveSession;
   final entry = choice ?? await _chooseEntry(context);
-  if (entry == null || !context.mounted) return;
+  if (entry == null ||
+      !context.mounted ||
+      archiveSession != store.archiveSession) {
+    return;
+  }
   try {
     final List<TicketRecord>? records;
     switch (entry) {
@@ -35,7 +40,11 @@ Future<void> openTicketEntry(
         await openEditor(context, store);
         return;
     }
-    if (!context.mounted || records == null) return;
+    if (!context.mounted ||
+        records == null ||
+        archiveSession != store.archiveSession) {
+      return;
+    }
     final ticket = records.length == 1 ? records.single : null;
     if (records.isEmpty ||
         ticket != null &&
@@ -52,7 +61,7 @@ Future<void> openTicketEntry(
       await openEditor(context, store, recognized: ticket);
     }
   } catch (error) {
-    if (context.mounted) {
+    if (context.mounted && archiveSession == store.archiveSession) {
       showError(
         context,
         error is PlatformException ? error.message ?? error : error,
@@ -101,10 +110,13 @@ Future<List<TicketRecord>?> _scan(
     if (!context.mounted) return null;
     final capture = await provider.scanLiveBoarding();
     if (capture == null || !context.mounted) return null;
-    final image = capture.retryWithDocumentCamera
+    final hasBoarding = capture.reading.barcodes.any(
+      (code) => decodeBoardingBytes(code) != null,
+    );
+    final image = capture.retryWithDocumentCamera && !hasBoarding
         ? await AppleServices.scanDocument()
         : capture.image;
-    if (!context.mounted || image == null) return null;
+    if (!context.mounted || (image == null && !hasBoarding)) return null;
     return _recognizing(
       context,
       () => recognizeTicketImage(image, catalog, live: capture.reading),

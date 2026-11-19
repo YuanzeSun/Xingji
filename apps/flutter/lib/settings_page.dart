@@ -107,12 +107,43 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: [
                   if (store.connected)
                     OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.error,
+                        side: BorderSide(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
                       onPressed: store.busy
                           ? null
-                          : () => action(
-                              () => store.clearLocalArchive(signOut: true),
-                            ),
-                      child: const Text('退出 GitHub'),
+                          : () async {
+                              final confirmed = await showAdaptiveDialog<bool>(
+                                context: context,
+                                builder: (dialog) => AlertDialog.adaptive(
+                                  title: const Text('退出登录？'),
+                                  content: const Text(
+                                    '退出后会清空此设备的 GitHub 票库缓存。重新登录即可读取云端票据。',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(dialog, false),
+                                      child: const Text('取消'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(dialog, true),
+                                      child: const Text('退出登录'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirmed == true && context.mounted) {
+                                await action(
+                                  () => store.clearLocalArchive(signOut: true),
+                                );
+                              }
+                            },
+                      child: const Text('退出登录'),
                     )
                   else
                     FilledButton.icon(
@@ -268,6 +299,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           !context.mounted) {
                         return;
                       }
+                      final archiveSession = store.archiveSession;
                       final file = await openFile(
                         acceptedTypeGroups: [
                           if (AppleServices.available)
@@ -299,7 +331,8 @@ class _SettingsPageState extends State<SettingsPage> {
                             ),
                         ],
                       );
-                      if (file != null) {
+                      if (file != null &&
+                          archiveSession == store.archiveSession) {
                         if (await file.length() > 40_000_000) {
                           throw const FormatException('请选择 40 MB 以内的文件');
                         }
@@ -308,14 +341,19 @@ class _SettingsPageState extends State<SettingsPage> {
                           final backup = FullArchiveBackup.fromJson(
                             jsonDecode(utf8.decode(bytes)),
                           );
-                          if (!context.mounted) return;
+                          if (!context.mounted ||
+                              archiveSession != store.archiveSession) {
+                            return;
+                          }
                           final restored = await reviewImport(
                             context,
                             store,
                             backup.archive.records,
                             backupSettings: backup.settings,
                           );
-                          if (restored && context.mounted) {
+                          if (restored &&
+                              context.mounted &&
+                              archiveSession == store.archiveSession) {
                             await _offerGitHubBackupConnection(
                               context,
                               store,
@@ -329,7 +367,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           bytes,
                           store.catalog,
                         );
-                        if (context.mounted) {
+                        if (context.mounted &&
+                            archiveSession == store.archiveSession) {
                           await reviewImport(context, store, records);
                         }
                       }

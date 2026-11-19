@@ -1,6 +1,7 @@
 library;
 
 export 'src/journey_date.dart';
+export 'src/identity.dart';
 export 'src/ticket_record.dart';
 export 'src/reference_catalog.dart';
 export 'src/archive_merge.dart';

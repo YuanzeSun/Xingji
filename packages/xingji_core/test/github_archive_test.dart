@@ -17,7 +17,11 @@ void main() {
   late String content;
   late List<http.Request> writes;
   late MockClient client;
+  late String head;
+  late bool losePublishReply;
   setUp(() {
+    head = 'head';
+    losePublishReply = false;
     content = jsonEncode(TicketArchive([record]).toJson());
     manifest = {
       'format': 'xingji-index',
@@ -37,6 +41,10 @@ void main() {
       dynamic response;
       if (request.method != 'GET') {
         writes.add(request);
+        if (request.method == 'PATCH' && losePublishReply) {
+          head = jsonDecode(request.body)['sha'] as String;
+          throw http.ClientException('connection lost after publish');
+        }
         response = {
           'sha': request.url.path.endsWith('trees') ? 'new-tree' : 'new-head',
         };
@@ -48,7 +56,7 @@ void main() {
         };
       } else if (request.url.path.endsWith('/git/ref/heads/main')) {
         response = {
-          'object': {'sha': 'head'},
+          'object': {'sha': head},
         };
       } else if (request.url.path.endsWith('/git/commits/head')) {
         response = {
@@ -150,6 +158,19 @@ void main() {
       );
       expect(jsonDecode(writes[1].body)['parents'], ['head']);
       expect(jsonDecode(writes.last.body)['force'], false);
+    },
+  );
+
+  test(
+    'reset recognizes the published commit after the reply is lost',
+    () async {
+      final api = archive();
+      final before = await api.resetTarget();
+      losePublishReply = true;
+      final after = await api.reset(before, before.settings);
+      expect(after.head, 'new-head');
+      expect(after.records, isEmpty);
+      expect(writes.where((r) => r.method == 'PATCH'), hasLength(1));
     },
   );
 

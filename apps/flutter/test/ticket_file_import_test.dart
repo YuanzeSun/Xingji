@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:xingji/platform_services.dart';
 import 'package:xingji/ticket_file_import.dart';
 import 'package:xingji_core/xingji_core.dart';
@@ -38,6 +38,9 @@ void main() {
         call,
       ) async {
         methods.add(call.method);
+        if (call.method == 'capabilities') {
+          return {'appleIntelligence': true, 'appleIntelligenceImage': true};
+        }
         expect(call.arguments['bytes'], orderedEquals(input));
         if (call.method == 'recognizeImage') {
           return {
@@ -76,12 +79,138 @@ void main() {
         catalog,
         flight: true,
       )).single;
-      expect(methods, ['recognizeImage', 'extractTicketImage']);
+      expect(methods, ['recognizeImage', 'capabilities', 'extractTicketImage']);
       expect(record.text('service'), 'CA181');
       expect(record.text('seat'), '8A');
       expect(record.barcodeLocked('seat'), isTrue);
       expect(record.text('gate'), 'A12');
       expect(record.departure?.calendarText, '2026-11-18');
+    },
+  );
+
+  test('photos fall back to Vision and local parsing when the model is unavailable or fails', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemRecognition.channel, null),
+    );
+    for (final available in [false, true]) {
+      var requestedModel = false;
+      messenger.setMockMethodCallHandler(SystemRecognition.channel, (
+        call,
+      ) async {
+        switch (call.method) {
+          case 'capabilities':
+            return {
+              'appleIntelligence': available,
+              'appleIntelligenceImage': available,
+            };
+          case 'recognizeImage':
+            return {
+              'lines': [
+                {
+                  'text': '车次 G21\n北京南站 南京南站\n出发日期 2026-11-18\n15:00开\n证件号 1101011990****1234',
+                  'x': 0.0,
+                  'y': 0.0,
+                  'width': 1.0,
+                  'height': 1.0,
+                  'confidence': 1.0,
+                },
+              ],
+            };
+          case 'extractTicketImage':
+            requestedModel = true;
+            throw PlatformException(code: 'intelligence_unavailable');
+        }
+        fail('Unexpected method ${call.method}');
+      });
+      final record = (await recognizeTicketImage(Uint8List(4), catalog)).single;
+      expect(requestedModel, available);
+      expect(record.text('service'), 'G21');
+      expect(record.text('origin'), '北京南');
+      expect(record.text('identity'), isEmpty);
+      expect(record.departure?.calendarText, '2026-11-18');
+    }
+  });
+
+  test(
+    'a text-only model can fill photo fields only when Vision saw their values',
+    () async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final methods = <String>[];
+      messenger.setMockMethodCallHandler(SystemRecognition.channel, (
+        call,
+      ) async {
+        methods.add(call.method);
+        return switch (call.method) {
+          'capabilities' => {
+            'appleIntelligence': true,
+            'appleIntelligenceImage': false,
+          },
+          'recognizeImage' => {
+            'lines': [
+              {
+                'text': '车次 G21\n北京南站 南京南站\n示例旅客',
+                'x': 0.0,
+                'y': 0.0,
+                'width': 1.0,
+                'height': 1.0,
+                'confidence': 1.0,
+              },
+            ],
+          },
+          'extractTicketText' => {
+            'type': 'rail',
+            'passenger': '示例旅客',
+            'departureDate': '2026-11-18',
+          },
+          _ => fail('Unexpected method ${call.method}'),
+        };
+      });
+      addTearDown(
+        () =>
+            messenger.setMockMethodCallHandler(SystemRecognition.channel, null),
+      );
+      final record = (await recognizeTicketImage(Uint8List(4), catalog)).single;
+      expect(methods, ['recognizeImage', 'capabilities', 'extractTicketText']);
+      expect(record.text('passenger'), '示例旅客');
+      expect(record.departure, isNull);
+    },
+  );
+
+  test(
+    'an already decoded live code needs no photo or model to open review',
+    () async {
+      final barcode = encodeBoardingPass(
+        passenger: 'TEST/TRAVELER',
+        pnr: 'ABC123',
+        origin: 'PEK',
+        destination: 'HND',
+        carrier: 'CA',
+        flightNumber: '181',
+        date: JourneyDate.calendar(2026, 11, 18),
+        cabin: 'Y',
+        seat: '08A',
+        sequence: '104',
+        status: '1',
+      );
+      final live = RecognitionResult(
+        barcodes: [Uint8List.fromList(utf8.encode(barcode))],
+        lines: [RecognitionLine('日期 2026-11-19', 0, 0, 1, .2, .9)],
+      );
+      final record = (await recognizeTicketImage(
+        null,
+        catalog,
+        live: live,
+      )).single;
+      expect(record.barcodeLocked('service'), isTrue);
+      expect(record.text('service'), 'CA181');
+      expect(record.departure?.year, isNull);
+      expect(
+        record.departure?.dayOfYear,
+        JourneyDate.calendar(2026, 11, 18).dayOfYear,
+      );
     },
   );
 

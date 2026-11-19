@@ -40,7 +40,7 @@ Pages 通过 GitHub Actions 中的 **Publish Xingji Pages** 手动发布。从 `
 
 `SystemRecognition` 使用 `dev.yuanzesun.xingji/recognition` 平台通道。iOS 使用 Apple Vision 识别文字和条码，从文稿扫描器、系统照片选择器或文件导入。缺少原生实现的平台返回能力不可用。
 
-`capabilities` 返回 `ocr`、`barcode`、`camera`、`liveBoarding` 和 `appleIntelligence`。端侧模型文字提取需要 iOS 26 或更新版本，图文提取需要 iOS 27 或更新版本。两者都会检查系统模型的可用状态。
+`capabilities` 返回 `ocr`、`barcode`、`camera`、`liveBoarding`、`appleIntelligence` 和 `appleIntelligenceImage`。端侧模型文字提取需要 iOS 26 或更新版本，图文提取需要 iOS 27 或更新版本。每次识别都会读取系统模型的当前可用状态。
 
 `recognizeImage` 接收 `{ bytes: Uint8List, languages: ["zh-Hans", "en"], barcodes: true }`，同时运行文字识别与条码检测，返回：
 
@@ -51,7 +51,7 @@ Pages 通过 GitHub Actions 中的 **Publish Xingji Pages** 手动发布。从 `
 }
 ```
 
-坐标以完成方向矫正后的整张图为准，左上为原点，范围 0–1。原始条码字节以 Base64 传输。图片录入将票面与 OCR 文字提示一起交给端侧模型，合并时以条码字段为准。原生错误通过通道返回，取消返回空值。
+坐标以完成方向矫正后的整张图为准，左上为原点，范围 0–1。原始条码字节以 Base64 传输。已从相机读到有效条码时，后续票面处理跳过重复解码。原生错误通过通道返回，取消返回空值。
 
 铁路二维码要保持原样重建，原生提供方还需在对应 `barcodes` 项中给出 `codeData`：`version:1`、`format`、相同的 Base64 `rawBytes`、`symbologyIdentifier`、`gs1`、`eci:[{offset,value}]` 和 `parameters:{symbolVersion,errorCorrectionLevel,mask}`。参数必须来自实际检测，未知值留空，不推测掩码或纠错等级；只能读出字节时可以导入文字，但不能声称已保存可精确重建的原码。机票条码按 BCBP 解码后统一重建为 PDF417。
 
@@ -61,7 +61,7 @@ Pages 通过 GitHub Actions 中的 **Publish Xingji Pages** 手动发布。从 `
 | macOS | Xcode 构建与签名；Vision 接入；文件面板、权限及 Keychain；票面导出与触控板验收 |
 | Android | 准备 SDK / JDK 与设备后构建；系统识别提供方；相机与文件权限；安全凭证存储、返回手势和系统栏验收 |
 
-图片录入使用 iOS 27 Apple Intelligence 的端侧多模态接口。Vision 提供条码及文字提示。识别到的 BCBP 字段先锁定，随后用票面图片和文字提示补全其余字段，整次识别结束后一次性返回。可从「＋ → 扫描」实时检测条码和拍照，从「＋ → 粘贴」读取剪贴板上的文字或图片。普通文字使用端侧模型提取字段。PDF 文字层和 .pkpass 按结构化来源读取。
+图文模型可用时，行迹用票面图片和 Vision 文字补全字段。只有文字模型可用时，模型从 Vision 文字提取字段。模型关闭、尚未就绪或请求失败时，行迹用 Vision 结果和本地规则继续识别。BCBP 读出的字段保持锁定。可从「＋ → 扫描」实时检测条码和拍照，从「＋ → 粘贴」读取剪贴板上的文字或图片。PDF 文字层和 .pkpass 按结构化来源读取。
 
 ## iOS 地图与文件导入
 

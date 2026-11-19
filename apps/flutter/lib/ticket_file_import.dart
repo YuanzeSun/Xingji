@@ -12,57 +12,81 @@ import 'wallet_pass.dart';
 
 bool _isFlight(RecognitionResult result) =>
     result.barcodes.any((bytes) => decodeBoardingBytes(bytes) != null) ||
-    RegExp(
-      r'航班|登机|机场|乘机|\b(?:FLIGHT|BOARDING PASS|AIRPORT)\b',
-      caseSensitive: false,
-    ).hasMatch(result.lines.map((line) => line.text).join('\n'));
+    _isFlightText(result.lines.map((line) => line.text).join('\n'));
+
+bool _isFlightText(String text) => RegExp(
+  r'航班|登机|出发机场|到达机场|乘机|\b(?:FLIGHT|BOARDING PASS|AIRPORT)\b|\b[A-Z]{2}\s*\d{2,5}[A-Z]?\b',
+  caseSensitive: false,
+).hasMatch(text);
+
+bool _hasJourney(TicketRecord record) =>
+    record.text('service').isNotEmpty ||
+    ['origin', 'destination'].every((key) => record.text(key).isNotEmpty);
 
 Future<List<TicketRecord>> recognizeTicketImage(
-  Uint8List bytes,
+  Uint8List? bytes,
   ReferenceCatalog catalog, {
   bool? flight,
   RecognitionResult? live,
 }) async {
   final provider = SystemRecognition();
-  RecognitionResult photo;
-  try {
-    photo = await provider.recognize(bytes, flight: flight ?? true);
-  } on PlatformException catch (error) {
-    if (error.code != 'vision_failed') rethrow;
-    photo = RecognitionResult();
+  final liveCodes =
+      live?.barcodes
+          .where((code) => decodeBoardingBytes(code) != null)
+          .toList() ??
+      [];
+  var photo = RecognitionResult();
+  if (bytes != null) {
+    try {
+      photo = await provider.recognize(
+        bytes,
+        flight: flight ?? true,
+        barcodes: liveCodes.isEmpty,
+      );
+    } on PlatformException catch (error) {
+      if (error.code != 'vision_failed') rethrow;
+    }
   }
-  final liveCodes = live?.barcodes
-      .where((code) => decodeBoardingBytes(code) != null)
-      .toList();
-  final encoded = liveCodes?.isNotEmpty == true ? liveCodes! : photo.barcodes;
-  final hasBoarding = encoded.any((code) => decodeBoardingBytes(code) != null);
-  final barcodeRecords = hasBoarding
-      ? parseRecognition(
-          RecognitionResult(barcodes: encoded),
-          catalog,
-          flight: true,
-        )
-      : const <TicketRecord>[];
+  final reading = RecognitionResult(
+    lines: photo.lines.isEmpty ? live?.lines ?? [] : photo.lines,
+    barcodes: liveCodes.isEmpty ? photo.barcodes : liveCodes,
+    symbolData: photo.symbolData,
+  );
+  final hasBarcode = reading.barcodes.any(
+    (code) => decodeBoardingBytes(code) != null,
+  );
+  final fallback = parseRecognition(
+    reading,
+    catalog,
+    flight: hasBarcode || (flight ?? _isFlight(reading)),
+  ).where(_hasJourney).toList();
+  // An image model extracts one ticket, so its fields cannot be assigned to
+  // individual coupons from a multi-leg barcode.
+  if (fallback.length > 1) return fallback;
 
-  Map<String, dynamic>? fields;
+  final text = recognizedTicketText(reading.lines);
   try {
-    fields = await provider.extractTicketImage(
-      bytes,
-      recognizedTicketText([...photo.lines, ...?live?.lines]),
-      flight: hasBoarding ? true : flight,
-    );
-  } catch (_) {
-    if (barcodeRecords.isEmpty) rethrow;
+    final capabilities = await provider.capabilities();
+    final fields =
+        bytes != null && capabilities['appleIntelligenceImage'] == true
+        ? await provider.extractTicketImage(
+            bytes,
+            text,
+            flight: hasBarcode ? true : flight,
+          )
+        : text.isNotEmpty && capabilities['appleIntelligence'] == true
+        ? _groundedFields(await provider.extractTicketText(text), text)
+        : null;
+    if (_recognizedTicket(fields, fallback.firstOrNull, catalog, flight: flight)
+        case final ticket? when _hasJourney(ticket)) {
+      return [ticket];
+    }
+  } on PlatformException {
+    // Availability can change after the capabilities check.
+  } on MissingPluginException {
+    // The local result is usable on hosts without a model channel.
   }
-  if (barcodeRecords.length > 1) return barcodeRecords;
-  if (fields == null && barcodeRecords.isNotEmpty) return barcodeRecords;
-  if (fields == null) {
-    throw const FormatException('Apple Intelligence 没有读出票据信息');
-  }
-  final record =
-      barcodeRecords.firstOrNull ??
-      _newRecognizedTicket(fields, flight: flight);
-  return [_mergeTicketFields(record, fields, catalog)];
+  return fallback;
 }
 
 Future<List<TicketRecord>> recognizeTicketText(
@@ -71,21 +95,73 @@ Future<List<TicketRecord>> recognizeTicketText(
 ) async {
   final barcode = boardingRecords(utf8.encode(text), catalog);
   if (barcode.isNotEmpty) return barcode;
-  final fields = await SystemRecognition().extractTicketText(text);
-  if (fields == null) {
-    throw const FormatException('Apple Intelligence 没有读出行程文字');
+  final fallback = parseTicketText(text, catalog, flight: _isFlightText(text));
+  final provider = SystemRecognition();
+  if (fallback.length > 1) return fallback;
+  try {
+    if (!await provider.supports('appleIntelligence')) return fallback;
+    final fields = _groundedFields(
+      await provider.extractTicketText(text),
+      text,
+    );
+    if (_recognizedTicket(fields, fallback.firstOrNull, catalog)
+        case final ticket? when _hasJourney(ticket)) {
+      return [ticket];
+    }
+  } on PlatformException {
+    // Keep the deterministic text result when the model cannot process it.
+  } on MissingPluginException {
+    // Text parsing works on platforms without a native model.
   }
-  return [_mergeTicketFields(_newRecognizedTicket(fields), fields, catalog)];
+  return fallback;
 }
 
-TicketRecord _newRecognizedTicket(Map<String, dynamic> fields, {bool? flight}) {
+Map<String, dynamic>? _groundedFields(
+  Map<String, dynamic>? fields,
+  String text,
+) {
+  if (fields == null) return null;
+  String compact(String value) =>
+      value.toUpperCase().replaceAll(RegExp(r'[\s·]'), '');
+  final source = compact(text);
+  final dates = RegExp(r'(?:19|20)\d{2}[年./-]\d{1,2}[月./-]\d{1,2}日?')
+      .allMatches(source)
+      .map((match) => parsePrintedJourneyDate(match[0])?.calendarText)
+      .toSet();
+  return {
+    for (final MapEntry(:key, :value) in fields.entries)
+      if (value is String &&
+          value.trim().isNotEmpty &&
+          (key == 'type' ||
+              (key.endsWith('Date')
+                  ? dates.contains(value)
+                  : source.contains(compact(value)))))
+        key: value,
+  };
+}
+
+TicketRecord? _recognizedTicket(
+  Map<String, dynamic>? fields,
+  TicketRecord? fallback,
+  ReferenceCatalog catalog, {
+  bool? flight,
+}) {
+  if (fields == null) return fallback;
   final type = switch (fields['type']) {
     'rail' => 'rail',
     'flight' => 'flight',
     _ when flight != null => flight ? 'flight' : 'rail',
-    _ => throw const FormatException('无法判断这是火车票还是机票'),
+    _ => null,
   };
-  return TicketRecord.create({'type': type});
+  if (type == null && fallback == null) return null;
+  if (fallback != null && type != null && fallback.text('type') != type) {
+    return fallback;
+  }
+  return _mergeTicketFields(
+    fallback ?? TicketRecord.create({'type': type}),
+    fields,
+    catalog,
+  );
 }
 
 TicketRecord _mergeTicketFields(
@@ -197,7 +273,7 @@ Future<List<TicketRecord>> readTicketAttachment(
       );
     }
   }
-  return deduplicateTickets(tickets, catalog);
+  return tickets;
 }
 
 Future<List<TicketRecord>> readLocalImport(
@@ -222,11 +298,7 @@ Future<List<TicketRecord>> readLocalImport(
   }
   final text = utf8.decode(bytes);
   return switch (extension) {
-    'txt' => parseTicketText(
-      text,
-      catalog,
-      flight: RegExp(r'航班|登机|FLIGHT', caseSensitive: false).hasMatch(text),
-    ),
+    'txt' => recognizeTicketText(text, catalog),
     _ => throw const FormatException('不支持这个文件格式'),
   };
 }
@@ -287,9 +359,12 @@ Future<void> reviewSharedTickets(BuildContext context, AppStore store) async {
     showError(context, store.readOnlyReason ?? '票库暂时不可写');
     return;
   }
+  final archiveSession = store.archiveSession;
   final data = await AppleServices.sharedTicketData(file.id);
   final records = await readTicketAttachment(data, file.kind, store.catalog);
-  if (context.mounted && await reviewImport(context, store, records)) {
+  if (context.mounted &&
+      archiveSession == store.archiveSession &&
+      await reviewImport(context, store, records)) {
     await AppleServices.removeSharedTicket(file.id);
   }
 }

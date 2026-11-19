@@ -24,11 +24,15 @@ class JourneyStatistics {
     required bool subtype,
     required bool owner,
     required bool mergeDirections,
+    DateTime? today,
   }) {
     final lower = from == null
         ? null
         : DateTime.utc(from.year, from.month, from.day);
-    final upper = DateTime.utc(until.year, until.month, until.day);
+    final now = today ?? DateTime.now();
+    final todayEnd = DateTime.utc(now.year, now.month, now.day);
+    final requestedEnd = DateTime.utc(until.year, until.month, until.day);
+    final upper = requestedEnd.isAfter(todayEnd) ? todayEnd : requestedEnd;
     final periodKeys = <String, (int, int)>{};
     int? firstYear, lastYear;
     for (final record in records) {
@@ -103,7 +107,7 @@ class JourneyStatistics {
       for (var year = firstYear; year <= lastYear; year++) {
         if (monthly) {
           final firstMonth = from?.year == year ? from!.month : 1;
-          final lastMonth = until.year == year ? until.month : 12;
+          final lastMonth = upper.year == year ? upper.month : 12;
           for (var month = firstMonth; month <= lastMonth; month++) {
             final key = _monthKey(year, month);
             buckets[key] = periodKeys[key] ?? (0, 0);

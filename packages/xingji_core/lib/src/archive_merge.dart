@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'boarding_decoder.dart';
+import 'journey_date.dart';
 import 'ticket_record.dart';
 import 'record_fields.dart';
 import 'reference_catalog.dart';
@@ -119,14 +120,20 @@ String _bucket(TicketRecord record) =>
           ? 'refund:'
           : ''}${record.departure!.calendarText}:${_normal(record['service'])}'
     : '';
-bool _sameJourney(TicketRecord a, TicketRecord b, ReferenceCatalog catalog) {
+bool _sameJourney(
+  TicketRecord a,
+  TicketRecord b,
+  ReferenceCatalog catalog, {
+  bool checkTime = true,
+}) {
   if (a.deleted || b.deleted || _bucket(a).isEmpty || _bucket(a) != _bucket(b))
     return false;
   if (a.text('passenger').isNotEmpty &&
       b.text('passenger').isNotEmpty &&
       _normal(a['passenger']) != _normal(b['passenger']))
     return false;
-  if (a.text('departureTime').isNotEmpty &&
+  if (checkTime &&
+      a.text('departureTime').isNotEmpty &&
       b.text('departureTime').isNotEmpty &&
       a['departureTime'] != b['departureTime'])
     return false;
@@ -162,10 +169,168 @@ bool _sameJourney(TicketRecord a, TicketRecord b, ReferenceCatalog catalog) {
   return true;
 }
 
-List<TicketRecord> deduplicateTickets(
-  List<TicketRecord> records,
+const _railConflictFields = {
+  'departureTime': '出发时间',
+  'arrivalDate': '到达日期',
+  'arrivalTime': '到达时间',
+  'identity': '证件号',
+  'carriage': '车厢',
+  'seat': '座位 / 铺位',
+  'seatClass': '席别',
+  'price': '金额',
+  'ticketNumber': '票号',
+  'orderNumber': '订单号',
+  'saleCode': '售票码',
+  'issuer': '售票站',
+  'gate': '检票口',
+  'railPlatform': '站台',
+  'railBureau': '担当路局',
+  'railModel': '车型',
+  'railTrainsets': '车组编号',
+  'railPowerSupply': '供电制式',
+  'railMileage': '铁路里程',
+  'railRunner': '担当客运段',
+  'railCarOwner': '车辆归属单位',
+};
+
+bool _railFieldConflicts(String field, Object? left, Object? right) {
+  if (_empty(left) || _empty(right)) return false;
+  if (field == 'arrivalDate') {
+    final a = JourneyDate.fromJson(left), b = JourneyDate.fromJson(right);
+    return (a?.year != null && b?.year != null && a!.year != b!.year) ||
+        (a?.dayOfYear != null &&
+            b?.dayOfYear != null &&
+            a!.dayOfYear != b!.dayOfYear);
+  }
+  final a = _normal(left), b = _normal(right);
+  if (const {
+    'carriage',
+    'price',
+    'railPlatform',
+    'railMileage',
+  }.contains(field)) {
+    final number = RegExp(r'^\d+(?:\.\d+)?$');
+    if (number.hasMatch(a) && number.hasMatch(b)) {
+      return double.parse(a) != double.parse(b);
+    }
+  }
+  return a != b;
+}
+
+Set<String> changedRailDuplicateIds(
+  Iterable<TicketRecord> baseline,
+  Iterable<TicketRecord> records,
+) {
+  final previous = {
+    for (final record in baseline)
+      for (final id in record.ids) id: record,
+  };
+  final fields = [
+    'service',
+    'departureDate',
+    'origin',
+    'originCode',
+    'destination',
+    'destinationCode',
+    'passenger',
+    'template',
+    ..._railConflictFields.keys,
+  ];
+  final changed = <String>{};
+  for (final record in records) {
+    if (record.isFlight || record.deleted) continue;
+    final prior = record.ids.map((id) => previous[id]).nonNulls.firstOrNull;
+    if (prior == null ||
+        fields.any((field) => !sameValue(record[field], prior[field]))) {
+      changed.add(record.id);
+    }
+  }
+  return changed;
+}
+
+List<TicketRecord> _duplicateMatches(
+  Iterable<TicketRecord> records,
+  TicketRecord candidate,
+  ReferenceCatalog catalog, {
+  required bool Function(TicketRecord) check,
+}) {
+  final matches = records
+      .where(
+        (row) => _sameJourney(
+          row,
+          candidate,
+          catalog,
+          checkTime:
+              candidate.isFlight ||
+              !check(row) ||
+              candidate.text('passenger').isEmpty ||
+              row.text('passenger').isEmpty,
+        ),
+      )
+      .toList();
+  final named = candidate.text('passenger').isEmpty
+      ? const <TicketRecord>[]
+      : matches
+            .where(
+              (row) =>
+                  _normal(row['passenger']) == _normal(candidate['passenger']),
+            )
+            .toList();
+  final preferred = named.isEmpty ? matches : named;
+  if (candidate.isFlight) return preferred;
+
+  final conflicting = <String>{}, compatible = <TicketRecord>[];
+  for (final row in preferred) {
+    if (!check(row)) {
+      if (!_railFieldConflicts(
+        'ticketNumber',
+        row['ticketNumber'],
+        candidate['ticketNumber'],
+      )) {
+        compatible.add(row);
+      }
+      continue;
+    }
+    final fields = _railConflictFields.keys
+        .where((key) => _railFieldConflicts(key, row[key], candidate[key]))
+        .toList();
+    if (fields.isEmpty) {
+      compatible.add(row);
+    } else {
+      conflicting.addAll(fields);
+    }
+  }
+  if (compatible.isEmpty && conflicting.isNotEmpty) {
+    final labels = conflicting.map((key) => _railConflictFields[key]).join('、');
+    throw FormatException(
+      '${candidate.text('service')} 疑似重复票据，${labels}与已有票据冲突。请核对后再加入。',
+    );
+  }
+  return compatible;
+}
+
+void checkRailDuplicates(
+  Iterable<TicketRecord> records,
+  Set<String> updated,
+  Iterable<TicketRecord> remote,
   ReferenceCatalog catalog,
 ) {
+  for (final candidate in records.where((row) => updated.contains(row.id))) {
+    final ids = candidate.ids.toSet();
+    _duplicateMatches(
+      remote.where((row) => !row.ids.any(ids.contains)),
+      candidate,
+      catalog,
+      check: (_) => true,
+    );
+  }
+}
+
+List<TicketRecord> deduplicateTickets(
+  List<TicketRecord> records,
+  ReferenceCatalog catalog, {
+  Set<String> rejectRailConflictsFor = const {},
+}) {
   final ordered = records.indexed.toList()
     ..sort((a, b) {
       final names =
@@ -185,20 +350,15 @@ List<TicketRecord> deduplicateTickets(
         )
         .toList();
     if (candidates.isEmpty) {
-      candidates = result
-          .where(
-            (row) => _sameJourney(TicketRecord.fromJson(row), record, catalog),
-          )
-          .toList();
-      if (record.text('passenger').isNotEmpty) {
-        final named = candidates
-            .where(
-              (row) =>
-                  _normal(row['passenger']) == _normal(record['passenger']),
-            )
-            .toList();
-        if (named.isNotEmpty) candidates = named;
-      }
+      final matches = _duplicateMatches(
+        result.map(TicketRecord.fromJson),
+        record,
+        catalog,
+        check: (row) =>
+            rejectRailConflictsFor.contains(record.id) ||
+            row.ids.any(rejectRailConflictsFor.contains),
+      ).map((row) => row.id).toSet();
+      candidates = result.where((row) => matches.contains(row['id'])).toList();
     }
     if (candidates.length != 1) {
       final row = record.toJson();

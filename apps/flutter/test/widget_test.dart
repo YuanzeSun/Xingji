@@ -381,6 +381,7 @@ void main() {
       return call.method == 'Clipboard.getData' ? {'text': message} : null;
     });
     messenger.setMockMethodCallHandler(SystemRecognition.channel, (call) async {
+      if (call.method == 'capabilities') return {'appleIntelligence': true};
       expect(call.method, 'extractTicketText');
       expect(call.arguments['text'], message);
       return {

@@ -18,8 +18,9 @@ class StatisticsPage extends StatefulWidget {
 }
 
 class _StatisticsPageState extends State<StatisticsPage> {
-  DateTime? from;
-  DateTime until = DateUtils.dateOnly(DateTime.now());
+  DateTime? from, endOverride;
+  DateTime get today => DateUtils.dateOnly(DateTime.now());
+  DateTime get until => endOverride ?? today;
   final rankingViews = <String, RankingView>{};
   bool monthly = false,
       supply = false,
@@ -265,7 +266,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
   Future<void> _pickDate({required bool start}) async {
     final initial = start ? from ?? until : until;
     final first = start ? DateTime(1800) : from ?? DateTime(1800);
-    final last = DateTime(2200, 12, 31);
+    final last = today;
     final DateTime? picked;
     try {
       picked = AppleServices.available
@@ -286,9 +287,9 @@ class _StatisticsPageState extends State<StatisticsPage> {
     setState(() {
       if (start) {
         from = selected;
-        if (until.isBefore(selected)) until = selected;
+        if (until.isBefore(selected)) endOverride = selected;
       } else {
-        until = selected;
+        endOverride = selected;
       }
     });
   }
@@ -332,7 +333,7 @@ class _StatisticsPageState extends State<StatisticsPage> {
                 icon: const Icon(Icons.restart_alt, size: 21),
                 onPressed: () => setState(() {
                   from = null;
-                  until = DateUtils.dateOnly(DateTime.now());
+                  endOverride = null;
                 }),
               ),
             ],
@@ -388,7 +389,9 @@ class _StatisticsPageState extends State<StatisticsPage> {
     Widget control, {
     bool switchable = false,
   }) {
-    final view = rankingViews[title] ?? RankingView.bars;
+    final view =
+        rankingViews[title] ??
+        (switchable ? RankingView.donut : RankingView.bars);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

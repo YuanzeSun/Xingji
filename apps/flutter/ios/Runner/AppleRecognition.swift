@@ -1,5 +1,6 @@
 import Flutter
 import CoreGraphics
+import CoreImage
 import FoundationModels
 import ImageIO
 import OSLog
@@ -11,6 +12,11 @@ enum AppleRecognition {
 
   static var modelAvailable: Bool {
     modelFailure == nil
+  }
+
+  static var imageModelAvailable: Bool {
+    if #available(iOS 27.0, *) { return modelAvailable }
+    return false
   }
 
   private static var modelFailure: (code: String, message: String)? {
@@ -128,6 +134,11 @@ enum AppleRecognition {
       if found.contains(where: isBoardingPayload) { return found }
     }
 
+    if let frame = enhancedBoardingFrame(image) {
+      let found = detectBarcodes(in: frame, flight: true)
+      if found.contains(where: isBoardingPayload) { return found }
+    }
+
     let width = CGFloat(image.width), height = CGFloat(image.height)
     let stripWidth = width * 0.67, stripHeight = height * 0.67
     // A side strip can preserve an entire PDF417 that spans two quadrants.
@@ -146,6 +157,18 @@ enum AppleRecognition {
       if found.contains(where: isBoardingPayload) { return found }
     }
     return original
+  }
+
+  private static let contrastContext = CIContext(options: [.cacheIntermediates: false])
+
+  private static func enhancedBoardingFrame(_ image: CGImage) -> CGImage? {
+    let edge = min(2400, Int(Double(max(image.width, image.height)) * 1.5))
+    guard let frame = resized(image, longestEdge: edge) else { return nil }
+    let contrasted = CIImage(cgImage: frame).applyingFilter("CIColorControls", parameters: [
+      kCIInputSaturationKey: 0,
+      kCIInputContrastKey: 1.65,
+    ])
+    return contrastContext.createCGImage(contrasted, from: contrasted.extent)
   }
 
   private static func resized(_ image: CGImage, longestEdge: Int) -> CGImage? {
@@ -253,7 +276,8 @@ enum AppleRecognition {
       return
     }
     guard !reportModelFailure(to: result) else { return }
-    guard let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+    guard bytes.count <= 80_000_000,
+          let source = CGImageSourceCreateWithData(bytes as CFData, nil),
           let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,

@@ -5,16 +5,17 @@ import 'package:xingji_core/xingji_core.dart';
 /// Each host reports the recognition features it implements.
 class SystemRecognition implements RecognitionService {
   static const channel = MethodChannel('dev.yuanzesun.xingji/recognition');
-  Future<bool> supports(String capability) async {
+  Future<Map<String, dynamic>> capabilities() async {
     try {
-      final value = await channel.invokeMapMethod<String, dynamic>(
-        'capabilities',
-      );
-      return value?[capability] == true;
+      return await channel.invokeMapMethod<String, dynamic>('capabilities') ??
+          const {};
     } on MissingPluginException {
-      return false;
+      return const {};
     }
   }
+
+  Future<bool> supports(String capability) async =>
+      (await capabilities())[capability] == true;
 
   Future<Map<String, dynamic>?> extractTicketImage(
     Uint8List bytes,
@@ -61,27 +62,22 @@ class SystemRecognition implements RecognitionService {
 
   @override
   Future<bool> available() async {
-    try {
-      final value = await channel.invokeMapMethod<String, dynamic>(
-        'capabilities',
-      );
-      return value?['ocr'] == true || value?['barcode'] == true;
-    } on MissingPluginException {
-      return false;
-    }
+    final features = await capabilities();
+    return features['ocr'] == true || features['barcode'] == true;
   }
 
   @override
   Future<RecognitionResult> recognize(
     Uint8List image, {
     bool flight = false,
+    bool barcodes = true,
   }) async {
     final result = await channel.invokeMapMethod<String, dynamic>(
       'recognizeImage',
       {
         'bytes': image,
         'languages': ['zh-Hans', 'en'],
-        'barcodes': true,
+        'barcodes': barcodes,
         'flight': flight,
       },
     );

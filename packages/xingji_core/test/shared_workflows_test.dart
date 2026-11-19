@@ -17,7 +17,7 @@ void main() {
     'lastName': 'sun',
     'firstName': 'yuanze',
     'documents': [
-      {'id': 'id', 'type': 'national-id', 'number': '11010119900101****'},
+      {'id': 'id', 'type': 'national-id', 'number': '110101199001011234'},
       {'id': 'passport', 'type': 'passport', 'number': 'E12345678'},
     ],
   });
@@ -35,7 +35,7 @@ void main() {
       catalog,
     );
     expect(domestic.text('passenger'), '示例旅客');
-    expect(domestic.text('identity'), '11010119900101****');
+    expect(domestic.text('identity'), '110101199001011234');
     final international = applyProfileDefaults(
       flight('PEK', 'VIE'),
       profile,

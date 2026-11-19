@@ -1,3 +1,4 @@
+import 'identity.dart';
 import 'journey_date.dart';
 import 'reference_catalog.dart';
 import 'ticket_record.dart';
@@ -50,11 +51,13 @@ Map<String, dynamic> personalProfile([Map value = const {}]) {
         throw const FormatException('证件有效期无效');
       }
     }
+    final number = text(raw['number'], 128);
+    requireCompleteIdentity(number);
     final doc = {
       'id': id,
       'type': type,
       'label': text(raw['label'], 80),
-      'number': text(raw['number'], 128),
+      'number': number,
       'expiry': expiry,
     };
     if (doc['label'] != '' || doc['number'] != '' || expiry.isNotEmpty) {

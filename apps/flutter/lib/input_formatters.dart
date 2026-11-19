@@ -1,4 +1,15 @@
 import 'package:flutter/services.dart';
+import 'package:xingji_core/xingji_core.dart';
+
+class CompleteIdentityInput extends TextInputFormatter {
+  const CompleteIdentityInput();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) => hasMaskedIdentity(newValue.text) ? oldValue : newValue;
+}
 
 class UppercaseInput extends TextInputFormatter {
   @override

@@ -365,12 +365,27 @@ class GitHubArchive {
         'parents': [snapshot.head],
       },
     );
-    await _request(
-      '/git/refs/heads/${Uri.encodeComponent(connection.branch)}',
-      method: 'PATCH',
-      body: {'sha': commit['sha'], 'force': false},
-    );
-    return commit['sha'] as String;
+    final published = commit['sha'] as String;
+    await _publish(published);
+    return published;
+  }
+
+  Future<void> _publish(String commit) async {
+    try {
+      await _request(
+        '/git/refs/heads/${Uri.encodeComponent(connection.branch)}',
+        method: 'PATCH',
+        body: {'sha': commit, 'force': false},
+      );
+    } catch (_) {
+      String? current;
+      try {
+        current = await head();
+      } catch (_) {
+        // Keep the original failure if the branch cannot be verified.
+      }
+      if (current != commit) rethrow;
+    }
   }
 
   Future<void> assertDescendant(String previous, String current) async {
@@ -463,11 +478,7 @@ class GitHubArchive {
         'parents': [snapshot.head],
       },
     );
-    await _request(
-      '/git/refs/heads/${Uri.encodeComponent(connection.branch)}',
-      method: 'PATCH',
-      body: {'sha': commit['sha'], 'force': false},
-    );
+    await _publish(commit['sha'] as String);
     return ArchiveSnapshot(
       records: [],
       settings: preserved,

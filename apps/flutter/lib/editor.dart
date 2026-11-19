@@ -82,6 +82,7 @@ class _TicketEditorState extends State<TicketEditor> {
       confirmingExit = false;
   bool electronicMarker = false;
   int revision = 0;
+  late final int archiveSession;
   String error = '';
   AppStore get store => widget.store;
   bool get flight => data['type'] == 'flight';
@@ -92,6 +93,7 @@ class _TicketEditorState extends State<TicketEditor> {
   @override
   void initState() {
     super.initState();
+    archiveSession = store.archiveSession;
     _replace(widget.record ?? widget.recognized ?? TicketRecord.create());
     dirty = widget.recognized != null;
   }
@@ -324,6 +326,10 @@ class _TicketEditorState extends State<TicketEditor> {
           null;
 
   Future<void> save() async {
+    if (archiveSession != store.archiveSession) {
+      setState(() => error = '票库已变化，请重新打开录入界面。');
+      return;
+    }
     setState(() {
       submitted = true;
       error = '';
@@ -931,7 +937,10 @@ class _TicketEditorState extends State<TicketEditor> {
           controller: controller,
           enabled: enabled,
           readOnly: locked(key) || time,
-          inputFormatters: uppercase ? [UppercaseInput()] : null,
+          inputFormatters: [
+            if (key == 'identity') const CompleteIdentityInput(),
+            if (uppercase) UppercaseInput(),
+          ],
           decoration: InputDecoration(
             label: _label(
               key,

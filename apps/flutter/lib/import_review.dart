@@ -17,6 +17,7 @@ Future<bool> reviewImport(
     return false;
   }
   final selected = records.map((record) => record.id).toSet();
+  final archiveSession = store.archiveSession;
   var saving = false;
   String error = '';
   return await showDialog<bool>(
@@ -95,6 +96,9 @@ Future<bool> reviewImport(
                             error = '';
                           });
                           try {
+                            if (archiveSession != store.archiveSession) {
+                              throw const FormatException('票库已变化，请重新导入票据。');
+                            }
                             await store.importArchive(
                               TicketArchive(
                                 records

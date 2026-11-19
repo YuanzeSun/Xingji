@@ -181,12 +181,9 @@ class _ProfileEditorState extends State<ProfileEditor> {
                                 setState(() => doc.type = value),
                           ),
                           const SizedBox(height: 12),
-                          ArchiveTextField(
-                            controller: doc.number,
-                            inputFormatters: [UppercaseInput()],
-                            decoration: const InputDecoration(
-                              labelText: '证件号码',
-                            ),
+                          _DocumentNumberField(
+                            number: doc.number,
+                            nationalId: doc.type == 'national-id',
                           ),
                           const SizedBox(height: 12),
                           ArchiveTextField(
@@ -268,6 +265,64 @@ class _ProfileEditorState extends State<ProfileEditor> {
         ),
       ),
     ),
+  );
+}
+
+class _DocumentNumberField extends StatefulWidget {
+  final TextEditingController number;
+  final bool nationalId;
+  const _DocumentNumberField({required this.number, required this.nationalId});
+
+  @override
+  State<_DocumentNumberField> createState() => _DocumentNumberFieldState();
+}
+
+class _DocumentNumberFieldState extends State<_DocumentNumberField> {
+  final focus = FocusNode();
+  final display = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    focus.addListener(_refresh);
+    _refresh();
+  }
+
+  @override
+  void didUpdateWidget(_DocumentNumberField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.nationalId != widget.nationalId && !focus.hasFocus) {
+      _refresh();
+    }
+  }
+
+  void _refresh() {
+    final number = widget.number.text;
+    final text = focus.hasFocus
+        ? number
+        : maskRailIdentity(number, isNationalId: widget.nationalId);
+    display.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  @override
+  void dispose() {
+    focus.dispose();
+    display.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ArchiveTextField(
+    controller: display,
+    focusNode: focus,
+    autocorrect: false,
+    enableSuggestions: false,
+    inputFormatters: [const CompleteIdentityInput(), UppercaseInput()],
+    decoration: const InputDecoration(labelText: '证件号码'),
+    onChanged: (value) => widget.number.text = value,
   );
 }
 

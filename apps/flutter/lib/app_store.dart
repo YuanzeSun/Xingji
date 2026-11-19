@@ -47,6 +47,7 @@ class AppStore extends ChangeNotifier {
   SettingsMerge? settingsConflicts;
   bool resetDetected = false;
   String _head = '', _generation = '';
+  int _archiveSession = 0;
   bool demo = false, busy = false, pending = false;
   bool _online = false, _checking = false;
   String status = '本机票库';
@@ -166,6 +167,7 @@ class AppStore extends ChangeNotifier {
   }
 
   bool get canWrite => !demo && !busy && readOnlyReason == null;
+  int get archiveSession => _archiveSession;
 
   List<TicketRecord> get records =>
       (demo ? examples : _records).where((record) => !record.deleted).toList();
@@ -188,7 +190,9 @@ class AppStore extends ChangeNotifier {
   }
 
   void setDemo(bool value) {
+    if (demo == value) return;
     demo = value;
+    _archiveSession++;
     notifyListeners();
   }
 
@@ -276,9 +280,14 @@ class AppStore extends ChangeNotifier {
     final next = records ?? _records;
     final preferences = nextSettings ?? settings;
     final remote = _remote;
+    final previous = baseRecords ?? _records;
+    final updated = changedRailDuplicateIds(previous, next);
+    final reviewed = records == null
+        ? next
+        : deduplicateTickets(next, catalog, rejectRailConflictsFor: updated);
     if (remote == null) {
       final oldRecords = _records, oldSettings = settings;
-      _records = deduplicateTickets(next, catalog);
+      _records = reviewed;
       settings = preferences;
       try {
         await _persist();
@@ -293,8 +302,7 @@ class AppStore extends ChangeNotifier {
 
     // Keep the edit in the form until the branch update succeeds. Retry once
     // if another device advanced the branch between reading and publishing.
-    final canonicalNext = await remote.canonicalRecords(next);
-    final previous = baseRecords ?? _records;
+    final canonicalNext = await remote.canonicalRecords(reviewed);
     final previousSettings = baseSettings ?? settings;
     for (var attempt = 0; ; attempt++) {
       late final ArchiveSnapshot snapshot;
@@ -303,6 +311,9 @@ class AppStore extends ChangeNotifier {
       } catch (failure) {
         _syncFailure(failure);
         rethrow;
+      }
+      if (snapshot.head != _head) {
+        checkRailDuplicates(next, updated, snapshot.records, catalog);
       }
       final tickets = mergeTickets(
         previous,
@@ -358,6 +369,7 @@ class AppStore extends ChangeNotifier {
   }) => _run(() async {
     _requireWritable();
     if (record.missingFields.isNotEmpty) throw const FormatException('请补全必填项');
+    requireCompleteIdentity(record.text('identity'));
     final next = catalog.normalize(record.withChanges({'updatedAt': utcNow()}));
     return _saveChanges(
       records: _replaceRecords([next]),
@@ -426,8 +438,11 @@ class AppStore extends ChangeNotifier {
     Map<String, dynamic>? backupSettings,
     PickConflicts? pick,
   }) => _run(() async {
+    for (final record in archive.records) {
+      requireCompleteIdentity(record.text('identity'));
+    }
     await _saveChanges(
-      records: deduplicateTickets([..._records, ...archive.records], catalog),
+      records: [..._records, ...archive.records],
       nextSettings: backupSettings == null
           ? null
           : sharedSettings({
@@ -474,6 +489,7 @@ class AppStore extends ChangeNotifier {
         _remote?.close();
         _remote = remote;
         connection = binding;
+        _archiveSession++;
         await _sync(firstSnapshot: snapshot);
         await _rememberCredential(binding, token);
         return true;
@@ -524,6 +540,7 @@ class AppStore extends ChangeNotifier {
           : await remote.write(merged, snapshot, mergedSettings);
       _remote = remote;
       connection = binding;
+      _archiveSession++;
       _adopt(
         snapshot,
         records: merged,
@@ -744,7 +761,9 @@ class AppStore extends ChangeNotifier {
     settings = sharedSettings(newSettings ?? snapshot.settings);
     _baseSettings = sharedSettings(cloneJson(settings));
     _head = head ?? snapshot.head;
-    _generation = generation ?? snapshot.generation;
+    final nextGeneration = generation ?? snapshot.generation;
+    if (_generation != nextGeneration) _archiveSession++;
+    _generation = nextGeneration;
     pending = false;
     resetDetected = false;
     _online = connected;
@@ -761,6 +780,7 @@ class AppStore extends ChangeNotifier {
     _remote?.close();
     _remote = null;
     connection = null;
+    _archiveSession++;
     _records = [];
     _base = [];
     _baseSettings = {};

@@ -21,7 +21,7 @@ void main() {
     'departureDate': JourneyDate.calendar(2026, 11, 16).toJson(),
     'departureTime': '15:00',
     'passenger': '示例旅客',
-    'identity': '11010119900101****',
+    'identity': '110101199001011234',
     'seatClass': '二等座',
     'carriage': '05',
     'seat': '08F',
@@ -32,6 +32,35 @@ void main() {
       ticket(),
     ], {});
   }
+
+  test('a duplicate rail trip merges blanks and rejects conflicting ticket details', () async {
+    final app = await store();
+    addTearDown(app.dispose);
+    final initial = ticket().withChanges({'ticketNumber': 'T000001'});
+    await app.save(initial);
+    await app.importArchive(
+      TicketArchive([
+        ticket().withChanges({'gate': '16A'}),
+      ]),
+    );
+    expect(app.records.single.text('gate'), '16A');
+    await expectLater(
+      app.importArchive(
+        TicketArchive([
+          ticket().withChanges({'ticketNumber': 'T000002', 'gate': '18B'}),
+        ]),
+      ),
+      throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          contains('票号'),
+        ),
+      ),
+    );
+    expect(app.records.single.text('gate'), '16A');
+    expect(app.records.single.text('ticketNumber'), 'T000001');
+  });
 
   test(
     'local-only tickets reload from storage without a sync requirement',

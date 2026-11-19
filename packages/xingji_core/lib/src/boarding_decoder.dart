@@ -239,14 +239,13 @@ List<TicketRecord> boardingRecords(
       ...boardingMetadata(leg),
       'boardingCode': code,
     };
-    final year = matching
-        ? JourneyDate.fromJson(supplement['departureDate'])?.year
+    final printedDate = matching
+        ? JourneyDate.fromJson(supplement['departureDate'])
         : null;
+    final dayOfYear = leg['dayOfYear'] as int;
     final date = JourneyDate(
-      year != null && (leg['dayOfYear'] as int) <= JourneyDate.daysInYear(year)
-          ? year
-          : null,
-      leg['dayOfYear'],
+      printedDate?.dayOfYear == dayOfYear ? printedDate?.year : null,
+      dayOfYear,
     );
     barcodeFields['departureDate'] = date.toJson();
     return catalog.normalize(

@@ -102,6 +102,8 @@ void main() {
 
     await choose('乘坐车型', RankingView.columns);
     expect(chart('乘坐车型').view, RankingView.columns);
+    await choose('乘坐机型', RankingView.bars);
+    expect(chart('乘坐机型').view, RankingView.bars);
     await choose('乘坐机型', RankingView.donut);
     expect(chart('乘坐机型').view, RankingView.donut);
     final subtype = find.widgetWithText(SwitchListTile, '包含子型号');
@@ -117,7 +119,7 @@ void main() {
       scrollable: pageScroll,
     );
     await tester.pumpAndSettle();
-    expect(chart('担当路局').view, RankingView.bars);
+    expect(chart('担当路局').view, RankingView.donut);
     await tester.scrollUntilVisible(
       group('乘坐车型'),
       -180,
@@ -152,6 +154,7 @@ void main() {
       bool monthly = false,
       bool merge = true,
       DateTime? from,
+      DateTime? today,
     }) => JourneyStatistics(
       [
         ...rails,
@@ -162,6 +165,7 @@ void main() {
       catalog,
       until: DateTime(2025, 12, 31),
       from: from,
+      today: today,
       monthly: monthly,
       supply: true,
       subtype: false,
@@ -184,6 +188,9 @@ void main() {
     expect(statistics(from: DateTime(2024, 6)).railMileageTrips, 0);
     expect(statistics(monthly: true).buckets['2025-10'], (1, 2));
     expect(statistics(monthly: true).buckets.containsKey('2024-01'), false);
+    final byToday = statistics(today: DateTime(2025, 9, 30, 23, 59));
+    expect(byToday.flights, isEmpty);
+    expect(byToday.rails, hasLength(1));
   });
 
   testWidgets(
