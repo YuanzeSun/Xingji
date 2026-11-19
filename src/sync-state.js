@@ -35,12 +35,15 @@ export async function bindRepository(config, expectedD1 = null, credential) {
     return { write, result: { ...current, config: bound } };
   });
 }
-export function signOutGitHub() {
-  return db.atomic(keys, raw => {
-    const write = { githubToken: '' };
-    if (raw.d1) return { write, result: unpack(raw) };
+export function signOutCloud(provider, otherSession) {
+  return db.atomic([...keys, 'githubToken', 'd1Token'], raw => {
+    const other = provider === 'd1' ? 'github' : 'd1';
+    const write = { [provider + 'Token']: '' };
+    const otherSignedIn = raw[other]?.id && (raw[other + 'Token'] ?? otherSession);
+    if (otherSignedIn) return { write, result: unpack(raw) };
     Object.assign(write, {
-      github: null, records: [], base: [], settings: {}, settingsBase: {},
+      github: null, d1: null, githubToken: '', d1Token: '', showDemo: false,
+      records: [], base: [], settings: {}, settingsBase: {},
       syncMeta: { revision: (raw.syncMeta?.revision || 0) + 1 }, lastSync: null
     });
     return { write, result: unpack(write) };
