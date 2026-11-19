@@ -21,7 +21,7 @@ test('backup roundtrip preserves template, manual locks and unicode', () => {
 });
 test('duplicate sources enrich missing fields without replacing corrections', () => {
   const before = sample({ seat: '08F', price: '', lockedFields: ['seat'], sources: [{ kind: 'manual', label: '校对', at: '2026-01-01' }] });
-  const incoming = sample({ id: 'other-id', seat: '08A', price: '553.00', sources: [{ kind: 'email', label: '通知', at: '2026-01-02' }] });
+  const incoming = sample({ id: 'other-id', seat: '08F', price: '553.00', sources: [{ kind: 'email', label: '通知', at: '2026-01-02' }] });
   const merged = applyImport([before], [incoming]);
   assert.equal(merged.added, 0); assert.equal(merged.enriched, 1); assert.equal(merged.records[0].seat, '08F'); assert.equal(merged.records[0].price, '553.00'); assert.equal(merged.records[0].sources.length, 2);
   assert.equal(applyImport([before], [sample({ id: 'different-passenger', passenger: '李四' })]).added, 1);

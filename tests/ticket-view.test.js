@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {createRecord} from '../src/model.js';
-import {ticketViewOptions,ticketViewControls,ticketCollection,bindTicketViewControls} from '../src/ticket-view.js';
+import {ticketViewOptions,ticketViewControls,ticketCollection,appendTicketCollection,bindTicketViewControls} from '../src/ticket-view.js';
 import {spaceWindow,spherePoint,ticketSpaceMarkup,mountTicketSpace} from '../src/ticket-space.js';
 import {timeline} from '../src/timeline.js';
 
@@ -18,6 +18,23 @@ test('list view keeps ticket actions and selection without constructing ticket f
   const markup=timeline([rail('a'),rail('fee',{template:'rail-refund-receipt'}),rail('open',{type:'flight',template:'air-boarding-pass',flightStatus:'open'})],icon);
   assert.match(markup,/timeline-list-compact/);assert.match(markup,/data-id="fee"/);assert.match(markup,/data-id="open"/);assert.doesNotMatch(markup,/ticket-preview/);
   dom.window.close();
+});
+
+test('appending tickets reuses nodes and merges the year group across page boundaries', () => {
+  const options = { icon, selected: new Set(['a', 'b']) };
+  for (const mode of ['grid', 'list']) {
+    const view = { mode, size: 'medium' };
+    const dom = new JSDOM(ticketCollection([rail('a')], view, options));
+    const root = dom.window.document.body, first = root.querySelector('[data-archive-select="a"]');
+    try {
+      appendTicketCollection(root, [rail('b'), rail('c', { departureDate: '2025-01-01' })], view, options);
+      assert.equal(root.querySelector('[data-archive-select="a"]'), first);
+      assert.equal(first.checked, true);
+      assert.equal(root.querySelector('[data-archive-select="b"]').checked, true);
+      const headings = [...root.querySelectorAll('.timeline-year-heading')].map(heading => heading.textContent);
+      assert.deepEqual(headings, ['20262 张票据', '20251 张票据']);
+    } finally { dom.window.close(); }
+  }
 });
 
 test('small grid is a ticket wall, while medium retains the original size and chronological groups',()=>{

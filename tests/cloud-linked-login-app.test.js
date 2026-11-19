@@ -21,7 +21,7 @@ test('either linked login uses the current D1 archive without copying the GitHub
   const db = await import('../src/db.js');
   const assertLinked = async () => {
     await until(() => document.querySelector('[data-action="backup-github"]')?.disabled === false);
-    assert.equal(sessionStorage.getItem('xingji-github-token'), connections.github.token);
+    assert.equal(await db.get('githubToken'), connections.github.token);
     assert.equal(await db.get('d1Token'), token);
     assert.deepEqual((await db.get('records')).map(row => row.id), ['latest-d1']);
     assert.equal((await db.get('settings')).flightMcpKey, 'latest');
@@ -44,15 +44,15 @@ test('either linked login uses the current D1 archive without copying the GitHub
     assert.equal(document.querySelector('[data-action="disconnect"], [data-action="disconnect-d1"]'), null);
     document.querySelector('[data-action="disconnect-all"]').click();
     await until(() => document.querySelector('.cloud-setup #d1-form'));
-    assert.equal(sessionStorage.getItem('xingji-github-token'), null);
-    assert.equal(sessionStorage.getItem('xingji-d1-token'), null);
+    assert.equal(await db.get('githubToken', ''), '');
+    assert.equal(await db.get('d1Token', ''), '');
     github.corrupt('archive/unknown.json', 'obsolete backup content');
     github.calls.length = d1.calls.length = 0;
 
     d1.available = false;
     connect(window, 'github');
     await until(() => document.querySelector('.cloud-setup')?.textContent.includes('暂时无法连接 D1'));
-    assert.equal(sessionStorage.getItem('xingji-github-token'), null);
+    assert.equal(await db.get('githubToken', ''), '');
     assert.equal(await db.get('records', []).then(records => records.length), 0);
 
     d1.available = true;
@@ -61,8 +61,8 @@ test('either linked login uses the current D1 archive without copying the GitHub
     assert.equal(document.querySelector('[data-action="disconnect"], [data-action="disconnect-d1"]'), null);
     document.querySelector('[data-action="disconnect-all"]').click();
     await until(() => document.querySelector('.cloud-setup #d1-form'));
-    assert.equal(sessionStorage.getItem('xingji-github-token'), null);
-    assert.equal(sessionStorage.getItem('xingji-d1-token'), null);
+    assert.equal(await db.get('githubToken', ''), '');
+    assert.equal(await db.get('d1Token', ''), '');
 
     connect(window, 'd1');
     await assertLinked();

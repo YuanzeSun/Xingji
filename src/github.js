@@ -1,4 +1,4 @@
-import { archive, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
+import { archive, assertRailDuplicateChanges, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings, unlinkedSettings } from './shared-settings.js';
 
 export class GitHubError extends Error { constructor(message, status, retryAt = 0) { super(message); this.status = status; this.retryAt = retryAt; } }
@@ -96,21 +96,24 @@ export class GitHubStore {
     const head=await this.head(),commit=await this.request('/git/commits/'+head),tree=await this.request('/git/trees/'+commit.tree.sha+'?recursive=1');
     if(tree.truncated)throw new Error('仓库目录不完整，无法安全重置');
     const index=tree.tree.find(entry=>entry.path==='archive/index.json' && entry.type==='blob');
-    let settings=preservedSettings(fallbackSettings);
+    let settings=preservedSettings(fallbackSettings), generation = '', recordCount;
+
     if(index){
       const blob=await this.request('/git/blobs/'+index.sha);
       if(blob.encoding!=='base64' || typeof blob.content!=='string')throw new Error('无法读取要保留的个人资料和 MCP 设置');
       const text=new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(blob.content.replace(/\s/g,'')),c=>c.charCodeAt(0)));
       let manifest;try{manifest=JSON.parse(text);}catch{throw new Error('无法读取索引中的个人资料和 MCP 设置，请先备份');}
       settings=preservedSettings(manifest.settings || {});
+      generation = manifest.generation || '';
+      recordCount = manifest.recordCount;
     }
-    return {head,tree:commit.tree.sha,settings,paths:tree.tree.filter(entry=>entry.type!=='tree').map(entry=>entry.path)};
+    return {head,tree:commit.tree.sha,settings,generation,recordCount,paths:tree.tree.filter(entry=>entry.type!=='tree').map(entry=>entry.path)};
   }
-  async resetRepository(expectedHead, fallbackSettings = {}, { unlink = false } = {}) {
+  async resetRepository(expectedHead, fallbackSettings = {}, { unlink = false, generation = crypto.randomUUID() } = {}) {
     const snapshot=await this.resetTarget(fallbackSettings);
     if(snapshot.head!==expectedHead)throw new GitHubError('仓库已变化，请重新检查后确认重置',409);
     const settings = unlink ? unlinkedSettings(snapshot.settings) : snapshot.settings;
-    const generation=crypto.randomUUID(),manifest={format:'xingji-index',schemaVersion:1,recordCount:0,generation,files:{},settings};
+    const manifest={format:'xingji-index',schemaVersion:1,recordCount:0,generation,files:{},settings};
     const tree=await this.request('/git/trees',{method:'POST',body:JSON.stringify({tree:[{path:'archive/index.json',mode:'100644',type:'blob',content:JSON.stringify(manifest,null,2)}]})});
     const commit=await this.request('/git/commits',{method:'POST',body:JSON.stringify({message:'Reset private archive and retain personal settings',tree:tree.sha,parents:[snapshot.head]})});
     try { await this.request('/git/refs/heads/'+encodeURIComponent(this.config.branch||'main'),{method:'PATCH',body:JSON.stringify({sha:commit.sha,force:false})}); }
@@ -141,8 +144,9 @@ export async function synchronize(store, base, local, resolutions = {}, { baseHe
   if (baseHead && snapshot.initialized === false) throw new ArchiveResetError(snapshot);
   if (baseHead && (snapshot.generation || '') !== baseGeneration) throw new ArchiveResetError(snapshot, true);
   if (baseHead && store.assertDescendant) await store.assertDescendant(baseHead, snapshot.head);
+  if (!baseHead || snapshot.head !== baseHead) assertRailDuplicateChanges(base, local, snapshot.records);
   const grouped = deduplicateRecords([...base, ...local, ...snapshot.records]), aliases = new Map();
-  for (const record of grouped) for (const id of [record.id, ...record.mergedIds]) aliases.set(id, { id: record.id, ids: [record.id, ...record.mergedIds] });
+  for (const record of grouped) for (const id of [record.id, ...(record.mergedIds || [])]) aliases.set(id, { id: record.id, ids: [record.id, ...(record.mergedIds || [])] });
   const align = rows => deduplicateRecords(rows).map(record => { const group = aliases.get(record.id); return { ...record, id: group.id, mergedIds: group.ids.filter(id => id !== group.id).sort() }; });
   const merge = mergeThreeWay(align(base), align(local), align(snapshot.records));
   const settingMerge = mergeSettings(baseSettings, localSettings, snapshot.settings);

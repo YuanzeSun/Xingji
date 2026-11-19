@@ -47,8 +47,7 @@ export class MemoryGitHub {
 export async function prepareCloud(records = [], settings = {}) {
   const server = new MemoryGitHub(records, settings);
   globalThis.fetch = server.fetch;
-  await db.setMany([['records', records], ['base', structuredClone(records)], ['github', { owner: 'user', repo: 'data', branch: 'main', id: 77 }], ['syncMeta', { revision: 1, head: server.head, verified: true, pending: false }], ['lastSync', new Date().toISOString()]]);
+  await db.setMany([['records', records], ['base', structuredClone(records)], ['github', { owner: 'user', repo: 'data', branch: 'main', id: 77 }], ['syncMeta', { revision: 1, head: server.head, verified: true, pending: false }], ['lastSync', new Date().toISOString()], ['githubToken', 'test-key']]);
   await db.setMany([['settings', sharedSettings(settings)], ['settingsBase', sharedSettings(settings)]]);
-  sessionStorage.setItem('xingji-github-token', 'test-key');
   return server;
 }

@@ -15,6 +15,7 @@ function cameraError(error) {
 export function mountScanner(root, {
   type = 'rail', onResult, mediaDevices = navigator.mediaDevices,
   loadRecognizer = async progress => (await import('./ocr.js')).createRecognizer(progress),
+  readBoardingFrame = async (image, cameraFrame) => (await import('./code-reader.js')).readBoardingCodesFromImage(image, { cameraFrame }),
   schedule = (fn, delay) => setTimeout(fn, delay), unschedule = id => clearTimeout(id), readFrame,
   now = () => Date.now(), prepareImage = image => image
 } = {}) {
@@ -24,6 +25,7 @@ export function mountScanner(root, {
   const analysis = doc.createElement('canvas'); analysis.width = 320;
   let disposed = false, active = false, generation = 0, motionEpoch = 0, typeEpoch = 0, timer, stream, worker;
   let fingerprint = null, steady = 0, busy = false, lastRead = 0, recognitionErrors = 0;
+  let readingCode = false, boardingFrame = null, boardingAttempts = 0, workerUnavailable = false;
   function message(text) { if (!disposed && status.textContent !== text) status.textContent = text; }
   function release() {
     generation++; active = false; unschedule(timer); timer = undefined;
@@ -31,6 +33,7 @@ export function mountScanner(root, {
     video.pause(); video.srcObject = null;
     const old = worker; worker = null; if (old) Promise.resolve(old.terminate()).catch(() => {});
     fingerprint = null; steady = 0; busy = false; consensus.reset();
+    readingCode = false; boardingFrame = null; boardingAttempts = 0; workerUnavailable = false;
     guide.classList.remove('reading');
   }
   function pause() { if (!active) return; release(); message('扫描已暂停'); retry.textContent = '继续扫描'; retry.hidden = false; }
@@ -43,21 +46,46 @@ export function mountScanner(root, {
     const ctx = analysis.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, analysis.width, analysis.height);
     const metrics = frameMetrics(ctx.getImageData(0, 0, analysis.width, analysis.height));
-    return { metrics, snapshot() {
-      const canvas = doc.createElement('canvas'); canvas.width = Math.round(Math.min(type === 'rail' ? 1800 : 2400, crop.width)); canvas.height = Math.max(1, Math.round(canvas.width * crop.height / crop.width));
-      canvas.getContext('2d').drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, canvas.width, canvas.height);
+    return { metrics, snapshot(padding = 0) {
+      const x = Math.max(0, crop.x - crop.width * padding), y = Math.max(0, crop.y - crop.height * padding);
+      const width = Math.min(video.videoWidth, crop.x + crop.width * (1 + padding)) - x;
+      const height = Math.min(video.videoHeight, crop.y + crop.height * (1 + padding)) - y;
+      const canvas = doc.createElement('canvas'); canvas.width = Math.round(Math.min(type === 'rail' ? 1800 : 2400, width)); canvas.height = Math.max(1, Math.round(canvas.width * height / width));
+      canvas.getContext('2d').drawImage(video, x, y, width, height, 0, 0, canvas.width, canvas.height);
       return canvas;
     } };
   }
-  async function recognize(canvas, request) {
-    busy = true; lastRead = now(); guide.classList.add('reading'); message('正在读取票面…');
-    const requestedType = type, requestedTypeEpoch = typeEpoch, frameEpoch = motionEpoch;
-    const current = () => !disposed && active && request === generation && requestedTypeEpoch === typeEpoch;
+  async function scanBoardingFrame(canvas, request) {
+    const requestedType = type, requestedTypeEpoch = typeEpoch;
+    readingCode = true;
     try {
-      const result = await worker.recognize(prepareImage(canvas, requestedType), { type: requestedType, refineRailDate: requestedType !== 'flight' });
+      const codes = await readBoardingFrame(canvas, ++boardingAttempts);
+      if (!codes.length || disposed || request !== generation || requestedTypeEpoch !== typeEpoch) return;
+      const candidate = scanCandidate('', 90, requestedType, { boardingCodes: codes });
+      if (candidate?.boardingCodeSource !== 'original') return;
+      boardingFrame = { canvas, codes, candidate };
+      guide.classList.add('reading');
+      message('已读到登机牌条码，正在补全票面…');
+    } catch { /* The combined OCR pass can still attempt to read the frame. */ }
+    finally { if (request === generation) readingCode = false; }
+  }
+  async function recognize(canvas, request, boarding = null) {
+    busy = true; lastRead = now(); guide.classList.add('reading');
+    if (!boarding) message('正在读取票面…');
+    const requestedType = type, requestedTypeEpoch = typeEpoch, frameEpoch = motionEpoch;
+    const current = () => !disposed && active && request === generation && requestedTypeEpoch === typeEpoch &&
+      (!boardingFrame || boardingFrame === boarding);
+    try {
+      let result;
+      try {
+        if (worker) result = await worker.recognize(prepareImage(canvas, requestedType), { type: requestedType,
+          refineRailDate: requestedType !== 'flight' && !boarding, decodedBoardingCodes: boarding?.codes });
+      } catch (error) { if (!boarding) throw error; }
       if (!current()) return;
       recognitionErrors = 0;
-      const candidate = scanCandidate(result.text, result.confidence, requestedType, result);
+      const candidate = boarding
+        ? (result && scanCandidate(result.text, Math.max(result.confidence || 0, 90), requestedType, { ...result, boardingCodes: boarding.codes })) || boarding.candidate
+        : scanCandidate(result.text, result.confidence, requestedType, result);
       const verifiedCode = candidate?.boardingCodeSource === 'original';
       if (!verifiedCode && frameEpoch !== motionEpoch) return;
       const confirmed = verifiedCode ? candidate : consensus.observe(candidate, result.confidence);
@@ -71,20 +99,26 @@ export function mountScanner(root, {
       if (recognitionErrors >= 3) { release(); message('识别暂时未能完成，请重新扫描'); retry.hidden = false; }
       else message('正在重新读取票面…');
     } finally {
-      if (request === generation) { busy = false; guide.classList.remove('reading'); }
+      if (request === generation) {
+        busy = false;
+        if (!boardingFrame) guide.classList.remove('reading');
+      }
     }
   }
   function tick(request) {
     if (disposed || !active || request !== generation) return;
     try {
-      const sample = frame();
-      if (sample) {
+      const sample = boardingFrame ? null : frame();
+      if (boardingFrame) {
+        if (!busy && (worker || workerUnavailable)) void recognize(boardingFrame.canvas, request, boardingFrame);
+      } else if (sample) {
+        if (type !== 'rail' && !readingCode && sample.metrics.contrast > 2) void scanBoardingFrame(sample.snapshot(.16), request);
         const quality = frameQuality(sample.metrics), motion = frameMotion(fingerprint, sample.metrics.fingerprint); fingerprint = sample.metrics.fingerprint;
         const mayContainCode = type !== 'rail' && sample.metrics.contrast >= 10 && sample.metrics.sharpness >= 3;
         if ((quality && !mayContainCode) || motion > 4.5) { steady = 0; motionEpoch++; consensus.reset(); message(quality || '保持稳定，正在对焦…'); }
         else {
           steady++;
-          if (steady >= 3 && !busy && now() - lastRead >= 1200) void recognize(sample.snapshot(), request);
+          if (worker && steady >= 3 && !busy && now() - lastRead >= 1200) void recognize(sample.snapshot(), request);
         }
       }
     } catch { release(); message('相机画面暂时不可用，请重试'); retry.hidden = false; return; }
@@ -101,10 +135,20 @@ export function mountScanner(root, {
       stream.getVideoTracks().forEach(track => track.addEventListener?.('ended', pause, { once: true }));
       await video.play();
       if (disposed || !active || request !== generation) return;
-      message('准备文字识别…');
-      const engine = await loadRecognizer(text => { if (!disposed && active && request === generation && !busy) message(text); });
-      if (disposed || !active || request !== generation) { await engine.terminate(); return; }
-      worker = engine; message('将票面对准框内，保持片刻'); tick(request);
+      message(type === 'rail' ? '准备文字识别…' : '将完整条码或票面放入框内');
+      tick(request);
+      try {
+        const engine = await loadRecognizer(text => {
+          if (!disposed && active && request === generation && type === 'rail' && !busy) message(text);
+        });
+        if (disposed || !active || request !== generation) { await engine.terminate(); return; }
+        worker = engine;
+      } catch (error) {
+        if (disposed || !active || request !== generation) return;
+        if (type === 'rail') throw error;
+        workerUnavailable = true;
+        if (!boardingFrame) message('文字识别暂不可用，仍可扫描登机牌条码');
+      }
     } catch (error) {
       if (disposed || request !== generation) return;
       release(); message(cameraError(error)); retry.hidden = false;
@@ -114,7 +158,11 @@ export function mountScanner(root, {
   const changeType = event => {
     const button = event.target.closest('[data-scan-type]'); if (!button) return;
     if (type === button.dataset.scanType) return;
-    type = button.dataset.scanType; typeEpoch++; steady = 0; fingerprint = null; consensus.reset();
+    type = button.dataset.scanType; typeEpoch++; steady = 0; fingerprint = null; boardingFrame = null; boardingAttempts = 0; consensus.reset();
+    guide.classList.remove('reading');
+    if (type === 'rail' && workerUnavailable) {
+      pause(); message('文字识别暂不可用，请重试');
+    }
     guide.style.setProperty('--ticket-ratio', type === 'flight' ? 2.46 : 1.58);
     for (const b of root.querySelectorAll('[data-scan-type]')) { b.classList.toggle('selected', b === button); b.setAttribute('aria-pressed', String(b === button)); }
   };

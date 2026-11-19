@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { requiredTicketFields, validateTicketForm, ticketFieldLabel } from '../src/ticket-form.js';
 import { normalizeAircraft } from '../src/aircraft.js';
-import { createRecord } from '../src/model.js';
+import { applyImport, createRecord } from '../src/model.js';
 import { ticketSVG } from '../src/tickets.js';
 
 test('rail and flight require their visible essential fields, with carriage limited to rail', () => {
@@ -22,4 +22,11 @@ test('Airbus manufacturer prefixes are omitted from manual records, imported dat
   assert.equal(record.aircraft, 'A320-200');
   const rendered = ticketSVG({ ...record, aircraft: 'Airbus A330-300' });
   assert.match(rendered, /A330-300/); assert.doesNotMatch(rendered, /Airbus/);
+});
+
+test('ticket forms and archive imports require a complete identity when one is provided', () => {
+  const record = createRecord({ type: 'flight', template: 'air-boarding-pass', flightStatus: 'open',
+    origin: 'PEK', destination: 'HND', passenger: 'DEMO/TRAVELER', identity: 'AB1234＊＊' });
+  assert.throws(() => validateTicketForm(record), /证件号不能包含星号/);
+  assert.throws(() => applyImport([], [record]), /证件号不能包含星号/);
 });

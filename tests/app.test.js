@@ -128,6 +128,10 @@ test('app creates, reloads, edits, imports and filters personal records without 
   document.querySelector('#import-text').value = '日期：2026-11-15 车次：G6203\n出发：广州南 到达：深圳北\n座位：06A 票价：74.50 （网）';
   click('[data-action="parse-text"]'); await waitFor(() => document.querySelector('#editor-form'));fill('departureTime','08:00');fill('passenger','示例旅客');fill('identity','P000001');fill('carriage','05');fill('seatClass','二等座');
   document.querySelector('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(() => document.querySelector('#editor-error')?.textContent.includes('与已有票据冲突'));
+  assert.equal((await get('records', []))[0].seat, '09A');
+  fill('seat', '09A');
+  document.querySelector('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await waitFor(() => !document.querySelector('dialog'));
   records = await get('records', []); assert.equal(records.length, 1); assert.equal(records[0].seat, '09A'); assert.equal(records[0].price, '74.50');
   assert.deepEqual(records[0].ticketCode, rebuiltCode);
@@ -162,6 +166,7 @@ test('app creates, reloads, edits, imports and filters personal records without 
   assert.equal(document.querySelector('dialog'), null);
   const json = JSON.stringify(archive(Array.from({ length: 100 }, (_, i) => createRecord({
     service: 'G' + (100 + i), departureDate: '2026-10-01', origin: '测试出发' + i, destination: '测试到达' + i,
+    departureTime: '08:00', passenger: '测试旅客', identity: 'TEST123', carriage: '05', seat: '08F', seatClass: '二等座'
   }))));
   Object.defineProperty(input, 'files', { value: [{ name: 'test.json', type: 'application/json', size: json.length, text: async () => json }] });
   input.dispatchEvent(new window.Event('change', { bubbles: true }));
@@ -169,6 +174,12 @@ test('app creates, reloads, edits, imports and filters personal records without 
   click('[data-action="save-candidates"]'); await waitFor(() => !document.querySelector('dialog'));
   click('[data-action="filter"][data-type="all"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 48);
   assert.equal((await get('records', [])).length, 102);
+  const firstCard = document.querySelector('.ticket-card');
+  firstCard.querySelector('[data-archive-select]').click();
+  document.querySelector('[data-action="load-more"]').focus();
   click('[data-action="load-more"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 96);
+  assert.equal(document.activeElement.closest('.ticket-card'), document.querySelectorAll('.ticket-card')[48]);
+  assert.equal(document.querySelector('.ticket-card'), firstCard);
+  assert.equal(firstCard.querySelector('[data-archive-select]').checked, true);
   dom.window.close();
 });

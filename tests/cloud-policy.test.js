@@ -18,6 +18,7 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   Object.defineProperty(globalThis, 'navigator', { value: window.navigator, configurable: true });
   Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true });
   window.scrollTo = () => {}; window.HTMLDialogElement.prototype.showModal = function () { this.open = true; }; window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+  window.confirm = () => true;
   let online = true; Object.defineProperty(navigator, 'onLine', { get: () => online, configurable: true });
   const ticket = createRecord({ id: 'cloud-ticket', origin: '清河', destination: '天津', service: 'G103', departureDate: '2026-11-15' });
   const server = new MemoryGitHub([ticket], { flightMcpKey: 'test-mcp', profile: { chineseName: '云端旅客' } }); globalThis.fetch = server.fetch;
@@ -40,7 +41,6 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   assert.equal(form.elements.token.value, 'test-key');
   assert.equal(document.activeElement, form.elements.token); assert.equal(form.elements.token.selectionStart, 2);
   const db = await import('../src/db.js');
-  assert.equal(sessionStorage.getItem('xingji-github-token'), null);
   assert.equal(await db.get('githubToken', ''), '', 'unsubmitted credentials stay in the current page memory');
   form.elements.owner.dispatchEvent(new window.CompositionEvent('compositionstart', { bubbles: true }));
   document.dispatchEvent(new window.Event('visibilitychange'));
@@ -50,7 +50,8 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   form = document.querySelector('#github-form');
   server.authorized = false;
   form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-  await wait(() => document.querySelector('.form-error').textContent && !document.querySelector('#github-form [type="submit"]').disabled);
+  await wait(() => document.querySelector('#github-form')?.closest('.panel').querySelector('.form-error').textContent &&
+    !document.querySelector('#github-form [type="submit"]').disabled);
   form = document.querySelector('#github-form');
   assert.equal(form.elements.token.value, 'test-key');
   server.authorized = true;
@@ -86,7 +87,6 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   const head = server.head;
   click('[data-action="disconnect"]');
   await wait(() => document.querySelector('.cloud-setup #github-form'));
-  assert.equal(sessionStorage.getItem('xingji-github-token'), null);
   assert.equal(await db.get('githubToken'), '');
   assert.equal(await db.get('github', null), null);
   assert.deepEqual(await db.get('records'), []);
@@ -102,7 +102,6 @@ test('GitHub is required on first use; verified caches remain read-only offline 
   form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   location.hash = 'archive';
   await wait(() => document.querySelector('.ticket-card'));
-  assert.equal(sessionStorage.getItem('xingji-github-token'), 'replacement-key');
   assert.equal(await db.get('githubToken'), 'replacement-key');
   dom.window.close();
 });

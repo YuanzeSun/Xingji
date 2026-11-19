@@ -1,6 +1,7 @@
 import {flightNameLanguage} from './flight-passenger.js';
 import {markFieldSources} from './field-sources.js';
 import {barcodeFieldLocked} from './barcode-fields.js';
+import { requireCompleteIdentity } from './identity.js';
 
 export const PROFILE_FIELDS = [
   ['chineseName','中文姓名','text',100], ['firstName','英文名（First name）','text',150], ['lastName','英文姓（Last name）','text',100],
@@ -35,7 +36,9 @@ export function personalProfile(value = {}) {
     ids.add(id);
     const type = doc.type || 'other';
     if (!Object.hasOwn(DOCUMENT_TYPES,type)) throw new Error('未知证件类型');
-    return { id, type, label:text(doc.label,'证件名称',80), number:text(doc.number,'证件号码',128), expiry:fullDate(text(doc.expiry,'有效期',10),'有效期') };
+    const number = text(doc.number,'证件号码',128);
+    requireCompleteIdentity(number);
+    return { id, type, label:text(doc.label,'证件名称',80), number, expiry:fullDate(text(doc.expiry,'有效期',10),'有效期') };
   }).filter(doc=>doc.label || doc.number || doc.expiry);
   for (const key of ['railDocument','flightDocument']) {
     const selected = text(value[key], '默认证件');

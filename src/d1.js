@@ -34,9 +34,9 @@ export class D1Store {
     if (response.status === 304 && head) return null;
     const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const messages = { 401: 'D1 访问凭证无效，请重新授权', 409: '另一台设备刚更新了 D1 票库，请重新核对', 413: 'D1 票据或设置超过大小限制', 429: 'D1 免费额度已用尽，请稍后再试' };
+      const messages = { 400: 'D1 拒绝了这次票库更新，请核对提交的票据和设置', 401: 'D1 访问凭证无效，请重新授权', 409: '另一台设备刚更新了 D1 票库，请重新核对', 413: 'D1 票据或设置超过大小限制', 429: 'D1 免费额度已用尽，请稍后再试' };
       const message = response.status === 503 ? databaseError(result?.code, body ? '写入' : '读取') : messages[response.status];
-      throw Object.assign(new Error(message || `D1 请求失败（${response.status}）`), { status: response.status });
+      throw Object.assign(new Error(message || `D1 请求失败（${response.status}）`), { status: response.status, writeRejected: !!body && [400, 413].includes(response.status) });
     }
     if (typeof result.id !== 'string' || !/^[0-9a-f]{32}$/.test(result.id) || typeof result.head !== 'string' || !result.head) throw new Error('Worker 票库接口返回无效');
     if (this.config.id && this.config.id !== result.id) throw new Error('D1 数据库身份已变化，已保留本机缓存');
@@ -66,9 +66,10 @@ export class D1Store {
     } })).head;
   }
 
-  async replace(snapshot, records, settings) {
+  async replace(snapshot, records, settings, { resetId } = {}) {
     const result = await this.request({ body: {
-      id: snapshot.id, head: snapshot.head, records: records.map(validateRecord), removed: [], settings: sharedSettings(settings), replace: true
+      id: snapshot.id, head: snapshot.head, records: records.map(validateRecord), removed: [], settings: sharedSettings(settings), replace: true,
+      ...(resetId ? { resetId } : {})
     } });
     return { ...result, records, settings };
   }

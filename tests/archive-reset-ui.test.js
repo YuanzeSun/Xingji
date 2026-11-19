@@ -37,7 +37,7 @@ test('deleted archive automatically asks, cancellation preserves cache, and chec
     await wait(async () => !document.querySelector('dialog') && (await db.get('records')).length === 0);
     assert.deepEqual(server.records(), []); assert.equal(server.settings().profile.chineseName,'示例');
     assert.deepEqual(await db.get('base'), []); assert.equal((await db.get('syncMeta')).pending, false); assert.ok((await db.get('syncMeta')).generation);
-    assert.equal(sessionStorage.getItem('xingji-github-token'), 'test-key'); assert.equal((await db.get('github')).id, 77);
+    assert.equal(await db.get('githubToken'), 'test-key'); assert.equal((await db.get('github')).id, 77);
     assert.equal(server.calls.filter(call => call.method === 'PATCH').length, 1);
     assert.equal(server.trees.get(server.commits.get(server.head).tree)['notes.txt'],undefined);
   } finally { dom.window.close(); }

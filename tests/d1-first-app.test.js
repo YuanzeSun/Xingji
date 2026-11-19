@@ -17,6 +17,7 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
   try {
     await import('../src/app.js');
     await until(() => document.querySelector('#d1-form'));
+    assert.deepEqual([...document.querySelectorAll('#d1-form, #github-form')].map(form => form.id), ['d1-form', 'github-form']);
     assert.equal(document.querySelectorAll('details.setup-help').length, 0);
     assert.equal(document.querySelector('#d1-form [name="remember"]'), null);
     const db = await import('../src/db.js');
@@ -25,13 +26,14 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
     assert.equal(await db.get('d1Token', ''), '');
     connect(window, 'd1');
     await until(() => document.querySelector('[data-d1-cloud-label]')?.textContent === '已同步');
+    assert.ok(document.querySelector('[data-d1-cloud-label]').compareDocumentPosition(document.querySelector('[data-cloud-label]')) &
+      window.Node.DOCUMENT_POSITION_FOLLOWING);
     assert.equal(github.calls.length, 0);
     assert.equal(await db.get('d1Token'), token);
     assert.equal(d1.calls.filter(call => call.method === 'POST').length, 0);
 
     document.querySelector('[data-action="disconnect-d1"]').click();
     await until(() => document.querySelector('.cloud-setup #d1-form'));
-    assert.equal(sessionStorage.getItem('xingji-d1-token'), null);
     assert.equal(await db.get('d1Token'), '');
     assert.equal(await db.get('d1', null), null);
     assert.deepEqual(await db.get('records'), []);
@@ -53,7 +55,7 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
     sourceForm.querySelector('[data-action="close-modal"]').click();
     await until(() => document.querySelector('#github-form button[type="submit"]')?.disabled === false);
     assert.equal(github.head, before);
-    assert.equal(sessionStorage.getItem('xingji-github-token'), null);
+    assert.equal(await db.get('githubToken', ''), '');
     connect(window, 'github');
     await chooseSource('d1');
     await confirm('确认覆盖 GitHub');
@@ -88,17 +90,42 @@ test('D1 first: binding backs up once, later changes only reach GitHub on manual
     assert.equal(github.calls.length, calls);
     assert.equal(github.head, bindingHead);
 
+    const beforeBackup = await d1Store.read();
+    await d1Store.write(beforeBackup.records, beforeBackup, { ...beforeBackup.settings, profile: { chineseName: '云端旅客' } });
     button().click();
-    await confirm('备份到 GitHub');
     await until(() => github.records().length === 2 && button()?.disabled === false);
+    assert.equal(document.querySelector('dialog'), null);
     assert.equal(github.settings().flightMcpKey, 'new-d1-key');
+    assert.equal(github.settings().profile.chineseName, '云端旅客');
     const saved = github.head;
+    const backupStatus = () => document.querySelector('[data-github-backup-status]')?.textContent;
+    assert.match(backupStatus(), /本机上次确认备份/);
+    const receipt = await db.get('githubBackupReceipt');
+    const afterBackup = await d1Store.read();
+    assert.equal(receipt.head, afterBackup.head);
+    assert.doesNotMatch(backupStatus(), /D1 已更新/);
+    await d1Store.write(afterBackup.records, afterBackup, { ...afterBackup.settings, flightMcpKey: 'after-backup' });
+    const beforeD1Sync = github.calls.length;
+    document.querySelector('[data-action="sync"]').click();
+    await until(() => backupStatus()?.includes('D1 已更新'));
+    assert.equal(github.calls.length, beforeD1Sync);
     assert.equal(document.querySelector('[data-action="disconnect"]'), null);
     assert.equal(document.querySelector('[data-action="disconnect-d1"]'), null);
     const beforeSignOut = [github.calls.length, d1.calls.length];
-    document.querySelector('[data-action="disconnect-all"]').click();
+    const exit = document.querySelector('[data-action="disconnect-all"]');
+    assert.equal(exit.textContent, '退出登录');
+    assert.ok(exit.matches('.button.danger'));
+    let prompt;
+    window.confirm = message => { prompt = message; return false; };
+    exit.click();
+    await until(() => prompt);
+    assert.match(prompt, /退出 GitHub 和 D1.*清除票库缓存/);
+    assert.ok(await db.get('github', null));
+    window.confirm = () => true;
+    exit.click();
     await until(() => document.querySelector('.cloud-setup #d1-form'));
     assert.equal(await db.get('github', null), null);
+    assert.equal(await db.get('githubBackupReceipt', null), null);
     assert.deepEqual(await db.get('records'), []);
     assert.deepEqual([github.calls.length, d1.calls.length], beforeSignOut);
     connect(window, 'github');

@@ -25,11 +25,13 @@ export function todayDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 export function statisticsOptions(input = {}, today = todayDate()) {
-  return { dateFrom: input.dateFrom ?? '', dateTo: input.dateTo ?? today, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railPowerSupplies:input.railPowerSupplies === true, aircraftSubtypes:input.aircraftSubtypes !== false };
+  const selectedEnd = input.dateTo || today;
+  const dateTo = dateInterval(selectedEnd)?.end > today ? today : selectedEnd;
+  return { dateFrom: input.dateFrom ?? '', dateTo, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railPowerSupplies:input.railPowerSupplies === true, aircraftSubtypes:input.aircraftSubtypes !== false };
 }
 
-export function statisticsRange(records, input = {}) {
-  const options = statisticsOptions(input), from = dateInterval(options.dateFrom), to = dateInterval(options.dateTo);
+export function statisticsRange(records, input = {}, today = todayDate()) {
+  const options = statisticsOptions(input, today), from = dateInterval(options.dateFrom), to = dateInterval(options.dateTo);
   if ((options.dateFrom && !from) || (options.dateTo && !to)) return { records: [], omittedDates: 0, error: '请选择有效的起止日期' };
   if (from && to && from.start > to.end) return { records: [], omittedDates: 0, error: '起始日期不能晚于截止日期' };
   let omittedDates = 0;
@@ -52,8 +54,8 @@ function placeGeography(record, side) {
   return { ...place, country: ['HK', 'MO', 'TW'].includes(place.country) ? 'CN' : place.country, continent: airportContinents.get(place.code) || '' };
 }
 
-export function journeyStatistics(records, input = {}) {
-  const options=statisticsOptions(input), range = statisticsRange(records, options), rows = range.records;
+export function journeyStatistics(records, input = {}, today = todayDate()) {
+  const options=statisticsOptions(input, today), range = statisticsRange(records, options, today), rows = range.records;
   const airports = new Map(), stations = new Map(), countries = new Map(), continents = new Set(), routes = new Map(), aircraft = new Map();
   const railModels = new Map(), railBureaus = new Map();
   let unknownAircraft = 0, unknownPlaces = 0, unknownRoutes = 0;

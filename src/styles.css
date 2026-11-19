@@ -69,6 +69,14 @@
 .code-actions{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
 .saved-code{display:flex;gap:12px;align-items:center;margin-top:12px}
 .saved-code svg{width:76px;height:76px;object-fit:contain;border:1px solid var(--line)}
+.boarding-code-scan{display:flex;flex-wrap:wrap;gap:4px 18px;align-items:center}
+.boarding-code-controls{flex:1 1 12rem;min-width:0}
+.boarding-code-controls [data-code-guidance]{margin:0}
+.boarding-code-examples{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;max-width:100%;margin:4px 0 10px;color:var(--muted);font-size:12px}
+.boarding-code-examples figcaption{grid-column:1/-1}
+.boarding-code-sample{display:grid;gap:4px;text-align:center}
+.boarding-code-sample-image{display:grid;place-items:center;min-width:0;width:100%;height:46px;padding:2px 7px;border:1px solid var(--line);border-radius:5px;background:#fff}
+.boarding-code-sample-image svg{display:block;max-width:100%;max-height:100%}
 .code-photo-preview{width:100%;height:auto;display:block;background:#e3e8dd;border-radius:5px;margin-top:15px}
 .code-sliders label{display:grid;grid-template-columns:65px 1fr;align-items:center;gap:12px;font-size:13px;margin:12px 0}
 .code-sliders input{width:100%;min-height:32px;accent-color:var(--green)}
@@ -309,11 +317,14 @@ dialog.scanner-modal::backdrop{background:#20242a80;backdrop-filter:blur(5px)}
 .connection-notice{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 18px;border:1px solid #dce2db;border-radius:9px;background:#fffefa;margin-bottom:25px}
 .connection-notice>div{display:flex;flex-direction:column;gap:6px;min-width:0}.connection-notice strong{font-size:15px;font-weight:550;color:#495b50}
 .connection-notice span{font-size:14px;color:#7a837a;overflow-wrap:anywhere}.connection-notice>.button{flex-shrink:0}
+.connection-notice.rejected-change>.button-row{flex-direction:row;justify-content:flex-end}
+@media(max-width:620px){.connection-notice.rejected-change{align-items:flex-start;flex-direction:column}.connection-notice.rejected-change>.button-row{justify-content:flex-start}}
 .button:disabled,.icon-button:disabled{cursor:default;opacity:.45}.field input[readonly]{background:#f0f2ec;color:#74816f}
 @media(max-width:620px){.cloud-setup{padding:32px 17px}.cloud-setup>.panel{padding:23px 18px}.cloud-setup h1{font-size:26px}.cloud-setup-description{font-size:15px}.connection-notice{padding:13px;gap:10px}.connection-notice strong{font-size:14px}.connection-notice span{font-size:13px}}
 
 /* Compact mobile archive; desktop keeps its existing layout. */
 .route-shortcuts-toggle{display:none}
+[data-github-backup-status]:empty{display:none}
 .backup-panel{grid-column:1/-1}.backup-panel .backup-actions{display:grid;grid-template-columns:1fr 1fr;gap:15px}
 .data-layout>.panel{align-self:start}
 @media(max-width:680px){

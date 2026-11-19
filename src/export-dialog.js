@@ -33,7 +33,11 @@ export function bindExportDialog(container, records, { download, images = export
       const blob = await (imageMode ? images : album)(records, { title, cover:container.querySelector('[name="album-cover"]')?.checked ?? false, signal, onProgress:({completed,total,phase}) => { if (!disposed) { bar.value = completed; status.textContent = `${phase} · ${completed} / ${total}`; } } });
       signal.throwIfAborted(); if (disposed) return;
       const name = imageMode ? '行迹票面' : title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/[. ]+$/, '') || '我的行迹';
-      download(blob, imageMode && records.length === 1 ? ticketFileName(records[0]) + '.png' : `${name}_${new Date().toISOString().slice(0,10)}.${imageMode ? 'zip' : 'pdf'}`);
+      const filename = imageMode && records.length === 1 ? ticketFileName(records[0]) + '.png'
+        : `${name}_${new Date().toISOString().slice(0,10)}.${imageMode ? 'zip' : 'pdf'}`;
+      const delivered = await download(blob, filename, signal);
+      if (disposed) return;
+      if (delivered === false) { status.textContent = '导出已取消'; return; }
       status.textContent = `已生成 ${records.length} 张票据${imageMode ? '的高清图片' : '的纪念册'}`;
     } catch (cause) {
       if (disposed) return;

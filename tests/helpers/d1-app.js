@@ -10,6 +10,7 @@ export function browser() {
     Object.defineProperty(globalThis, key, { value: key === 'window' ? window : key === 'indexedDB' ? indexedDB : window[key], configurable: true });
   }
   window.scrollTo = () => {};
+  window.confirm = () => true;
   let previous = Promise.resolve();
   Object.defineProperty(window.navigator, 'locks', { value: { request(_name, callback) {
     const next = previous.then(callback);

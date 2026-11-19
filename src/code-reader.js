@@ -71,7 +71,7 @@ async function withCodeImage(source, read) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-function imagePixels(source, { x = 0, y = 0, width, height, edge, upscale = false } = {}) {
+function imagePixels(source, { x = 0, y = 0, width, height, edge, upscale = false, enhance = false } = {}) {
   width ??= source.naturalWidth || source.width;
   height ??= source.naturalHeight || source.height;
   if (!width || !height) throw new Error('图片无法读取');
@@ -82,8 +82,30 @@ function imagePixels(source, { x = 0, y = 0, width, height, edge, upscale = fals
     const context = canvas.getContext('2d', { willReadFrequently: true });
     context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(source, x, y, width, height, 0, 0, canvas.width, canvas.height);
-    return context.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    return enhance ? stretchCodeContrast(pixels) : pixels;
   } finally { canvas.width = canvas.height = 1; }
+}
+
+function stretchCodeContrast(pixels) {
+  const { data } = pixels, histogram = new Uint32Array(256);
+  const luminance = i => (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
+  for (let i = 0; i < data.length; i += 16) histogram[luminance(i)]++;
+  const cutoff = Math.floor(Math.ceil(data.length / 16) / 100);
+  let low = 0, high = 255, count = 0;
+  while (low < high && (count += histogram[low]) <= cutoff) low++;
+  count = 0;
+  while (high > low && (count += histogram[high]) <= cutoff) high--;
+  if (high - low < 20) return pixels;
+  const scale = 255 / (high - low);
+  for (let i = 0; i < data.length; i += 4) data[i] = data[i + 1] = data[i + 2] = (luminance(i) - low) * scale;
+  return pixels;
+}
+
+function* liveBoardingFrames(source) {
+  const longest = Math.max(source.naturalWidth || source.width, source.naturalHeight || source.height);
+  yield { edge: 1800 };
+  yield { edge: Math.min(2400, Math.round(longest * 1.5)), upscale: true, enhance: true };
 }
 
 function* boardingFrames(source) {
@@ -93,6 +115,7 @@ function* boardingFrames(source) {
   if (longest > 1100) yield { edge: 1100 };
   if (longest > 1800) yield { edge: 2600 };
   if (longest < 1800) yield { edge: 1800, upscale: true };
+  yield { edge: Math.min(2400, Math.round(longest * 1.5)), upscale: true, enhance: true };
   // Keep the full width or height so a long code does not get split across tiles.
   const stripHeight = Math.ceil(height * .67), stripWidth = Math.ceil(width * .67);
   yield { width, height: stripHeight, edge: 1800 };
@@ -101,11 +124,13 @@ function* boardingFrames(source) {
   yield { x: width - stripWidth, width: stripWidth, height, edge: 1800 };
 }
 
-async function readFlightImage(source, boardingOnly) {
+async function readFlightImage(source, boardingOnly, cameraFrame = 0) {
   await prepareCodeReader();
   return withCodeImage(source, async image => {
     let fallback = [], issues = [], formats = formatsFor('flight');
-    for (const frame of boardingFrames(image)) {
+    // Every fourth camera frame gets the same full search as an uploaded photo.
+    const frames = cameraFrame % 4 ? liveBoardingFrames(image) : boardingFrames(image);
+    for (const frame of frames) {
       const pixels = imagePixels(image, frame);
       const results = (await readBarcodes(pixels, { ...options, formats })).filter(result => result.isValid);
       if (formats !== pdfFormats) fallback = results;
@@ -121,13 +146,13 @@ async function readFlightImage(source, boardingOnly) {
   });
 }
 
-export async function readBoardingCodesFromImage(source) {
-  const { codes } = await readFlightImage(source, true);
+export async function readBoardingCodesFromImage(source, { cameraFrame } = {}) {
+  const { codes } = await readFlightImage(source, true, cameraFrame);
   return codes.map(code => code.data);
 }
 
-export async function rebuildCodesFromImage(source, type = 'rail') {
-  const result = type === 'flight' ? await readFlightImage(source, false) :
+export async function rebuildCodesFromImage(source, type = 'rail', { cameraFrame } = {}) {
+  const result = type === 'flight' ? await readFlightImage(source, false, cameraFrame) :
     await withCodeImage(source, image => {
       if ((image.naturalWidth || image.width) * (image.naturalHeight || image.height) > 24_000_000) throw new Error('图片尺寸过大，请选择原始票据截图');
       return rebuildCodeSymbols(imagePixels(image), type);

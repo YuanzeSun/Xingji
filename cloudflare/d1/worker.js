@@ -1,6 +1,7 @@
 const readState = 'SELECT id, head, generation, settings FROM archive_state WHERE singleton = 1';
 const newHead = 'EXISTS (SELECT 1 FROM archive_state WHERE singleton = 1 AND head = ?)';
 const validId = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id);
+const validResetId = id => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id);
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const encoder = new TextEncoder();
 const missingSchema = respond => respond({ code: 'D1_SCHEMA_MISSING', error: 'D1 票库尚未初始化' }, 503);
@@ -36,11 +37,12 @@ async function writeArchive(request, db, respond) {
       new Set([...input.records.map(row => row.id), ...input.removed]).size !== input.records.length + input.removed.length ||
       (input.settings !== undefined && !object(input.settings)) ||
       (input.replace !== undefined && typeof input.replace !== 'boolean') ||
-      (input.replace && (!input.settings || input.removed.length))) {
+      (input.replace && (!input.settings || input.removed.length)) ||
+      (input.resetId !== undefined && (!input.replace || input.records.length || !validResetId(input.resetId) || input.head === input.resetId))) {
     return respond({ error: '票库更新数据无效' }, 400);
   }
 
-  const head = crypto.randomUUID(), generation = input.replace ? crypto.randomUUID() : null;
+  const head = input.resetId ?? crypto.randomUUID(), generation = input.replace ? input.resetId ?? crypto.randomUUID() : null;
   const payloads = input.records.map(record => [record.id, JSON.stringify(record)]);
   const settings = input.settings === undefined ? null : JSON.stringify(input.settings);
   if (payloads.some(([, payload]) => payload.length > 600_000 && encoder.encode(payload).length >= 1_900_000) ||

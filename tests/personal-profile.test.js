@@ -65,7 +65,7 @@ test('profile validation rejects malformed values; display summaries mask docume
   assert.deepEqual([...dom.window.document.querySelector('select[name=gender]').options].map(option=>option.value),['','男','女']);
   assert.equal(dom.window.document.querySelector('[name=birthDate],[name=phone],[name=email],[name=address],[name=personalInfo],[name=englishName],[name=nationality],[data-doc-field=country]'),null);
   const summary = personalProfileSummary(profile);
-  assert.match(summary,/000000\*{8}1234/); assert.ok(!summary.includes('000000200001011234'));
+  assert.match(summary,/0000002000\*{4}1234/); assert.ok(!summary.includes('000000200001011234'));
   dom.window.close();
 });
 

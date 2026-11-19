@@ -20,6 +20,7 @@ function harness(options = {}) {
   const dispose = mountScanner(root, {
     mediaDevices: { getUserMedia: async constraints => { assert.equal(constraints.audio, false); assert.equal(constraints.video.facingMode.ideal, 'environment'); return stream; } },
     loadRecognizer: async () => ({ recognize: async () => { reads++; return { text: notice, confidence: 90 }; }, terminate: async () => { terminated++; } }),
+    readBoardingFrame: async () => [],
     schedule: fn => { tasks.push(fn); return fn; }, unschedule: fn => { const i = tasks.indexOf(fn); if (i >= 0) tasks.splice(i, 1); },
     readFrame: () => frame, now: () => clock, prepareImage: image => image,
     onResult: (record, blob) => captured.push({ record, blob }), ...options
@@ -96,6 +97,66 @@ test('flight camera scanning waits for the combined OCR and barcode result and r
   }finally{h.dispose();h.dom.window.close();}
 });
 
+test('a single readable PDF417 frame is captured before OCR is ready, even while the camera moves', async () => {
+  const code = createBoardingCode({ passenger: 'EXAMPLE/TRAVELER', pnr: 'ABC123', origin: 'JFK', destination: 'LHR',
+    carrier: 'BA', flightNumber: '321', date: '2026-05-18', cabin: 'Y', seat: '12A', sequence: '42', status: '1' });
+  let startOCR, reads = 0, recognizedImage;
+  const h = harness({ type: 'auto',
+    readBoardingFrame: async image => { reads++; recognizedImage = image; return [code]; },
+    loadRecognizer: () => new Promise(resolve => { startOCR = resolve; })
+  });
+  try {
+    await h.ticks(1);
+    assert.equal(reads, 1);
+    assert.match(h.root.querySelector('#scanner-status').textContent, /已读到登机牌条码/);
+    assert.equal(h.captured.length, 0);
+    h.frame.metrics.fingerprint.fill(30);
+    startOCR({
+      recognize: async (image, { decodedBoardingCodes, refineRailDate }) => {
+        assert.equal(image, recognizedImage);
+        assert.deepEqual(decodedBoardingCodes, [code]);
+        assert.equal(refineRailDate, false);
+        return { text: 'BOARDING PASS\nBOARDING TIME: 09:55', confidence: 80 };
+      },
+      terminate: async () => {}
+    });
+    await h.ticks(2);
+    assert.equal(reads, 1);
+    assert.equal(h.captured[0].record.seat, '12A');
+    assert.equal(h.captured[0].record.boardingTime, '09:55');
+    assert.equal(h.stopped, 1);
+  } finally { h.dispose(); h.dom.window.close(); }
+});
+
+test('PDF417 remains usable when the OCR worker fails to start', async () => {
+  const code = createBoardingCode({ passenger: 'EXAMPLE/TRAVELER', pnr: 'ABC123', origin: 'JFK', destination: 'LHR',
+    carrier: 'BA', flightNumber: '321', date: '2026-05-18', cabin: 'Y', seat: '12A', sequence: '42', status: '1' });
+  const unknown = harness({ type: 'flight', readBoardingFrame: async () => [code],
+    loadRecognizer: async () => { throw new Error('OCR unavailable'); } });
+  try {
+    await unknown.ticks(2);
+    assert.equal(unknown.captured[0].record.service, 'BA321');
+    assert.equal(unknown.stopped, 1);
+  } finally { unknown.dispose(); unknown.dom.window.close(); }
+});
+
+test('a late boarding barcode is ignored after closing the live scanner', async () => {
+  const code = createBoardingCode({ passenger: 'EXAMPLE/TRAVELER', pnr: 'ABC123', origin: 'JFK', destination: 'LHR',
+    carrier: 'BA', flightNumber: '321', date: '2026-05-18', cabin: 'Y', seat: '12A', sequence: '42', status: '1' });
+  let finishRead;
+  const h = harness({ type: 'auto', readBoardingFrame: () => new Promise(resolve => { finishRead = resolve; }) });
+  try {
+    await h.ticks(1);
+    assert.ok(finishRead);
+    h.dispose();
+    finishRead([code]);
+    await h.ticks(2);
+    assert.doesNotMatch(h.root.querySelector('#scanner-status').textContent, /已读到登机牌条码/);
+    assert.equal(h.captured.length, 0);
+    assert.equal(h.stopped, 1);
+  } finally { h.dispose(); h.dom.window.close(); }
+});
+
 test('a boarding pass keeps repeated coupon fields together and distinguishes boarding from departure time', () => {
   const text = '中国东方航空 登机牌 BOARDING PASS\n姓名 NAME 航班 FLIGHT 日期 DATE\n示例旅客 MU5403 2025.05.03\nSHA TFU\n航程 ROUTE\nSHA - TFU\nGATE BOARDING DEPARTURE SEAT\nD21 09:55 10:35 32A';
   const record = scanCandidate(text, 90, 'flight');
@@ -119,13 +180,37 @@ test('motion invalidates an in-flight recognition and closing stops a late-arriv
   assert.equal(stops, 1); assert.equal(late.captured.length, 0); late.dom.window.close();
 });
 
-test('backgrounding releases the camera; denied permission offers a retry', async () => {
-  const h = harness(); await h.ticks(1);
-  Object.defineProperty(h.dom.window.document, 'visibilityState', { value: 'hidden', configurable: true });
-  h.dom.window.document.dispatchEvent(new h.dom.window.Event('visibilitychange'));
-  assert.equal(h.stopped, 1); assert.equal(h.root.querySelector('#scanner-retry').hidden, false);
-  h.dispose(); h.dom.window.close();
-  const denied = harness({ mediaDevices: { getUserMedia: async () => { throw Object.assign(new Error(), { name: 'NotAllowedError' }); } } });
-  await wait(); assert.match(denied.root.querySelector('#scanner-status').textContent, /允许相机/);
-  assert.equal(denied.root.querySelector('#scanner-retry').hidden, false); denied.dispose(); denied.dom.window.close();
+test('backgrounding releases the camera, and a denied camera can be retried', async () => {
+  const h = harness();
+  await h.ticks(1);
+  const doc = h.dom.window.document, retry = h.root.querySelector('#scanner-retry');
+  Object.defineProperty(doc, 'visibilityState', { value: 'hidden', configurable: true });
+  doc.dispatchEvent(new h.dom.window.Event('visibilitychange'));
+  assert.equal(h.stopped, 1);
+  assert.equal(retry.hidden, false);
+  Object.defineProperty(doc, 'visibilityState', { value: 'visible', configurable: true });
+  doc.dispatchEvent(new h.dom.window.Event('visibilitychange'));
+  assert.equal(retry.hidden, false);
+  retry.click();
+  await h.ticks(1);
+  assert.equal(retry.hidden, true);
+  h.dispose();
+  h.dom.window.close();
+
+  let attempts = 0;
+  const track = { stop() {} };
+  const denied = harness({ mediaDevices: { async getUserMedia() {
+    if (++attempts === 1) throw Object.assign(new Error(), { name: 'NotAllowedError' });
+    return { getTracks: () => [track], getVideoTracks: () => [track] };
+  } } });
+  await wait();
+  const retryDenied = denied.root.querySelector('#scanner-retry');
+  assert.match(denied.root.querySelector('#scanner-status').textContent, /允许相机/);
+  assert.equal(retryDenied.hidden, false);
+  retryDenied.click();
+  await denied.ticks(1);
+  assert.equal(attempts, 2);
+  assert.equal(retryDenied.hidden, true);
+  denied.dispose();
+  denied.dom.window.close();
 });
