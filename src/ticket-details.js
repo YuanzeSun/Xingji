@@ -24,7 +24,7 @@ export function ticketDetails(record) {
     ['passenger', passenger],
     ...(record.identity ? [['identity', maskIdentity(record.identity)]] : []),
     ...populatedFields(record, ['gate', 'railPlatform']),
-    ['seat', [record.type === 'rail' && record.carriage && record.carriage + '车', record.seat, record.seatClass].filter(Boolean).join(' · ')],
+    ['seat', [record.type === 'rail' && record.carriage && record.carriage + '车', record.railStanding ? '无座' : record.seat, record.seatClass].filter(Boolean).join(' · ')],
     ['price', record.price ? `¥${record.price}` : ''],
     ...populatedFields(record, ['orderNumber']),
     ['ticketNumber', record.ticketNumber]
@@ -34,7 +34,7 @@ export function ticketDetails(record) {
     rows.push(
       ...populatedFields(record, ['railBureau', 'railModel']),
       ...(trainsets.length ? [['railTrainsets', trainsets.join(' / ')]] : []),
-      ...populatedFields(record, ['railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner']),
+      ...populatedFields(record, ['railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'saleCode', 'issuer']),
       ['ticketMarks', describeMarks(record.ticketMarks)],
       ['ticketCode', record.ticketCode ? '已收录原码数据' : '未收录']
     );

@@ -125,7 +125,7 @@ function railNumerals(value, x, y, size) {
   return { markup: parts.join(''), width: cursor - x };
 }
 function seats(r, x, y, size = 36) {
-  if (!r.carriage && !r.seat) return '';
+  if (!r.carriage && !r.seat && !r.railStanding) return '';
   const match = r.seat?.match(/^([\dA-Za-z]+)(.*)$/);
   const number = match ? match[1] : r.seat || '';
   const ending = match?.[2] || (r.seat ? '号' : '');
@@ -136,8 +136,11 @@ function seats(r, x, y, size = 36) {
     parts.push(digits.markup, text(cursor + digits.width, y, '车', size * .75, railBody(r)));
     cursor += digits.width + size * .75;
   }
-  const seat = railNumerals(number, cursor + 3, y, size);
-  parts.push(seat.markup, text(cursor + 3 + seat.width, y, ending, size * .75, railBody(r)));
+  if (r.railStanding) parts.push(text(cursor + 3, y, '无座', size * .85, railBody(r)));
+  else {
+    const seat = railNumerals(number, cursor + 3, y, size);
+    parts.push(seat.markup, text(cursor + 3 + seat.width, y, ending, size * .75, railBody(r)));
+  }
   return `<g data-rail-seat="true">${parts.join('')}</g>`;
 }
 function fare(r, x, y, numberFamily = 'TicketOCR') {

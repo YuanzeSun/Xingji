@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseScanText, scanCandidate } from '../src/scan-engine.js';
+import { parseScanText } from '../src/scan-engine.js';
 import { refineRailService, refineRailTemplate, preferEnhancedRailRead } from '../src/rail-ocr.js';
 import { railPaperFromPixels } from '../src/rail-template.js';
 
@@ -34,7 +34,7 @@ test('rail OCR can re-read a missing train directly between the station headings
       return { data: { text: 'D3759', confidence: 90 } };
     }
   }, {}, data);
-  assert.equal(scanCandidate(data.text, 90, 'rail', { layout: data.tsv }).service, 'D3759');
+  assert.equal(parseScanText(data.text, 'photo', { layout: data.tsv })[0].service, 'D3759');
 });
 
 test('printed rail tickets remain one rail record when serial numbers resemble flight codes', () => {
@@ -53,7 +53,7 @@ test('printed rail tickets remain one rail record when serial numbers resemble f
 test('numeric trains and OCR-confused letters are resolved from their position between stations', () => {
   for (const [printed,expected] of [['6852','6852'],['p3759','D3759'],['Gl','G1']]) {
     const tsv = layout([[printed,430,80,150,45],['Liuzhou',150,140,140,30],['Laibinbei',710,140,170,30]]);
-    assert.equal(scanCandidate(picture(printed),85,'rail',{layout:tsv}).service,expected);
+    assert.equal(parseScanText(picture(printed),'photo',{layout:tsv})[0].service,expected);
   }
 });
 
@@ -68,12 +68,12 @@ test('a spaced train prefix is retained and a seat number below the station row 
   const text = picture('T 166');
   const tsv = layout([['Lasa',150,140,140,30],['Bengbu',710,140,170,30],['005',550,200,70,35]]);
   assert.equal(parseScanText(text,'test',{layout:tsv})[0].service,'T166');
-  assert.equal(scanCandidate(picture('???'),90,'rail',{layout:tsv}),null);
+  assert.equal(parseScanText(picture('???'),'photo',{layout:tsv})[0]?.service || '', '');
 });
 
 test('uncertain railway text and footer phone numbers do not become flight or train candidates', () => {
   assert.deepEqual(parseScanText('S006765\n仅供报销使用\n检票口5B'),[]);
-  assert.equal(scanCandidate(picture('???')+'\nT95306',90,'rail'),null);
+  assert.equal(parseScanText(picture('???')+'\nT95306','photo')[0]?.service || '', '');
   assert.deepEqual(parseScanText('BOARDING PASS\n航班：CA181 日期：2025-05-03\n出发：PEK 到达：HND'), []);
 });
 

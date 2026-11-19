@@ -7,13 +7,29 @@ import { normalizeSeatClass } from '../src/seat-classes.js';
 test('common seat class aliases are stored consistently across entry, imports and export', () => {
   for (const value of ['二等', '二等座', ' 二 等 座 ']) assert.equal(createRecord({ seatClass: value }).seatClass, '二等座');
   assert.equal(parseText('日期：2026-11-15 车次：G103 出发：北京南 到达：上海虹桥 二等座')[0].seatClass, '二等座');
-  const record = createRecord({ seatClass: '站票' });
-  assert.equal(readArchive(archive([record]))[0].seatClass, '无座');
+  assert.throws(() => createRecord({ seatClass: '站票' }), /单独选择无座/);
+  const [record] = parseText('车次：G103 日期：2026-11-15 出发：北京南 到达：上海虹桥 二等座 05车无座');
+  const saved = readArchive(archive([record]))[0];
+  assert.equal(saved.seatClass, '二等座');
+  assert.equal(saved.railStanding, true);
+  assert.equal(saved.carriage, '05');
+  assert.equal(saved.seat, '');
   assert.equal(normalizeSeatClass('商务舱', 'flight'), '公务舱');
   assert.equal(normalizeSeatClass('商务', 'rail'), '商务座');
   assert.equal(normalizeSeatClass('特别观景包厢', 'rail'), '特别观景包厢');
   assert.equal(normalizeSeatClass('Y', 'flight'), 'Y');
   assert.equal(normalizeSeatClass('constructor', 'rail'), 'constructor');
+});
+
+test('a standing ticket keeps its class and does not require an assigned place',async()=>{
+  const { missingTicketFields } = await import('../src/ticket-form.js');
+  const { ticketSVG } = await import('../src/tickets.js');
+  const ticket = createRecord({railStanding:true,seatClass:'二等座'});
+  assert.ok(!missingTicketFields(ticket).includes('seat'));
+  assert.ok(!missingTicketFields(ticket).includes('carriage'));
+  assert.match(ticketSVG(ticket), />无座</);
+  assert.match(ticketSVG(ticket), />二等座</);
+  assert.ok(missingTicketFields(createRecord({railStanding:true})).includes('seatClass'));
 });
 
  test('flight booking codes preserve explicit letters without inferring them from a cabin name', () => {

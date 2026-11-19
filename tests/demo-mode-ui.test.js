@@ -31,8 +31,8 @@ test('sample mode exposes only browsing pages and preserves private records when
     assert.equal(document.querySelector('#modal-root [data-action="new"],#modal-root [data-action="edit"],#modal-root [data-action="delete"]'),null);
     document.querySelector('[data-action="close-modal"]').click();await go('archive','我的票据');await toggle(false);
     assert.ok(document.querySelector('[data-action="new"]'));assert.ok(document.querySelector('nav [data-page="import"]'));assert.ok(document.querySelector('nav [data-page="data"]'));
-    await go('archive','我的票据');assert.ok(document.querySelector('[data-action="scan-ticket"]'));assert.ok(document.querySelector('[data-action="new"]'));assert.equal(document.querySelectorAll('.ticket-card').length,1);
-    await go('import','录入票据');assert.ok(document.querySelector('.manual-panel'));assert.ok(document.querySelector('#camera-file'));
+    await go('archive','我的票据');assert.equal(document.querySelector('[data-action="scan-ticket"]'),null);assert.ok(document.querySelector('[data-action="new"]'));assert.equal(document.querySelectorAll('.ticket-card').length,1);
+    await go('import','录入票据');assert.ok(document.querySelector('.manual-panel'));assert.equal(document.querySelector('#camera-file'),null);
     assert.deepEqual(await db.get('records'),[original]);assert.deepEqual(server.records(),[original]);
   }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();}
 });
