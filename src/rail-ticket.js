@@ -47,20 +47,33 @@ export function railStationFromRegion(text, { fuzzy = true } = {}) {
   return names.size === 1 ? [...names][0] : '';
 }
 
+function standardTopSerial(value) {
+  const serial = value.match(/^([A-Z]|\d{1,3}[A-Z]|[A-Z]\d{2,3}[A-Z])([0-9OQIL]{6})$/);
+  return serial && /\d{4,}/.test(serial[2])
+    ? serial[1] + serial[2].replace(/[OQ]/g, '0').replace(/[IL]/g, '1') : '';
+}
+
+export function splitRailTicketHeader(text) {
+  const compact = text.normalize('NFKC').replace(/\s/g, '').toUpperCase();
+  if (!/^[A-Z0-9\p{Script=Han}]{8,25}$/u.test(compact) || !/\p{Script=Han}/u.test(compact)) return null;
+  const ticketNumber = standardTopSerial(compact.replace(/\p{Script=Han}/gu, ''));
+  if (!ticketNumber) return null;
+  const station = railStationFromRegion(compact.replace(/[A-Z0-9]/g, ''), { fuzzy:false });
+  return station ? { station, ticketNumber } : null;
+}
+
 export function printedRailNumber(text, footer = false) {
   const candidates = new Set();
   for (const line of text.normalize('NFKC').toUpperCase().split('\n')) {
-    const words = line.trim().replace(/^(?:票号|底部售票码|售票码)\s*[:：]\s*/, '').split(/\s+/);
+    const content = line.trim().replace(/^(?:票号|底部售票码|售票码)\s*[:：]\s*/, '');
+    const overlapped = !footer && splitRailTicketHeader(content);
+    if (overlapped) { candidates.add(overlapped.ticketNumber); continue; }
+    const words = content.split(/\s+/);
     const pattern = footer ? /^(?=.{17,25}$)\d{5,}[A-Z]?\d{8,}[A-Z]?\d{0,7}$/ : /^(?:[A-Z]\d{6,10}|\d{1,3}[A-Z]\d{6,9}|[A-Z]\d{2,3}[A-Z]\d{6})$/;
     for (const token of [words[0], words.join('')]) {
       let value = token.match(/^[A-Z0-9]+/)?.[0] || '';
       if (footer && value.length === 23) value = value.replace(/J[MN]$/, '');
-      if (!footer) {
-        const serial = value.match(/^([A-Z]|\d{1,3}[A-Z]|[A-Z]\d{2,3}[A-Z])([0-9OQIL]{6})$/);
-        if (serial && /\d{4,}/.test(serial[2])) {
-          value = serial[1] + serial[2].replace(/[OQ]/g, '0').replace(/[IL]/g, '1');
-        }
-      }
+      if (!footer) value = standardTopSerial(value) || value;
       if (pattern.test(value)) candidates.add(value);
     }
   }
@@ -165,8 +178,9 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
   const anchorFor = hit => words.find(word => key(word.text) === key(hit.text));
   if (pair.length === 2 && pair.every(anchorFor)) pair.sort((a,b) => anchorFor(a).left - anchorFor(b).left);
   const anchors = pair.map(anchorFor);
+  const serviceText = raw.split('\n').filter(line => !splitRailTicketHeader(line)).join('\n');
   let service = route?.service || trainCode(raw.match(/车次\s*[:：]\s*([A-Z]?\d{1,5})/)?.[1] || '', true);
-  service ||= [...raw.matchAll(/\b[GDCZTKYLS]\s*[0-9OIl]{1,5}(?:次)?\b/g)].map(match => trainCode(match[0])).find(Boolean) || '';
+  service ||= [...serviceText.matchAll(/\b[GDCZTKYLS]\s*[0-9OIl]{1,5}(?:次)?\b/g)].map(match => trainCode(match[0])).find(Boolean) || '';
   if (anchors.length === 2 && anchors.every(Boolean)) {
     const [from, to] = anchors;
     const candidates = words.filter(word => word.left > from.left + from.width * .5 && word.left + word.width < to.left + to.width * .5 && word.top + word.height * .5 < Math.max(from.top, to.top) + Math.max(from.height, to.height) * .3 && word.top > Math.min(from.top, to.top) - Math.max(from.height, to.height) * 4)
@@ -174,7 +188,6 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
       .sort((a, b) => Math.abs(a.word.top + a.word.height - from.top) - Math.abs(b.word.top + b.word.height - from.top));
     service ||= candidates[0]?.code || '';
   }
-  service ||= [...raw.matchAll(/\b[GDCZTKYLS][0-9OIl]{1,5}(?:次)?\b/g)].map(match => trainCode(match[0])).find(Boolean) || '';
   const compact = raw.replace(/(?<=\d)\s*[:：]\s*(?=\d)/g, ':');
   const lines = compact.split('\n');
   const printedDates = lines.map(line => readRailDateRow(line)).filter(Boolean);

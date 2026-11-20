@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import { openRailCamera } from '../src/rail-camera.js';
 import { readPrintedDate } from '../src/scan-date.js';
 import { railStationFromRegion, printedRailNumber } from '../src/rail-ticket.js';
+import { separateRailRedInk } from '../src/scan-image.js';
 import { marksFromRailRegion } from '../src/ticket-marks.js';
 import { chooseRailReading, fullRailRead, paddleRailReading, recognizedRailRecords } from '../src/paddle-rail.js';
 
@@ -145,6 +146,37 @@ test('rail photo layout assembles split dates and verifies a misread serial agai
   items.push(item('硬座', 481, 185, 44), item('新空调', 410, 185, 68));
   const [airConditioned] = recognizedRailRecords(paddleRailReading({ image, items }, 'blue'));
   assert.equal(airConditioned.seatClass, '新空调硬座');
+});
+
+test('a ticket number overlapping the left station is retained without becoming the train number', () => {
+  const item = (text, x, y, width, height = 22) => ({
+    text, score: .96, poly:[ [x,y], [x+width,y], [x+width,y+height], [x,y+height] ]
+  });
+  const image = { width:640, height:400 };
+  for (const header of ['包头站 J085247', 'J08524包头站7', 'G123包头站456']) {
+    const items = [
+      item(header, 35, 38, 125, 44), item('6852', 282, 64, 57), item('包头东站', 442, 65, 96),
+      item('2023年06月22日15:19开', 33, 128, 183), item('03车013号', 441, 128, 87),
+      item('￥1.0元', 33, 163, 85), item('仅供报销使用', 34, 222, 124)
+    ];
+    const [ticket] = recognizedRailRecords(paddleRailReading({ image, items }, 'blue'));
+    assert.deepEqual([ticket.origin, ticket.destination, ticket.service, ticket.ticketNumber],
+      ['包头', '包头东', '6852', header.startsWith('G') ? 'G123456' : 'J085247']);
+  }
+  assert.equal(printedRailNumber('包头站J08524'), '');
+  assert.equal(printedRailNumber('包头站06车008号'), '');
+  assert.equal(printedRailNumber('G21 北京南站'), '');
+});
+
+test('the serial color pass suppresses black station ink and preserves red strokes on tinted paper', () => {
+  const paper = Array.from({ length:90 }, () => [232,211,211,255]).flat();
+  const pixels = new Uint8ClampedArray([...paper, ...Array(5).fill([37,34,35,255]).flat(), ...Array(5).fill([180,74,81,255]).flat()]);
+  assert.equal(separateRailRedInk({ data:pixels }), true);
+  assert.equal(pixels[0], 255);
+  assert.equal(pixels[360], 255);
+  assert.ok(pixels[380] < 60);
+  const neutral = new Uint8ClampedArray([255,255,255,255,40,40,40,255]);
+  assert.equal(separateRailRedInk({ data:neutral }), false);
 });
 
 test('rail photo layout uses the same sloped row and ignores a nearby sales station', () => {

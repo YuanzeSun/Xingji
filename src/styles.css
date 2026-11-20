@@ -280,6 +280,9 @@ p:empty{display:none}
 [data-github-backup-status]:empty{display:none}
 .backup-panel{grid-column:1/-1}.backup-panel .backup-actions{display:grid;grid-template-columns:1fr 1fr;gap:15px}
 .data-layout>.panel{align-self:start}
+.install-panel{grid-column:1/-1}
+.install-panel p{font-size:14px;line-height:1.65;color:var(--ink)}
+.install-panel p+p,.install-panel .button{margin-top:8px}
 @media(max-width:680px){
   .stats{grid-template-columns:repeat(4,minmax(0,1fr));padding:13px 0}
   .stats>div,.stats>div+div:not(.stats-decoration){padding:0 8px;border-top:0;border-left:0}

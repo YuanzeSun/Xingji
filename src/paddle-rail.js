@@ -1,8 +1,8 @@
 import { calendarDate } from './journey-date.js';
 import { parseScanText } from './scan-engine.js';
-import { prepareRailDetailImage, railPhotoColor } from './scan-image.js';
+import { prepareRailDetailImage, railPhotoColor, separateRailRedInk } from './scan-image.js';
 import { isRailOrderText } from './rail-order.js';
-import { parsePrintedRailTicket, printedRailNumber, railFareFromLine, railSeatFromLine, trainCode } from './rail-ticket.js';
+import { parsePrintedRailTicket, printedRailNumber, railFareFromLine, railSeatFromLine, splitRailTicketHeader, trainCode } from './rail-ticket.js';
 import { locateRailRoute, railNumbersFromLayout, railSplitFieldsFromLayout, railTextAngle, railValueRegions, ticketNumberFromFooter } from './rail-photo-layout.js';
 import { readRailDateRow } from './scan-date.js';
 import { marksFromRailRegion } from './ticket-marks.js';
@@ -55,7 +55,7 @@ export function paddleRailReading({ image, items }, paperColor) {
     const dx = topRight[0] - topLeft[0], dy = topRight[1] - topLeft[1];
     const glyphWidth = Math.hypot(dx, dy) || width || 1;
     const glyphHeight = Math.hypot(bottomLeft[0] - topLeft[0], bottomLeft[1] - topLeft[1]) || height;
-    return { text, score, train, left, top, width, height, glyphWidth, glyphHeight,
+    return { text, score, train, header: splitRailTicketHeader(text), left, top, width, height, glyphWidth, glyphHeight,
       centerX: left + width / 2, centerY: top + height / 2, cos: dx / glyphWidth, sin: dy / glyphWidth };
   }).filter(line => line.text);
   const text = lines.map(line => line.text).join('\n');
@@ -84,19 +84,23 @@ export function paddleRailReading({ image, items }, paperColor) {
   return { text, layout, paperColor, railFields, ...(route && { route }) };
 }
 
-async function readRegion(engine, bitmap, region, { redInk = false } = {}) {
+async function readRegion(engine, bitmap, region, ink = '') {
   const canvas = document.createElement('canvas');
   const scale = Math.min(2, inferenceOptions.textDetLimitSideLen / Math.max(region.width, region.height));
   canvas.width = Math.round(region.width * scale);
   canvas.height = Math.round(region.height * scale);
-  const context = canvas.getContext('2d', { willReadFrequently: redInk });
+  const context = canvas.getContext('2d', { willReadFrequently: !!ink });
   context.drawImage(bitmap, region.left, region.top, region.width, region.height, 0, 0, canvas.width, canvas.height);
-  if (redInk) {
+  if (ink) {
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-    for (let i = 0; i < pixels.data.length; i += 4) {
-      const [r, g, b] = [pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]];
-      const gray = g - Math.max(0, r - (g + b) / 2) * .9;
-      pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = gray;
+    if (ink === 'red-only') {
+      if (!separateRailRedInk(pixels)) return [];
+    } else {
+      for (let i = 0; i < pixels.data.length; i += 4) {
+        const [r, g, b] = [pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]];
+        const gray = g - Math.max(0, r - (g + b) / 2) * .9;
+        pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = gray;
+      }
     }
     context.putImageData(pixels, 0, 0);
   }
@@ -118,7 +122,7 @@ function regionalValue(items, parse) {
   return values.size === 1 ? values.values().next().value : null;
 }
 
-async function refineRailValues(engine, bitmap, regions, first, reading, progress) {
+async function refineRailValues(engine, bitmap, regions, first, reading, progress, colorNumber) {
   const [record] = recognizedRailRecords(reading);
   if (!record || !regions || isRailOrderText(reading.text)) return reading;
   const seatMatches = (seat) => seat?.carriage && (seat.seat || seat.railStanding);
@@ -158,7 +162,8 @@ async function refineRailValues(engine, bitmap, regions, first, reading, progres
       const readSerial = items => regionalValue(items, text => printedRailNumber(text)) ||
         ticketNumberFromFooter(items.filter(item => item.score >= .82).map(item => item.text), record.saleCode);
       const serial = readSerial(await readRegion(engine, bitmap, regions.ticketNumber)) ||
-        readSerial(await readRegion(engine, bitmap, regions.ticketNumber, { redInk: true }));
+        readSerial(await readRegion(engine, colorNumber?.bitmap || bitmap, colorNumber?.region || regions.ticketInk, 'red-only')) ||
+        readSerial(await readRegion(engine, bitmap, regions.ticketNumber, 'contrast'));
       if (serial) railFields.ticketNumber = serial;
     } catch { /* Keep the original fields if the serial cannot be read. */ }
   }
@@ -199,6 +204,7 @@ export async function recognizePaddleRailPhoto(file, progress = () => {}) {
         firstReading = paddleRailReading(result, railPhotoColor(bitmap));
         let [record] = recognizedRailRecords(firstReading);
         let regions = railValueRegions(firstReading.layout, bitmap.width, bitmap.height, record);
+        const colorNumber = regions?.ticketInk && { bitmap, region: regions.ticketInk };
         if (regions?.paper && !isRailOrderText(firstReading.text) && !printedRailTemplate(firstReading.text)) {
           const paperColor = railPhotoColor(bitmap, regions.paper);
           if (paperColor) firstReading = { ...firstReading, paperColor, paperColorFromTicket: true };
@@ -222,7 +228,7 @@ export async function recognizePaddleRailPhoto(file, progress = () => {}) {
             }
           } catch { /* The original photograph is still available. */ }
         }
-        return await refineRailValues(engine, source, regions, result, firstReading, progress);
+        return await refineRailValues(engine, source, regions, result, firstReading, progress, colorNumber);
       } finally {
         bitmap.close();
         enhanced?.close();

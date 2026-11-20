@@ -9,6 +9,26 @@ export function railPhotoColor(image, region) {
   return railPaperFromPixels(context.getImageData(7, 7, 58, 34).data, { faint: !!region });
 }
 
+export function separateRailRedInk({ data }) {
+  const redExcess = i => Math.max(0, data[i] - Math.max(data[i + 1], data[i + 2]));
+  const histogram = new Uint32Array(256);
+  for (let i = 0; i < data.length; i += 4) histogram[redExcess(i)]++;
+  const quantile = fraction => {
+    let remaining = Math.floor(data.length / 4 * fraction);
+    return histogram.findIndex(count => (remaining -= count) < 0);
+  };
+  const baseline = quantile(.7), ink = quantile(.995);
+  if (ink - baseline < 9) return false;
+  const paper = Math.max(5, baseline + Math.max(3, Math.round((ink - baseline) * .18)));
+  if (ink <= paper) return false;
+  const scale = 220 / (ink - paper);
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = 255 - Math.max(0, redExcess(i) - paper) * scale;
+    data[i] = data[i + 1] = data[i + 2] = gray;
+  }
+  return true;
+}
+
 export function cropColoredRailPaper(canvas, maxEdge = Infinity) {
   const crop = paperCrop(canvas);
   if (!crop) return null;
