@@ -31,6 +31,23 @@ await copyVendorFile('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm', 'z
 await copyVendorFile('node_modules/bwip-js/LICENSE', 'BWIP-JS-LICENSE.txt');
 await copyVendorFile('node_modules/zxing-wasm/LICENSE', 'ZXING-WASM-LICENSE.txt');
 await copyVendorFile('licenses/ZXING-CPP-LICENSE.txt', 'ZXING-CPP-LICENSE.txt');
+const paddleSource = join(root, 'node_modules/@paddleocr/paddleocr-js/dist');
+const paddleOut = join(out, 'vendor/paddle');
+await mkdir(join(paddleOut, 'assets'), { recursive: true });
+await build({
+  entryPoints: [join(paddleSource, 'index.mjs')], outfile: join(paddleOut, 'index.mjs'),
+  bundle: true, format: 'esm', minify: true, target: 'es2022', external: ['fs', 'path']
+});
+for (const file of await readdir(join(paddleSource, 'assets'))) {
+  if (file.endsWith('.js')) await cp(join(paddleSource, 'assets', file), join(paddleOut, 'assets', file));
+}
+for (const extension of ['mjs', 'wasm']) {
+  const name = 'ort-wasm-simd-threaded.jsep.' + extension;
+  await copyVendorFile('node_modules/onnxruntime-web/dist/' + name, 'paddle/' + name);
+}
+for (const name of ['PADDLEOCR-APACHE-2.0.txt', 'PADDLEOCR-NOTICES.txt', 'ONNXRUNTIME-MIT.txt', 'ONNXRUNTIME-THIRD-PARTY.txt']) {
+  await copyVendorFile('licenses/' + name, 'paddle/' + name);
+}
 await copyVendorFile('node_modules/tesseract.js/dist/worker.min.js', 'worker.min.js');
 const core = join(root, 'node_modules/tesseract.js-core');
 for (const file of await readdir(core)) if (file.endsWith('.wasm') || file.endsWith('.wasm.js')) await cp(join(core, file), join(out, 'vendor', file));

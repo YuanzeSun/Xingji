@@ -1,5 +1,6 @@
 allowBuilds:
   esbuild: true
+  protobufjs: false
   tesseract.js: false
 minimumReleaseAgeExclude:
   - zxing-wasm@3.1.7

@@ -448,11 +448,12 @@ function bindRailPhoto(form) {
     railCameraCleanup?.(); railCameraCleanup = null;
     shutter.disabled = file.disabled = true;
     status.textContent = '正在识别火车票…';
-    let record;
+    let record, multiplePrintedTickets;
     try {
       const { recognize } = await import('./ocr.js');
       if (!current()) return;
       const reading = await recognize(photo, progress => { if (current()) status.textContent = progress; }, { details: true });
+      multiplePrintedTickets = reading.multiplePrintedTickets;
       record = parseScanText(reading.text, '火车票照片', { ...reading, singleTicket: true })[0];
     } catch { /* The photo is still available for manual entry. */ }
     if (!current() || form.dataset.pending === 'true') return;
@@ -463,7 +464,8 @@ function bindRailPhoto(form) {
     if (changes.departureDate?.year) markFieldSources(next, ['departureDateYear'], 'ocr');
     if (lookupContext(draft) !== lookupContext(next)) clearLookupValues(next);
     editRecord(next, importIndex, true, original, photo);
-    toast(record ? '已填入识别结果，请核对' : '已保留照片，请对照原图填写', !record);
+    const feedback = multiplePrintedTickets ? '请逐张拍摄火车票' : '已保留照片，请对照原图填写';
+    toast(record ? '已填入识别结果，请核对' : feedback, !record);
   }
   shutter.onclick = () => {
     if (!current()) return;
@@ -1022,6 +1024,7 @@ async function handleFiles(files, { backupOnly = false } = {}) {
           if (!currentImport(task)) return;
           const result = parseScanText(recognized.text, file.name, recognized);
           if (!result.length) {
+            if (recognized.multiplePrintedTickets) throw new Error('请将每张火车票保存为单独的照片');
             if (recognized.flightImage) throw new Error('请在录入机票时上传登机牌条码或二维码');
             fallbackText = recognized.text;
             throw new Error('没有识别到行程。可复制识别文字并手动修订');
