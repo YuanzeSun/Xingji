@@ -1,4 +1,5 @@
 import { createWorker } from 'tesseract.js';
+import { chooseRailReading, fullRailRead, recognizedRailRecords, recognizePaddleRailPhoto } from './paddle-rail.js';
 import { dateRectangle, readPrintedDate } from './scan-date.js';
 import { isRailOrderText, railOrderService } from './rail-order.js';
 import { railTimeWords } from './ocr-layout.js';
@@ -97,7 +98,20 @@ export async function createRecognizer(progress = () => {}, {
   };
 }
 export async function recognize(file, progress = () => {}, { details = false } = {}) {
-  const worker = await createRecognizer(progress);
-  try { const result = await worker.recognize(file); return details ? result : result.text; }
-  finally { await worker.terminate(); }
+  progress('正在识别火车票…');
+  let reading;
+  try { reading = await recognizePaddleRailPhoto(file); }
+  catch { /* Older browsers can use the original OCR engine. */ }
+  if (reading?.multiplePrintedTickets) return details ? reading : '';
+  const primaryRecords = recognizedRailRecords(reading);
+  if (!fullRailRead(primaryRecords)) {
+    let worker;
+    try {
+      worker = await createRecognizer(progress);
+      reading = chooseRailReading(reading, await worker.recognize(file));
+    } catch (error) {
+      if (!primaryRecords.length) throw error;
+    } finally { await worker?.terminate(); }
+  }
+  return details ? reading : reading.text;
 }
