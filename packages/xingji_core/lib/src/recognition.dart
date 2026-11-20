@@ -239,7 +239,7 @@ void _fillPrintedRailRegions(
   }
 
   const serial = r'^(?:[A-Z]\d{5,10}|\d{1,3}[A-Z]\d{5,9})$';
-  const sale = r'^(?=.{17,25}$)\d{5,}[A-Z]?\d{8,}[A-Z]?\d{0,4}$';
+  const sale = r'^(?=.{17,25}$)\d{5,}[A-Z]?\d{8,}[A-Z]?\d{0,7}$';
   final lines = text
       .split('\n')
       .where((line) => line.trim().isNotEmpty)

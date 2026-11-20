@@ -137,7 +137,7 @@ void main() {
           'origin': '北 京 南 站',
           'destination': 'Nanjingnan',
           'ticketNumber': 'X 000001',
-          'saleCode': '000000000000000000001 南京南站售',
+          'saleCode': '12345678900001 X000001 南京南站售',
           'ticketMarks': '网\n孩',
         },
       ),
@@ -147,7 +147,7 @@ void main() {
     expect(record.text('origin'), '北京南');
     expect(record.text('destination'), '南京南');
     expect(record.text('ticketNumber'), 'X000001');
-    expect(record.text('saleCode'), '000000000000000000001');
+    expect(record.text('saleCode'), '12345678900001X000001');
     expect((record['ticketMarks'] as List).map((mark) => mark['text']), [
       '网',
       '孩',
