@@ -7,7 +7,7 @@ import { railStationFromRegion, printedRailNumber } from '../src/rail-ticket.js'
 import { marksFromRailRegion } from '../src/ticket-marks.js';
 import { chooseRailReading, fullRailRead, paddleRailReading, recognizedRailRecords } from '../src/paddle-rail.js';
 
-test('the rail camera delivers one photo only after a shutter press', async t => {
+test('the rail camera only delivers the pixels inside the guide after a shutter press', async t => {
   const { window } = new JSDOM('<div id="preview"></div>');
   t.after(() => window.close());
   window.HTMLMediaElement.prototype.play = async () => {};
@@ -15,7 +15,8 @@ test('the rail camera delivers one photo only after a shutter press', async t =>
     videoWidth: { get: () => 1280 },
     videoHeight: { get: () => 720 }
   });
-  window.HTMLCanvasElement.prototype.getContext = () => ({ drawImage() {} });
+  const draws = [];
+  window.HTMLCanvasElement.prototype.getContext = () => ({ drawImage: (...args) => draws.push(args) });
   window.HTMLCanvasElement.prototype.toBlob = callback => callback(new Blob(['fixture']));
   let shots = 0, stopped = 0;
   const root = window.document.querySelector('#preview');
@@ -24,9 +25,21 @@ test('the rail camera delivers one photo only after a shutter press', async t =>
   });
   t.after(close);
   await new Promise(resolve => setImmediate(resolve));
+  const video = root.querySelector('video');
+  const guide = root.querySelector('.rail-camera-guide');
+  const shutter = root.querySelector('[data-shutter]');
+  video.getBoundingClientRect = () => new window.DOMRect(40, 80, 400, 360);
+  guide.style.border = '2px solid white';
   assert.equal(shots, 0);
-  assert.equal(root.querySelector('[data-shutter]').disabled, false);
-  root.querySelector('[data-shutter]').click();
+  assert.equal(shutter.disabled, false);
+  shutter.click(); // The guide has no layout yet.
+  assert.deepEqual(draws, []);
+  assert.equal(shots, 0);
+  assert.equal(shutter.disabled, false);
+  assert.equal(root.querySelector('[role="status"]').textContent, '未能拍照，请重试');
+  guide.getBoundingClientRect = () => new window.DOMRect(70, 160, 340, 212);
+  shutter.click();
+  assert.deepEqual(draws, [[video, 304, 164, 672, 416, 0, 0, 672, 416]]);
   assert.equal(shots, 1);
   assert.equal(stopped, 1);
   assert.equal(root.childElementCount, 0);
