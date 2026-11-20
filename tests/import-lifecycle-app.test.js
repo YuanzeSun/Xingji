@@ -6,7 +6,7 @@ import { signOutCloud } from '../src/sync-state.js';
 import { prepareCloud } from './helpers/cloud.js';
 import { browser, until } from './helpers/d1-app.js';
 
-test('imports stay with their archive and original image, and never replace an unrelated editor', async t => {
+test('unsaved imports stay with their active review and stale results are discarded', async t => {
   const window = browser();
   location.hash = 'import';
   let channel;
@@ -20,19 +20,19 @@ test('imports stay with their archive and original image, and never replace an u
     createRecord({ id: 'train', service: 'G23', destination: '原票据到达站' })
   ];
   const json = JSON.stringify(archive(records));
-  let read, finish;
+  let finish;
   const click = selector => document.querySelector(selector).click();
   const go = page => click('[data-page="' + page + '"]');
-  const pick = file => {
+  const pick = (...files) => {
     const input = document.querySelector('#import-files');
-    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    Object.defineProperty(input, 'files', { value: files, configurable: true });
     input.dispatchEvent(new window.Event('change', { bubbles: true }));
   };
   async function deferredFile() {
-    const reading = new Promise(resolve => { read = resolve; });
+    let reading = false;
     const contents = new Promise(resolve => { finish = resolve; });
-    pick({ name: 'records.json', size: json.length, text() { read(); return contents; } });
-    await reading;
+    pick({ name: 'records.json', size: json.length, text() { reading = true; return contents; } });
+    await until(() => reading);
   }
   const ocrURL = new URL('../src/ocr.js', import.meta.url).href;
   const hook = registerHooks({
@@ -56,14 +56,15 @@ test('imports stay with their archive and original image, and never replace an u
     click('dialog [data-action="close-modal"]');
     await until(() => !document.querySelector('dialog'));
 
-    pick(new window.File(['two'], 'second.png', { type: 'image/png' }));
+    assert.equal(document.querySelector('[data-action="review"]'), null);
+    const first = new window.File(['one'], 'first.png', { type: 'image/png' });
+    const second = new window.File(['two'], 'second.png', { type: 'image/png' });
+    pick(first, second);
     await until(() => document.querySelectorAll('.review-row').length === 2);
     click('[data-action="edit-candidate"][data-index="0"]');
     await until(() => document.querySelector('.scan-reference img'));
     assert.equal(document.querySelector('.scan-reference img').getAttribute('src'), 'blob:fixture-first.png');
-    click('dialog [data-action="close-modal"]');
-    await until(() => !document.querySelector('dialog'));
-    click('[data-action="review"]');
+    click('[data-action="back-to-batch"]');
     await until(() => document.querySelector('[data-action="edit-candidate"][data-index="1"]'));
     click('[data-action="edit-candidate"][data-index="1"]');
     await until(() => document.querySelector('.scan-reference img'));
@@ -71,6 +72,9 @@ test('imports stay with their archive and original image, and never replace an u
     click('dialog [data-action="close-modal"]');
     await until(() => !document.querySelector('dialog'));
     assert.ok(revoke.mock.calls.some(call => call.arguments[0] === 'blob:fixture-first.png'));
+    assert.ok(revoke.mock.calls.some(call => call.arguments[0] === 'blob:fixture-second.png'));
+    assert.equal(document.querySelector('[data-action="review"]'), null);
+    assert.deepEqual(github.records(), []);
 
     await deferredFile();
     go('archive');
@@ -86,11 +90,11 @@ test('imports stay with their archive and original image, and never replace an u
     globalThis.confirm = () => true;
     click('dialog [data-action="close-modal"]');
     go('import');
-    await until(() => document.querySelector('[data-action="review"]')?.textContent.includes('4'));
-    click('[data-action="review"]');
-    await until(() => document.querySelectorAll('.review-row').length === 4);
-    click('[data-action="discard-candidates"]');
-    await until(() => !document.querySelector('dialog'));
+    await until(() => document.querySelector('#import-files') &&
+      !document.querySelector('#import-status').textContent.includes('正在'));
+    assert.equal(document.querySelector('[data-action="review"]'), null);
+    assert.equal(document.querySelector('dialog'), null);
+    assert.doesNotMatch(document.body.textContent, /原票据出发站/);
 
     await deferredFile();
     const demo = document.querySelector('#demo-toggle');
@@ -104,7 +108,10 @@ test('imports stay with their archive and original image, and never replace an u
     click('[data-action="exit-demo"]');
     await until(() => document.querySelector('[data-page="import"]'));
     go('import');
-    await until(() => document.querySelector('[data-action="review"]')?.textContent.includes('2'));
+    await until(() => document.querySelector('#import-files') &&
+      !document.querySelector('#import-status').textContent.includes('正在'));
+    assert.equal(document.querySelector('[data-action="review"]'), null);
+    assert.equal(document.querySelector('dialog'), null);
 
     await deferredFile();
     await signOutCloud();
