@@ -6,6 +6,7 @@ import { parseFlightScreenshot } from './flight-screenshot.js';
 import { flightStatusFromText } from './flight-status.js';
 import { aircraftMentions, extractAircraft } from './aircraft.js';
 import {labelledFlightTimes} from './flight-times.js';
+import { readRailSeatClasses } from './seat-classes.js';
 
 export function decodeMail(raw) {
   const split = raw.search(/\r?\n\r?\n/);
@@ -63,7 +64,8 @@ function parseOne(text, sourceKind, label) {
   const seatMatch = text.match(/(?:座位|座号|SEAT)\s*[:：]?\s*([\dA-Z\-]{1,8})(?:\s*号)?(?:\s*([上中下])\s*铺)?/i) || text.match(/\d{1,2}\s*车(?:厢)?\s*([\dA-Z\-]{1,8})(?:\s*号)?(?:\s*([上中下])\s*铺)?/i);
   const seat = seatMatch ? seatMatch[1] + (seatMatch[2] ? '号' + seatMatch[2] + '铺' : '') : '';
   const cabinCode = type === 'flight' ? capture(text, /(?:舱位(?:代码)?|(?:BOOKING\s+)?CLASS)\s*[:：]?\s*([A-Z]\d{0,2})(?:\s*舱)?(?![A-Z0-9])/i) || capture(text, /(?<![A-Z0-9])([A-Z]\d{0,2})\s*舱(?!位)/i) : '';
-  const seatClass = cabinCode || capture(text, /(商务座|特等座|一等座|二等座|软卧|硬卧|软座|硬座|超级经济舱|经济舱|公务舱|商务舱|头等舱)/);
+  const seatClass = type === 'rail' ? readRailSeatClasses(text)[0] || '' :
+    cabinCode || capture(text, /(超级经济舱|经济舱|公务舱|商务舱|头等舱)/);
   const gate = capture(text, /(?:检票(?:口)?|登机口|GATE)\s*[:：]?\s*([A-Z0-9][A-Z0-9/\-]{0,15})(?![A-Z0-9])/i);
   const price = capture(text, /(?:票价|价格|金额|CNY|RMB|￥|¥)\s*[:：]?\s*(\d+(?:\.\d{1,2})?)/i);
   const aircraftField = capture(text, /(?:机型|飞机型号|AIRCRAFT(?:\s+TYPE)?|EQUIPMENT)\s*[:：]\s*([^,，;；\n]{2,80})/i);

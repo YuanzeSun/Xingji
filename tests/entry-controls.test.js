@@ -19,6 +19,19 @@ test('date controls offer native calendar selection without adding precision to 
   }
 });
 
+test('the printed air-conditioned seat name is retained in OCR, the form and the ticket', () => {
+  const text = '北京南站 G21 南京南站\nBeijingnan Nanjingnan\n2014年11月16日15:00开\n05车014号 新 空 调 硬 座\n￥153.50元\n限乘当日当次车';
+  const [record] = parseScanText(text, 'photo', { paperColor:'red' });
+  assert.equal(record.seatClass, '新空调硬座');
+  assert.equal(record.seat, '014');
+  assert.equal(record.price, '153.50');
+  assert.equal(readArchive(archive([record]))[0].seatClass, '新空调硬座');
+  assert.match(ticketSVG(record), /新空调硬座/);
+  const dom = new JSDOM(seatClassField(record));
+  assert.equal(dom.window.document.querySelector('[data-seat-preset]').value, '新空调硬座');
+  dom.window.close();
+});
+
 test('clicking date and time fields opens their picker, and a choice updates form input listeners', () => {
   const dom = new JSDOM(`<form>${dateControl('departureDate')}<input type="time" name="departureTime"></form>`);
   const { document, Event, MouseEvent } = dom.window;

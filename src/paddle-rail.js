@@ -1,9 +1,10 @@
 import { calendarDate } from './journey-date.js';
 import { parseScanText } from './scan-engine.js';
-import { railPhotoColor } from './scan-image.js';
+import { prepareRailDetailImage, railPhotoColor } from './scan-image.js';
 import { isRailOrderText } from './rail-order.js';
-import { parsePrintedRailTicket, railFareFromLine, railSeatFromLine } from './rail-ticket.js';
-import { locateRailRoute, railNumbersFromLayout, railSplitFieldsFromLayout, railValueRegions, trainLine } from './rail-photo-layout.js';
+import { parsePrintedRailTicket, printedRailNumber, railFareFromLine, railSeatFromLine, trainCode } from './rail-ticket.js';
+import { locateRailRoute, railNumbersFromLayout, railSplitFieldsFromLayout, railTextAngle, railValueRegions, ticketNumberFromFooter } from './rail-photo-layout.js';
+import { readRailDateRow } from './scan-date.js';
 import { marksFromRailRegion } from './ticket-marks.js';
 import { printedRailTemplate } from './rail-template.js';
 
@@ -49,7 +50,7 @@ export function paddleRailReading({ image, items }, paperColor) {
     const width = Math.max(...xs) - left, height = Math.max(...ys) - top;
     text = text.normalize('NFKC').trim();
     if (score >= .8) text = text.replace(/^((?:19|20)\d{2})\s*\*(?=\s*\d{1,2}月\d{1,2}[日目])/, '$1年');
-    const train = text.match(trainLine)?.[1].replace(/\s/g, '');
+    const train = trainCode(text, true);
     const [topLeft, topRight, , bottomLeft] = poly;
     const dx = topRight[0] - topLeft[0], dy = topRight[1] - topLeft[1];
     const glyphWidth = Math.hypot(dx, dy) || width || 1;
@@ -83,12 +84,22 @@ export function paddleRailReading({ image, items }, paperColor) {
   return { text, layout, paperColor, railFields, ...(route && { route }) };
 }
 
-async function readRegion(engine, bitmap, region) {
+async function readRegion(engine, bitmap, region, { redInk = false } = {}) {
   const canvas = document.createElement('canvas');
   const scale = Math.min(2, inferenceOptions.textDetLimitSideLen / Math.max(region.width, region.height));
   canvas.width = Math.round(region.width * scale);
   canvas.height = Math.round(region.height * scale);
-  canvas.getContext('2d').drawImage(bitmap, region.left, region.top, region.width, region.height, 0, 0, canvas.width, canvas.height);
+  const context = canvas.getContext('2d', { willReadFrequently: redInk });
+  context.drawImage(bitmap, region.left, region.top, region.width, region.height, 0, 0, canvas.width, canvas.height);
+  if (redInk) {
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      const [r, g, b] = [pixels.data[i], pixels.data[i + 1], pixels.data[i + 2]];
+      const gray = g - Math.max(0, r - (g + b) / 2) * .9;
+      pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = gray;
+    }
+    context.putImageData(pixels, 0, 0);
+  }
   const cropped = await createImageBitmap(canvas);
   try {
     const [result] = await engine.predict(cropped, inferenceOptions);
@@ -118,9 +129,39 @@ async function refineRailValues(engine, bitmap, regions, first, reading, progres
   });
   const needFare = regions.price && !first.items.some(({text, score}) => score >= .9 && record.price &&
     /[.·元圆圓]/.test(text.normalize('NFKC')) && railFareFromLine(text) === record.price);
-  if (!needSeat && !needFare) return reading;
-  progress('正在核对票价和席位…');
+  const needService = regions.service && (!record.service || (/^\d+$/.test(record.service) &&
+    !first.items.some(({text, score}) => score >= .9 && trainCode(text, true) === record.service)));
+  const needDate = regions.date && (!completeRailDate(record) || !record.departureTime);
+  const needNumber = regions.ticketNumber && !record.ticketNumber;
+  if (!needSeat && !needFare && !needService && !needDate && !needNumber) return reading;
+  progress('正在核对票面字段…');
   const railFields = { ...reading.railFields };
+  if (needService) {
+    const service = await readRegion(engine, bitmap, regions.service)
+      .then(items => regionalValue(items, text => trainCode(text, true))).catch(() => '');
+    if (service && (!record.service || (service.length > record.service.length && service.slice(1) === record.service))) {
+      railFields.service = service;
+    }
+  }
+  if (needDate) {
+    try {
+      const date = regionalValue(await readRegion(engine, bitmap, regions.date),
+        (text, score) => readRailDateRow(text, score >= .95 ? record.departureTime : ''));
+      if (date && (!completeRailDate(record) || completeRailDate(record) === date.departureDate)) {
+        railFields.departureDate = date.departureDate;
+        if (!record.departureTime && date.departureTime) railFields.departureTime = date.departureTime;
+      }
+    } catch { /* The printed date may be cut off or covered. */ }
+  }
+  if (needNumber) {
+    try {
+      const readSerial = items => regionalValue(items, text => printedRailNumber(text)) ||
+        ticketNumberFromFooter(items.filter(item => item.score >= .82).map(item => item.text), record.saleCode);
+      const serial = readSerial(await readRegion(engine, bitmap, regions.ticketNumber)) ||
+        readSerial(await readRegion(engine, bitmap, regions.ticketNumber, { redInk: true }));
+      if (serial) railFields.ticketNumber = serial;
+    } catch { /* Keep the original fields if the serial cannot be read. */ }
+  }
   if (needSeat) {
     try {
       const seat = regionalValue(await readRegion(engine, bitmap, regions.seat), (text, score) => {
@@ -151,17 +192,40 @@ export async function recognizePaddleRailPhoto(file, progress = () => {}) {
     const infer = async () => {
       const engine = await loading;
       const bitmap = await createImageBitmap(file);
+      let enhanced;
       try {
-        const [result] = await engine.predict(bitmap, inferenceOptions);
+        let source = bitmap;
+        let [result] = await engine.predict(bitmap, inferenceOptions);
         firstReading = paddleRailReading(result, railPhotoColor(bitmap));
-        const regions = railValueRegions(firstReading.layout, bitmap.width, bitmap.height);
+        let [record] = recognizedRailRecords(firstReading);
+        let regions = railValueRegions(firstReading.layout, bitmap.width, bitmap.height, record);
         if (regions?.paper && !isRailOrderText(firstReading.text) && !printedRailTemplate(firstReading.text)) {
           const paperColor = railPhotoColor(bitmap, regions.paper);
           if (paperColor) firstReading = { ...firstReading, paperColor, paperColorFromTicket: true };
         }
-        return await refineRailValues(engine, bitmap, regions, result, firstReading, progress);
+        if (!firstReading.multiplePrintedTickets && !isRailOrderText(firstReading.text) && result.items.length >= 4 &&
+            (!record || !fullRailRead([record]) || !record.ticketNumber || !record.departureTime)) {
+          progress('正在增强票面细节…');
+          try {
+            const { canvas, paperColor } = prepareRailDetailImage(bitmap, railTextAngle(result.items));
+            enhanced = await createImageBitmap(canvas);
+            const [second] = await engine.predict(enhanced, { ...inferenceOptions, textDetLimitSideLen: 1440 });
+            const other = paddleRailReading(second, firstReading.paperColorFromTicket ? firstReading.paperColor : paperColor || firstReading.paperColor);
+            if (!other.multiplePrintedTickets) {
+              firstReading = chooseRailReading(firstReading, other);
+              if (firstReading.layout === other.layout) {
+                result = second;
+                source = enhanced;
+                [record] = recognizedRailRecords(firstReading);
+                regions = railValueRegions(firstReading.layout, enhanced.width, enhanced.height, record);
+              }
+            }
+          } catch { /* The original photograph is still available. */ }
+        }
+        return await refineRailValues(engine, source, regions, result, firstReading, progress);
       } finally {
         bitmap.close();
+        enhanced?.close();
       }
     };
     const limit = new Promise((resolve, reject) => {
@@ -173,7 +237,11 @@ export async function recognizePaddleRailPhoto(file, progress = () => {}) {
   }
 }
 
-const dateOrText = (record, key) => key === 'departureDate' ? calendarDate(record[key]) : record[key];
+const completeRailDate = record => {
+  const date = calendarDate(record.departureDate);
+  return date.length === 10 ? date : '';
+};
+const dateOrText = (record, key) => key === 'departureDate' ? completeRailDate(record) : record[key];
 const score = record => coreFields.filter(key => dateOrText(record, key)).length;
 
 export function recognizedRailRecords(reading) {
@@ -196,22 +264,29 @@ export function chooseRailReading(primary, fallback) {
   const preferPrimary = score(a) >= score(b);
   const reading = preferPrimary ? primary : fallback;
   const [record, other] = preferPrimary ? [a, b] : [b, a];
-  const agrees = record.service && record.service === other.service &&
-    ['origin', 'destination'].some(key => record[key] && record[key] === other[key]) &&
+  const sameSerial = ['ticketNumber', 'saleCode'].some(key => record[key] && record[key] === other[key]);
+  const sameRouteAndDay = record.origin && record.origin === other.origin && record.destination &&
+    record.destination === other.destination && completeRailDate(record) && completeRailDate(record) === completeRailDate(other);
+  const sameServiceAndStation = record.service && record.service === other.service &&
+    ['origin', 'destination'].some(key => record[key] && record[key] === other[key]);
+  const agrees = sameSerial || ((sameRouteAndDay || sameServiceAndStation) &&
     coreFields.every(key => {
       const left = dateOrText(record, key), right = dateOrText(other, key);
       return !left || !right || left === right;
-    });
+    }));
   if (!agrees) return reading;
 
   const hasValue = value => Array.isArray(value) ? value.length > 0 : !!value;
   const seatAgrees = ['carriage', 'seat'].every(key => !record[key] || !other[key] || record[key] === other[key]) &&
     !(record.railStanding && other.seat) && !(record.seat && other.railStanding);
-  const extra = ['origin', 'destination', 'departureDate', 'departureTime', 'price', 'ticketNumber', 'saleCode', 'issuer', 'ticketMarks'];
+  const extra = ['service', 'origin', 'destination', 'departureDate', 'departureTime', 'price', 'seatClass', 'ticketNumber', 'saleCode', 'issuer', 'ticketMarks'];
   if (seatAgrees) extra.push('carriage', 'seat', 'railStanding');
   const additions = extra
-    .filter(key => !hasValue(record[key]) && hasValue(other[key]))
+    .filter(key => key === 'departureDate'
+      ? !completeRailDate(record) && !!completeRailDate(other)
+      : !hasValue(record[key]) && hasValue(other[key]))
     .map(key => [key, other[key]]);
+  if (record.seatClass && other.seatClass === '新空调' + record.seatClass) additions.push(['seatClass', other.seatClass]);
   const secondaryReading = preferPrimary ? fallback : primary;
   const strongerTemplate = !printedRailTemplate(reading.text) &&
     (printedRailTemplate(secondaryReading.text) || (secondaryReading.paperColorFromTicket && !reading.paperColorFromTicket));

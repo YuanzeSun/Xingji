@@ -1,7 +1,8 @@
 import { ocrWords } from './ocr-layout.js';
-import { printedRailNumber, railFareFromLine, railIssuerFromLine, railSeatFromLine, railStationFromRegion } from './rail-ticket.js';
-
-export const trainLine = /^([A-Z]\s*\d{1,5}|[1-9]\d{2,3})(?:\s*次)?$/;
+import { calendarDate } from './journey-date.js';
+import { readRailDateRow } from './scan-date.js';
+import { SEAT_CLASSES } from './seat-classes.js';
+import { printedRailNumber, railFareFromLine, railIssuerFromLine, railSeatFromLine, railStationFromRegion, trainCode } from './rail-ticket.js';
 
 function projection(line, anchor) {
   const x = line.centerX - anchor.centerX, y = line.centerY - anchor.centerY;
@@ -64,8 +65,31 @@ export function railNumbersFromLayout(lines, service) {
     }
     return numbers.size === 1 ? numbers.values().next().value : '';
   };
-  const ticketNumber = find(false), saleCode = find(true);
+  const saleCode = find(true);
+  const ticketNumber = find(false) || ticketNumberFromFooter(lines
+    .filter(line => line.score >= .72 && projection(line, train).below < -train.glyphHeight * .34 && line.centerX < train.centerX)
+    .map(line => line.text), saleCode);
   return { ...(ticketNumber && { ticketNumber }), ...(saleCode && { saleCode }) };
+}
+
+export function ticketNumberFromFooter(lines, saleCode) {
+  const serial = saleCode?.match(/^[0-9]{14}([A-Z]\d{6})$/)?.[1];
+  if (!serial) return '';
+  const serials = new Set();
+  for (const text of lines) {
+    const top = text.normalize('NFKC').replace(/\s/g, '');
+    const number = top.match(/^(\d{0,2})(?:\d)(\d{6})$/);
+    if (number?.[2] === serial.slice(1)) serials.add(number[1] + serial);
+  }
+  return serials.size === 1 ? serials.values().next().value : '';
+}
+
+export function railTextAngle(items) {
+  const angles = items.filter(item => item.score >= .7 && item.text.length >= 4)
+    .map(({ poly: [left, right] }) => Math.atan2(right[1] - left[1], right[0] - left[0]))
+    .filter(angle => Math.abs(angle) < .55).sort((a, b) => a - b);
+  const median = angles[Math.floor(angles.length / 2)];
+  return angles.filter(angle => Math.abs(angle - median) <= .09).length >= Math.max(3, angles.length * .6) ? median : 0;
 }
 
 function* joinedRailRows(lines, start) {
@@ -86,6 +110,23 @@ function* joinedRailRows(lines, start) {
 export function railSplitFieldsFromLayout(lines, printed) {
   const fields = {};
   const confident = lines.filter(line => line.score >= .55);
+  const departureDate = calendarDate(printed.departureDate);
+  if (departureDate.length !== 10 || !printed.departureTime) {
+    const dates = new Map();
+    for (const line of confident) {
+      if (!/^(?:19|20)[0-9OIl]{2}/.test(line.text)) continue;
+      let date = readRailDateRow(line.text);
+      for (const row of joinedRailRows(confident, line)) date = readRailDateRow(row) || date;
+      if (date && (departureDate.length !== 10 || departureDate === date.departureDate)) {
+        dates.set(date.departureDate, date.departureTime || dates.get(date.departureDate) || '');
+      }
+    }
+    if (dates.size === 1) {
+      const [[date, time]] = dates;
+      fields.departureDate = date;
+      if (!printed.departureTime && time) fields.departureTime = time;
+    }
+  }
   if ((!printed.seat && !printed.railStanding) || (printed.railStanding && !printed.carriage)) {
     const seats = new Map();
     for (const line of confident) {
@@ -98,6 +139,16 @@ export function railSplitFieldsFromLayout(lines, printed) {
       }
     }
     if (seats.size === 1) Object.assign(fields, seats.values().next().value);
+  }
+  if (!printed.seatClass.startsWith('新空调')) {
+    const labels = new Set();
+    for (const line of confident.filter(line => /^新(?:\s*空|\s*$)/.test(line.text))) {
+      for (const row of joinedRailRows(confident, line)) {
+        const label = row.replace(/\s/g, '');
+        if (SEAT_CLASSES.rail.includes(label) && (!printed.seatClass || label === '新空调' + printed.seatClass)) labels.add(label);
+      }
+    }
+    if (labels.size === 1) fields.seatClass = labels.values().next().value;
   }
   if (!printed.issuer) {
     const names = new Set();
@@ -123,22 +174,39 @@ export function railSplitFieldsFromLayout(lines, printed) {
   return fields;
 }
 
-export function railValueRegions(layout, width, height) {
-  const dates = ocrWords(layout).filter(word => word.confidence >= 65 && word.left < width * .46 &&
+export function railValueRegions(layout, width, height, record) {
+  const words = ocrWords(layout);
+  const dates = words.filter(word => word.confidence >= 65 && word.left < width * .46 &&
     /^(?:19|20)\d{2}\s*[年*]\s*\d{1,2}\s*月/.test(word.text));
-  if (dates.length !== 1) return null;
-  const date = dates[0], line = Math.min(date.height, height * .12);
+  if (dates.length > 1) return null;
+  const train = record?.service && words.find(word => word.left > width * .25 && word.left < width * .66 &&
+    trainCode(word.text, true) === record.service);
+  const station = record?.origin && words.find(word => word.left < width * .43 &&
+    railStationFromRegion(word.text, { fuzzy: false }) === record.origin);
+  const date = dates[0];
+  if (!train && !date) return null;
+  const line = Math.min(date?.height || train.height * .82, height * .12);
+  const margin = date?.left ?? station?.left ?? Math.max(0, train.left - line * 7);
   const region = (left, top, right, bottom) => {
     left = Math.max(0, Math.floor(left)); top = Math.max(0, Math.floor(top));
     right = Math.min(width, Math.ceil(right)); bottom = Math.min(height, Math.ceil(bottom));
     return right - left >= 20 && bottom - top >= 12 ? { left, top, width: right - left, height: bottom - top } : null;
   };
   return {
-    paper: region(date.left + date.width * .12, date.top + line * .8,
+    paper: date && region(date.left + date.width * .12, date.top + line * .8,
       date.left + date.width * .9, date.top + line * 2.8),
-    price: region(date.left - line, date.top + line * .78,
+    price: date && region(date.left - line, date.top + line * .78,
       Math.min(width * .57, date.left + Math.max(width * .28, line * 7)), date.top + line * 3.6),
-    seat: region(Math.max(width * .43, Math.min(width * .60, date.left + date.width - line)),
-      date.top - line, width, date.top + line * 2.6)
+    seat: date && region(Math.max(width * .43, Math.min(width * .60, date.left + date.width - line)),
+      date.top - line, width, date.top + line * 2.6),
+    service: train ? region(train.left - line * 1.1, train.top - line * .65,
+      train.left + train.width + line * .7, train.top + train.height + line * .65) : date && region(
+      Math.max(width * .31, margin + date.width * .56), date.top - line * 3.45,
+      Math.min(width * .7, margin + date.width * 1.6), date.top - line * .35),
+    date: region(margin - line, date ? date.top - line * .75 : Math.min(train.top, station?.top ?? train.top) + line * .7,
+      Math.min(width * .62, date ? date.left + date.width + line : train.left + train.width), date ? date.top + line * 1.65 : train.top + line * 5.3),
+    ticketNumber: region(margin - line, train ? train.top - line * 4.3 : date.top - line * 6.5,
+      train ? Math.min(width * .53, train.left + line) : Math.min(width * .52, margin + date.width),
+      train ? train.top + line * .4 : date.top - line * 1.7)
   };
 }

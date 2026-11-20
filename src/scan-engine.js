@@ -2,7 +2,7 @@ import {calendarDate} from './journey-date.js';
 import { parseText, parseSingleTicket } from './importers.js';
 import { STATIONS } from './data/location-reference.js';
 import { parseRailOrder } from './rail-order.js';
-import { parsePrintedRailTicket } from './rail-ticket.js';
+import { parsePrintedRailTicket, printedRailNumber } from './rail-ticket.js';
 import { detectedRailTemplate } from './rail-template.js';
 import { createRecord } from './model.js';
 import {markFieldSources} from './field-sources.js';
@@ -78,7 +78,7 @@ export function parseScanText(raw, label = '相机自动扫描', {
     const timeRow = text.split('\n').find(line => /\d{1,2}:\d{2}/.test(line)) || '';
     const seat = timeRow.replace(/^.*?\d{1,2}:\d{2}/, '').match(/(\d{1,2})[车#]\s*(\d{1,3}[A-F]|\d{1,3}[上下中]铺?)[号#]?/);
     if (seat) { record.carriage ||= seat[1]; record.seat ||= seat[2]; }
-    record.ticketNumber ||= text.match(/^\s*([A-Z]\d{5,10})(?=\s|$)/m)?.[1] || '';
+    record.ticketNumber ||= printedRailNumber(text.split('\n').slice(0, 3).join('\n'));
     Object.assign(record, railFields);
     markFieldSources(record, Object.keys(railFields), 'ocr');
   }

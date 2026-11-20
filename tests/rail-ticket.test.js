@@ -120,6 +120,16 @@ test('numeric trains and OCR-confused letters are resolved from their position b
   }
 });
 
+test('distinct serial formats are accepted and a missing train does not discard the visible fields', () => {
+  for (const id of ['Z63P073459', 'Z20D076932', 'Z81U009760', 'J085247']) {
+    assert.equal(printedRailNumber(id), id);
+  }
+  assert.equal(printedRailNumber('J08524'), '', 'a clipped five-digit serial is incomplete');
+  const [partial] = parseScanText('J085247\n20I8*O8月09 H 09:08开\n￥66.50元\n03车08A号\n限乘当日当次车');
+  assert.deepEqual([partial.service, partial.ticketNumber, partial.departureDate.year, partial.departureTime, partial.price, partial.seat],
+    ['', 'J085247', 2018, '09:08', '66.50', '08A']);
+});
+
 test('coordinate order controls the route when OCR emits the right column first', () => {
   const text = picture().replace('Liuzhou Laibinbei','Laibinbei\n\nLiuzhou');
   const tsv = layout([['D3759',430,80,150,45],['Laibinbei',710,140,170,30],['Liuzhou',150,140,140,30]]);
