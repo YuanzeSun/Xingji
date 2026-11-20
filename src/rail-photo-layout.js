@@ -1,4 +1,5 @@
-import { printedRailNumber, railIssuerFromLine, railSeatFromLine, railStationFromRegion } from './rail-ticket.js';
+import { ocrWords } from './ocr-layout.js';
+import { printedRailNumber, railFareFromLine, railIssuerFromLine, railSeatFromLine, railStationFromRegion } from './rail-ticket.js';
 
 export const trainLine = /^([A-Z]\s*\d{1,5}|[1-9]\d{2,3})(?:\s*次)?$/;
 
@@ -109,5 +110,35 @@ export function railSplitFieldsFromLayout(lines, printed) {
     }
     if (names.size === 1) fields.issuer = names.values().next().value;
   }
+  const prices = new Set();
+  for (const line of confident) {
+    if (!/^(?:[¥￥Y羊]|票价|金额|退票(?:手续)?费)/.test(line.text)) continue;
+    let price = '';
+    for (const row of joinedRailRows(confident, line)) {
+      price = railFareFromLine(row) || price;
+    }
+    if (price && (!printed.price || price.startsWith(printed.price + '.'))) prices.add(price);
+  }
+  if (prices.size === 1) fields.price = prices.values().next().value;
   return fields;
+}
+
+export function railValueRegions(layout, width, height) {
+  const dates = ocrWords(layout).filter(word => word.confidence >= 65 && word.left < width * .46 &&
+    /^(?:19|20)\d{2}\s*[年*]\s*\d{1,2}\s*月/.test(word.text));
+  if (dates.length !== 1) return null;
+  const date = dates[0], line = Math.min(date.height, height * .12);
+  const region = (left, top, right, bottom) => {
+    left = Math.max(0, Math.floor(left)); top = Math.max(0, Math.floor(top));
+    right = Math.min(width, Math.ceil(right)); bottom = Math.min(height, Math.ceil(bottom));
+    return right - left >= 20 && bottom - top >= 12 ? { left, top, width: right - left, height: bottom - top } : null;
+  };
+  return {
+    paper: region(date.left + date.width * .12, date.top + line * .8,
+      date.left + date.width * .9, date.top + line * 2.8),
+    price: region(date.left - line, date.top + line * .78,
+      Math.min(width * .57, date.left + Math.max(width * .28, line * 7)), date.top + line * 3.6),
+    seat: region(Math.max(width * .43, Math.min(width * .60, date.left + date.width - line)),
+      date.top - line, width, date.top + line * 2.6)
+  };
 }

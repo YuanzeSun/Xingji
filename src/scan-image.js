@@ -1,11 +1,12 @@
 import { railPaperFromPixels, railPaperHue } from './rail-template.js';
 
-export function railPhotoColor(image) {
+export function railPhotoColor(image, region) {
   const canvas = document.createElement('canvas');
   canvas.width = 72; canvas.height = 48;
   const context = canvas.getContext('2d', { willReadFrequently: true });
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return railPaperFromPixels(context.getImageData(7, 7, 58, 34).data);
+  if (region) context.drawImage(image, region.left, region.top, region.width, region.height, 0, 0, canvas.width, canvas.height);
+  else context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return railPaperFromPixels(context.getImageData(7, 7, 58, 34).data, { faint: !!region });
 }
 
 export function cropColoredRailPaper(canvas) {

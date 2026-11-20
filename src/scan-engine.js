@@ -3,12 +3,12 @@ import { parseText, parseSingleTicket } from './importers.js';
 import { STATIONS } from './data/location-reference.js';
 import { parseRailOrder } from './rail-order.js';
 import { parsePrintedRailTicket } from './rail-ticket.js';
-import { railTemplateFromText } from './rail-template.js';
+import { detectedRailTemplate } from './rail-template.js';
 import { createRecord } from './model.js';
 import {markFieldSources} from './field-sources.js';
 
 const pinyinStations = new Map();
-const photoFields = ['template','origin','originCode','destination','destinationCode','service','departureDate',
+const photoFields = ['origin','originCode','destination','destinationCode','service','departureDate',
   'departureTime','passenger','carriage','seatClass','seat','railStanding','price','gate','ticketNumber','saleCode','issuer','ticketMarks'];
 
 export function railPhotoChanges(draft, record) {
@@ -18,9 +18,9 @@ export function railPhotoChanges(draft, record) {
   const changes = Object.fromEntries(photoFields.filter(key => {
     const source = draft.fieldSources[key];
     return present(record[key]) && editable(key) &&
-      (key === 'template' ? !source || ['default','ocr'].includes(source) :
-        !present(draft[key]) || source === 'profile' || source === 'ocr');
+      (!present(draft[key]) || source === 'profile' || source === 'ocr');
   }).map(key => [key, record[key]]));
+  if (record.template !== draft.template && record.fieldSources.template === 'ocr') changes.template = record.template;
   if (changes.origin && !changes.originCode) changes.originCode = '';
   if (changes.destination && !changes.destinationCode) changes.destinationCode = '';
   if (draft.carriage && record.carriage && draft.carriage !== record.carriage && !changes.carriage) {
@@ -46,7 +46,10 @@ export function parseScanText(raw, label = '相机自动扫描', {
   if (flightImage) return [];
   const text = raw.replace(/\b(\d{1,2}):(\d{2})\b/g, (all, hour, minute) => +hour <= 23 && +minute <= 59 ? all : '');
   const order = parseRailOrder(text, 'scan', label, { layout });
-  if (order) return singleTicket && order.length !== 1 ? [] : order;
+  if (order) {
+    for (const record of order) markFieldSources(record, ['template'], detectedRailTemplate(text) ? 'ocr' : 'default');
+    return singleTicket && order.length !== 1 ? [] : order;
+  }
   const printed = parsePrintedRailTicket(text, label, { layout, paperColor, route });
   if (printed) return [createRecord({ ...printed, ...railFields, fieldSources: {
     ...printed.fieldSources, ...Object.fromEntries(Object.keys(railFields).map(key => [key, 'ocr']))
@@ -55,11 +58,14 @@ export function parseScanText(raw, label = '相机自动扫描', {
   const records = (singleTicket ? [parseSingleTicket(text, 'scan', label)] : parseText(text, 'scan', label))
     .filter(record => record?.type === 'rail');
   if (!records.length && paperColor && Object.keys(railFields).length) {
-    return [createRecord({ template: railTemplateFromText(text, { paperColor }), ...railFields, sources: [{ kind:'scan', label }] })];
+    const template = detectedRailTemplate(text, { paperColor });
+    return [createRecord({ ...(template && { template }), ...railFields, sources: [{ kind:'scan', label }] })];
   }
   if (records.length === 1 && records[0].type === 'rail') {
     const record = records[0], stations = [];
-    if (paperColor) record.template = railTemplateFromText(text, { paperColor, departureDate: calendarDate(record.departureDate) });
+    const template = detectedRailTemplate(text, { paperColor, departureDate: calendarDate(record.departureDate) });
+    if (template) record.template = template;
+    markFieldSources(record, ['template'], template ? 'ocr' : 'default');
     for (const match of text.matchAll(/[A-Za-z]+(?:['’][A-Za-z]+)*/g)) {
       const rows = pinyinStations.get(pinyinKey(match[0])); if (rows?.size === 1) stations.push([...rows.values()][0]);
     }

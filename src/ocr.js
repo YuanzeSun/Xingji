@@ -5,6 +5,7 @@ import { isRailOrderText, railOrderService } from './rail-order.js';
 import { railTimeWords } from './ocr-layout.js';
 import { isFlightScreenshotText } from './flight-screenshot.js';
 import { refineRailService, refineRailTemplate, refineRailReceipt, refineRailFields, railReadScore, preferEnhancedRailRead } from './rail-ocr.js';
+import { railValueRegions } from './rail-photo-layout.js';
 import { prepareRailPhoto, prepareOCRImage, railPhotoColor, cropColoredRailPaper } from './scan-image.js';
 
 async function rereadRailPhoto(worker, photo, first) {
@@ -26,6 +27,7 @@ async function rereadRailPhoto(worker, photo, first) {
 }
 
 async function createRecognizer(progress) {
+  progress('正在加载备用识别模型…');
   const base = new URL('./', location.href);
   let rejectStartup;
   const startupError = new Promise((_, reject) => { rejectStartup = reject; });
@@ -33,12 +35,12 @@ async function createRecognizer(progress) {
     workerPath: new URL('vendor/worker.min.js', base).href,
     corePath: new URL('vendor/', base).href,
     langPath: new URL('ocr/', base).href,
-    logger: m => progress(m.status === 'recognizing text' ? `正在识别 ${Math.round(m.progress * 100)}%` : '正在加载本地识别模型…'),
     // Tesseract can signal a language-load failure without rejecting createWorker.
     errorHandler: cause => rejectStartup?.(new Error('文字识别模型未能加载，请重试', { cause }))
   });
   const worker = await Promise.race([creating, startupError]).finally(() => { rejectStartup = undefined; });
   await worker.setParameters({ user_defined_dpi: '300', preserve_interword_spaces: '1', tessedit_pageseg_mode: '3' });
+  progress('正在补读火车票票面…');
   return {
     async recognize(image) {
       image = await prepareOCRImage(image);
@@ -51,7 +53,10 @@ async function createRecognizer(progress) {
       if (!isRailOrderText(data.text)) {
         ({ image, data } = await rereadRailPhoto(worker, photo, data));
       }
-      const paperColor = railPhotoColor(image) || (image !== photo ? railPhotoColor(photo) : '');
+      const regions = railValueRegions(data.tsv, image.width, image.height);
+      // The enhanced image may be monochrome. Keep the source photo's colour in that case.
+      const fromTicket = regions?.paper && railPhotoColor(image, regions.paper);
+      const paperColor = fromTicket || railPhotoColor(image) || (image !== photo ? railPhotoColor(photo) : '');
       if (!isRailOrderText(data.text)) {
         await refineRailTemplate(worker, image, data, paperColor);
         await refineRailReceipt(worker, image, data);
@@ -90,7 +95,7 @@ async function createRecognizer(progress) {
         }
       }
       const railFields = order ? {} : await refineRailFields(worker, image, { text, tsv: layout }, paperColor);
-      return { text, layout, paperColor, railFields };
+      return { text, layout, paperColor, paperColorFromTicket: !!fromTicket, railFields };
     },
     terminate: () => worker.terminate()
   };
@@ -98,7 +103,7 @@ async function createRecognizer(progress) {
 export async function recognize(file, progress = () => {}) {
   progress('正在识别火车票…');
   let reading;
-  try { reading = await recognizePaddleRailPhoto(file); }
+  try { reading = await recognizePaddleRailPhoto(file, progress); }
   catch { /* Older browsers can use the original OCR engine. */ }
   if (reading?.multiplePrintedTickets) return reading;
   const records = recognizedRailRecords(reading);
@@ -106,7 +111,11 @@ export async function recognize(file, progress = () => {}) {
     let worker;
     try {
       worker = await createRecognizer(progress);
-      reading = chooseRailReading(reading, await worker.recognize(file));
+      const fallback = await worker.recognize(file);
+      if (reading?.paperColorFromTicket && !fallback.paperColorFromTicket && !records.length) {
+        fallback.paperColor = reading.paperColor;
+      }
+      reading = chooseRailReading(reading, fallback);
     } catch (error) {
       if (!records.length) throw error;
     } finally { await worker?.terminate(); }
