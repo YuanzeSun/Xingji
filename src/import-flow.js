@@ -6,10 +6,8 @@ export function createImportFlow() {
     batch: false,
     backup: null,
     review: 'closed',
-    get phase() {
-      if (this.review !== 'closed') return this.review;
-      if (this.task) return 'reading';
-      return this.entries.length || this.backup ? 'ready' : 'idle';
+    get reading() {
+      return this.review === 'closed' && this.task !== null;
     },
     start(kind, context, view) {
       if (this.task) return null;

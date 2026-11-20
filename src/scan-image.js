@@ -84,11 +84,10 @@ function paperCrop(canvas) {
   return null;
 }
 
-export function prepareScanImage(source, type = 'rail') {
+function prepareScanImage(source) {
   const canvas = source.ownerDocument.createElement('canvas');
   canvas.width = Math.min(1800, Math.max(1280, source.width * 2)); canvas.height = Math.round(canvas.width * source.height / source.width);
   const ctx = canvas.getContext('2d', { willReadFrequently: true }); ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-  if (type === 'flight') return canvas;
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height), histogram = new Uint32Array(256), gray = new Uint8Array(canvas.width * canvas.height);
   for (let i = 0; i < gray.length; i++) { gray[i] = Math.round(image.data[i * 4] * .299 + image.data[i * 4 + 1] * .587 + image.data[i * 4 + 2] * .114); histogram[gray[i]]++; }
   let sum = 0; for (let i = 0; i < 256; i++) sum += i * histogram[i];

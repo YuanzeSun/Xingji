@@ -421,7 +421,7 @@ function updateSearch(key, value, immediate = false) {
 function importPage() {
   if (state.showDemo) return header('录入票据', '') + '<div class="empty-state"><h2>示例模式</h2><p>关闭示例模式后可录入自己的票据。</p></div>';
   if (!canWrite()) return header('录入票据', '') + '<div class="empty-state"><h2>当前仅可查看缓存</h2><button class="button secondary" data-action="sync">恢复连接</button></div>';
-  return header('录入票据', '') + '<div class="entry-layout">' + '<section class="panel manual-panel"><h2>录入</h2><p>填写旅程信息，同时查看票面效果。</p><button class="button primary" data-action="new">'+icon('plus')+'添加票据</button></section>' + '<aside class="entry-aside">' + queuedBackupButton() + '<details class="panel file-entry"><summary>图片与文件</summary><label class="dropzone" id="dropzone" tabindex="0"><input id="import-files" type="file" multiple accept="image/*,.pdf,.eml,.txt,.json" hidden /><span class="drop-icon">' + icon('upload') + '</span><strong>选择或拖入文件</strong><span>票面照片、12306截图、邮件、PDF或备份</span></label><div id="import-status" class="import-status" role="status">' + (imports.phase === 'reading' ? '正在识别资料…' : '') + '</div></details><details class="panel paste-entry"><summary>粘贴行程文字</summary><label class="field"><span>短信、订单或邮件正文</span><textarea id="import-text" rows="6" placeholder="日期：2026-11-15 车次：G103&#10;出发：北京南 到达：上海虹桥&#10;时间：08:00 姓名：…"></textarea></label><button class="button secondary full" data-action="parse-text" ' + (imports.phase === 'reading' ? 'disabled' : '') + '>识别并填写</button></details></aside></div>';
+  return header('录入票据', '') + '<div class="entry-layout">' + '<section class="panel manual-panel"><h2>录入</h2><p>填写旅程信息，同时查看票面效果。</p><button class="button primary" data-action="new">'+icon('plus')+'添加票据</button></section>' + '<aside class="entry-aside">' + queuedBackupButton() + '<details class="panel file-entry"><summary>图片与文件</summary><label class="dropzone" id="dropzone" tabindex="0"><input id="import-files" type="file" multiple accept="image/*,.pdf,.eml,.txt,.json" hidden /><span class="drop-icon">' + icon('upload') + '</span><strong>选择或拖入文件</strong><span>票面照片、12306截图、邮件、PDF或备份</span></label><div id="import-status" class="import-status" role="status">' + (imports.reading ? '正在识别资料…' : '') + '</div></details><details class="panel paste-entry"><summary>粘贴行程文字</summary><label class="field"><span>短信、订单或邮件正文</span><textarea id="import-text" rows="6" placeholder="日期：2026-11-15 车次：G103&#10;出发：北京南 到达：上海虹桥&#10;时间：08:00 姓名：…"></textarea></label><button class="button secondary full" data-action="parse-text" ' + (imports.reading ? 'disabled' : '') + '>识别并填写</button></details></aside></div>';
 }
 function newPersonalRecord(type = 'rail') {
   const values=applyProfileDefaults({type,template:type === 'flight' ? 'air-boarding-pass' : DEFAULT_RAIL_TEMPLATE},state.settings.profile);
@@ -451,7 +451,7 @@ function bindRailPhoto(form) {
     try {
       const { recognize } = await import('./ocr.js');
       if (!current()) return;
-      const reading = await recognize(photo, progress => { if (current()) status.textContent = progress; }, { details: true });
+      const reading = await recognize(photo, progress => { if (current()) status.textContent = progress; });
       multiplePrintedTickets = reading.multiplePrintedTickets;
       record = parseScanText(reading.text, '火车票照片', { ...reading, singleTicket: true })[0];
     } catch { /* The photo is still available for manual entry. */ }
@@ -793,7 +793,7 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
   const generatorSettings = preserve && draft.type==='flight' ? readBoardingGenerator(modalRoot) : undefined;
   draft.flightStatus = draft.type === 'flight' ? normalizeFlightStatus(draft.flightStatus) : '';
   const personalEdited = preserve ? new Set(editor?.personalEdited || []) : new Set(record.lockedFields || []);
-  const typeFixed = (importIndex !== null && !entry?.photoOnly) || state.records.some(record => record.id === draft.id);
+  const typeFixed = importIndex !== null || state.records.some(record => record.id === draft.id);
   editor = { original, draft, importIndex, fromBatch, context, dirty: preserve, personalEdited, photo };
   const flight = draft.type === 'flight';
   const basics = flight ? ['origin','destination','service','departureDate','departureTime','arrivalTime','arrivalDate','boardingTime','passenger','identity','airline','seat','seatClass','price','gate'] : ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seatClass','seat','price','gate','railPlatform'];
@@ -835,10 +835,7 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
     if (!lookupApplying && changedKey === 'type') {
       if (typeFixed || barcodeFieldLocked(draft,'type')) { form.elements.type.value=draft.type; return; }
       if (['rail','flight'].includes(event.target.value) && event.target.value !== draft.type) {
-        const next = newPersonalRecord(event.target.value);
-        if (entry?.photoOnly) {
-          editRecord({ ...next, id: draft.id, sources: draft.sources, provenance: draft.provenance }, importIndex);
-        } else editRecord(next);
+        editRecord(newPersonalRecord(event.target.value));
         editor.dirty=true;
         return;
       }
@@ -1027,7 +1024,7 @@ async function handleFiles(files, { backupOnly = false } = {}) {
         } else if (file.type?.startsWith('image/') || /\.(png|jpe?g|webp|bmp|heic)$/.test(name)) {
           const { recognize } = await import('./ocr.js');
           if (!currentImport(task)) return;
-          const recognized = await recognize(file, status => showStatus(`${i + 1}/${files.length} · ${status}`), { details: true });
+          const recognized = await recognize(file, status => showStatus(`${i + 1}/${files.length} · ${status}`));
           if (!currentImport(task)) return;
           const result = parseScanText(recognized.text, file.name, recognized);
           if (!result.length) {
@@ -1052,8 +1049,8 @@ async function handleFiles(files, { backupOnly = false } = {}) {
     if (found.length) addCandidates(found, { task });
   } finally { if (imports.finish(task)) applyAccessPolicy(); }
 }
-function reviewImportCandidates(records, { batch = false, image, task, photoOnly = false } = {}) {
-  return addCandidates(records.map(record => ({ record, image, photoOnly })), { batch, task });
+function reviewImportCandidates(records, { batch = false, image, task } = {}) {
+  return addCandidates(records.map(record => ({ record, image })), { batch, task });
 }
 function addCandidates(entries, { batch = false, task } = {}) {
   if (!entries.length || !mayOpenImport(task)) return false;
