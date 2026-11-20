@@ -407,7 +407,7 @@ enum AppleRecognition {
   }
 
   @MainActor static func extractImage(
-    _ bytes: Data, text: String, flight: Bool?, result: @escaping FlutterResult
+    _ bytes: Data, text: String, result: @escaping FlutterResult
   ) {
     guard #available(iOS 27.0, *) else {
       result(FlutterError(code: "intelligence_image_os_version", message: "Apple Intelligence 票面图像识别需要 iOS 27 或更新版本。", details: nil))
@@ -432,12 +432,11 @@ enum AppleRecognition {
     Task {
       do {
         let session = PreparedSession.take()
-        let hint = flight.map { $0 ? "flight" : "rail" } ?? "unknown"
         let fields = try await session.respond(
           generating: AppleTicketFields.self,
           options: GenerationOptions(samplingMode: .greedy)
         ) {
-          "Extract the printed ticket fields. Expected ticket type: \(hint)."
+          "Extract the printed ticket fields. Expected ticket type: rail."
           "OCR hint, which may be incomplete or incorrect:\n\(String(text.prefix(3_000)))"
           Attachment(image)
         }.content

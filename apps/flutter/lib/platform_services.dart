@@ -19,12 +19,10 @@ class SystemRecognition implements RecognitionService {
 
   Future<Map<String, dynamic>?> extractTicketImage(
     Uint8List bytes,
-    String text, {
-    bool? flight,
-  }) => channel.invokeMapMethod<String, dynamic>('extractTicketImage', {
+    String text,
+  ) => channel.invokeMapMethod<String, dynamic>('extractTicketImage', {
     'bytes': bytes,
     'text': text,
-    'flight': flight,
   });
 
   Future<Map<String, dynamic>?> extractTicketText(String text) => channel

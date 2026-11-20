@@ -49,7 +49,7 @@ Future<List<TicketRecord>> recognizeTicketImage(
   try {
     final capabilities = await provider.capabilities();
     final fields = capabilities['appleIntelligenceImage'] == true
-        ? await provider.extractTicketImage(bytes, text, flight: false)
+        ? await provider.extractTicketImage(bytes, text)
         : text.isNotEmpty && capabilities['appleIntelligence'] == true
         ? _groundedFields(await provider.extractTicketText(text), text)
         : null;

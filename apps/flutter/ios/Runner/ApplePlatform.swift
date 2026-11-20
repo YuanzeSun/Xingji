@@ -46,8 +46,7 @@ final class ApplePlatform: NSObject, UIImagePickerControllerDelegate, UINavigati
         reply(FlutterError(code: "missing_image", message: "没有收到票据图片。", details: nil))
         return
       }
-      AppleRecognition.extractImage(image.data, text: args["text"] as? String ?? "",
-                                   flight: args["flight"] as? Bool, result: reply)
+      AppleRecognition.extractImage(image.data, text: args["text"] as? String ?? "", result: reply)
     case "extractTicketText":
       AppleRecognition.extractText(args["text"] as? String ?? "", result: reply)
     default:
