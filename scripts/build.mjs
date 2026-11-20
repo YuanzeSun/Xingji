@@ -66,10 +66,25 @@ async function files(dir) {
   }
   return result;
 }
-const shell = (await files(out)).filter(p => !p.startsWith('./vendor/') && !p.startsWith('./ocr/') && !p.endsWith('sw.js'));
-const hash = createHash('sha256');
-for (const file of shell) hash.update(await readFile(join(out, file)));
-const version = hash.digest('hex').slice(0, 12);
-const sw = (await readFile(join(root, 'src/sw.template.js'), 'utf8')).replace('__VERSION__', version).replace('__SHELL__', JSON.stringify(shell));
+async function fingerprint(paths) {
+  const hash = createHash('sha256');
+  for (const path of paths) {
+    hash.update(path + '\0');
+    hash.update(await readFile(join(out, path)));
+  }
+  return hash.digest('hex').slice(0, 12);
+}
+
+const outputFiles = (await files(out)).sort();
+const shell = outputFiles.filter(p => !p.startsWith('./vendor/') && !p.startsWith('./ocr/') && !p.endsWith('sw.js'));
+const ocrFiles = outputFiles.filter(p =>
+  (p.startsWith('./ocr/') && !p.endsWith('.txt')) ||
+  (p.startsWith('./vendor/paddle/') && /\.(?:m?js|wasm)$/.test(p)) ||
+  p === './vendor/worker.min.js' || p.startsWith('./vendor/tesseract-core')
+);
+const [version, ocrVersion] = await Promise.all([fingerprint(shell), fingerprint(ocrFiles)]);
+const sw = (await readFile(join(root, 'src/sw.template.js'), 'utf8'))
+  .replace('__VERSION__', version).replace('__SHELL__', JSON.stringify(shell))
+  .replace('__OCR_VERSION__', ocrVersion).replace('__OCR_FILES__', JSON.stringify(ocrFiles));
 await writeFile(join(out, 'sw.js'), sw);
 console.log(`Built ${shell.length} offline app files (${version}). OCR assets are cached when first used.`);
