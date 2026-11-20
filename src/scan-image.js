@@ -9,28 +9,78 @@ export function railPhotoColor(image, region) {
   return railPaperFromPixels(context.getImageData(7, 7, 58, 34).data, { faint: !!region });
 }
 
-export function cropColoredRailPaper(canvas) {
+export function cropColoredRailPaper(canvas, maxEdge = Infinity) {
   const crop = paperCrop(canvas);
   if (!crop) return null;
-  const clipped = cropCanvas(canvas, crop);
+  const clipped = cropCanvas(canvas, crop, maxEdge);
   if (Math.abs(crop.angle) < .035) return clipped;
+  const rotated = levelRailImage(clipped, crop.angle, maxEdge);
+  const corrected = paperCrop(rotated);
+  return corrected ? cropCanvas(rotated, corrected, maxEdge) : rotated;
+}
+
+function levelRailImage(clipped, angle, maxEdge) {
   const rotated = document.createElement('canvas');
-  const sin = Math.abs(Math.sin(crop.angle)), cos = Math.cos(crop.angle);
-  rotated.width = Math.ceil(clipped.width * cos + clipped.height * sin);
-  rotated.height = Math.ceil(clipped.height * cos + clipped.width * sin);
+  const sin = Math.abs(Math.sin(angle)), cos = Math.cos(angle);
+  const width = clipped.width * cos + clipped.height * sin;
+  const height = clipped.height * cos + clipped.width * sin;
+  const scale = Math.min(1, maxEdge / Math.max(width, height));
+  rotated.width = Math.ceil(width * scale);
+  rotated.height = Math.ceil(height * scale);
   const context = rotated.getContext('2d');
   context.fillStyle = '#fff';
   context.fillRect(0, 0, rotated.width, rotated.height);
   context.translate(rotated.width / 2, rotated.height / 2);
-  context.rotate(-crop.angle);
-  context.drawImage(clipped, -clipped.width / 2, -clipped.height / 2);
-  const corrected = paperCrop(rotated);
-  return corrected ? cropCanvas(rotated, corrected) : rotated;
+  context.rotate(-angle);
+  const drawWidth = clipped.width * scale, drawHeight = clipped.height * scale;
+  context.drawImage(clipped, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  return rotated;
 }
 
-function cropCanvas(canvas, crop) {
+export function prepareRailDetailImage(source, angle = 0) {
+  const cropped = cropColoredRailPaper(source, 1800);
+  const paper = cropped || (Math.abs(angle) >= .045 ? levelRailImage(source, angle, 1800) : source);
+  const canvas = document.createElement('canvas');
+  const scale = Math.min(2, 1440 / Math.max(paper.width, paper.height));
+  const width = canvas.width = Math.max(1, Math.round(paper.width * scale));
+  const height = canvas.height = Math.max(1, Math.round(paper.height * scale));
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  context.drawImage(paper, 0, 0, width, height);
+
+  // Normalize against the light around each stroke to suppress uneven lighting and paper patterns.
+  const pixels = context.getImageData(0, 0, width, height);
+  const { data } = pixels;
+  const gray = new Uint8Array(width * height);
+  const stride = width + 1;
+  const sums = new Uint32Array(stride * (height + 1));
+  for (let y = 0; y < height; y++) {
+    let row = 0;
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x, p = i * 4;
+      gray[i] = (data[p] + 2 * data[p + 1] + data[p + 2]) >> 2;
+      row += gray[i];
+      sums[(y + 1) * stride + x + 1] = sums[y * stride + x + 1] + row;
+    }
+  }
+  const radius = Math.max(10, Math.round(width * .025));
+  for (let y = 0; y < height; y++) {
+    const top = Math.max(0, y - radius) * stride, bottom = Math.min(height, y + radius + 1) * stride;
+    for (let x = 0; x < width; x++) {
+      const left = Math.max(0, x - radius), right = Math.min(width, x + radius + 1);
+      const mean = (sums[bottom + right] - sums[top + right] - sums[bottom + left] + sums[top + left]) /
+        ((bottom - top) / stride * (right - left));
+      const i = y * width + x, p = i * 4;
+      data[p] = data[p + 1] = data[p + 2] = 248 + (gray[i] - mean) * 2.35;
+    }
+  }
+  context.putImageData(pixels, 0, 0);
+  return { canvas, paperColor: railPhotoColor(paper) };
+}
+
+function cropCanvas(canvas, crop, maxEdge) {
   const clipped = document.createElement('canvas');
-  clipped.width = Math.ceil(crop.w); clipped.height = Math.ceil(crop.h);
+  const scale = Math.min(1, maxEdge / Math.max(crop.w, crop.h));
+  clipped.width = Math.ceil(crop.w * scale); clipped.height = Math.ceil(crop.h * scale);
   clipped.getContext('2d').drawImage(canvas, crop.x, crop.y, crop.w, crop.h, 0, 0, clipped.width, clipped.height);
   return clipped;
 }

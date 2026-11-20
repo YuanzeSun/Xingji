@@ -463,7 +463,7 @@ function bindRailPhoto(form) {
     markFieldSources(next, Object.keys(changes), 'ocr');
     if (changes.departureDate?.year) markFieldSources(next, ['departureDateYear'], 'ocr');
     if (lookupContext(draft) !== lookupContext(next)) clearLookupValues(next);
-    editRecord(next, importIndex, true, original, photo);
+    editRecord(next, importIndex, true, original, photo, { scannedRail: record });
     const feedback = multiplePrintedTickets ? '请逐张拍摄火车票' : '已保留照片，请对照原图填写';
     toast(record ? '已填入识别结果，请核对' : feedback, !record);
   }
@@ -782,7 +782,7 @@ async function reviewBoardingLegs(code, current, image) {
   if(editor)editor.dirty=false;closeModal(true);
   reviewImportCandidates(candidates, { batch: true, image });
 }
-function editRecord(record = newPersonalRecord(), importIndex = null, preserve = false, originalOverride = null, photo = preserve ? editor?.photo : null) {
+function editRecord(record = newPersonalRecord(), importIndex = null, preserve = false, originalOverride = null, photo = preserve ? editor?.photo : null, { scannedRail } = {}) {
   const entry = imports.entries[importIndex];
   const fromBatch = !!entry && imports.batch;
   const context = preserve && editor ? editor.context : archiveContext();
@@ -943,7 +943,7 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
     }
   });
   else railLookupCleanup = bindRailLookup(form, {
-    getRecord: () => draft, canQuery: canWrite,
+    getRecord: () => draft, canQuery: canWrite, scannedRail,
     apply(changes, source) {
       lookupApplying=true;
       try {

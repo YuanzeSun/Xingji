@@ -3,13 +3,13 @@ import { STATIONS } from './data/location-reference.js';
 import { railTimeWords, railRouteAreas } from './ocr-layout.js';
 import { marksFromText } from './ticket-marks.js';
 import { railTemplateFromText } from './rail-template.js';
+import { readRailSeatClasses } from './seat-classes.js';
 
 const stationNames = new Set(STATIONS.map(row => row[0]));
 const stationPattern = new RegExp([...stationNames].sort((a, b) => b.length - a.length).join('|'), 'g');
 const datePattern = /((?:19|20)\d{2})\s*[年./-]\s*(\d{1,2})\s*[月./-]\s*(\d{1,2})日?/g;
 const trainPattern = /(?<![A-Z0-9])([GDCZTKYL]\s*[0-9OIl]{1,5})(?![A-Z0-9])/gi;
 const timePattern = /(?<!\d)([0-2]?\d:[0-5]\d)(?!\d)/g;
-const seatClassPattern = /商务座|特等座|优选一等座|一等座|二等座|高级软卧|一等卧|二等卧|软卧|硬卧|软座|硬座|动卧/;
 const normal = text => String(text || '').normalize('NFKC').replace(/\r/g, '').replace(/[：﹕]/g, ':').replace(/(?<=[\u3400-\u9fff])[ \t]+(?=[\u3400-\u9fff])/g, '').replace(/([0-2]?\d)[ \t]*:[ \t]*(\d{2})/g, '$1:$2');
 const trainCode = value => { const code = value.replace(/\s/g, '').toUpperCase(); return code[0] + code.slice(1).replace(/O/g, '0').replace(/[IL]/g, '1'); };
 const unique = values => [...new Set(values.filter(Boolean))];
@@ -44,7 +44,7 @@ function passengerFields(text) {
   carriage ||= only([...text.matchAll(/车厢(?:号)?\s*:?\s*(\d{1,2})/g)].map(match => match[1]));
   carriage ||= only([...text.matchAll(/(\d{1,2})\s*车(?:厢)?/g)].map(match => match[1]));
   seat ||= only([...text.matchAll(/(?:座位(?:号)?|座号|铺位)\s*:?\s*(\d{1,3}[A-F]|\d{1,3}号?\s*[上中下]铺?|\d{1,3}号)/gi)].map(match => match[1].replace(/\s|号/g, '').toUpperCase()));
-  const classes = unique([...text.matchAll(new RegExp(seatClassPattern.source, 'g'))].map(match => match[0]));
+  const classes = readRailSeatClasses(text);
   let passenger = labelled(text, '乘车人(?:姓名)?|旅客姓名|姓名').split(/身份证|中国居民|证件|成人票|儿童票|学生票|席别|座位|车厢|票价|\n/)[0].trim();
   if (!passenger) passenger = text.match(/(?:^|\n)\s*([\u3400-\u9fff·*＊]{2,12}?)(?=中国居民身份证|居民身份证|身份证|成人票|学生票|儿童票)/)?.[1] || '';
   if (!/^[\u3400-\u9fffA-Za-z·.*＊ -]{2,50}$/.test(passenger)) passenger = '';
@@ -58,7 +58,7 @@ function passengerFields(text) {
 function passengerBlocks(text) {
   const nameStarts = [...text.matchAll(/(?:^|\n)\s*(?:(?:乘车人(?:姓名)?|旅客姓名|姓名)\s*:?|[\u3400-\u9fff·*＊]{2,12}?(?=中国居民身份证|居民身份证|身份证|成人票|学生票|儿童票))/g)];
   if (nameStarts.length > 1) return nameStarts.map((match, i) => text.slice(match.index, nameStarts[i + 1]?.index));
-  const paid = text.split(/\n[^\n]*(?:已支付|未支付|已完成|已退票|已改签)[^\n]*(?:\n|$)/).filter(block => seatClassPattern.test(block) || /\d\s*车|乘车人|旅客姓名|无座/.test(block));
+  const paid = text.split(/\n[^\n]*(?:已支付|未支付|已完成|已退票|已改签)[^\n]*(?:\n|$)/).filter(block => readRailSeatClasses(block).length || /\d\s*车|乘车人|旅客姓名|无座/.test(block));
   return paid.length > 1 ? paid : [text];
 }
 // Returns null for other documents so that the existing paper-ticket and flight parsers still apply.

@@ -1,7 +1,18 @@
 export const SEAT_CLASSES = Object.freeze({
-  rail: ['商务座', '特等座', '优选一等座', '一等座', '二等座', '高级软卧', '软卧', '硬卧', '一等卧', '二等卧', '动卧', '软座', '硬座'],
+  rail: ['商务座', '特等座', '优选一等座', '一等座', '二等座', '高级软卧', '软卧', '硬卧', '一等卧', '二等卧', '动卧', '软座', '硬座', '新空调软卧', '新空调硬卧', '新空调软座', '新空调硬座'],
   flight: [...new Set('YBMHKLQVWSTNUXJCDZIFAEGOPR')]
 });
+
+const railSeatClassPattern = new RegExp([...SEAT_CLASSES.rail].sort((a, b) => b.length - a.length).join('|'), 'g');
+const railSeatClassSuffix = new RegExp('(?:卧代)?(?:' + railSeatClassPattern.source + ')$');
+
+export const stripRailSeatClassSuffix = text => text.replace(railSeatClassSuffix, '');
+
+export function readRailSeatClasses(text) {
+  const compact = text.normalize('NFKC').replace(/(?<=\p{Script=Han})[ \t]+(?=\p{Script=Han})/gu, '');
+  const classes = new Set(compact.match(railSeatClassPattern));
+  return [...classes].filter(label => !classes.has('新空调' + label));
+}
 
 const aliases = {
   rail: { 商务: '商务座', 特等: '特等座', 一等: '一等座', 二等: '二等座' },

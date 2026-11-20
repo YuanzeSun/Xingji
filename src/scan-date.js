@@ -25,3 +25,18 @@ export function readPrintedDate(text) {
   const date = `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
   return validDate(date) ? date : '';
 }
+
+export function readRailDateRow(text, confirmedTime = '') {
+  let compact = text.normalize('NFKC').replace(/\s/g, '');
+  if (confirmedTime) {
+    const lostUnits = compact.match(/^((?:19|20)\d{2})[年*](\d{2})(\d{2})(\d{2}:\d{2})(?:开|開)?$/);
+    if (lostUnits?.[4] === confirmedTime) compact = lostUnits[1] + '年' + lostUnits[2] + '月' + lostUnits[3] + '日' + confirmedTime;
+  }
+  const row = compact.match(/^((?:19|20)[0-9OIl]{2})[年*]([0-9OIl]{1,2})月([0-9OIl]{1,2})([日目H]|(?=\d{1,2}:|$))/i);
+  if (!row) return null;
+  const digits = value => value.toUpperCase().replace(/O/g, '0').replace(/[IL]/g, '1');
+  const departureDate = readPrintedDate(digits(row[1]) + '年' + digits(row[2]) + '月' + digits(row[3]) + '日');
+  if (!departureDate) return null;
+  const time = compact.slice(row[0].length).match(/^([01]?\d|2[0-3]):([0-5]\d)(?:开|開|$)/);
+  return { departureDate, ...(time && { departureTime: time[1].padStart(2, '0') + ':' + time[2] }) };
+}

@@ -126,6 +126,27 @@ test('Paddle recovers numeric train routes from the station row and rejects a co
   assert.deepEqual(recognizedRailRecords(collage), []);
 });
 
+test('rail photo layout assembles split dates and verifies a misread serial against visible digits on both rows', () => {
+  const item = (text, x, y, width) => ({
+    text, score: .98, poly: [[x, y], [x + width, y], [x + width, y + 19], [x, y + 19]]
+  });
+  const image = { width: 640, height: 400 };
+  const items = [
+    item('3091695', 31, 24, 105), item('海口东站', 32, 66, 95), item('D7313', 272, 65, 78),
+    item('陵水站', 460, 66, 74), item('2018', 37, 137, 57), item('年11月22日', 101, 137, 105),
+    item('08:39开', 211, 137, 83), item('￥77.0元', 40, 179, 85), item('仅供报销使用', 37, 219, 115),
+    item('51447000081122C091695 海口东售', 33, 363, 330)
+  ];
+  const [ticket] = recognizedRailRecords(paddleRailReading({ image, items }, 'blue'));
+  assert.deepEqual([ticket.service, ticket.departureDate.year, ticket.departureDate.dayOfYear, ticket.departureTime, ticket.ticketNumber],
+    ['D7313', 2018, 326, '08:39', 'C091695']);
+  const [covered] = recognizedRailRecords(paddleRailReading({ image, items: items.slice(1) }, 'blue'));
+  assert.equal(covered.ticketNumber, '');
+  items.push(item('硬座', 481, 185, 44), item('新空调', 410, 185, 68));
+  const [airConditioned] = recognizedRailRecords(paddleRailReading({ image, items }, 'blue'));
+  assert.equal(airConditioned.seatClass, '新空调硬座');
+});
+
 test('rail photo layout uses the same sloped row and ignores a nearby sales station', () => {
   const item = (text, x, y, width, score = .96) => ({
     text, score, poly: [[x, y], [x + width, y - width * .25], [x + width + 6, y + 22 - width * .25], [x + 6, y + 22]]
