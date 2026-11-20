@@ -78,3 +78,38 @@ test('multiple detected codes require a choice before the draft changes', async 
   form.querySelectorAll('.code-choice')[1].click(); assert.deepEqual(record.ticketCode, other);
   form.querySelector('#code-remove').click(); assert.equal(record.ticketCode, ''); dispose(); dom.window.close();
 });
+
+test('a single verified QR from the rail photo is attached even when it contains a URL', { timeout: 3000 }, async t => {
+  const record = sample(), dom = new JSDOM();
+  t.after(() => dom.window.close());
+  const domainCode = { ...code, rawBytes: btoa('https://example.invalid/t') };
+  let reads = 0;
+  const options = {
+    referenceURL: 'data:image/png;base64,AA==', autoRead: true,
+    loadRebuilder: async () => async () => {
+      reads++;
+      return { codes: [{ format: 'QRCode', data: domainCode, verified: true, isLink: true }], issues: [] };
+    }
+  };
+  const bind = changed => {
+    dom.window.document.body.innerHTML = `<form>${ticketCodeEditor(record, true)}</form>`;
+    const form = dom.window.document.querySelector('form');
+    return { form, dispose: bindTicketCodeEditor(form, record, changed, options) };
+  };
+  let resolve;
+  const codeAdded = new Promise(done => { resolve = done; });
+  const { form, dispose } = bind(resolve);
+  await codeAdded;
+  assert.deepEqual(record.ticketCode, domainCode);
+  assert.equal(record.fieldSources.ticketCode, 'barcode');
+  assert.equal(form.querySelector('#code-use-scan').hidden, true);
+  assert.equal(form.querySelector('#code-choices').hidden, true);
+
+  form.querySelector('#code-remove').click();
+  dispose();
+  const reopened = bind(() => assert.fail('Removed codes must stay removed'));
+  t.after(reopened.dispose);
+  await new Promise(done => setImmediate(done));
+  assert.equal(record.ticketCode, '');
+  assert.equal(reads, 1);
+});

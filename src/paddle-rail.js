@@ -3,7 +3,7 @@ import { parseScanText } from './scan-engine.js';
 import { railPhotoColor } from './scan-image.js';
 import { isRailOrderText } from './rail-order.js';
 import { parsePrintedRailTicket } from './rail-ticket.js';
-import { locateRailRoute, railNumbersFromLayout, trainLine } from './rail-photo-layout.js';
+import { locateRailRoute, railNumbersFromLayout, railSplitFieldsFromLayout, trainLine } from './rail-photo-layout.js';
 import { marksFromRailRegion } from './ticket-marks.js';
 
 const detector = 'PP-OCRv6_tiny_det';
@@ -70,7 +70,7 @@ export function paddleRailReading({ image, items }, paperColor) {
     printed = parsePrintedRailTicket(text, 'OCR', { layout, paperColor, route });
   } else route = null;
 
-  const railFields = printed ? railNumbersFromLayout(lines, printed.service) : {};
+  const railFields = printed ? { ...railNumbersFromLayout(lines, printed.service), ...railSplitFieldsFromLayout(lines, printed) } : {};
   if (printed) {
     const isolated = lines.filter(line => line.score >= .6).map(line => line.text).join('\n');
     const marks = marksFromRailRegion(isolated);
@@ -138,8 +138,12 @@ export function chooseRailReading(primary, fallback) {
   if (!agrees) return reading;
 
   const hasValue = value => Array.isArray(value) ? value.length > 0 : !!value;
-  const extra = ['origin', 'destination', 'departureDate', 'departureTime', 'ticketNumber', 'saleCode', 'ticketMarks']
+  const seatAgrees = ['carriage', 'seat'].every(key => !record[key] || !other[key] || record[key] === other[key]) &&
+    !(record.railStanding && other.seat) && !(record.seat && other.railStanding);
+  const extra = ['origin', 'destination', 'departureDate', 'departureTime', 'ticketNumber', 'saleCode', 'issuer', 'ticketMarks'];
+  if (seatAgrees) extra.push('carriage', 'seat', 'railStanding');
+  const additions = extra
     .filter(key => !hasValue(record[key]) && hasValue(other[key]))
     .map(key => [key, other[key]]);
-  return extra.length ? { ...reading, railFields: { ...reading.railFields, ...Object.fromEntries(extra) } } : reading;
+  return additions.length ? { ...reading, railFields: { ...reading.railFields, ...Object.fromEntries(additions) } } : reading;
 }

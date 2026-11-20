@@ -28,7 +28,8 @@ function boardingExamplesMarkup(hidden) {
 export function ticketCodeEditor(record, fromScan = false, prefix = '', {generator=true} = {}) {
   const { field, title, normalize } = configuration(record);
   const flight = record.type === 'flight';
-  const controls = `<div class="saved-code" id="saved-code">${thumbnail(normalize(record[field]), title)}</div><div class="code-actions">${fromScan ? '<button type="button" class="button small secondary" id="code-use-scan">读取本次图片中的码</button>' : ''}<button type="button" class="button small secondary" data-code-start>相机扫描</button><label class="button small secondary">上传图片<input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden /></label><button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>`;
+  const referenceButton = fromScan ? `<button type="button" class="button small secondary" id="code-use-scan" ${record[field] ? 'hidden' : ''}>读取本次图片中的码</button>` : '';
+  const controls = `<div class="saved-code" id="saved-code">${thumbnail(normalize(record[field]), title)}</div><div class="code-actions">${referenceButton}<button type="button" class="button small secondary" data-code-start>相机扫描</button><label class="button small secondary">上传图片<input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden /></label><button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>`;
   const scan = flight
     ? `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}<p class="fine-print" data-code-guidance ${record[field] ? 'hidden' : ''}>请扫描自己登机牌上的完整码。</p></div>${boardingExamplesMarkup(record[field])}</div>`
     : controls;
@@ -45,6 +46,8 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
   function showSaved() {
     find('saved-code').innerHTML = thumbnail(draft[field], title);
     find('code-remove').hidden = !removable(draft,field);
+    const reference = find('code-use-scan');
+    if (reference) reference.hidden = !!draft[field];
     for (const element of section.querySelectorAll('[data-code-examples], [data-code-guidance]')) element.hidden = !!draft[field];
   }
   function currentRecord() {
@@ -119,14 +122,14 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     refreshBarcodeFieldLocks(form,draft);
     reset();showSaved();showDifferences();status.textContent='已读取并重建 '+code.format+'，重新编码后信息已核对';error.textContent='';changed({filled,previousRecord});
   }
-  async function read(file, automatic = false, options) {
+  async function read(file, source = 'manual', options) {
     if (!isCurrent()) return;
     reset(); const request = generation; loading = true; status.textContent = '正在读取并重建条码…'; error.textContent = '';
     try {
       const rebuild = await loadRebuilder(), result = await rebuild(file, draft.type, options);
       if (disposed || request !== generation || !section.isConnected || !isCurrent()) return;
       loading = false;
-      if (!result.codes.length) { status.textContent = ''; if (!automatic || result.issues.length) {  error.textContent = result.issues[0] || '未识别到可重建的码，请选择显示完整二维码或条码的图片'; } return; }
+      if (!result.codes.length) { status.textContent = ''; if (source === 'manual' || result.issues.length) {  error.textContent = result.issues[0] || '未识别到可重建的码，请选择显示完整二维码或条码的图片'; } return; }
       const first=draft.type==='flight'&&result.codes.length===1 ? readBoardingCode(result.codes[0].data) : null;
       if (first?.legCount > 1 && onMultiple) {
         const image = typeof file.toBlob === 'function' ? await new Promise(resolve => file.toBlob(resolve, 'image/png')) : file;
@@ -137,7 +140,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
         const read=draft.type==='flight'&&readBoardingCode(code.data);
         return read?.legCount>1 ? read.legs.map((leg,index)=>({...code,legIndex:index,label:`第 ${index+1} 段 · ${leg.service} ${leg.origin} → ${leg.destination}`})) : [code];
       });
-      if (available.length === 1 && (!automatic || !available[0].isLink)) { use(available[0]); return true; }
+      if (available.length === 1 && (source !== 'camera' || !available[0].isLink)) { use(available[0]); return true; }
       pending = true; status.textContent = '请选择本张票据对应的码'; choices.hidden = false; cancel.hidden = false;
       for (const code of available) {
         const button = form.ownerDocument.createElement('button'); button.type = 'button'; button.className = 'code-choice';
@@ -147,13 +150,13 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
       return true;
     } catch (failure) { if (!disposed && request === generation) { loading = false; status.textContent = ''; error.textContent = failure.message || '条码读取失败，请换一张清晰图片';  } }
   }
-  async function readReference(automatic = false) {
+  async function readReference(source) {
     const request = generation; loading = true; status.textContent = '正在读取并重建条码…';
-    try { const response = await fetch(referenceURL); if (!response.ok) throw new Error('本次图片无法读取'); const file = await response.blob(); if (!disposed && request === generation) await read(file, automatic); }
+    try { const response = await fetch(referenceURL); if (!response.ok) throw new Error('本次图片无法读取'); const file = await response.blob(); if (!disposed && request === generation) await read(file, source); }
     catch (failure) { if (!disposed && request === generation) { loading = false; status.textContent = ''; error.textContent = failure.message;  } }
   }
   const flightCamera = draft.type === 'flight';
-  const camera = bindCodeCamera(section, (image, options) => read(image, true, options), { asCanvas: flightCamera, ...cameraOptions, onCancel: () => { reset(); status.textContent = ''; } });
+  const camera = bindCodeCamera(section, (image, options) => read(image, 'camera', options), { asCanvas: flightCamera, ...cameraOptions, onCancel: () => { reset(); status.textContent = ''; } });
   photo.addEventListener('change', () => { const file = photo.files?.[0]; if (file) { camera.stop(); read(file); } });
   find('code-use-scan')?.addEventListener('click', () => readReference());
   find('code-remove').addEventListener('click', () => {
@@ -197,6 +200,6 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     else updateGenerated();
   }
   refreshBarcodeFieldLocks(form,draft);
-  if (autoRead && referenceURL && !draft[field]) readReference(true);
+  if (autoRead && referenceURL && !draft[field] && draft.fieldSources?.[field] !== 'manual') readReference('photo');
   return () => { disposed = true; clearTimeout(updateTimer);form.removeEventListener('input',inputChanged);form.removeEventListener('change',inputChanged);form.removeEventListener('submit',submit,true); camera.dispose(); reset(); };
 }

@@ -1,5 +1,5 @@
 import {calendarDate} from './journey-date.js';
-import { railTrainRectangle, railFareRectangle, parsePrintedRailTicket, railStationFromRegion, printedRailNumber } from './rail-ticket.js';
+import { railTrainRectangle, railFareRectangle, parsePrintedRailTicket, railStationFromRegion, printedRailNumber, railSeatFromLine, railIssuerFromLine } from './rail-ticket.js';
 import { printedRailTemplate } from './rail-template.js';
 import { marksFromRailRegion } from './ticket-marks.js';
 
@@ -21,6 +21,19 @@ export async function refineRailFields(worker, image, data, paperColor) {
       const station = confidence >= 38 && railStationFromRegion(text);
       if (station && station !== (fields.origin || record?.origin) &&
         station !== record?.destination) fields[side] = station;
+    }
+    if (record && !record.seat && !record.railStanding) {
+      const { text, confidence } = await read(.52, .23, .46, .33);
+      const rows = text.split('\n').map(railSeatFromLine).filter(seat => seat?.carriage && (seat.seat || seat.railStanding));
+      if (confidence >= 58 && rows.length === 1 && (!record.carriage || record.carriage === rows[0].carriage)) {
+        Object.assign(fields, rows[0]);
+      }
+    }
+    if (record && !record.issuer) {
+      const { text, confidence } = record.template === 'rail-red-classic'
+        ? await read(.57, .01, .41, .16) : await read(.41, .84, .55, .15);
+      const names = new Set(text.split('\n').map(railIssuerFromLine).filter(Boolean));
+      if (confidence >= 58 && names.size === 1) fields.issuer = names.values().next().value;
     }
     if (!record?.ticketMarks?.length) {
       const { text } = await read(.37, .355, .26, .23);

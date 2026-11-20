@@ -14,15 +14,27 @@ const photoFields = ['template','origin','originCode','destination','destination
 export function railPhotoChanges(draft, record) {
   if (!record) return {};
   const present = value => Array.isArray(value) ? value.length > 0 : !!value;
+  const editable = key => !draft.lockedFields.includes(key) && draft.fieldSources[key] !== 'manual';
   const changes = Object.fromEntries(photoFields.filter(key => {
     const source = draft.fieldSources[key];
-    return present(record[key]) && !draft.lockedFields.includes(key) && source !== 'manual' &&
+    return present(record[key]) && editable(key) &&
       (key === 'template' ? !source || ['default','ocr'].includes(source) :
         !present(draft[key]) || source === 'profile' || source === 'ocr');
   }).map(key => [key, record[key]]));
   if (changes.origin && !changes.originCode) changes.originCode = '';
   if (changes.destination && !changes.destinationCode) changes.destinationCode = '';
-  if (changes.railStanding && draft.seat && draft.lockedFields.includes('seat')) delete changes.railStanding;
+  if (draft.carriage && record.carriage && draft.carriage !== record.carriage && !changes.carriage) {
+    delete changes.seat;
+    delete changes.railStanding;
+  }
+  if (changes.railStanding && draft.seat) {
+    if (draft.fieldSources.seat === 'ocr' && editable('seat')) changes.seat = '';
+    else delete changes.railStanding;
+  }
+  if (changes.seat && draft.railStanding) {
+    if (draft.fieldSources.railStanding === 'ocr' && editable('railStanding')) changes.railStanding = false;
+    else delete changes.seat;
+  }
   return changes;
 }
 
