@@ -20,13 +20,16 @@ export function createImportFlow() {
       this.task = null;
       return true;
     },
-    clear() {
-      this.task = null;
+    discardEntries() {
       this.entries = [];
       this.selected.clear();
       this.batch = false;
-      this.backup = null;
       this.review = 'closed';
+    },
+    clear() {
+      this.task = null;
+      this.backup = null;
+      this.discardEntries();
     }
   };
 }

@@ -107,8 +107,8 @@ const modalRoot = document.querySelector('#modal-root');
 const live = () => (state.showDemo ? samples : state.records).filter(r => !r.deleted);
 async function setDemoMode(enabled) {
   if (enabled === state.showDemo) return;
-  importView++;
   if (enabled && (imports.review !== 'closed' || modalRoot.querySelector('[data-backup-restore]')) && !closeModal()) return;
+  advanceImportView();
   archiveSelected.clear();
   await db.set('showDemo', enabled);
   state.showDemo = enabled;
@@ -305,7 +305,7 @@ function applyAccessPolicy() {
   const saveReview = modalRoot.querySelector('[data-candidate-review] [type="submit"]');
   if (saveReview) saveReview.disabled = !canWrite() || state.saving || !checkedCandidateIndices(saveReview.form).length;
   const form = document.querySelector('#editor-form');
-  if (form) for (const input of form.querySelectorAll('input,select,textarea,button:not([data-action="close-modal"])')) {
+  if (form) for (const input of form.querySelectorAll('input,select,textarea,button:not([data-action="close-modal"],[data-action="back-to-batch"])')) {
     if (!canWrite()) { if (!input.hasAttribute('data-readonly-disabled')) input.dataset.readonlyDisabled = String(input.disabled); input.disabled = true; }
     else if (input.hasAttribute('data-readonly-disabled')) { input.disabled = input.dataset.readonlyDisabled === 'true'; delete input.dataset.readonlyDisabled; }
   }
@@ -421,8 +421,7 @@ function updateSearch(key, value, immediate = false) {
 function importPage() {
   if (state.showDemo) return header('录入票据', '') + '<div class="empty-state"><h2>示例模式</h2><p>关闭示例模式后可录入自己的票据。</p></div>';
   if (!canWrite()) return header('录入票据', '') + '<div class="empty-state"><h2>当前仅可查看缓存</h2><button class="button secondary" data-action="sync">恢复连接</button></div>';
-  const pending = imports.entries.length;
-  return header('录入票据', '') + '<div class="entry-layout">' + '<section class="panel manual-panel"><h2>录入</h2><p>填写旅程信息，同时查看票面效果。</p><button class="button primary" data-action="new">'+icon('plus')+'添加票据</button></section>' + '<aside class="entry-aside">' + (pending ? '<button class="button secondary full" data-action="review">继续校对 ' + pending + ' 张票据</button>' : '') + queuedBackupButton() + '<details class="panel file-entry"><summary>图片与文件</summary><label class="dropzone" id="dropzone" tabindex="0"><input id="import-files" type="file" multiple accept="image/*,.pdf,.eml,.txt,.json" hidden /><span class="drop-icon">' + icon('upload') + '</span><strong>选择或拖入文件</strong><span>票面照片、12306截图、邮件、PDF或备份</span></label><div id="import-status" class="import-status" role="status">' + (imports.phase === 'reading' ? '正在识别资料…' : '') + '</div></details><details class="panel paste-entry"><summary>粘贴行程文字</summary><label class="field"><span>短信、订单或邮件正文</span><textarea id="import-text" rows="6" placeholder="日期：2026-11-15 车次：G103&#10;出发：北京南 到达：上海虹桥&#10;时间：08:00 姓名：…"></textarea></label><button class="button secondary full" data-action="parse-text" ' + (imports.phase === 'reading' ? 'disabled' : '') + '>识别并填写</button></details></aside></div>';
+  return header('录入票据', '') + '<div class="entry-layout">' + '<section class="panel manual-panel"><h2>录入</h2><p>填写旅程信息，同时查看票面效果。</p><button class="button primary" data-action="new">'+icon('plus')+'添加票据</button></section>' + '<aside class="entry-aside">' + queuedBackupButton() + '<details class="panel file-entry"><summary>图片与文件</summary><label class="dropzone" id="dropzone" tabindex="0"><input id="import-files" type="file" multiple accept="image/*,.pdf,.eml,.txt,.json" hidden /><span class="drop-icon">' + icon('upload') + '</span><strong>选择或拖入文件</strong><span>票面照片、12306截图、邮件、PDF或备份</span></label><div id="import-status" class="import-status" role="status">' + (imports.phase === 'reading' ? '正在识别资料…' : '') + '</div></details><details class="panel paste-entry"><summary>粘贴行程文字</summary><label class="field"><span>短信、订单或邮件正文</span><textarea id="import-text" rows="6" placeholder="日期：2026-11-15 车次：G103&#10;出发：北京南 到达：上海虹桥&#10;时间：08:00 姓名：…"></textarea></label><button class="button secondary full" data-action="parse-text" ' + (imports.phase === 'reading' ? 'disabled' : '') + '>识别并填写</button></details></aside></div>';
 }
 function newPersonalRecord(type = 'rail') {
   const values=applyProfileDefaults({type,template:type === 'flight' ? 'air-boarding-pass' : DEFAULT_RAIL_TEMPLATE},state.settings.profile);
@@ -538,7 +537,8 @@ const pageScroll = new Map();
 function visitPage(page, restoreScroll = false) {
   if (page !== state.page) {
     pageScroll.set(state.page, window.scrollY);
-    importView++;
+    if (imports.review === 'reviewing') closeModal();
+    advanceImportView();
   }
   state.page = page;
   render();
@@ -628,7 +628,11 @@ function bindPage() {
     documents: (state.profileDraft || state.settings.profile)?.documents,
     change: updateProfileDraft, restructure: profile => { updateProfileDraft(profile); render(); }, submit: savePersonalProfile
   });
-  for (const id of ['import-files']) document.querySelector('#' + id)?.addEventListener('change', event => handleFiles([...event.target.files]));
+  root.querySelector('#import-files')?.addEventListener('change', event => {
+    const files = [...event.target.files];
+    event.target.value = '';
+    handleFiles(files);
+  });
   const picker = root.querySelector('#import-json-file');
   if (picker) {
     root.querySelector('[data-action="import-json"]').addEventListener('click', () => picker.click());
@@ -674,21 +678,21 @@ function openModal(html, wide = false) {
   modalFocus = document.activeElement;
   modalRoot.innerHTML = `<dialog class="modal ${wide ? 'wide' : ''}">${html}</dialog>`;
   const dialog = modalRoot.querySelector('dialog'); dialog.addEventListener('cancel', event => { event.preventDefault(); closeModal(); });
-  dialog.addEventListener('click', event => { if (event.target === dialog && !editor?.dirty) closeModal(); });
+  dialog.addEventListener('click', event => { if (event.target === dialog && (!editor?.dirty || editor.importIndex != null)) closeModal(); });
   dialog.showModal(); document.body.classList.add('modal-open');
   applyAccessPolicy();
 }
 function closeModal(force = false) {
   if ((state.resetting || modalRoot.querySelector('form[data-pending="true"]')) && !force) return false;
-  if (editor?.dirty && !force) {
+  if (editor?.dirty && editor.importIndex == null && !force) {
     if (!confirm('还没有保存这次修改，确定放弃吗？')) return false;
   }
   disposeModalBindings();
   modalRoot.querySelector('dialog')?.close(); modalRoot.innerHTML = ''; document.body.classList.remove('modal-open'); editor = null;
   setImportReference(null);
-  imports.review = 'closed';
+  imports.discardEntries();
   modalFocus?.focus?.();
-  if ((imports.entries.length || imports.backup) && !state.showDemo && ['import', 'data'].includes(state.page)) render();
+  if (imports.backup && !state.showDemo && ['import', 'data'].includes(state.page)) render();
   return true;
 }
 function setImportReference(image) {
@@ -779,7 +783,7 @@ async function reviewBoardingLegs(code, current, image) {
 }
 function editRecord(record = newPersonalRecord(), importIndex = null, preserve = false, originalOverride = null, photo = preserve ? editor?.photo : null) {
   const entry = imports.entries[importIndex];
-  const fromBatch = preserve ? editor?.fromBatch : imports.batch;
+  const fromBatch = !!entry && imports.batch;
   const context = preserve && editor ? editor.context : archiveContext();
   setImportReference(photo ?? entry?.image);
   if (entry) imports.review = 'reviewing';
@@ -794,7 +798,7 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
   const flight = draft.type === 'flight';
   const basics = flight ? ['origin','destination','service','departureDate','departureTime','arrivalTime','arrivalDate','boardingTime','passenger','identity','airline','seat','seatClass','price','gate'] : ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seatClass','seat','price','gate','railPlatform'];
   const extra = flight ? ['orderNumber', 'terminal', 'aircraft', 'aircraftRegistration', 'pnr', 'ticketNumber', 'flightDistance'] : ['arrivalDate','arrivalTime','railBureau','railRunner','railCarOwner','railModel','railPowerSupply','railMileage','orderNumber','ticketNumber','saleCode','issuer'];
-  openModal(modalHead(importIndex !== null ? '核对这张票据' : state.records.some(r => r.id === draft.id) ? '编辑票据' : '添加一张票据', '红色<span class="required-mark">*</span> 为保存票据必填') + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${field('type', draft, { options: [['rail', '火车票'], ['flight', '机票']] })}${flight ? '<input type="hidden" name="template" value="air-boarding-pass" />' : field('template', {...draft,template:isRefundReceipt(draft) ? 'rail-receipt' : draft.template}, { options: Object.entries(TEMPLATES).filter(([id]) => id !== 'rail-refund-receipt' && id.startsWith('rail-')).sort(([a],[b]) => Number(b === DEFAULT_RAIL_TEMPLATE) - Number(a === DEFAULT_RAIL_TEMPLATE)) })}${flight ? '' : railPhotoControls()}${!flight && ['rail-receipt','rail-refund-receipt'].includes(draft.template) ? '<label class="checkbox-row receipt-refund-switch"><input type="checkbox" data-refund-receipt ' + (isRefundReceipt(draft) ? 'checked' : '') + ' />退票费凭证' + fieldSourceBadge('template',draft) + '</label>' : ''}${flight ? field('flightStatus', draft, { options: Object.entries(FLIGHT_STATUSES) }) + ticketCodeEditor(draft,!!localFileURL,'',{generator:false}) : ''}${flight || isRefundReceipt(draft) ? '' : '<label class="checkbox-row full-field"><input type="checkbox" data-rail-standing ' + (draft.railStanding ? 'checked' : '') + ' />无座' + fieldSourceBadge('railStanding',draft) + '</label>'}${basics.filter(key => !(draft.railStanding && key === 'seat')).map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ticketCodeEditor(draft, !!localFileURL)}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div><p class="fine-print"></p>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div><div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="close-modal">取消</button><span class="save-note">${icon('database')}保存票据</span><div class="spacer"></div><button class="button primary" type="submit">${icon('check')}保存票据</button></div></form>`, true);
+  openModal(modalHead(importIndex !== null ? '核对这张票据' : state.records.some(r => r.id === draft.id) ? '编辑票据' : '添加一张票据', '红色<span class="required-mark">*</span> 为保存票据必填') + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${field('type', draft, { options: [['rail', '火车票'], ['flight', '机票']] })}${flight ? '<input type="hidden" name="template" value="air-boarding-pass" />' : field('template', {...draft,template:isRefundReceipt(draft) ? 'rail-receipt' : draft.template}, { options: Object.entries(TEMPLATES).filter(([id]) => id !== 'rail-refund-receipt' && id.startsWith('rail-')).sort(([a],[b]) => Number(b === DEFAULT_RAIL_TEMPLATE) - Number(a === DEFAULT_RAIL_TEMPLATE)) })}${flight ? '' : railPhotoControls()}${!flight && ['rail-receipt','rail-refund-receipt'].includes(draft.template) ? '<label class="checkbox-row receipt-refund-switch"><input type="checkbox" data-refund-receipt ' + (isRefundReceipt(draft) ? 'checked' : '') + ' />退票费凭证' + fieldSourceBadge('template',draft) + '</label>' : ''}${flight ? field('flightStatus', draft, { options: Object.entries(FLIGHT_STATUSES) }) + ticketCodeEditor(draft,!!localFileURL,'',{generator:false}) : ''}${flight || isRefundReceipt(draft) ? '' : '<label class="checkbox-row full-field"><input type="checkbox" data-rail-standing ' + (draft.railStanding ? 'checked' : '') + ' />无座' + fieldSourceBadge('railStanding',draft) + '</label>'}${basics.filter(key => !(draft.railStanding && key === 'seat')).map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ticketCodeEditor(draft, !!localFileURL)}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div><p class="fine-print"></p>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div><div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="${fromBatch ? 'back-to-batch' : 'close-modal'}">${fromBatch ? '返回校对' : '取消'}</button>${fromBatch ? '' : `<span class="save-note">${icon('database')}保存票据</span>`}<div class="spacer"></div><button class="button primary" type="submit">${icon('check')}${fromBatch ? '完成校对' : '保存票据'}</button></div></form>`, true);
   // openModal replaces the DOM, but keeps the editor state deliberately.
   const form = document.querySelector('#editor-form');
   bindRailPhoto(form);
@@ -903,7 +907,7 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
       if (importIndex !== null) {
         entry.record = checked;
         if (!fromBatch) await saveCandidates([importIndex]);
-        else { editor.dirty = false; closeModal(true); reviewCandidates(); }
+        else reviewCandidates();
       } else {
         const records = clone(state.records); const index = records.findIndex(r => r.id === checked.id);
         if (index >= 0) {
@@ -959,6 +963,10 @@ function importStatus(message) { const el = document.querySelector('#import-stat
 function archiveContext() {
   return { binding: activeBinding(state), generation: state.syncMeta.generation || '', epoch: authEpoch };
 }
+function advanceImportView() {
+  importView++;
+  if (imports.task?.kind !== 'backup') imports.task = null;
+}
 function startImport(kind) {
   if (!canWrite()) { toast('当前仅可查看缓存', true); return null; }
   const task = imports.start(kind, archiveContext(), importView);
@@ -986,11 +994,10 @@ function clearImportedWork() {
 async function handleFiles(files, { backupOnly = false } = {}) {
   if (!files.length) return;
   if (files.length > 20) return toast('每批最多处理20个文件，可以分批导入', true);
-  const task = startImport('files');
+  const task = startImport(backupOnly ? 'backup' : 'files');
   if (!task) return;
   applyAccessPolicy();
   const found = [], failures = [];
-  let fallbackText = '';
   const showStatus = message => {
     if (currentImport(task) && !state.showDemo && task.view === importView) importStatus(message);
   };
@@ -1026,8 +1033,7 @@ async function handleFiles(files, { backupOnly = false } = {}) {
           if (!result.length) {
             if (recognized.multiplePrintedTickets) throw new Error('请将每张火车票保存为单独的照片');
             if (recognized.flightImage) throw new Error('请在录入机票时上传登机牌条码或二维码');
-            fallbackText = recognized.text;
-            throw new Error('没有识别到行程。可复制识别文字并手动修订');
+            throw new Error('没有识别到票据信息');
           }
           found.push(...result.map(record => ({ record, image: file })));
         } else if (/\.(pdf|eml|txt)$/.test(name) || (!name.includes('.') && file.type === 'text/plain')) {
@@ -1038,39 +1044,32 @@ async function handleFiles(files, { backupOnly = false } = {}) {
         } else throw new Error('请选择图片、JSON、PDF、邮件或文本文件');
       } catch (error) { failures.push(`${file.name}：${error.message}`); }
     }
-    if (!await acceptsImport(task)) return;
-    if (found.length) addCandidates(found, { task });
-    if (task.view === importView && !state.showDemo) {
-      if (failures.length) {
-        importStatus(failures.join('\n'));
-        toast(`${failures.length} 个文件需要手动处理，详情见导入状态`, true);
-        const area = root.querySelector('#import-text');
-        if (fallbackText && area) area.value = fallbackText;
-      } else importStatus(`已识别 ${found.length} 条候选记录，请核对后保存。`);
+    if (!await acceptsImport(task) || !mayOpenImport(task)) {
+      showStatus('');
+      return;
     }
+    importStatus(failures.join('\n'));
+    if (found.length) addCandidates(found, { task });
   } finally { if (imports.finish(task)) applyAccessPolicy(); }
 }
 function reviewImportCandidates(records, { batch = false, image, task, photoOnly = false } = {}) {
-  addCandidates(records.map(record => ({ record, image, photoOnly })), { batch, task });
+  return addCandidates(records.map(record => ({ record, image, photoOnly })), { batch, task });
 }
 function addCandidates(entries, { batch = false, task } = {}) {
-  const offset = imports.entries.length;
-  imports.entries.push(...entries);
-  imports.batch = imports.batch || batch || imports.entries.length > 1;
+  if (!entries.length || !mayOpenImport(task)) return false;
+  imports.entries = entries;
+  imports.selected.clear();
+  imports.batch = batch || entries.length > 1;
   entries.forEach(({ record }, index) => {
     if (hasMaskedIdentity(record.identity)) {
       record.identity = '';
       markFieldSources(record, ['identity'], 'ocr');
     }
-    if (!missingTicketFields(record).length) imports.selected.add(offset + index);
+    if (!missingTicketFields(record).length) imports.selected.add(index);
   });
-  if (mayOpenImport(task)) openCandidateReview();
-  else if (!state.showDemo && !modalRoot.querySelector('dialog')) render();
-}
-function openCandidateReview() {
-  if (!canWrite() || !imports.entries.length) return;
   if (imports.batch) reviewCandidates();
   else editRecord(imports.entries[0].record, 0);
+  return true;
 }
 function queuedBackupButton() {
   return imports.backup ? '<div class="button-row"><button class="button secondary" data-action="review-uploaded-backup">继续恢复已读取的备份</button></div>' : '';
@@ -1085,6 +1084,7 @@ function checkedCandidateIndices(form) {
 }
 function reviewCandidates() {
   editor = null;
+  setImportReference(null);
   imports.review = 'reviewing';
   const rows = imports.entries.map(({ record }, index) => {
     const missing = missingTicketFields(record);
@@ -1098,8 +1098,7 @@ function reviewCandidates() {
   });
   openModal(modalHead(`核对 ${rows.length} 条候选票据`, '补齐必填项后即可勾选保存。') +
     `<form data-candidate-review><div class="review-list">${rows.join('')}</div>
-    <div class="modal-footer"><button type="button" class="button secondary" data-action="close-modal">稍后处理</button>
-    <button type="button" class="text-button danger" data-action="discard-candidates">放弃剩余</button><div class="spacer"></div>
+    <div class="modal-footer"><button type="button" class="button secondary" data-action="close-modal">取消</button><div class="spacer"></div>
     <button class="button primary" type="submit" data-action="save-candidates" ${imports.selected.size && canWrite() ? '' : 'disabled'}>${icon('check')}保存所选票据</button></div></form>`);
   const form = modalRoot.querySelector('[data-candidate-review]');
   form.addEventListener('change', event => {
@@ -1115,14 +1114,6 @@ function reviewCandidates() {
     saveCandidates(checkedCandidateIndices(form)).catch(fail);
   });
 }
-function discardCandidates() {
-  if (!imports.entries.length || !confirm('放弃剩余待校对票据？')) return;
-  imports.entries = [];
-  imports.selected.clear();
-  imports.batch = false;
-  closeModal(true);
-  render();
-}
 async function saveCandidates(indices) {
   if (state.saving) return;
   if (!indices.length) return toast('请先选择要保存的票据', true);
@@ -1135,23 +1126,8 @@ async function saveCandidates(indices) {
   try {
     const result = await persist(records, { candidates: true });
     if (!isArchiveContext(context)) return;
-    const saved = new Set(indices);
-    const remaining = [], selection = new Set();
-    imports.entries.forEach((entry, index) => {
-      if (saved.has(index)) return;
-      if (imports.selected.has(index)) selection.add(remaining.length);
-      remaining.push(entry);
-    });
-    imports.entries = remaining;
-    imports.selected = selection;
     closeModal(true);
-    if (remaining.length) {
-      render();
-      reviewCandidates();
-    } else {
-      imports.batch = false;
-      navigate('archive');
-    }
+    navigate('archive');
     toast(savedMessage(`已新增 ${result.added} 张，补充 ${result.enriched} 张票据`));
   } finally {
     if (imports.review === 'saving') imports.review = 'reviewing';
@@ -1896,7 +1872,7 @@ async function checkFlights() {
     const { FlightConnector } = await import('./mcp.js');
     if (!currentImport(task)) return;
     const result = await new FlightConnector(key).historyTrips(year);
-    if (!await acceptsImport(task)) return;
+    if (!await acceptsImport(task) || !mayOpenImport(task)) return;
     state.flightResult = result; state.flightResultYear = year;
     let payload = result.structuredContent;
     if (!payload) {
@@ -1908,7 +1884,10 @@ async function checkFlights() {
     } else if (payload && (Array.isArray(payload) || Array.isArray(payload.flights))) {
       try {
         const candidates = mapFlightResult(payload);
-        if (candidates.length) reviewImportCandidates(candidates, { batch: true, task });
+        if (candidates.length) {
+          state.flightResult = null;
+          reviewImportCandidates(candidates, { batch: true, task });
+        }
         else toast(`${year} 年未返回历史行程`);
       } catch { toast('接口已返回内容，请查看并校对字段'); }
     } else toast('已取得接口返回；尚需核对结构，请在数据页查看');
@@ -1954,16 +1933,16 @@ const actions = {
     const index = Number(button.dataset.index), entry = imports.entries[index];
     if (entry) editRecord(entry.record, index);
   },
-  'discard-candidates': discardCandidates,
-  review: openCandidateReview,
+  'back-to-batch': () => { if (editor?.fromBatch && !modalRoot.querySelector('form[data-pending="true"]')) reviewCandidates(); },
   'review-uploaded-backup': openQueuedBackup,
   'discard-uploaded-backup': () => { imports.backup = null; closeModal(true); render(); },
   'parse-text': () => {
-    const text = document.querySelector('#import-text').value.trim();
+    const input = document.querySelector('#import-text');
+    const text = input.value.trim();
     if (!text) return toast('请先粘贴一段行程信息', true);
     const candidates = parseText(text);
     if (!candidates.length) return toast('没有识别到行程，请补充日期、车次或起终点，也可直接手动添加', true);
-    reviewImportCandidates(candidates);
+    if (reviewImportCandidates(candidates)) input.value = '';
   },
   backup: () => download(JSON.stringify(fullBackup(state.records, state.settings, {
     github: state.config?.id ? { ...state.config, token: token() } : null,
@@ -2050,7 +2029,7 @@ channel?.addEventListener('message', async event => {
   } catch (error) { fail(error); }
 });
 window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); installPrompt = event; if (state.page === 'data') render(); });
-window.addEventListener('beforeunload', event => { if (state.profileDirty || editor?.dirty) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (state.profileDirty || editor?.dirty && editor.importIndex == null) { event.preventDefault(); event.returnValue = ''; } });
 async function boot() {
   try {
     sessionStorage.removeItem('xingji-github-token');
