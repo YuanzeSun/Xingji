@@ -36,6 +36,7 @@ test('rail regions distinguish matching stations, numbers and isolated marks', (
   assert.equal(railStationFromRegion('Beijingnan\nNanjingnan'), '');
   assert.equal(printedRailNumber('X 000001'), 'X000001');
   assert.equal(printedRailNumber('000000000000000000001 南京南站售', true), '000000000000000000001');
+  assert.equal(printedRailNumber('12345678900001 X000001 南京南站售', true), '12345678900001X000001');
   assert.equal(printedRailNumber('13812345678', true), '');
   assert.deepEqual(marksFromRailRegion('网\n孩\n网上购票').map(mark => [mark.text, mark.shape]), [['网','circle'],['孩','plain']]);
   assert.equal(readPrintedDate('2018410015'), '');
