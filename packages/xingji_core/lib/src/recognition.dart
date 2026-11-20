@@ -238,7 +238,7 @@ void _fillPrintedRailRegions(
     return candidates.length == 1 ? candidates.single : null;
   }
 
-  const serial = r'^(?:[A-Z]\d{5,10}|\d{1,3}[A-Z]\d{5,9})$';
+  const serial = r'^(?:[A-Z]\d{5,10}|\d{1,3}[A-Z]\d{5,9}|[A-Z]\d{3}[A-Z]\d{6})$';
   const sale = r'^(?=.{17,25}$)\d{5,}[A-Z]?\d{8,}[A-Z]?\d{0,7}$';
   final lines = text
       .split('\n')
@@ -251,11 +251,16 @@ void _fillPrintedRailRegions(
       number(regions['saleCode'] ?? '', RegExp(sale)) ??
       number(lines.reversed.take(3).join('\n'), RegExp(sale));
 
+  final markLines = (regions['ticketMarks'] ?? '').split('\n');
+  final discountedOnline = markLines.any(
+    (line) => line.replaceAll(RegExp(r'\s+'), '') == '网折',
+  );
   final marks = <String>{
     ...RegExp(r'[（(]\s*([网学孩惠折赠支微团残兑])\s*[）)]')
         .allMatches(text)
         .map((match) => match[1]!),
-    for (final line in (regions['ticketMarks'] ?? '').split('\n'))
+    if (discountedOnline) ...['网', '折'],
+    for (final line in markLines)
       if (RegExp(r'^[（(○\s]*([网学孩惠折赠支微团残兑])[）)○\s]*$').firstMatch(line)
           case final mark?)
         mark[1]!,
@@ -265,7 +270,9 @@ void _fillPrintedRailRegions(
       for (final mark in marks.take(4))
         {
           'text': mark,
-          'shape': mark == '孩' ? 'plain' : 'circle',
+          'shape': mark == '孩' || (discountedOnline && '网折'.contains(mark))
+              ? 'plain'
+              : 'circle',
           'offsetX': 0,
           'offsetY': 0,
         },

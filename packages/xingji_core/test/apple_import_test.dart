@@ -136,9 +136,9 @@ void main() {
         railRegions: {
           'origin': '北 京 南 站',
           'destination': 'Nanjingnan',
-          'ticketNumber': 'X 000001',
+          'ticketNumber': 'Z123 P000001',
           'saleCode': '12345678900001 X000001 南京南站售',
-          'ticketMarks': '网\n孩',
+          'ticketMarks': '网折\n孩',
         },
       ),
       catalog,
@@ -146,10 +146,11 @@ void main() {
     ).single;
     expect(record.text('origin'), '北京南');
     expect(record.text('destination'), '南京南');
-    expect(record.text('ticketNumber'), 'X000001');
+    expect(record.text('ticketNumber'), 'Z123P000001');
     expect(record.text('saleCode'), '12345678900001X000001');
     expect((record['ticketMarks'] as List).map((mark) => mark['text']), [
       '网',
+      '折',
       '孩',
     ]);
     expect(record.railStanding, true);
