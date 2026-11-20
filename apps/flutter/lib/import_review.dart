@@ -16,7 +16,11 @@ Future<bool> reviewImport(
     showError(context, '没有识别到可导入的票据');
     return false;
   }
-  final selected = records.map((record) => record.id).toSet();
+  final tickets = backupSettings == null
+      ? records.where((record) => record.missingFields.isEmpty).toList()
+      : records;
+  if (tickets.isEmpty && backupSettings == null) return false;
+  final selected = tickets.map((record) => record.id).toSet();
   final archiveSession = store.archiveSession;
   var saving = false;
   String error = '';
@@ -27,7 +31,7 @@ Future<bool> reviewImport(
           builder: (context, update) => PopScope(
             canPop: !saving,
             child: AlertDialog(
-              title: Text('核对 ${records.length} 张票据'),
+              title: Text('核对 ${tickets.length} 张票据'),
               content: SizedBox(
                 width: 600,
                 child: Column(
@@ -38,12 +42,12 @@ Future<bool> reviewImport(
                         padding: EdgeInsets.only(bottom: 12),
                         child: Text('个人资料和飞常准 MCP 设置将以备份为准。'),
                       ),
-                    if (records.isNotEmpty)
+                    if (tickets.isNotEmpty)
                       Flexible(
                         child: ListView(
                           shrinkWrap: true,
                           children: [
-                            for (final record in records)
+                            for (final record in tickets)
                               CheckboxListTile(
                                 value: selected.contains(record.id),
                                 onChanged: saving
@@ -59,7 +63,9 @@ Future<bool> reviewImport(
                                   '${record.text('service')}  ${record.text('origin')} → ${record.text('destination')}',
                                 ),
                                 subtitle: Text(
-                                  '${record.departure?.complete == true ? record.departure!.label : '日期未知'}${record.missingFields.isEmpty ? '' : '\n部分信息待补全，可导入后编辑'}',
+                                  record.departure?.complete == true
+                                      ? record.departure!.label
+                                      : '日期未知',
                                 ),
                               ),
                           ],
@@ -101,7 +107,7 @@ Future<bool> reviewImport(
                             }
                             await store.importArchive(
                               TicketArchive(
-                                records
+                                tickets
                                     .where(
                                       (record) => selected.contains(record.id),
                                     )

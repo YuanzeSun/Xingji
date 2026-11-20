@@ -8,6 +8,7 @@ import 'package:xingji/main.dart';
 import 'package:xingji/apple_navigation_bar.dart';
 import 'package:xingji/app_store.dart';
 import 'package:xingji/editor.dart';
+import 'package:xingji/import_review.dart';
 import 'package:xingji/platform_services.dart';
 import 'package:xingji/ticket_face.dart';
 import 'package:xingji/ticket_detail.dart';
@@ -34,6 +35,52 @@ void main() {
     }
     await tester.pumpAndSettle();
   }
+
+  testWidgets('ordinary batch import lists and saves only complete tickets', (
+    tester,
+  ) async {
+    final app = (await tester.runAsync(store))!;
+    addTearDown(app.dispose);
+    final complete = TicketRecord.create({
+      'service': 'G21',
+      'origin': '北京南',
+      'destination': '南京南',
+      'departureDate': JourneyDate.calendar(2026, 11, 16).toJson(),
+      'departureTime': '08:00',
+      'passenger': '测试旅客',
+      'identity': 'TEST123',
+      'carriage': '05',
+      'seat': '08F',
+      'seatClass': '二等座',
+    });
+    final incomplete = TicketRecord.create({
+      'service': 'G33',
+      'origin': '北京南',
+      'destination': '南京南',
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () =>
+                  reviewImport(context, app, [complete, incomplete]),
+              child: const Text('选择票据'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('选择票据'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('G21'), findsOneWidget);
+    expect(find.textContaining('G33'), findsNothing);
+    expect(find.textContaining('待补全'), findsNothing);
+    await tester.tap(find.text('导入 1 张'));
+    await settle(tester);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(app.privateRecords.map((record) => record.id), [complete.id]);
+  });
 
   testWidgets('welcome guide can swipe to maps and start the demo', (
     tester,
