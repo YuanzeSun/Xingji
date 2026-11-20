@@ -1,4 +1,3 @@
-import {JOURNEY_DATE_FIELDS} from './journey-date.js';
 import { createRecord, now, validDate } from './model.js';
 import { railTemplateFromText } from './rail-template.js';
 import { marksFromText } from './ticket-marks.js';

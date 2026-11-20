@@ -124,7 +124,7 @@ function* boardingFrames(source) {
   yield { x: width - stripWidth, width: stripWidth, height, edge: 1800 };
 }
 
-async function readFlightImage(source, boardingOnly, cameraFrame = 0) {
+async function readFlightImage(source, cameraFrame = 0) {
   await prepareCodeReader();
   return withCodeImage(source, async image => {
     let fallback = [], issues = [], formats = formatsFor('flight');
@@ -141,18 +141,13 @@ async function readFlightImage(source, boardingOnly, cameraFrame = 0) {
       if (rebuilt.codes.length) return rebuilt;
       issues = rebuilt.issues;
     }
-    if (boardingOnly || !fallback.length) return { codes: [], issues };
+    if (!fallback.length) return { codes: [], issues };
     return rebuildResults(fallback, 'flight', true);
   });
 }
 
-export async function readBoardingCodesFromImage(source, { cameraFrame } = {}) {
-  const { codes } = await readFlightImage(source, true, cameraFrame);
-  return codes.map(code => code.data);
-}
-
 export async function rebuildCodesFromImage(source, type = 'rail', { cameraFrame } = {}) {
-  const result = type === 'flight' ? await readFlightImage(source, false, cameraFrame) :
+  const result = type === 'flight' ? await readFlightImage(source, cameraFrame) :
     await withCodeImage(source, image => {
       if ((image.naturalWidth || image.width) * (image.naturalHeight || image.height) > 24_000_000) throw new Error('图片尺寸过大，请选择原始票据截图');
       return rebuildCodeSymbols(imagePixels(image), type);

@@ -25,13 +25,11 @@ async function rereadRailPhoto(worker, photo, first) {
   return best;
 }
 
-export async function createRecognizer(progress = () => {}, {
-  workerFactory=createWorker
-} = {}) {
+async function createRecognizer(progress) {
   const base = new URL('./', location.href);
   let rejectStartup;
   const startupError = new Promise((_, reject) => { rejectStartup = reject; });
-  const creating = workerFactory(['chi_sim', 'eng'], 1, {
+  const creating = createWorker(['chi_sim', 'eng'], 1, {
     workerPath: new URL('vendor/worker.min.js', base).href,
     corePath: new URL('vendor/', base).href,
     langPath: new URL('ocr/', base).href,
@@ -97,12 +95,12 @@ export async function createRecognizer(progress = () => {}, {
     terminate: () => worker.terminate()
   };
 }
-export async function recognize(file, progress = () => {}, { details = false } = {}) {
+export async function recognize(file, progress = () => {}) {
   progress('正在识别火车票…');
   let reading;
   try { reading = await recognizePaddleRailPhoto(file); }
   catch { /* Older browsers can use the original OCR engine. */ }
-  if (reading?.multiplePrintedTickets) return details ? reading : '';
+  if (reading?.multiplePrintedTickets) return reading;
   const records = recognizedRailRecords(reading);
   if (!fullRailRead(records)) {
     let worker;
@@ -113,5 +111,5 @@ export async function recognize(file, progress = () => {}, { details = false } =
       if (!records.length) throw error;
     } finally { await worker?.terminate(); }
   }
-  return details ? reading : reading.text;
+  return reading;
 }

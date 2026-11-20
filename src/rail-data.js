@@ -6,7 +6,6 @@ import { railDetails } from './rail-lookup-model.js';
 import {resolvePlace} from './places.js';
 import { railText as clean, railService, railDate, railTime, railStation, isEmuModel, normalizeRailJourney, railJourneyRange, sameRailTimetable } from './rail-journey.js';
 export const RAIL_DETAILS_SOURCE = 'https://api.railgo.dev/479755220e0';
-export const RAIL_STOCK_SOURCE = 'https://api.railgo.dev/507418598e0';
 
 async function requestJSON(url, { fetcher, signal }) {
   const response = await fetcher.call(globalThis, url.href, { credentials:'omit', referrerPolicy:'no-referrer', signal:signal ? AbortSignal.any([signal, AbortSignal.timeout(12000)]) : AbortSignal.timeout(12000) });
