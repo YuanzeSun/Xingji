@@ -1,4 +1,4 @@
-import { printedRailNumber, railStationFromRegion } from './rail-ticket.js';
+import { printedRailNumber, railIssuerFromLine, railSeatFromLine, railStationFromRegion } from './rail-ticket.js';
 
 export const trainLine = /^([A-Z]\s*\d{1,5}|[1-9]\d{2,3})(?:\s*次)?$/;
 
@@ -65,4 +65,49 @@ export function railNumbersFromLayout(lines, service) {
   };
   const ticketNumber = find(false), saleCode = find(true);
   return { ...(ticketNumber && { ticketNumber }), ...(saleCode && { saleCode }) };
+}
+
+function* joinedRailRows(lines, start) {
+  const neighbors = lines.map(line => ({ line, ...projection(line, start) }))
+    .filter(({ line, along, below }) => along > start.glyphWidth / 2 &&
+      Math.abs(below) < Math.max(start.glyphHeight, line.glyphHeight) * .64)
+    .sort((a, b) => a.along - b.along);
+  let text = start.text, end = start.glyphWidth / 2;
+  for (const { line, along } of neighbors.slice(0, 3)) {
+    const gap = along - line.glyphWidth / 2 - end;
+    if (gap > Math.max(start.glyphHeight, line.glyphHeight) * 2.25 || gap < -line.glyphHeight * .5) break;
+    text += ' ' + line.text;
+    end = along + line.glyphWidth / 2;
+    yield text;
+  }
+}
+
+export function railSplitFieldsFromLayout(lines, printed) {
+  const fields = {};
+  const confident = lines.filter(line => line.score >= .55);
+  if ((!printed.seat && !printed.railStanding) || (printed.railStanding && !printed.carriage)) {
+    const seats = new Map();
+    for (const line of confident) {
+      if (!/^[0-9OIl]{1,2}(?:\s*[车車#%*+]|\s*$)/i.test(line.text)) continue;
+      for (const row of joinedRailRows(confident, line)) {
+        const seat = railSeatFromLine(row);
+        if (seat?.carriage && (printed.railStanding ? seat.railStanding : seat.seat || seat.railStanding)) {
+          seats.set(JSON.stringify(seat), seat);
+        }
+      }
+    }
+    if (seats.size === 1) Object.assign(fields, seats.values().next().value);
+  }
+  if (!printed.issuer) {
+    const names = new Set();
+    for (const line of confident) {
+      if (!/^(?:[\p{Script=Han}\s]{1,14}[A-Z]{0,3}|[A-Z0-9\s]{17,25})$/u.test(line.text)) continue;
+      for (const row of joinedRailRows(confident, line)) {
+        const name = railIssuerFromLine(row);
+        if (name) names.add(name);
+      }
+    }
+    if (names.size === 1) fields.issuer = names.values().next().value;
+  }
+  return fields;
 }

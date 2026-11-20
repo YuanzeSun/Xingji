@@ -57,6 +57,36 @@ export function printedRailNumber(text, footer = false) {
   }
   return candidates.size === 1 ? [...candidates][0] : '';
 }
+
+export function railSeatFromLine(text) {
+  const line = text.normalize('NFKC').replace(/.*\d{1,2}:\d{2}\s*[开開]?\s*/, '')
+    .replace(/[\s,，·]+/g, '').replace(/(?:新空调|卧代)?(?:商务座|特等座|一等座|二等座|高级软卧|软卧|硬卧|软座|硬座)$/, '');
+  const coach = line.match(/^([0-9OIl]{1,2})[车車#%*+](?:厢)?/i);
+  const digits = value => value.toUpperCase().replace(/O/g, '0').replace(/[IL]/g, '1');
+  const carriage = coach ? digits(coach[1]) : '';
+  const rest = coach ? line.slice(coach[0].length) : line;
+  if (rest === '无座' || rest === '站票') return { ...(carriage && { carriage }), railStanding: true };
+  if (!carriage) return null;
+  if (!rest) return { carriage };
+  const seat = rest.match(/^[*#]?([上中下])?([0-9OIl]{1,3})([A-F])?[号號座#%]?([上中下])?(铺|鋪)?$/i);
+  if (!seat || (seat[1] && seat[4]) || (seat[3] && (seat[2].length > 2 || seat[1] || seat[4] || seat[5])) ||
+      (seat[5] && !(seat[1] || seat[4]))) return null;
+  const bunk = seat[1] || seat[4];
+  return { carriage, seat: digits(seat[2]) + (seat[3]?.toUpperCase() || '') + (bunk ? '号' + bunk + '铺' : '') };
+}
+
+export function railIssuerFromLine(text) {
+  const line = text.normalize('NFKC').replace(/\s/g, '');
+  const match = line.match(/^(?:售票站:|[A-Z0-9]{17,25})?(\p{Script=Han}{1,14}[A-Z]{0,3}?)站?(?:售|\(售\))$/u);
+  if (!match) return '';
+  const name = match[1].replace(/站$/, '');
+  return stationNames.has(name) || /^\p{Script=Han}{1,2}[A-Z]{1,3}$/u.test(name) ? name : '';
+}
+
+function uniqueField(values) {
+  const unique = new Set(values.filter(Boolean));
+  return unique.size === 1 ? unique.values().next().value : '';
+}
 const trainCode = (value, route = false) => {
   const code = value.replace(/\s|次/g, '').toUpperCase();
   const match = code.match(route ? /^([GDCZTKYLSP]?)([0-9OIL]{1,5})$/ : /^([GDCZTKYLS])([0-9OIL]{1,5})$/);
@@ -130,8 +160,12 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
   const departureDate = date ? `${date[1]}-${date[2].padStart(2, '0')}-${date[3].padStart(2, '0')}` : '';
   const time = compact.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
   const seatRow = time ? compact.slice(time.index + time[0].length).split('\n')[0] : '';
-  const seat = seatRow.match(/([0-9OIl]{1,2})\s*[车#%*]\s*[*#]?\s*([0-9OIl]{1,3}[A-F]?)(?:[号#%]\s*|\s+|(?=[上中下]\s*铺)|$)(?:([上中下])\s*铺)?/i);
-  const digits = value => value.replace(/O/gi, '0').replace(/[Il]/g, '1');
+  const lines = compact.split('\n');
+  const seatRows = new Map(lines.map(railSeatFromLine).filter(Boolean)
+    .map(seat => [[seat.carriage, seat.seat, seat.railStanding].join('/'), seat]));
+  const seat = railSeatFromLine(seatRow.replace(/^\s*[开開]\s*/, '')) ||
+    (seatRows.size === 1 ? seatRows.values().next().value : {});
+  const issuer = uniqueField(lines.map(railIssuerFromLine));
   const price = compact.match(/[¥￥Y]\s*(\d{1,4}(?:\s*\.\s*\d{1,2})?)(?:元|%|\s|$)/);
   const seatClass = compact.match(/商务座|特等座|一等座|二等座|高级软卧|软卧|硬卧|软座|硬座/)?.[0] || '';
   const identity = raw.match(/(\d{6,14}[*xX]{2,8}\d{2,4})\s+([\p{Script=Han}]{2,8})/u);
@@ -169,9 +203,10 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
   const record = createRecord({ type: 'rail', template: railTemplateFromText(raw, { paperColor, departureDate }), origin, destination,
     originCode: pair[0]?.row[0] === origin ? pair[0].row[3] : '', destinationCode: pair[1]?.row[0] === destination ? pair[1].row[3] : '', service,
     departureDate: validDate(departureDate) ? departureDate : '', departureTime: time ? `${time[1].padStart(2, '0')}:${time[2]}` : '',
-    carriage: seat ? digits(seat[1]) : '', seat: seat ? digits(seat[2]).toUpperCase() + (seat[3] ? '号' + seat[3] + '铺' : '') : '', seatClass, railStanding: /无\s*座|站票/.test(seatRow) || /(?:席别|座位)[：:\s]*无\s*座|(?:商务座|一等座|二等座|硬座|软座)[：:\s]*无\s*座|^\s*无\s*座\s*$/m.test(compact), price: price ? price[1].replace(/\s/g, '') : '', identity: identity?.[1] || '', passenger: identity?.[2] || '',
+    carriage: seat.carriage, seat: seat.seat, seatClass, railStanding: seat.railStanding || /无\s*座|站票/.test(seatRow) || /(?:席别|座位)[：:\s]*无\s*座|(?:商务座|一等座|二等座|硬座|软座)[：:\s]*无\s*座|^\s*无\s*座\s*$/m.test(compact), price: price ? price[1].replace(/\s/g, '') : '', identity: identity?.[1] || '', passenger: identity?.[2] || '',
     ticketNumber: printedRailNumber(raw.split('\n').slice(0, 3).join('\n')),
     saleCode: printedRailNumber(raw.split('\n').filter(line => line.trim()).slice(-3).join('\n'), true),
+    issuer,
     gate: raw.match(/检票(?:口)?\s*[:：]?\s*([A-Z]?\d+[A-Z]?)/)?.[1] || '', ticketMarks: marksFromText(raw),
     sources: [{ kind: 'scan', label }], provenance: 'reconstruction' });
   return record;

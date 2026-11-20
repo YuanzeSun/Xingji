@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseScanText } from '../src/scan-engine.js';
+import { parseScanText, railPhotoChanges } from '../src/scan-engine.js';
+import { createRecord } from '../src/model.js';
 import { refineRailService, refineRailTemplate, preferEnhancedRailRead } from '../src/rail-ocr.js';
 import { railPaperFromPixels } from '../src/rail-template.js';
 
@@ -48,6 +49,38 @@ test('printed rail tickets remain one rail record when serial numbers resemble f
   assert.equal(records[0].carriage, '03');
   assert.equal(records[0].seat, '15F');
   assert.equal(records[0].ticketMarks[0].text,'网');
+});
+
+test('freestanding seat rows and the printed sales station are independent of the departure row', () => {
+  const cases = [
+    ['08车 07B号', '08', '07B'],
+    ['03+08A', '03', '08A'],
+    ['05車 O55號', '05', '055'],
+    ['04车 上085号', '04', '085号上铺'],
+    ['08车011号中铺', '08', '011号中铺'],
+  ];
+  for (const [row, carriage, seat] of cases) {
+    const raw = picture().replace('03车15F号', '') + '\n' + row + '\n10010300351001S042775 北京南站售';
+    const [ticket] = parseScanText(raw);
+    assert.deepEqual([ticket.carriage, ticket.seat, ticket.issuer], [carriage, seat, '北京南'], row);
+  }
+  const bare = picture().replace('03车15F号', '');
+  const [ambiguous] = parseScanText(bare + '\n07417D号\n10010300351001S042775 JM\n退票改签时须交回车站');
+  assert.deepEqual([ambiguous.carriage, ambiguous.seat, ambiguous.issuer], ['', '', '']);
+  assert.equal(parseScanText(bare + '\n海口东售')[0].issuer, '海口东');
+});
+
+test('retaking a photo replaces an OCR standing seat while preserving a manually chosen carriage', () => {
+  const [assigned] = parseScanText(picture());
+  const prior = createRecord({ carriage: '03', railStanding: true, fieldSources: { carriage: 'ocr', railStanding: 'ocr' } });
+  const updated = railPhotoChanges(prior, assigned);
+  assert.equal(updated.seat, '15F');
+  assert.equal(updated.railStanding, false);
+
+  const manual = createRecord({ carriage: '08', lockedFields: ['carriage'] });
+  const protectedSeat = railPhotoChanges(manual, assigned);
+  assert.equal(protectedSeat.carriage, undefined);
+  assert.equal(protectedSeat.seat, undefined);
 });
 
 test('numeric trains and OCR-confused letters are resolved from their position between stations', () => {
