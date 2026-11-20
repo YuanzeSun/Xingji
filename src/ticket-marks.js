@@ -55,6 +55,12 @@ export function marksFromText(text) {
 export function marksFromRailRegion(text) {
   const marks = marksFromText(text);
   for (const line of text.split('\n')) {
+    if (line.replace(/\s/g, '') === '网折') {
+      for (const text of ['网', '折']) {
+        if (!marks.some(value => value.text === text)) marks.push({ text, shape: 'plain', offsetX: 0, offsetY: 0 });
+      }
+      continue;
+    }
     const mark = line.trim().match(/^[（(○\s]*([网学孩惠折赠支微团残兑])[）)○\s]*$/)?.[1];
     if (mark && !marks.some(value => value.text === mark)) {
       marks.push({ text: mark, shape: mark === '孩' ? 'plain' : 'circle', offsetX: 0, offsetY: 0 });

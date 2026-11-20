@@ -103,14 +103,14 @@ export async function recognize(file, progress = () => {}, { details = false } =
   try { reading = await recognizePaddleRailPhoto(file); }
   catch { /* Older browsers can use the original OCR engine. */ }
   if (reading?.multiplePrintedTickets) return details ? reading : '';
-  const primaryRecords = recognizedRailRecords(reading);
-  if (!fullRailRead(primaryRecords)) {
+  const records = recognizedRailRecords(reading);
+  if (!fullRailRead(records)) {
     let worker;
     try {
       worker = await createRecognizer(progress);
       reading = chooseRailReading(reading, await worker.recognize(file));
     } catch (error) {
-      if (!primaryRecords.length) throw error;
+      if (!records.length) throw error;
     } finally { await worker?.terminate(); }
   }
   return details ? reading : reading.text;

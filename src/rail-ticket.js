@@ -12,12 +12,12 @@ for (const row of STATIONS) {
   if (!stations.has(code)) stations.set(code, new Map());
   stations.get(code).set(row[0], row);
 }
-function stationFor(value, raw) {
+function stationFor(value, raw, fuzzy = true) {
   if (value.length < 4) return null;
   const code = key(value), exact = stations.get(code);
   const choose = rows => rows.size === 1 ? [...rows.values()][0] : [...rows.values()].find(row => raw.replace(/\s/g, '').includes(row[0] + '站')) || null;
   if (exact) return choose(exact);
-  if (code.length < 6) return null;
+  if (!fuzzy || code.length < 6) return null;
   const matches = new Map();
   for (const [candidate, rows] of stations) {
     if (candidate.length !== code.length || !choose(rows)) continue;
@@ -30,15 +30,15 @@ function stationFor(value, raw) {
   return matches.size === 1 ? [...matches.values()][0] : null;
 }
 
-export function railStationFromRegion(text) {
+export function railStationFromRegion(text, { fuzzy = true } = {}) {
   const names = new Set();
   for (const line of text.normalize('NFKC').split('\n')) {
     const region = line.trim();
-    if (/^[\p{Script=Han}\s]{2,22}$/u.test(region)) {
+    if (/^[\p{Script=Han}\s]{1,22}$/u.test(region)) {
       const name = region.replace(/\s/g, '').replace(/站$/, '');
       if (stationNames.has(name)) names.add(name);
     } else if (/^[A-Za-z'’\s]{4,30}$/.test(region)) {
-      const station = stationFor(region, text);
+      const station = stationFor(region, text, fuzzy);
       if (station) names.add(station[0]);
     }
   }
@@ -49,7 +49,7 @@ export function printedRailNumber(text, footer = false) {
   const candidates = new Set();
   for (const line of text.normalize('NFKC').toUpperCase().split('\n')) {
     const words = line.trim().replace(/^(?:票号|底部售票码|售票码)\s*[:：]\s*/, '').split(/\s+/);
-    const pattern = footer ? /^(?=.{17,25}$)\d{5,}[A-Z]?\d{8,}[A-Z]?\d{0,7}$/ : /^(?:[A-Z]\d{5,10}|\d{1,3}[A-Z]\d{5,9})$/;
+    const pattern = footer ? /^(?=.{17,25}$)\d{5,}[A-Z]?\d{8,}[A-Z]?\d{0,7}$/ : /^(?:[A-Z]\d{5,10}|\d{1,3}[A-Z]\d{5,9}|[A-Z]\d{3}[A-Z]\d{6})$/;
     for (const token of [words[0], words.join('')]) {
       const value = token.match(/^[A-Z0-9]+/)?.[0] || '';
       if (pattern.test(value)) candidates.add(value);
@@ -102,19 +102,19 @@ export function railFareRectangle(raw, layout) {
 
 // Printed tickets put the train between the station names. A serial number
 // elsewhere on the paper must never turn a railway ticket into a flight.
-export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '' } = {}) {
+export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '', route = null } = {}) {
   if (/BOARDING|\bFLIGHT\b|航班|航空公司|订座编号/i.test(raw)) return null;
   const printed = /限乘|当日当次|仅供报销|报销凭证|退票费|买票请到|中国铁路|检票/.test(raw.replace(/\s/g, ''));
   const hits = [...raw.matchAll(/[A-Za-z]+(?:['’][A-Za-z]+)*/g)].map(match => ({ text: match[0], row: stationFor(match[0], raw), index: match.index })).filter(hit => hit.row);
   const unique = hits.filter((hit, i) => !i || hit.row[0] !== hits[i - 1].row[0]);
-  if (unique.length > 2) return false; // Separate a collage before recognizing a single ticket.
+  if (unique.length > 2 && !route) return false; // Separate a collage before recognizing a single ticket.
   const probableRail = unique.length === 1 && /[¥￥]\s*\d/.test(raw) && /(?:19|20)\d{2}.{0,16}\d{1,2}[:：]/.test(raw);
-  if (!printed && !probableRail && unique.length !== 2) return null;
+  if (!route && !printed && !probableRail && unique.length !== 2) return null;
   const words = ocrWords(layout), pair = unique.length === 2 ? unique : [];
   const anchorFor = hit => words.find(word => key(word.text) === key(hit.text));
   if (pair.length === 2 && pair.every(anchorFor)) pair.sort((a,b) => anchorFor(a).left - anchorFor(b).left);
   const anchors = pair.map(anchorFor);
-  let service = trainCode(raw.match(/车次\s*[:：]\s*([A-Z]?\d{1,5})/)?.[1] || '', true);
+  let service = route?.service || trainCode(raw.match(/车次\s*[:：]\s*([A-Z]?\d{1,5})/)?.[1] || '', true);
   service ||= [...raw.matchAll(/\b[GDCZTKYLS]\s*[0-9OIl]{1,5}(?:次)?\b/g)].map(match => trainCode(match[0])).find(Boolean) || '';
   if (anchors.length === 2 && anchors.every(Boolean)) {
     const [from, to] = anchors;
@@ -135,14 +135,14 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
   const price = compact.match(/[¥￥Y]\s*(\d{1,4}(?:\s*\.\s*\d{1,2})?)(?:元|%|\s|$)/);
   const seatClass = compact.match(/商务座|特等座|一等座|二等座|高级软卧|软卧|硬卧|软座|硬座/)?.[0] || '';
   const identity = raw.match(/(\d{6,14}[*xX]{2,8}\d{2,4})\s+([\p{Script=Han}]{2,8})/u);
-  let origin = pair[0]?.row[0] || '', destination = pair[1]?.row[0] || '';
-  for (const side of ['origin', 'destination']) {
+  let origin = route?.origin || pair[0]?.row[0] || '', destination = route?.destination || pair[1]?.row[0] || '';
+  for (const side of route ? [] : ['origin', 'destination']) {
     const explicit = raw.match(new RegExp((side === 'origin' ? '出发站' : '到达站') + '[：:]\\s*([^\\n]+)'));
     const name = explicit && railStationFromRegion(explicit[1]);
     if (name && side === 'origin') origin = name;
     else if (name) destination = name;
   }
-  if (!pair.length && unique.length === 1) {
+  if (!route && !pair.length && unique.length === 1) {
     const word = anchorFor(unique[0]), page = layout.split('\n').map(line=>line.split('\t')).find(row=>row[0]==='1');
     const width = +page?.[8];
     if (word && width) {
