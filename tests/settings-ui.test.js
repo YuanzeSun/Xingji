@@ -32,6 +32,8 @@ test('saving or receiving a shared MCP key never consumes quota; explicit refres
  Object.defineProperty(navigator,'userAgent',{value:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',configurable:true});
  document.querySelector('[data-action="navigate"][data-page="archive"]').click();await wait(()=>document.querySelector('h1')?.textContent==='我的票据');
  document.querySelector('[data-action="navigate"][data-page="data"]').click();await wait(()=>document.querySelector('.data-layout'));
+ const install=document.querySelector('.data-layout').firstElementChild;
+ assert.ok(install.classList.contains('install-panel'));assert.match(install.textContent,/随身票夹.*Safari.*共享.*添加到主屏幕.*编辑操作/);
  assert.equal(document.querySelector('#flight-form'),null);assert.equal(document.querySelector('[data-action="flight-refresh"]'),null);assert.equal(queries,1);
  dom.window.close();
 });

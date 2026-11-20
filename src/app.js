@@ -487,10 +487,11 @@ function flightSettingsPanel() {
 }
 function dataPage() {
   const count = state.records.filter(r => !r.deleted).length;
-  return header('数据与同步', '管理个人资料、同步与外部连接。') + `<div class="data-layout">${personalProfilePanel(state.profileDraft || state.settings.profile,state.profileError)}
+  return header('数据与同步', '管理个人资料、同步与外部连接。') + `<div class="data-layout">
+    <section class="panel quiet-panel install-panel"><h3>${icon('ticket')}随身票夹</h3><p>在 iPhone 的 Safari 中打开行迹，点「共享」，选择「添加到主屏幕」。如果有「作为网页 App 打开」开关，保持开启，再点「添加」。</p><p>「共享」也可能在页面菜单里。找不到「添加到主屏幕」时，点共享菜单底部的「编辑操作」。</p>${installPrompt ? '<button class="button secondary" data-action="install">安装行迹</button>' : ''}</section>
+    ${personalProfilePanel(state.profileDraft || state.settings.profile,state.profileError)}
     <div class="data-column">${d1ConnectionPanel()}<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h2>GitHub 私有仓库</h2><p data-cloud-label>${state.d1 ? '手动备份' : e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError)}</p>${githubExtras()}</section></div>
-    <aside class="data-column">${flightSettingsPanel()}
-    <section class="panel quiet-panel"><h3>${icon('ticket')}随身票夹</h3><p>在手机浏览器中选择“添加到主屏幕”，即可像应用一样打开。已有票据可离线查看。</p>${installPrompt ? '<button class="button secondary" data-action="install">安装行迹</button>' : ''}</section></aside>
+    ${flightSettingsPanel()}
     <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button></div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div><div data-restore-followup>${backupRestoreMarkup()}</div>${queuedBackupButton()}${cloudActions()}</section>
   </div>`;
 }

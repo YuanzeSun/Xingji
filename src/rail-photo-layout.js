@@ -14,6 +14,7 @@ function projection(line, anchor) {
 
 export function locateRailRoute(lines) {
   const stations = lines.filter(line => line.score >= .5).map(line => {
+    if (line.header) return { ...line, name: line.header.station, printed: true, known: true };
     const known = railStationFromRegion(line.text, { fuzzy: false });
     const han = line.text.replace(/\s/g, '').match(/^(\p{Script=Han}{1,7}?)站?$/u)?.[1];
     const printed = han && (known || han.length > 1 && line.score >= .88) ? han : '';
@@ -22,7 +23,8 @@ export function locateRailRoute(lines) {
   const routes = [];
   for (const train of lines.filter(line => line.train && line.score >= .76)) {
     const nearby = stations.map(line => ({ ...line, ...projection(line, train) })).filter(line =>
-      Math.abs(line.below) <= Math.max(line.glyphHeight, train.glyphHeight) * (line.printed ? .84 : 1.5)
+      (!line.header || line.along < 0) &&
+      Math.abs(line.below) <= Math.max(line.glyphHeight, train.glyphHeight) * (line.printed && !line.header ? .84 : 1.5)
       && Math.abs(line.along) >= (line.glyphWidth + train.glyphWidth) * .41);
     const stationsInRow = nearby.map(line => {
       if (!line.printed || line.known) return line;
@@ -36,7 +38,7 @@ export function locateRailRoute(lines) {
     const pairs = [];
     for (const origin of left) for (const destination of right) {
       if (origin.name === destination.name ||
-          Math.abs(origin.below - destination.below) > Math.max(train.glyphHeight, origin.glyphHeight, destination.glyphHeight) * .6) continue;
+          Math.abs(origin.below - destination.below) > Math.max(train.glyphHeight, origin.glyphHeight, destination.glyphHeight) * (origin.header ? 1.1 : .6)) continue;
       const quality = Number(origin.printed) + Number(destination.printed);
       if (!origin.known && !destination.known && !(quality === 2 && [origin, destination].every(line => /站$/.test(line.text)))) continue;
       pairs.push({ origin: origin.name, destination: destination.name, quality });
@@ -58,7 +60,11 @@ export function railNumbersFromLayout(lines, service) {
     const numbers = new Set();
     for (const line of lines) {
       if (line.score < .63) continue;
-      const { below } = projection(line, train);
+      const { along, below } = projection(line, train);
+      if (!footer && line.header) {
+        if (along < 0 && below <= train.glyphHeight * .6) numbers.add(line.header.ticketNumber);
+        continue;
+      }
       if (footer ? below < train.glyphHeight * 2.1 : below > -train.glyphHeight * .34) continue;
       const code = printedRailNumber(line.text, footer);
       if (code) numbers.add(code);
@@ -192,6 +198,9 @@ export function railValueRegions(layout, width, height, record) {
     right = Math.min(width, Math.ceil(right)); bottom = Math.min(height, Math.ceil(bottom));
     return right - left >= 20 && bottom - top >= 12 ? { left, top, width: right - left, height: bottom - top } : null;
   };
+  const number = region(margin - line, train ? train.top - line * 4.3 : date.top - line * 6.5,
+    train ? Math.min(width * .53, train.left + line) : Math.min(width * .52, margin + date.width),
+    train ? train.top + line * .4 : date.top - line * 1.7);
   return {
     paper: date && region(date.left + date.width * .12, date.top + line * .8,
       date.left + date.width * .9, date.top + line * 2.8),
@@ -205,8 +214,7 @@ export function railValueRegions(layout, width, height, record) {
       Math.min(width * .7, margin + date.width * 1.6), date.top - line * .35),
     date: region(margin - line, date ? date.top - line * .75 : Math.min(train.top, station?.top ?? train.top) + line * .7,
       Math.min(width * .62, date ? date.left + date.width + line : train.left + train.width), date ? date.top + line * 1.65 : train.top + line * 5.3),
-    ticketNumber: region(margin - line, train ? train.top - line * 4.3 : date.top - line * 6.5,
-      train ? Math.min(width * .53, train.left + line) : Math.min(width * .52, margin + date.width),
-      train ? train.top + line * .4 : date.top - line * 1.7)
+    ticketNumber: number,
+    ticketInk: number && { ...number, height: Math.min(height - number.top, number.height + Math.ceil(line)) }
   };
 }
