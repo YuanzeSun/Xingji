@@ -91,3 +91,37 @@ test('Paddle recovers numeric train routes from the station row and rejects a co
   assert.equal(collage.multiplePrintedTickets, true);
   assert.deepEqual(recognizedRailRecords(collage), []);
 });
+
+test('rail photo layout uses the same sloped row and ignores a nearby sales station', () => {
+  const item = (text, x, y, width, score = .96) => ({
+    text, score, poly: [[x, y], [x + width, y - width * .25], [x + width + 6, y + 22 - width * .25], [x + 6, y + 22]]
+  });
+  const reading = paddleRailReading({
+    image: { width: 520, height: 335 },
+    items: [
+      item('Z123P000001', 25, 51, 110), item('宁波东', 363, 36, 59),
+      item('羊草', 100, 120, 65), item('6214', 224, 87, 55),
+      item('宋', 360, 57, 25, .54), item('2013年10月23日04:26开', 56, 172, 178),
+      item('网折', 253, 181, 38), item('限乘当日当次车', 63, 220, 148)
+    ]
+  }, 'blue');
+  const [record] = recognizedRailRecords(reading);
+  assert.deepEqual([record.service, record.origin, record.destination], ['6214', '羊草', '宋']);
+  assert.equal(record.ticketNumber, 'Z123P000001');
+  assert.deepEqual(record.ticketMarks.map(mark => [mark.text, mark.shape]), [['网', 'plain'], ['折', 'plain']]);
+});
+
+test('exact station pinyin corrects an unknown spelling in the same photographed column', () => {
+  const item = (text, x, y, width, height) => ({
+    text, score: .96, poly: [[x, y], [x + width, y], [x + width, y + height], [x, y + height]]
+  });
+  const reading = paddleRailReading({
+    image: { width: 520, height: 335 },
+    items: [
+      item('成郁南站', 24, 67, 120, 27), item('Chengdunan', 32, 94, 111, 20),
+      item('C3366', 220, 65, 78, 28), item('邛崃站', 380, 69, 103, 28),
+      item('2023年12月15日17:32开', 26, 119, 224, 22), item('仅供报销使用', 28, 210, 143, 22)
+    ]
+  }, 'blue');
+  assert.equal(recognizedRailRecords(reading)[0].origin, '成都南');
+});

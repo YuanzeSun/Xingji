@@ -29,13 +29,13 @@ export function railPhotoChanges(draft, record) {
 const pinyinKey = value => value.toLowerCase().replace(/['’]/g, '');
 for (const row of STATIONS) { const key = pinyinKey(row[3]); if (!pinyinStations.has(key)) pinyinStations.set(key, new Map()); pinyinStations.get(key).set(row[0], row); }
 export function parseScanText(raw, label = '相机自动扫描', {
-  singleTicket = false, layout = '', paperColor = '', flightImage = false, railFields = {}
+  singleTicket = false, layout = '', paperColor = '', flightImage = false, railFields = {}, route = null
 } = {}) {
   if (flightImage) return [];
   const text = raw.replace(/\b(\d{1,2}):(\d{2})\b/g, (all, hour, minute) => +hour <= 23 && +minute <= 59 ? all : '');
   const order = parseRailOrder(text, 'scan', label, { layout });
   if (order) return singleTicket && order.length !== 1 ? [] : order;
-  const printed = parsePrintedRailTicket(text, label, { layout, paperColor });
+  const printed = parsePrintedRailTicket(text, label, { layout, paperColor, route });
   if (printed) return [createRecord({ ...printed, ...railFields, fieldSources: {
     ...printed.fieldSources, ...Object.fromEntries(Object.keys(railFields).map(key => [key, 'ocr']))
   } })];
