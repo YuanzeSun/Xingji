@@ -49,7 +49,7 @@ export function printedRailNumber(text, footer = false) {
   const candidates = new Set();
   for (const line of text.normalize('NFKC').toUpperCase().split('\n')) {
     const words = line.trim().replace(/^(?:票号|底部售票码|售票码)\s*[:：]\s*/, '').split(/\s+/);
-    const pattern = footer ? /^(?=.{17,25}$)\d{5,}[A-Z]?\d{8,}[A-Z]?\d{0,4}$/ : /^(?:[A-Z]\d{5,10}|\d{1,3}[A-Z]\d{5,9})$/;
+    const pattern = footer ? /^(?=.{17,25}$)\d{5,}[A-Z]?\d{8,}[A-Z]?\d{0,7}$/ : /^(?:[A-Z]\d{5,10}|\d{1,3}[A-Z]\d{5,9})$/;
     for (const token of [words[0], words.join('')]) {
       const value = token.match(/^[A-Z0-9]+/)?.[0] || '';
       if (pattern.test(value)) candidates.add(value);
