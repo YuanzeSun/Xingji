@@ -459,6 +459,7 @@ function bindRailPhoto(form) {
     const { draft, original, importIndex } = activeEditor;
     const changes = railPhotoChanges(draft, record);
     const next = { ...draft, ...changes, sources: record ? [...draft.sources, ...record.sources] : draft.sources };
+    if (changes.template) next.lockedFields = draft.lockedFields.filter(key => key !== 'template');
     markFieldSources(next, Object.keys(changes), 'ocr');
     if (changes.departureDate?.year) markFieldSources(next, ['departureDateYear'], 'ocr');
     if (lookupContext(draft) !== lookupContext(next)) clearLookupValues(next);

@@ -97,11 +97,13 @@ test('photo layout joins a divided seat row and the sales suffix on their own ba
   const items = [
     item('北京南站', 30, 62, 83), item('G21', 267, 62, 45), item('南京南站', 449, 62, 85),
     item('2026年11月16日15:00开', 30, 130, 180), item('无座', 488, 130, 48), item('01车', 440, 130, 42),
+    item('¥12', 32, 167, 35), item('.50', 69, 167, 28), item('元', 100, 167, 16),
     item('仅供报销使用', 32, 263, 120), item('退票改签时须交回车站', 85, 314, 200),
     item('站售', 421, 365, 40), item('天津西', 360, 365, 60), item('10010300351001S042775', 68, 365, 278)
   ];
   const [standing] = recognizedRailRecords(paddleRailReading({ image, items }, 'blue'));
   assert.deepEqual([standing.carriage, standing.seat, standing.railStanding, standing.issuer], ['01', '', true, '天津西']);
+  assert.equal(standing.price, '12.50');
 
   items.splice(4, 2, item('07B号', 492, 130, 56), item('08', 440, 130, 19), item('车', 462, 130, 22));
   const [assigned] = recognizedRailRecords(paddleRailReading({ image, items }, 'blue'));

@@ -2,14 +2,18 @@ import { calendarDate } from './journey-date.js';
 import { parseScanText } from './scan-engine.js';
 import { railPhotoColor } from './scan-image.js';
 import { isRailOrderText } from './rail-order.js';
-import { parsePrintedRailTicket } from './rail-ticket.js';
-import { locateRailRoute, railNumbersFromLayout, railSplitFieldsFromLayout, trainLine } from './rail-photo-layout.js';
+import { parsePrintedRailTicket, railFareFromLine, railSeatFromLine } from './rail-ticket.js';
+import { locateRailRoute, railNumbersFromLayout, railSplitFieldsFromLayout, railValueRegions, trainLine } from './rail-photo-layout.js';
 import { marksFromRailRegion } from './ticket-marks.js';
+import { printedRailTemplate } from './rail-template.js';
 
 const detector = 'PP-OCRv6_tiny_det';
 const recognizer = 'PP-OCRv6_small_rec';
 const coreFields = ['service', 'origin', 'destination', 'departureDate'];
 const printedDeparture = /^(?:19|20)\d{2}\s*年\s*\d{1,2}\s*月\s*\d{1,2}[^\d\n]{0,3}\d{1,2}\s*:\s*\d{2}/;
+const inferenceOptions = {
+  textDetLimitSideLen: 960, textDetLimitType: 'max', textDetBoxThresh: .45, textRecScoreThresh: .48
+};
 let modelPromise;
 
 function loadModel(base) {
@@ -79,26 +83,89 @@ export function paddleRailReading({ image, items }, paperColor) {
   return { text, layout, paperColor, railFields, ...(route && { route }) };
 }
 
-export async function recognizePaddleRailPhoto(file) {
+async function readRegion(engine, bitmap, region) {
+  const canvas = document.createElement('canvas');
+  const scale = Math.min(2, inferenceOptions.textDetLimitSideLen / Math.max(region.width, region.height));
+  canvas.width = Math.round(region.width * scale);
+  canvas.height = Math.round(region.height * scale);
+  canvas.getContext('2d').drawImage(bitmap, region.left, region.top, region.width, region.height, 0, 0, canvas.width, canvas.height);
+  const cropped = await createImageBitmap(canvas);
+  try {
+    const [result] = await engine.predict(cropped, inferenceOptions);
+    return result.items;
+  } finally {
+    cropped.close();
+  }
+}
+
+function regionalValue(items, parse) {
+  const values = new Map();
+  for (const { text, score } of items) {
+    const value = score >= .82 && parse(text, score);
+    if (value) values.set(JSON.stringify(value), value);
+  }
+  return values.size === 1 ? values.values().next().value : null;
+}
+
+async function refineRailValues(engine, bitmap, regions, first, reading, progress) {
+  const [record] = recognizedRailRecords(reading);
+  if (!record || !regions || isRailOrderText(reading.text)) return reading;
+  const seatMatches = (seat) => seat?.carriage && (seat.seat || seat.railStanding);
+  const needSeat = regions.seat && !first.items.some(({text, score}) => {
+    const seat = railSeatFromLine(text);
+    return score >= .92 && seatMatches(seat) && seat.carriage === record.carriage &&
+      (seat.railStanding ? record.railStanding : seat.seat === record.seat);
+  });
+  const needFare = regions.price && !first.items.some(({text, score}) => score >= .9 && record.price &&
+    /[.·元圆圓]/.test(text.normalize('NFKC')) && railFareFromLine(text) === record.price);
+  if (!needSeat && !needFare) return reading;
+  progress('正在核对票价和席位…');
+  const railFields = { ...reading.railFields };
+  if (needSeat) {
+    try {
+      const seat = regionalValue(await readRegion(engine, bitmap, regions.seat), (text, score) => {
+        // The faded 车 glyph is sometimes read as 4 in this position.
+        const value = railSeatFromLine(text, { fadedCarriage: score >= .94 });
+        return seatMatches(value) ? value : null;
+      });
+      if (seat && (!record.carriage || seat.carriage === record.carriage) &&
+          (!record.seat || seat.seat === record.seat) && (!record.railStanding || seat.railStanding)) {
+        Object.assign(railFields, seat);
+      }
+    } catch { /* Keep the full-ticket result if the crop is unclear. */ }
+  }
+  if (needFare) {
+    try {
+      const price = regionalValue(await readRegion(engine, bitmap, regions.price), text => railFareFromLine(text, { regional: true }));
+      if (price && (!record.price || price.startsWith(record.price + '.'))) railFields.price = price;
+    } catch { /* Preserve any amount already verified by the full read. */ }
+  }
+  return { ...reading, railFields };
+}
+
+export async function recognizePaddleRailPhoto(file, progress = () => {}) {
   const base = new URL('./', location.href);
   const loading = loadModel(base);
-  let timer;
+  let timer, firstReading;
   try {
     const infer = async () => {
       const engine = await loading;
       const bitmap = await createImageBitmap(file);
       try {
-        const paperColor = railPhotoColor(bitmap);
-        const [result] = await engine.predict(bitmap, {
-          textDetLimitSideLen: 960, textDetLimitType: 'max', textDetBoxThresh: .45, textRecScoreThresh: .48
-        });
-        return paddleRailReading(result, paperColor);
+        const [result] = await engine.predict(bitmap, inferenceOptions);
+        firstReading = paddleRailReading(result, railPhotoColor(bitmap));
+        const regions = railValueRegions(firstReading.layout, bitmap.width, bitmap.height);
+        if (regions?.paper && !isRailOrderText(firstReading.text) && !printedRailTemplate(firstReading.text)) {
+          const paperColor = railPhotoColor(bitmap, regions.paper);
+          if (paperColor) firstReading = { ...firstReading, paperColor, paperColorFromTicket: true };
+        }
+        return await refineRailValues(engine, bitmap, regions, result, firstReading, progress);
       } finally {
         bitmap.close();
       }
     };
-    const limit = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error('火车票识别超时')), 20000);
+    const limit = new Promise((resolve, reject) => {
+      timer = setTimeout(() => firstReading ? resolve(firstReading) : reject(new Error('火车票识别超时')), 20000);
     });
     return await Promise.race([infer(), limit]);
   } finally {
@@ -140,10 +207,17 @@ export function chooseRailReading(primary, fallback) {
   const hasValue = value => Array.isArray(value) ? value.length > 0 : !!value;
   const seatAgrees = ['carriage', 'seat'].every(key => !record[key] || !other[key] || record[key] === other[key]) &&
     !(record.railStanding && other.seat) && !(record.seat && other.railStanding);
-  const extra = ['origin', 'destination', 'departureDate', 'departureTime', 'ticketNumber', 'saleCode', 'issuer', 'ticketMarks'];
+  const extra = ['origin', 'destination', 'departureDate', 'departureTime', 'price', 'ticketNumber', 'saleCode', 'issuer', 'ticketMarks'];
   if (seatAgrees) extra.push('carriage', 'seat', 'railStanding');
   const additions = extra
     .filter(key => !hasValue(record[key]) && hasValue(other[key]))
     .map(key => [key, other[key]]);
+  const secondaryReading = preferPrimary ? fallback : primary;
+  const strongerTemplate = !printedRailTemplate(reading.text) &&
+    (printedRailTemplate(secondaryReading.text) || (secondaryReading.paperColorFromTicket && !reading.paperColorFromTicket));
+  if (other.fieldSources.template === 'ocr' &&
+      (record.fieldSources.template !== 'ocr' || strongerTemplate)) {
+    additions.push(['template', other.template]);
+  }
   return additions.length ? { ...reading, railFields: { ...reading.railFields, ...Object.fromEntries(additions) } } : reading;
 }

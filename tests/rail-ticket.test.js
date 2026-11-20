@@ -4,6 +4,7 @@ import { parseScanText, railPhotoChanges } from '../src/scan-engine.js';
 import { createRecord } from '../src/model.js';
 import { refineRailService, refineRailTemplate, preferEnhancedRailRead } from '../src/rail-ocr.js';
 import { railPaperFromPixels } from '../src/rail-template.js';
+import { printedRailNumber, railFareFromLine, railSeatFromLine } from '../src/rail-ticket.js';
 
 const layout = entries => '1\t1\t0\t0\t0\t0\t0\t0\t1000\t630\t-1\t\n' + entries.map(([text,x,y,w,h,confidence=90],i) => `5\t1\t1\t1\t1\t${i+1}\t${x}\t${y}\t${w}\t${h}\t${confidence}\t${text}`).join('\n');
 const picture = (service='D3759') => `X000001\n柳州站 ${service} 来宾北站\nLiuzhou Laibinbei\n2023年05月26日 15:06开 03车15F号\n￥24.0元 二等座\n仅供报销使用\n报销凭证 遗失不补`;
@@ -24,6 +25,33 @@ test('rail paper colour distinguishes red and blue, while the printed reimbursem
     recognize: async () => ({ data: { text: '仅供报 销使用', confidence: 85 } })
   }, { width: 1000, height: 630 }, data, blue);
   assert.equal(template(data.text, blue), 'rail-receipt');
+});
+
+test('a photographed red ticket switches the draft template when the paper has a faint warm tint', () => {
+  const pale = Uint8Array.from(Array.from({ length: 32 }, () => [208, 201, 200, 255]).flat());
+  assert.equal(railPaperFromPixels(pale), '');
+  const paperColor = railPaperFromPixels(pale, { faint: true });
+  const redText = picture().split('\n仅供')[0] + '\n限乘当日当次车';
+  const draft = createRecord({ template: 'rail-blue', fieldSources: { template: 'manual' }, lockedFields: ['template'] });
+  const [red] = parseScanText(redText, 'photo', { paperColor });
+  const [unknown] = parseScanText(redText, 'photo');
+  assert.equal(railPhotoChanges(draft, red).template, 'rail-red');
+  assert.equal(railPhotoChanges(draft, unknown).template, undefined);
+  assert.equal(railPhotoChanges(draft, parseScanText(picture(), 'photo', { paperColor })[0]).template, 'rail-receipt');
+});
+
+test('rail fares retain cents and reject lookalike years, percentages and additional charges', () => {
+  assert.equal(railFareFromLine('羊 ４１ · ５０ 元 二等座'), '41.50');
+  assert.equal(railFareFromLine(' 8.5 ', { regional: true }), '8.5');
+  for (const printed of ['2024', '08车10A号', '加收0.0元', '15%', 'Y073006', 'Y0730']) {
+    assert.equal(railFareFromLine(printed, { regional: true }), '', printed);
+  }
+  const original = picture().replace('￥24.0元', '￥24.00元');
+  assert.equal(parseScanText(original + '\n加收 0.0 元')[0].price, '24.00');
+  for (const mark of ['JM', 'JN']) {
+    assert.equal(printedRailNumber('10010300351001S042775 ' + mark, true), '10010300351001S042775');
+    assert.equal(printedRailNumber('10010300351001S042775' + mark, true), '10010300351001S042775');
+  }
 });
 
 test('rail OCR can re-read a missing train directly between the station headings', async () => {
@@ -67,6 +95,8 @@ test('freestanding seat rows and the printed sales station are independent of th
   const bare = picture().replace('03车15F号', '');
   const [ambiguous] = parseScanText(bare + '\n07417D号\n10010300351001S042775 JM\n退票改签时须交回车站');
   assert.deepEqual([ambiguous.carriage, ambiguous.seat, ambiguous.issuer], ['', '', '']);
+  assert.deepEqual(railSeatFromLine('07417D号', { fadedCarriage: true }), { carriage: '07', seat: '17D' });
+  assert.equal(railSeatFromLine('074177号', { fadedCarriage: true }), null);
   assert.equal(parseScanText(bare + '\n海口东售')[0].issuer, '海口东');
 });
 

@@ -1,5 +1,5 @@
 import {calendarDate} from './journey-date.js';
-import { railTrainRectangle, railFareRectangle, parsePrintedRailTicket, railStationFromRegion, printedRailNumber, railSeatFromLine, railIssuerFromLine } from './rail-ticket.js';
+import { railTrainRectangle, railFareRectangle, parsePrintedRailTicket, railStationFromRegion, printedRailNumber, railSeatFromLine, railIssuerFromLine, railFareFromLine } from './rail-ticket.js';
 import { printedRailTemplate } from './rail-template.js';
 import { marksFromRailRegion } from './ticket-marks.js';
 
@@ -76,7 +76,6 @@ export async function refineRailTemplate(worker, image, data, paperColor) {
     const template = printedRailTemplate(notice.text);
     if (template === 'rail-refund-receipt') data.text += '\n退票费';
     else if (template === 'rail-receipt') data.text += '\n报销凭证';
-    else if (/限乘|当次车/.test(notice.text.replace(/\s/g, ''))) data.text += '\n限乘当日当次车';
   } catch { /* Use the text and colour already collected. */ }
   finally { await worker.setParameters({ tessedit_pageseg_mode: '3' }); }
 }
@@ -120,7 +119,8 @@ export async function refineRailReceipt(worker, image, data) {
     const { data:refined } = await worker.recognize(image, { rectangle });
     if (refined.confidence < 60) return;
     const fee = /退票(?:手续)?费/.test(refined.text.replace(/\s/g, ''));
-    const price = refined.text.match(/[¥￥Y]\s*(\d{1,4}(?:\s*\.\s*\d{1,2})?)(?:元|%|\s|$)/)?.[1]?.replace(/\s/g, '');
+    const prices = new Set(refined.text.split('\n').map(line => railFareFromLine(line, { regional: true })).filter(Boolean));
+    const price = prices.size === 1 ? prices.values().next().value : '';
     if (!record.price && price) data.text = `￥${price}元\n` + data.text;
     if (fee && record.template === 'rail-receipt') data.text += '\n退票费';
   } catch { /* Leave the original read available when this region is unclear. */ }
