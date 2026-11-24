@@ -52,13 +52,12 @@ import { bindStationPicker } from './station-picker.js';
 import { FLIGHT_STATUSES, normalizeFlightStatus } from './flight-status.js';
 import { isRefundReceipt, isJourneyRecord } from './record-kind.js';
 import { bindUppercaseInputs } from './uppercase-input.js';
-import { personalProfile, applyProfileDefaults, applyTicketIdentity } from './personal-profile.js';
+import { applyProfileDefaults, applyTicketIdentity } from './personal-profile.js';
 import { personalProfilePanel, collectPersonalProfile, bindPersonalProfileForm, personalProfileSummary } from './personal-profile-form.js';
 import { journeyCities } from './locations.js';
 import { DEFAULT_SEARCH, searchOptions, searchTickets, clearSearchField } from './search.js';
 import { searchPanel, searchChips, resultSummary, cityContextHTML, bindSearchHelp } from './search-panel.js';
 
-const sameField = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const icons = {
   ticket: '<path d="M4 5h16v5a2 2 0 0 0 0 4v5H4v-5a2 2 0 0 0 0-4z"/><path d="M15 5v2m0 3v2m0 3v2m0 1v1"/>',
@@ -2074,7 +2073,7 @@ async function savePersonalProfile(event) {
   state.profileDraft = collectPersonalProfile(form); state.profileDirty = true;
   state.saving = true; const release = freezeForm(form);
   try {
-    const proposed = sharedSettings({ ...expected, profile:personalProfile(state.profileDraft) });
+    const proposed = sharedSettings({ ...expected, profile:state.profileDraft });
     await verifyBeforeWrite('云端核对未完成，个人资料尚未提交');
     useSnapshot(await withCloudLock(() => stageSettings(expected, proposed, config, d1))); announce();
     await doSync(); state.profileDraft = null; state.profileBase = null; state.profileDirty = false;

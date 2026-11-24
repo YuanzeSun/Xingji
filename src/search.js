@@ -17,7 +17,7 @@ export function searchOptions(input = {}) {
   if (!Object.hasOwn(SORTS, options.sort)) options.sort = 'newest';
   return options;
 }
-export function searchTerms(query) {
+function searchTerms(query) {
   return [...text(query).matchAll(/(-?)"([^"]+)"|(-?)([^\s"]+)/g)].map(m => ({ value: m[2] ?? m[4], exclude: !!(m[1] || m[3]), phrase: m[2] !== undefined }));
 }
 function searchable(record) {

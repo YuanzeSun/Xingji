@@ -7,7 +7,7 @@ const sizes = {small:{label:'小',scale:.4},medium:{label:'中',scale:1}};
 export function ticketViewOptions(value = {}, defaultMode = 'grid') {
   return {mode:modes.some(([mode])=>mode===value?.mode) ? value.mode : defaultMode,size:Object.hasOwn(sizes,value?.size) ? value.size : 'medium'};
 }
-export const ticketGridStyle = size => `--ticket-min:${390*sizes[size].scale}px;--ticket-scale:${sizes[size].scale}`;
+const ticketGridStyle = size => `--ticket-min:${390*sizes[size].scale}px;--ticket-scale:${sizes[size].scale}`;
 export function ticketViewControls(value) {
   return `<section class="ticket-view-controls" aria-label="票据展示方式"><div class="ticket-view-modes" role="group" aria-label="切换展示方式">${modes.map(([mode,label,path])=>`<button type="button" data-ticket-view="${mode}" aria-pressed="${value.mode===mode}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">${path}</svg>${label}</button>`).join('')}</div><div class="ticket-size-controls" role="group" aria-label="显示大小" ${value.mode==='space' ? 'hidden' : ''}><span>${value.mode==='list' ? '列表大小' : '票面大小'}</span>${Object.entries(sizes).map(([size,{label}])=>`<button type="button" data-ticket-size="${size}" aria-pressed="${value.size===size}">${label}</button>`).join('')}</div></section>`;
 }

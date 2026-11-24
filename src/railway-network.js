@@ -7,7 +7,7 @@ const endpoint = (record, side) => {
   const place = resolvePlace(record, side);
   return place.status === 'matched' ? place.name : String(record[side] || '').trim().replace(/站$/, '');
 };
-export const railJourneyKey = record => JSON.stringify([record.service.trim().toUpperCase().split('/')[0], endpoint(record, 'origin'), endpoint(record, 'destination')]);
+const railJourneyKey = record => JSON.stringify([record.service.trim().toUpperCase().split('/')[0], endpoint(record, 'origin'), endpoint(record, 'destination')]);
 
 export async function loadRailwayNetwork(records, { loader = savedRailRoute, onProgress = () => {}, signal, concurrency = 4 } = {}) {
   const rows = records.filter(record => isJourneyRecord(record) && record.type === 'rail'), groups = new Map();

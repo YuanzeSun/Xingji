@@ -13,18 +13,19 @@ import { normalizeRailBureau, normalizeRailModel, normalizeRailPowerSupply } fro
 import { railJourneyMatches, railText, isEmuModel } from './rail-journey.js';
 import { journeyMinutes } from './journey-duration.js';
 
-export const CONTINENTS = Object.freeze({ AF: '非洲', AN: '南极洲', AS: '亚洲', EU: '欧洲', NA: '北美洲', OC: '大洋洲', SA: '南美洲' });
+const CONTINENTS = Object.freeze({ AF: '非洲', AN: '南极洲', AS: '亚洲', EU: '欧洲', NA: '北美洲', OC: '大洋洲', SA: '南美洲' });
 const airportContinents = new Map(Object.entries(CONTINENT_AIRPORT_CODES).flatMap(([continent, codes]) => codes.split(' ').filter(Boolean).map(code => [code, continent])));
 // Foreign stations in the bundled 12306 catalogue; see docs/statistics.md for sources.
 const laoStations = new Set(['YTM', 'VBM', 'VJM', 'VFM', 'VCM', 'VOM']);
 const regionNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' });
 const compare = new Intl.Collator('zh-CN', { numeric: true }).compare;
 function railModelsForRecord(record, options) {
-  const saved = railJourneyMatches(record) ? record.railJourney.trainsets.map(stock => stock.model) : [];
-  const values = railText(record.railModel) ? [record.railModel] : saved;
-  const models=values.flatMap(value => railText(value).split(/[/、,，;；+]/)).map(value => normalizeRailModel(value)).filter(Boolean);
-  const supply=normalizeRailPowerSupply(record.railPowerSupply || '');
-  return new Set(models.map(model=>options.railPowerSupplies && !isEmuModel(model) ? model+' · '+(supply || '供电制式未知') : model));
+  const model = railText(record.railModel);
+  const values = model ? [model] : railJourneyMatches(record) ? record.railJourney.trainsets.map(stock => railText(stock.model)) : [];
+  const models = values.flatMap(value => value.split(/[/、,，;；+]/)).map(normalizeRailModel).filter(Boolean);
+  if (!options.railPowerSupplies) return new Set(models);
+  const supply = normalizeRailPowerSupply(record.railPowerSupply || '') || '供电制式未知';
+  return new Set(models.map(model => isEmuModel(model) ? model : `${model} · ${supply}`));
 }
 export const countryName = code => code === 'CN' ? '中国' : regionNames.of(code) || code;
 export function todayDate(date = new Date()) {
@@ -37,8 +38,12 @@ export function statisticsOptions(input = {}, today = todayDate()) {
 }
 
 export function statisticsRange(records, input = {}, today = todayDate()) {
-  const options = statisticsOptions(input, today), from = dateInterval(options.dateFrom), to = dateInterval(options.dateTo);
-  if ((options.dateFrom && !from) || (options.dateTo && !to)) return { records: [], omittedDates: 0, error: '请选择有效的起止日期' };
+  return filterStatisticsRange(records, statisticsOptions(input, today));
+}
+
+function filterStatisticsRange(records, { dateFrom, dateTo }) {
+  const from = dateInterval(dateFrom), to = dateInterval(dateTo);
+  if ((dateFrom && !from) || (dateTo && !to)) return { records: [], omittedDates: 0, error: '请选择有效的起止日期' };
   if (from && to && from.start > to.end) return { records: [], omittedDates: 0, error: '起始日期不能晚于截止日期' };
   let omittedDates = 0;
   const included = records.filter(record => {
@@ -73,11 +78,12 @@ function flightAirline(record, byMarketing) {
 }
 
 export function journeyStatistics(records, input = {}, today = todayDate()) {
-  const options=statisticsOptions(input, today), range = statisticsRange(records, options, today), rows = range.records;
+  const options = statisticsOptions(input, today), range = filterStatisticsRange(records, options), rows = range.records;
   const airports = new Map(), stations = new Map(), countries = new Map(), continents = new Set(), routes = new Map(), aircraft = new Map();
   const railModels = new Map(), railBureaus = new Map(), airlines = new Map();
   let unknownAircraft = 0, unknownAirlines = 0, unknownPlaces = 0, unknownRoutes = 0;
   let actualFlightDistance = 0, actualFlightDistanceTrips = 0;
+  let rail = 0, flight = 0, railMileage = 0, railMileageTrips = 0;
   const travelTime = { rail: { minutes: 0, trips: 0 }, flight: { minutes: 0, trips: 0 } };
   for (const record of rows) {
     const minutes = journeyMinutes(record);
@@ -86,6 +92,11 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
       travelTime[record.type].trips++;
     }
     if (record.type === 'rail') {
+      rail++;
+      if (record.railMileage) {
+        railMileage += Number(record.railMileage);
+        railMileageTrips++;
+      }
       for (const model of railModelsForRecord(record,options)) railModels.set(model, (railModels.get(model) || 0) + 1);
       let bureau = normalizeRailBureau(record.railBureau);
       if (options.railUnits) {
@@ -103,6 +114,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
       if (place.continent) continents.add(place.continent);
     }
     if (record.type !== 'flight') continue;
+    flight++;
     const airline = flightAirline(record, options.marketingAirlines);
     if (airline) airlines.set(airline, (airlines.get(airline) || 0) + 1);
     else unknownAirlines++;
@@ -123,14 +135,13 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   }
   const byName = values => [...values].sort((a, b) => compare(a.name, b.name));
   const years = [...new Set(rows.map(record => calendarDate(record.departureDate).slice(0, 4)))].sort();
-  const mileageTrips = rows.filter(record => record.type === 'rail' && record.railMileage);
   const ranked = collection => [...collection].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || compare(a.name, b.name));
-  return { ...range, rail: rows.filter(record => record.type === 'rail').length, flight: rows.filter(record => record.type === 'flight').length,
+  return { ...range, rail, flight,
     years, airports: byName(airports.values()), stations: byName(stations.values()), countries: byName(countries.values()),
     continents: [...continents].sort().map(code => ({ code, name: CONTINENTS[code] })),
     aircraft: ranked(aircraft), airlines: ranked(airlines),
-    railMileage:Math.round(mileageTrips.reduce((sum,row)=>sum+Number(row.railMileage),0)*1000)/1000,
-    railMileageTrips: mileageTrips.length, actualFlightDistance, actualFlightDistanceTrips, travelTime,
+    railMileage: Math.round(railMileage * 1000) / 1000,
+    railMileageTrips, actualFlightDistance, actualFlightDistanceTrips, travelTime,
     railModels: ranked(railModels), railBureaus: ranked(railBureaus),
     routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)), unknownAircraft, unknownAirlines, unknownPlaces, unknownRoutes };
 }

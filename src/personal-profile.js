@@ -65,7 +65,7 @@ export function personalProfile(value = {}) {
   if (memberships.length) profile.memberships = memberships;
   return profile;
 }
-export const hasPersonalProfile = value => JSON.stringify(personalProfile(value)) !== JSON.stringify(personalProfile());
+export const hasPersonalProfile = profile => Boolean(profile.documents.length || profile.memberships?.length || PROFILE_FIELDS.some(([key]) => profile[key]));
 
 export function matchProfileIdentity(hint, profile) {
   const pattern = identityPattern(hint);
