@@ -85,6 +85,22 @@ test('old red and new reimbursement layouts preserve their distinct label placem
   assert.doesNotMatch(receipt, /fill="#c45766"[^>]*>报销凭证/);
   assert.doesNotMatch(receipt, /ARCHIVE/);
 });
+test('paper receipts only print the issuing station on an explicit opt-in', () => {
+  for (const template of ['rail-receipt', 'rail-refund-receipt']) {
+    const values = { issuer: '无锡', saleCode: '30497000000910X000002' };
+    for (const flag of [undefined, false, 'true']) {
+      const hidden = record(template, { ...values, railShowIssuer: flag });
+      assert.equal(Object.hasOwn(hidden, 'railShowIssuer'), false);
+      assert.equal(hidden.issuer, '无锡');
+      assert.match(ticketSVG(hidden), /30497000000910X000002/);
+      assert.doesNotMatch(ticketSVG(hidden), /无锡站售/);
+    }
+    assert.match(ticketSVG(record(template, { ...values, railShowIssuer: true })), /无锡站售/);
+  }
+  const magnetic = record('rail-blue', { issuer: '无锡', railShowIssuer: true });
+  assert.equal(Object.hasOwn(magnetic, 'railShowIssuer'), false);
+  assert.match(ticketSVG(magnetic), /无锡站售/);
+});
 test('anonymous red versions use the old stock without printing personal details', () => {
   const values = { issuer: '北京南', ticketCode: DEMO_TICKET_CODE };
   const linear = ticketSVG(record('rail-red-barcode', values));

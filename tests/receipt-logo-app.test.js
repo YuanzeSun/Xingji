@@ -13,7 +13,7 @@ test('the editor saves refund fees with matching validation and restricts transp
   window.scrollTo = () => {}; globalThis.confirm = () => true;
   window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   window.HTMLDialogElement.prototype.close = function () { this.open = false; };
-  const fields = { origin:'上海虹桥', destination:'济南西', service:'G104', departureDate:'2024-06-18', passenger:'示例旅客', identity:'P000001', price:'41.5' };
+  const fields = { origin:'上海虹桥', destination:'济南西', service:'G104', departureDate:'2024-06-18', passenger:'示例旅客', identity:'P000001', price:'41.5', issuer:'无锡' };
   await prepareCloud([createRecord({ ...fields, id:'original', template:'rail-receipt', price:'415.0' })]);
   const db = await import('../src/db.js');
   const wait = async fn => { for (let i=0; i<300; i++) { if (await fn()) return; await new Promise(resolve=>setTimeout(resolve,5)); } assert.fail('Editor did not settle'); };
@@ -27,6 +27,7 @@ test('the editor saves refund fees with matching validation and restricts transp
       ['rail-red', 'rail-red-classic', 'rail-red-qr', 'rail-red-barcode']);
     fill('template', 'rail-supplement');
     assert.equal(document.querySelector('[name="departureTime"]').required, false);
+    assert.equal(document.querySelector('[data-rail-show-issuer]'), null);
     fill('railSupplementReason', '越站');
     assert.match(document.querySelector('#editor-preview').textContent, /事由:越站/);
     fill('template', 'rail-red-qr');
@@ -42,10 +43,13 @@ test('the editor saves refund fees with matching validation and restricts transp
     assert.equal(document.querySelector('[data-seat-preset]').required,false);
     assert.equal(document.querySelector('[name="departureTime"]').required,false);
     for (const [key,value] of Object.entries(fields)) fill(key,value);
+    assert.equal(document.querySelector('[data-rail-show-issuer]').checked, false);
+    assert.doesNotMatch(document.querySelector('#editor-preview').textContent, /无锡站售/);
     document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
     await wait(()=>!document.querySelector('dialog'));
     const rows=await db.get('records',[]), refund=rows.find(row=>row.template==='rail-refund-receipt');
     assert.equal(rows.length,2); assert.equal(refund.price,'41.5'); assert.equal(refund.seat,'');
+    assert.equal(Object.hasOwn(refund, 'railShowIssuer'), false);
     assert.equal(rows.find(row=>row.id==='original').price,'415.0');
     document.querySelector('[data-action="navigate"][data-page="statistics"]').click();
     await wait(()=>document.querySelector('.statistics-summary'));
@@ -55,16 +59,36 @@ test('the editor saves refund fees with matching validation and restricts transp
     document.querySelector(`[data-action="view"][data-id="${refund.id}"]`).click();
     await wait(()=>document.querySelector('[data-ticket-detail=booking] .detail-grid'));
     assert.match(document.querySelector('[data-ticket-detail=booking] .detail-grid').textContent,/退票费（元）/);
+    assert.equal(document.querySelector('[data-detail-field="issuer"] dd').textContent, '无锡');
+    assert.doesNotMatch(document.querySelector('.detail-preview').textContent, /无锡站售/);
     document.querySelector(`[data-action="edit"][data-id="${refund.id}"]`).click();
     await wait(()=>document.querySelector('#editor-form'));
     assert.equal(document.querySelector('[name="type"]').disabled,true);
     fill('type','flight');
     assert.equal(document.querySelector('[name="type"]').value,'rail');
     assert.match(document.querySelector('#editor-preview').textContent,/退票费/);
-    document.querySelector('[data-action="close-modal"]').click();
+    document.querySelector('[data-rail-show-issuer]').click();
+    assert.match(document.querySelector('#editor-preview').textContent, /无锡站售/);
+    document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
+    await wait(()=>!document.querySelector('dialog'));
+    assert.equal((await db.get('records', [])).find(row => row.id === refund.id).railShowIssuer, true);
+
+    document.querySelector(`[data-action="view"][data-id="${refund.id}"]`).click();
+    await wait(()=>document.querySelector(`[data-action="edit"][data-id="${refund.id}"]`));
+    document.querySelector(`[data-action="edit"][data-id="${refund.id}"]`).click();
+    await wait(()=>document.querySelector('#editor-form'));
+    assert.equal(document.querySelector('[data-rail-show-issuer]').checked, true);
+    document.querySelector('[data-rail-show-issuer]').click();
+    document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
+    await wait(()=>!document.querySelector('dialog'));
+    const hidden = (await db.get('records', [])).find(row => row.id === refund.id);
+    assert.equal(Object.hasOwn(hidden, 'railShowIssuer'), false);
+    assert.equal(hidden.issuer, '无锡');
+
     document.querySelector('[data-action="new"]').click();await wait(()=>document.querySelector('#editor-form'));
     fill('type','flight');
     assert.equal(document.querySelector('[name="template"]').value,'air-boarding-pass');
+    assert.equal(document.querySelector('[data-rail-show-issuer]'), null);
     assert.equal(document.querySelector('[name="seat"]').required,true);
     fill('airline','国航');
     assert.ok(document.querySelector('#editor-preview [data-airline-logo="CA"]'));

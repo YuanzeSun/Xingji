@@ -19,6 +19,7 @@ export const SUPPLEMENT_FIELDS = Object.freeze({
 
 export const isOldRedTemplate = template => template.startsWith('rail-red-');
 export const isAnonymousRedTemplate = template => template === 'rail-red-qr' || template === 'rail-red-barcode';
+export const isRailReceiptTemplate = template => template === 'rail-receipt' || template === 'rail-refund-receipt';
 
 export function ticketTemplateChoices({ archive = false } = {}) {
   const entries = Object.entries(TEMPLATES);

@@ -49,7 +49,7 @@ export function demoRecords(today=localToday()){
     baggageTagNumbers: `781000010${2 + index}`, ticketNumber: `781000000000${2 + index}`
   }));
   const rows=[
-    {id:'demo-1',type:'rail',template:'rail-receipt',departureDate:recent(1),origin:'北京南',destination:'南京南',service:'G21',carriage:'05',seat:'08F',seatClass:'二等座',price:'503.0',issuer:'北京南',gate:'16A',railPlatform:'8'},
+    {id:'demo-1',type:'rail',template:'rail-receipt',departureDate:recent(1),origin:'北京南',destination:'南京南',service:'G21',carriage:'05',seat:'08F',seatClass:'二等座',price:'503.0',issuer:'北京南',railShowIssuer:true,gate:'16A',railPlatform:'8'},
     {...domesticFlight,id:'demo-2',departureDate:recent(1),service:'MU5403',aircraft:'A321-200',aircraftRegistration:'B-1813',pnr:'DEMO01',baggageTagNumbers:'7810000101',ticketNumber:'7810000000001'},
     {id:'demo-3',type:'rail',template:'rail-blue',departureDate:'2018-10-01',origin:'杭州东',destination:'南京南',service:'G7602',carriage:'03',seat:'12A',seatClass:'二等座',price:'117.5',issuer:'杭州东',gate:'7',railPlatform:'7',provenance:'reconstruction'},
     {id:'demo-4',type:'rail',template:'rail-red-classic',departureDate:'2014-07-12',origin:'北京',destination:'齐齐哈尔',service:'Z83',carriage:'09',seat:'015号下铺',seatClass:'硬卧',price:'363.0',issuer:'北京',gate:'2',railPlatform:'5',provenance:'reconstruction'},

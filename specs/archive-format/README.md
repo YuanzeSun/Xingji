@@ -10,6 +10,8 @@
 
 铁路电子发票导入可附带 `railInvoice`，其中只保存 `electronicTicketNumber`（电子客票号）。纸票的 `ticketNumber` 与 `saleCode` 分别保存。
 
+纸质报销凭证与退票费报销凭证可保存 `railShowIssuer: true`，表示票面显示售票站。默认省略此字段，售票站本身仍记录在 `issuer`。
+
 机票可附带 `flightTrack`，包含飞常准查询标识 `flightStr`、查询时间 `queriedAt` 和按段保存的经纬度 `segments`。快照仅匹配本票的航班号、出发日期和起降机场。
 
 ## GitHub 文件

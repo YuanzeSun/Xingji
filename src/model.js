@@ -22,15 +22,15 @@ import { normalizeFlightStatus } from './flight-status.js';
 import { normalizeRailJourney, railJourneyMatches, normalizeRailTrainsets } from './rail-journey.js';
 import { requireCompleteIdentity } from './identity.js';
 import { normalizeRailInvoice } from './rail-invoice.js';
-import { DEFAULT_RAIL_TEMPLATE, SUPPLEMENT_FIELDS, TEMPLATES } from './rail-template.js';
+import { DEFAULT_RAIL_TEMPLATE, SUPPLEMENT_FIELDS, TEMPLATES, isRailReceiptTemplate } from './rail-template.js';
 export { DEFAULT_RAIL_TEMPLATE, TEMPLATES };
 export const SCHEMA_VERSION = 2;
-export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'flightTrack', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'railInvoice', ...Object.keys(SUPPLEMENT_FIELDS), 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
+export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'flightTrack', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'railShowIssuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'railInvoice', ...Object.keys(SUPPLEMENT_FIELDS), 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
 export const now = () => new Date().toISOString();
 export const clone = value => structuredClone(value);
 export const sameRecords = (a, b) => JSON.stringify([...a].sort((x, y) => x.id.localeCompare(y.id))) === JSON.stringify([...b].sort((x, y) => x.id.localeCompare(y.id)));
 export function createRecord(values = {}) {
-  const record = Object.fromEntries(FIELDS.filter(key => !['railInvoice', 'flightTrack'].includes(key)).map(k => [k, '']));
+  const record = Object.fromEntries(FIELDS.filter(key => !['railInvoice', 'flightTrack', 'railShowIssuer'].includes(key)).map(k => [k, '']));
   Object.assign(record, { id: crypto.randomUUID(), type: 'rail', template: DEFAULT_RAIL_TEMPLATE, departureZone: 'Asia/Shanghai', arrivalZone: 'Asia/Shanghai', provenance: 'commemorative', offsetX: '0', offsetY: '0', deleted: false, ticketMarks: [], sources: [], mergedIds: [], lockedFields: [], createdAt: now(), updatedAt: now() });
   for (const k of [...FIELDS, 'id', 'createdAt', 'updatedAt', 'sources', 'mergedIds', 'lockedFields']) if (Object.hasOwn(values, k)) record[k] = JOURNEY_DATE_FIELDS.includes(k) ? journeyDate(values[k]) : clone(values[k]);
   record.fieldSources=normalizeFieldSources(record.fieldSources,FIELDS);
@@ -56,6 +56,10 @@ export function validateRecord(input) {
   const out = { id: input.id };
   for (const field of FIELDS) {
     if (field === 'flightTrack') continue;
+    if (field === 'railShowIssuer') {
+      if (!input.deleted && isRailReceiptTemplate(input.template) && input.railShowIssuer === true) out.railShowIssuer = true;
+      continue;
+    }
     if (Object.hasOwn(SUPPLEMENT_FIELDS, field) && (input.template !== 'rail-supplement' || input.deleted)) continue;
     if (field === 'railInvoice') {
       const invoice = input.type === 'rail' && !input.deleted ? normalizeRailInvoice(input.railInvoice) : undefined;
@@ -101,7 +105,7 @@ export function validateRecord(input) {
   out.mergedIds = [...new Set((Array.isArray(input.mergedIds) ? input.mergedIds : []).filter(id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id) && id !== out.id))].sort();
   if (out.deleted) {
     // Keep only an ID marker for synchronization; there is no recoverable ticket.
-    for (const field of FIELDS) if (!['type', 'template', 'deleted', 'railInvoice', 'flightTrack'].includes(field) && !Object.hasOwn(SUPPLEMENT_FIELDS, field)) out[field] = ['lookupValues','fieldSources'].includes(field) ? {} : field === 'ticketMarks' ? [] : field === 'railStanding' ? false : '';
+    for (const field of FIELDS) if (!['type', 'template', 'deleted', 'railInvoice', 'flightTrack', 'railShowIssuer'].includes(field) && !Object.hasOwn(SUPPLEMENT_FIELDS, field)) out[field] = ['lookupValues','fieldSources'].includes(field) ? {} : field === 'ticketMarks' ? [] : field === 'railStanding' ? false : '';
     out.sources = []; out.lockedFields = [];
     return out;
   }

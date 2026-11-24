@@ -15,11 +15,10 @@ import { renderBoardingCode, boardingCodeSize } from './boarding-code.js';
 import { airlineLogo } from './airline-logo.js';
 import { isRefundReceipt } from './record-kind.js';
 import { isInactiveFlight } from './flight-status.js';
-import { isAnonymousRedTemplate, isOldRedTemplate } from './rail-template.js';
+import { isAnonymousRedTemplate, isOldRedTemplate, isRailReceiptTemplate } from './rail-template.js';
 import { PINYIN_ADVANCES, PINYIN_TRACKING } from './data/rail-pinyin-metrics.js';
 const text = (x, y, value, size = 30, family = 'TicketSong', attrs = '') => value ? `<text x="${x}" y="${y}" font-size="${size}" font-family="${family},TicketRailFallback,TicketSong,serif" ${attrs}>${esc(value)}</text>` : '';
-const isReceipt = template => ['rail-receipt', 'rail-refund-receipt'].includes(template);
-const railBody = r => isReceipt(r.template) ? 'TicketFang' : 'TicketSong';
+const railBody = r => isRailReceiptTemplate(r.template) ? 'TicketFang' : 'TicketSong';
 const softPaper = Object.freeze({ width: 900, height: 600 });
 const dim = Object.freeze({
   'rail-red-barcode': softPaper,
@@ -153,7 +152,7 @@ function fare(r, x, y, numberFamily = 'TicketOCR') {
   if (!r.price) return '';
   const classic = isOldRedTemplate(r.template);
   const scale = classic ? 1.35 : 1;
-  const numberSize = classic ? 56 : isReceipt(r.template) ? 35 : 40;
+  const numberSize = classic ? 56 : isRailReceiptTemplate(r.template) ? 35 : 40;
   const symbol = `<path d="m3 -31 10 13 10-13m-10 13v19m-11-17h22m-22 7h22" transform="translate(${x} ${y}) scale(${scale})" fill="none" stroke="#172226" stroke-width="1.8"/>`;
   const numberX = x + 32 * scale;
   // These numeral faces have fixed digit advances; the decimal has a half cell.
@@ -186,10 +185,11 @@ function trainWatermark() {
   return `<g transform="translate(118 180)" opacity=".065" fill="#3c9db9" stroke="#3c9db9"><path d="M15 142Q42 43 128 11l56-7 83 29 424 131-8 18-459-72-39 43Q80 185 15 142z" stroke-width="2"/><path d="M34 112Q64 48 130 27l52-4 55 23-62 40-99 30z" fill="#f2f7f4" stroke-width="3"/><path d="m225 58 25 8-2 43-26-4zm43 13 22 7-1 38-22-3zm39 12 21 6v34l-22-3zm38 11 19 6v28l-20-3zm36 11 19 5v25l-20-3zm35 10 18 6v21l-18-3zm33 10 16 5v17l-16-2zm31 9 14 4v15l-14-2zm28 9 13 3v13l-13-2zm26 8 12 4v11l-12-2z" fill="#f2f7f4" stroke="none"/><path d="M19 143q82 25 166-4l35-28 464 70" fill="none" stroke-width="4"/><text x="239" y="142" font-family="TicketLatin" font-size="22" stroke="none" transform="rotate(13 239 142)">CRH</text></g>`;
 }
 function blue(r) {
-  const thermal = isReceipt(r.template);
+  const thermal = isRailReceiptTemplate(r.template);
   const body = railBody(r);
   const origin = railwayStop(r, 'origin'), destination = railwayStop(r, 'destination');
   const pattern = `fine-${esc(r.id)}`;
+  const issuer = r.issuer && (!thermal || r.railShowIssuer === true) ? r.issuer.replace(/站$/, '') + '站售' : '';
   const printed = `<g fill="#172226" stroke="#172226" stroke-width="${thermal ? '.5' : '.65'}" paint-order="stroke" transform="translate(${Number(r.offsetX) || 0} ${Number(r.offsetY) || 0})">
     ${text(48, 57, r.ticketNumber, 44, 'TicketOCR', 'fill="#c45766" letter-spacing="2" stroke="none"')}
     ${text(803, 52, r.gate ? `检票:${r.gate}` : '', 29, body, 'text-anchor="end"')}
@@ -203,7 +203,7 @@ function blue(r) {
     ${thermal ? text(60, 352, '仅供报销使用', 29, body) : ''}
     ${passenger(r, 57, 390, 433)}${renderTicketCode(r, 669, 335, 141)}
     ${notice(99, 404, 497, thermal)}
-    ${text(59, 519, r.saleCode, thermal ? 25 : 40, thermal ? 'TicketOCR' : 'TicketRailNarrow', 'letter-spacing=".5" stroke="none"')}${text(450, 519, r.issuer ? r.issuer.replace(/站$/, '') + '站售' : '', 31, body)}
+    ${text(59, 519, r.saleCode, thermal ? 25 : 40, thermal ? 'TicketOCR' : 'TicketRailNarrow', 'letter-spacing=".5" stroke="none"')}${text(450, 519, issuer, 31, body)}
   </g>`;
   return `<defs>${paperPattern(pattern, false)}<clipPath id="cut-${esc(r.id)}"><rect width="856" height="540" rx="20"/></clipPath></defs><g clip-path="url(#cut-${esc(r.id)})"><rect width="856" height="540" fill="#c6e2e7"/><rect width="856" height="540" fill="url(#${pattern})"/>${trainWatermark()}<rect y="485" width="856" height="55" fill="#67b8d0"/><g fill="#91c5d1" font-family="TicketLatin" font-size="7">${Array.from({ length: 61 }, (_, i) => `<text x="${i * 14}" y="481">CR</text>`).join('')}</g>${printed}</g>`;
 }
@@ -388,6 +388,6 @@ export function layoutFontFiles(template) {
     ['TicketRailPinyin', 'ticket-rail-pinyin.woff2', '400'],
     ['TicketLatin', 'ticket-latin.woff2', '400']
   ];
-  if (isReceipt(template)) fonts.push(['TicketFang', 'ticket-fang.woff2', '400']);
+  if (isRailReceiptTemplate(template)) fonts.push(['TicketFang', 'ticket-fang.woff2', '400']);
   return fonts;
 }

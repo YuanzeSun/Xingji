@@ -11,7 +11,7 @@ import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } fro
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
 import { renderCodeData } from './barcode-data.js';
 import { createRecord, validateRecord, mergeThreeWay, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, formatDate } from './model.js';
-import { SUPPLEMENT_FIELDS, ticketTemplateChoices } from './rail-template.js';
+import { SUPPLEMENT_FIELDS, isRailReceiptTemplate, ticketTemplateChoices } from './rail-template.js';
 import { hasRailQRCode } from './ticket-code.js';
 import * as db from './db.js';
 import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageBackupRestore, stageTicket, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, replaceWithRemote } from './sync-state.js';
@@ -1023,13 +1023,17 @@ function collectMarks(form) {
 }
 function railTicketOptions(draft) {
   const refund = isRefundReceipt(draft);
-  const refundOption = ['rail-receipt', 'rail-refund-receipt'].includes(draft.template)
+  const receipt = isRailReceiptTemplate(draft.template);
+  const refundOption = receipt
     ? `<label class="checkbox-row"><input type="checkbox" data-refund-receipt ${refund ? 'checked' : ''} />退票费凭证${fieldSourceBadge('template', draft)}</label>`
     : '';
   const standingOption = `<label class="checkbox-row"><input type="checkbox" data-rail-standing ${draft.railStanding ? 'checked' : ''} />无座${fieldSourceBadge('railStanding', draft)}</label>`;
+  const issuerOption = receipt
+    ? `<label class="checkbox-row"><input type="checkbox" data-rail-show-issuer ${draft.railShowIssuer === true ? 'checked' : ''} />票面显示售票站</label>`
+    : '';
   return `<div class="rail-ticket-options full-field" role="group" aria-label="票面选项">
     ${field('template', { ...draft, template: refund ? 'rail-receipt' : draft.template }, { options: ticketTemplateChoices() })}
-    <div class="rail-ticket-flags">${refundOption}${standingOption}</div>
+    <div class="rail-ticket-flags">${refundOption}${standingOption}${issuerOption}</div>
   </div>`;
 }
 
@@ -1169,6 +1173,8 @@ function editRecord(record, {
       if(!ticketFieldLocked(draft,'railStanding') && !ticketFieldLocked(draft,'seat'))draft.railStanding = form.querySelector('[data-rail-standing]').checked;
       draft.ticketMarks = collectMarks(form).filter(mark => mark.text);
       if (data.get('template') === 'rail-receipt' && form.querySelector('[data-refund-receipt]')?.checked) draft.template = 'rail-refund-receipt';
+      if (isRailReceiptTemplate(draft.template) && form.querySelector('[data-rail-show-issuer]')?.checked) draft.railShowIssuer = true;
+      else delete draft.railShowIssuer;
     }
     normalizePlaces(draft);
     if(!lookupApplying){
