@@ -31,7 +31,7 @@ test('a complete or masked ticket number locks only a unique matching document',
   assert.equal(hint, '0000002000****1234');
   assert.equal(printedIdentityHint('证件号码：e000000＊＊'), 'e000000**');
   assert.equal(matchProfileIdentity('0000002000••••1234', profile),'000000200001011234');
-  assert.equal(matchProfileIdentity('E000000＊＊', {...profile,autoFill:false}),'E00000000');
+  assert.equal(matchProfileIdentity('E000000＊＊', profile),'E00000000');
   for (const unmatched of ['', 'E12345678', '*********', 'E0000**', '000000200001011235']) assert.equal(matchProfileIdentity(unmatched,profile),'');
   const ambiguous = {...profile,documents:[...profile.documents,{type:'passport',number:'E00000001'}]};
   assert.equal(matchProfileIdentity('E000000**', ambiguous),'');
@@ -66,7 +66,6 @@ test('a manually entered flight preselects documents from its route and exact de
   assert.equal(identity({departureDate:'2026-06-11'}, {...profile, documents:[...passports, passport('P000003', '')]}), '');
   assert.equal(identity({}, {...profile, documents:[passport('P000003', '')]}), 'P000003');
   assert.equal(identity({departureDate:'2026-06-11'}, {...profile, documents:[...passports, passport('P000003', '2030-06-10')]}), '');
-  assert.equal(identity({departureDate:'2026-02-01'}, {...standard, autoFill:false}), '');
 
   const draft = applyProfileDefaults(flight({departureDate:'2026-02-01'}), standard);
   assert.equal(draft.identity, 'P000002');
@@ -98,10 +97,11 @@ test('manual railway defaults and backups contain the saved name and a uniquely 
 });
 
 test('profile validation rejects malformed values; display summaries mask document numbers', () => {
-  for (const value of [{documents:[{id:'d',expiry:'2000-02-30'}]}, {documents:[{id:'d',expiry:'0000-01-01'}]}, {autoFill:'yes'}, {documents:[{id:'a',type:'unknown'}]}, {documents:[{id:'a',number:'1'},{id:'a',number:'2'}]}]) assert.throws(()=>personalProfile(value));
+  for (const value of [{documents:[{id:'d',expiry:'2000-02-30'}]}, {documents:[{id:'d',expiry:'0000-01-01'}]}, {documents:[{id:'a',type:'unknown'}]}, {documents:[{id:'a',number:'1'},{id:'a',number:'2'}]}]) assert.throws(()=>personalProfile(value));
   const dom = new JSDOM(personalProfilePanel());
   assert.equal(dom.window.document.querySelectorAll('[required]').length,0);
-  for (const input of dom.window.document.querySelectorAll('input:not([type=checkbox]),textarea')) assert.equal(input.value,'');
+  assert.equal(dom.window.document.querySelector('[type=checkbox]'),null);
+  for (const input of dom.window.document.querySelectorAll('input,textarea')) assert.equal(input.value,'');
   assert.deepEqual([...dom.window.document.querySelector('select[name=gender]').options].map(option=>option.value),['','男','女']);
   assert.equal(dom.window.document.querySelector('[name=birthDate],[name=phone],[name=email],[name=address],[name=personalInfo],[name=englishName],[name=nationality],[data-doc-field=country]'),null);
   const summary = personalProfileSummary(profile);

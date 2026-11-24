@@ -13,7 +13,7 @@ test('a fresh mobile login accepts cloud profiles and keys without rewriting the
   Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', configurable: true });
   Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true }); window.scrollTo = () => {};
   const record = createRecord({ id: 'mobile-ticket', origin: '北京南', destination: '天津', service: 'C2021', departureDate: '2023-05-26' });
-  const settings = sharedSettings({ flightMcpKey: 'fictional-cloud-key', profile: { chineseName: '测试旅客', autoFill: true } });
+  const settings = sharedSettings({ flightMcpKey: 'fictional-cloud-key', profile: { chineseName: '测试旅客' } });
   const server = new MemoryGitHub([record], settings), originalHead = server.head;
   globalThis.fetch = server.fetch;
   const wait = async check => { for (let i = 0; i < 400; i++) { if (await check()) return; await new Promise(resolve => setTimeout(resolve, 10)); } assert.fail('Mobile login did not settle'); };

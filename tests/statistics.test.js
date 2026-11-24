@@ -39,9 +39,9 @@ test('rail mileage and flown distance share the date filter and show independent
   const dom = new JSDOM('<div id="root"></div>');
   const root = dom.window.document.querySelector('#root');
   const unmount = mountStatistics(root, rows, { options: { ...range } });
-  const [railMetric, , flightMetric] = root.querySelectorAll('.statistics-journey-metrics > div');
-  assert.match(railMetric.textContent, /铁路里程.*1,318 km.*1 \/ 1/);
-  assert.match(flightMetric.textContent, /实际飞行航程.*333\.6 km.*1 \/ 2/);
+  const [railCard, flightCard] = root.querySelectorAll('.statistics-journey-metrics > section');
+  assert.match(railCard.querySelector('dl > div').textContent, /铁路里程.*1,318 km.*1 \/ 1/);
+  assert.match(flightCard.querySelector('dl > div').textContent, /实际飞行航程.*333\.6 km.*1 \/ 2/);
   unmount();
   dom.window.close();
 });
@@ -71,13 +71,18 @@ test('rail and flight travel times are totaled independently across dates, time 
   const dom = new JSDOM('<div id="root"></div>');
   const root = dom.window.document.querySelector('#root');
   const unmount = mountStatistics(root, rows, { options: { ...range } });
-  const metrics = () => root.querySelectorAll('.statistics-journey-metrics > div');
-  assert.match(metrics()[1].textContent, /火车总在途时间.*1 小时 40 分.*1 \/ 3 程可计算/);
-  assert.match(metrics()[3].textContent, /飞机总在途时间.*21 小时 15 分.*4 \/ 6 程可计算/);
+  const cards = () => [...root.querySelectorAll('.statistics-journey-metrics > section')];
+  assert.deepEqual(cards().map(card => card.querySelector('h2').textContent), ['火车', '飞机']);
+  assert.deepEqual(cards().map(card => [...card.querySelectorAll('dt')].map(label => label.textContent)), [
+    ['铁路里程', '总在途时间'], ['实际飞行航程', '总在途时间']
+  ]);
+  const duration = index => cards()[index].querySelector('dl > div:last-child').textContent;
+  assert.match(duration(0), /总在途时间.*1 小时 40 分.*1 \/ 3 程可计算/);
+  assert.match(duration(1), /总在途时间.*21 小时 15 分.*4 \/ 6 程可计算/);
   bindTestDialogs(dom.window);
   applyStatisticsDate(root, '[data-stat-to]', '2024-02-29');
-  assert.match(metrics()[1].textContent, /1 小时 40 分.*1 \/ 3 程可计算/);
-  assert.match(metrics()[3].textContent, /—.*0 \/ 0 程可计算/);
+  assert.match(duration(0), /1 小时 40 分.*1 \/ 3 程可计算/);
+  assert.match(duration(1), /—.*0 \/ 0 程可计算/);
   unmount();
   dom.window.close();
 });

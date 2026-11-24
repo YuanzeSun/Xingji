@@ -44,8 +44,7 @@ function normalizeMemberships(value = []) {
 }
 export function personalProfile(value = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('个人资料格式无效');
-  if (value.autoFill !== undefined && typeof value.autoFill !== 'boolean') throw new Error('预填设置格式无效');
-  const profile = { autoFill:value.autoFill !== false };
+  const profile = {};
   for (const [key,label,,max] of PROFILE_FIELDS) profile[key] = text(value[key], label, max);
   const gender = profile.gender.toLowerCase();
   profile.gender = ['男','male','m'].includes(gender) ? '男' : ['女','female','f'].includes(gender) ? '女' : '';
@@ -91,14 +90,13 @@ export function applyTicketIdentity(record, hint, profile, source) {
 }
 
 export function profilePassengerName(record, profile = {}) {
-  if (profile.autoFill === false) return '';
   return record.type === 'flight' && flightNameLanguage(record) !== 'zh'
     ? [profile.lastName, profile.firstName].filter(Boolean).join('/')
     : profile.chineseName || '';
 }
 
 function prefilledDocument(record, profile) {
-  if (!profile.autoFill || !profile.documents.length) return '';
+  if (!profile.documents.length) return '';
   let type = 'national-id';
   if (record.type === 'flight') {
     const countries = ['origin', 'destination'].map(side => {

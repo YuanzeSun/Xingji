@@ -60,7 +60,7 @@ export function readBoardingCode(code,legIndex=0) {
 export function boardingCodeDefaults(record,{useSaved=true,profile}={}) {
   const original=readBoardingCode(record.boardingCode,record.boardingLegIndex) || {},saved=useSaved ? original : {},flight=upper(record.service).match(/^([A-Z]{2,3}|[A-Z]\d|\d[A-Z])\s*(\d{1,4}[A-Z]?)$/);
   const airport=side=>{const place=resolvePlace(record,side);return place.status==='matched' ? place.code : /^[A-Z]{3}$/.test(upper(record[side+'Code'])) ? upper(record[side+'Code']) : '';};
-  const profileName=profile?.autoFill!==false && record.passenger && record.passenger===profile?.chineseName ? [profile.lastName,profile.firstName].filter(Boolean).join('/') : '';
+  const profileName=record.passenger && record.passenger===profile?.chineseName ? [profile.lastName,profile.firstName].filter(Boolean).join('/') : '';
   const name=upper(hasChineseName(record.passenger) ? original.passenger || profileName : record.passenger),cabins={'经济舱':'Y','超级经济舱':'W','公务舱':'C','头等舱':'F'};
   const recordedCabin=upper(record.seatClass),cabin=recordedCabin ? cabins[recordedCabin] || recordedCabin : 'Y';
   return {format:saved.format || 'PDF417',electronic:saved.electronic ?? '',passenger:/^[A-Z][A-Z .'-]*\/[A-Z .'-]+$/.test(name) ? name : saved.passenger || '',pnr:record.pnr || saved.pnr || '',origin:airport('origin') || saved.origin || '',destination:airport('destination') || saved.destination || '',carrier:saved.carrier || flight?.[1] || '',flightNumber:saved.flightNumber || flight?.[2] || '',date:journeyDate(record.departureDate),cabin:saved.cabin || cabin,seat:record.seat || saved.seat || '',sequence:saved.sequence || '',status:saved.status || '1'};

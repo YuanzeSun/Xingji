@@ -16,7 +16,7 @@ test('barcode-derived fields stay protected against manual attribution, provider
   applyLookupValues(current,{gate:'B9',departureTime:'08:00',passenger:'OTHER'},true,{kind:'flight-lookup'});
   assert.equal(current.gate,'A101');assert.equal(current.passenger,'张三');assert.equal(current.departureTime,'08:00');
   markManualFields(current,['passenger']);assert.equal(current.fieldSources.passenger,'barcode');
-  const filled=applyProfileDefaults(current,{autoFill:true,chineseName:'王五',documents:[]},{previousProfile:{autoFill:true,chineseName:'张三',documents:[]}});
+  const filled=applyProfileDefaults(current,{chineseName:'王五',documents:[]},{previousProfile:{chineseName:'张三',documents:[]}});
   assert.equal(filled.passenger,'张三');
 });
 
