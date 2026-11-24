@@ -108,8 +108,8 @@ export function applyProfileDefaults(record, profile, { passengerEdited = false,
     if (out.passenger !== record.passenger || !record.passenger) markFieldSources(out, ['passenger'], 'profile');
   }
   const source = record.fieldSources?.identity;
-  if (source !== 'manual' && !ticketFieldLocked(record, 'identity') && (!record.identity || source === 'profile')) {
-    const hasTicketSource = record.boardingCodeSource === 'original' || record.ticketCode ||
+  if (record.boardingCodeSource !== 'original' && source !== 'manual' && !ticketFieldLocked(record, 'identity') && (!record.identity || source === 'profile')) {
+    const hasTicketSource = record.ticketCode ||
       record.sources?.some(item => item.kind === 'pdf' || item.kind === 'scan');
     const identity = hasTicketSource ? '' : prefilledDocument(record, settings);
     if (identity !== (record.identity || '')) {

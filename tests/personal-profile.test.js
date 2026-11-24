@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { personalProfile, profilePassengerName, applyProfileDefaults, applyTicketIdentity, matchProfileIdentity } from '../src/personal-profile.js';
 import { printedIdentityHint } from '../src/identity.js';
+import { DEMO_BOARDING_CODE } from '../src/demo-boarding-code.js';
 import { ticketFieldLocked } from '../src/barcode-fields.js';
 import { sharedSettings, mergeSettings } from '../src/shared-settings.js';
 import { createRecord, archive, readArchive } from '../src/model.js';
@@ -69,7 +70,8 @@ test('a manually entered flight preselects documents from its route and exact de
 
   const draft = applyProfileDefaults(flight({departureDate:'2026-02-01'}), standard);
   assert.equal(draft.identity, 'P000002');
-  assert.equal(applyProfileDefaults({...draft, boardingCodeSource:'original'}, standard).identity, '');
+  assert.equal(applyProfileDefaults({...draft, boardingCodeSource:'original'}, standard).identity, 'P000002');
+  assert.equal(applyProfileDefaults(flight({departureDate:'2026-02-01', boardingCodeSource:'original', boardingCode:DEMO_BOARDING_CODE, boardingLegIndex:'0'}), standard).identity, '');
   assert.equal(applyProfileDefaults({...draft, identity:'', fieldSources:{identity:'manual'}}, standard).identity, '');
   assert.equal(applyProfileDefaults({...draft, identity:'MYDOC123', fieldSources:{identity:'manual'}}, standard).identity, 'MYDOC123');
 });
