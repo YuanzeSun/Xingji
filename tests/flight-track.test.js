@@ -110,6 +110,8 @@ test('flight tracks save with a lookup in the editor or from details and can rep
     assert.equal(server.records()[0].passenger, 'TEST/PASSENGER');
     const svg = element('.flight-track-frame svg'), [first, second] = svg.querySelectorAll('.flight-track-highlight path');
     assert.ok(Number(svg.getAttribute('viewBox').split(' ')[2]) < 400, 'fits across the date line');
+    const cityLabels = [...svg.querySelectorAll('.route-city text')].map(label => label.textContent);
+    assert.ok(cityLabels.includes('东京') && cityLabels.includes('洛杉矶'));
     assert.equal(svg.hasAttribute('data-flight-track-played'), false);
     play.click();
     step(0);
@@ -169,6 +171,11 @@ test('flight tracks save with a lookup in the editor or from details and can rep
       { name: 'getFlightTrackLine', arguments: { flightStr: domesticFlightStr } },
     ]);
     assert.equal(connections, 2);
+    await waitFor(() => !element('dialog'));
+    element(`[data-action="view"][data-id="${savedFlight.id}"]`).click();
+    const labels = await waitFor(() => element('[data-flight-track-labels]'));
+    assert.deepEqual([...labels.querySelectorAll('.route-city.along-route text')].map(label => label.textContent), ['北京', '西宁']);
+    assert.ok([...labels.querySelectorAll('.route-province text')].some(label => label.textContent === '山西'));
   } finally {
     window.dispatchEvent(new window.Event('offline'));
     window.close();

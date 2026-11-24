@@ -33,6 +33,8 @@ The city lookup includes factual station fields extracted from the public [12306
 
 Snapshot dates, source URLs and original-file hashes are preserved in `src/data/map-reference.js`. No online map service is embedded.
 
+- **Natural Earth** — [1:50m Populated Places](https://www.naturalearthdata.com/downloads/50m-cultural-vectors/50m-populated-places/), Public Domain. Flight details display selected city names and coordinates from this dataset.
+
 Localized airport aliases in `src/data/airport-labels.js` are derived from Wikidata structured data (CC0-1.0), matched to OurAirports by IATA code, ICAO where available, and coordinates (or exact English name when coordinates are absent). Mainland airport names are checked against the CAAC transport-airport list. Query, source hashes and snapshot date are preserved with the generated data. OpenCC Python (Apache-2.0) is used only during reference generation to add simplified Chinese variants; no converter runs in the application.
 - https://www.wikidata.org/wiki/Wikidata:Licensing
 - https://www.caac.gov.cn/GYMH/MHGK/MYJC/

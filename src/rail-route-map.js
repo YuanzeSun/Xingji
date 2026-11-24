@@ -4,6 +4,7 @@ import { railMapPoint } from './rail-projection.js';
 export { railMapPoint } from './rail-projection.js';
 import { createMapBasemap } from './map-basemap.js';
 import { createRailMapContext, railMapAnnotations } from './rail-map-context.js';
+import { geographicLabelMarkup, mapLabelText } from './map-labels.js';
 import { LAND_PATH, COUNTRY_PATH, PROVINCE_PATH } from './data/map-reference.js';
 import { escape as e } from './html.js';
 import {RAIL_LINE_SOURCE} from './rail-line-names.js';
@@ -126,10 +127,10 @@ function mountMap(container, route) {
     svg.style.setProperty('--rail-playback-width', String(4 * unit));
     basemap?.draw(viewport, width, height, pointers.size > 0);
     const annotations = railMapAnnotations(context, stops, viewport, width, height,{lineLabels:[...(route.lineLabels||[]),...(route.fullRoute?.lineLabels||[])]});
-    const text = row => row.label ? `<text x="${row.label.dx * unit}" y="${row.label.dy * unit}" font-size="${row.label.fontSize * unit}" stroke-width="${3 * unit}">${e(row.name)}</text>` : '';
+    const text = row => mapLabelText(row, unit);
     const lineLabels=annotations.lines;
     svg.querySelector('[data-rail-lines]').innerHTML=lineLabels.map(row=>`<g class="rail-line-name" data-rail-line-name="${e(row.name)}" transform="translate(${row.point})">${text(row)}</g>`).join('');
-    svg.querySelector('[data-rail-context]').innerHTML = annotations.provinces.map(row => `<g class="rail-province" transform="translate(${row.point})" style="letter-spacing:${2 * unit}px">${text(row)}</g>`).join('') + annotations.cities.map(row => `<g class="rail-city ${row.alongRoute ? 'along-route' : ''}" data-rail-city="${e(row.name)}" transform="translate(${row.point})"><circle r="${2 * unit}"/>${text(row)}</g>`).join('');
+    svg.querySelector('[data-rail-context]').innerHTML = geographicLabelMarkup(annotations, unit);
     stationLayer.innerHTML = annotations.stops.map(stop => {
       return `<g data-rail-segment="${stop.mySegment ? 'selected' : 'outside'}" transform="translate(${stop.point})"><circle r="${(stop.endpoint ? 5 : 3) * unit}" class="rail-stop ${stop.endpoint ? 'endpoint' : ''}"/><title>${e(stop.name)}</title>${text(stop)}</g>`;
     }).join('');

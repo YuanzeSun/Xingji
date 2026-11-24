@@ -1,6 +1,7 @@
 import {railLineAnnotations} from './rail-line-names.js';
 import { CITY_POINTS, PROVINCE_LABELS, PROVINCE_PATH } from './data/map-reference.js';
 import { projectPoint } from './journey-map-model.js';
+import { mapLabelPlacer } from './map-labels.js';
 
 const cities = Object.entries(CITY_POINTS).map(([name, coordinates]) => ({ name, point: projectPoint(coordinates) }));
 const provinces = Object.entries(PROVINCE_LABELS).map(([name, coordinates]) => ({ name, point: projectPoint(coordinates) }));
@@ -29,20 +30,8 @@ export function createRailMapContext(segments) {
 }
 
 export function railMapAnnotations(context, stops, viewport, width, height, {lineLabels=[]}={}) {
-  const unit = 1000 / viewport.zoom / width;
-  const pixel = point => [(point[0] - viewport.x) / unit + width / 2, (point[1] - viewport.y) / unit + height / 2];
   const boxes = [[width - 62, 8, width - 8, 184], [8, height - 33, 132, height - 4]], result = { stops: [], cities: [], provinces: [] };
-  function label(row, fontSize, centered = false) {
-    const [x, y] = pixel(row.point), textWidth = [...row.name].reduce((sum, char) => sum + (/\p{Script=Han}/u.test(char) ? fontSize : fontSize * .65), 0) + (centered ? (row.name.length - 1) * 2 : 0);
-    const positions = centered ? [[-textWidth / 2, fontSize / 2], [-textWidth / 2 - 28, fontSize / 2], [-textWidth / 2, fontSize / 2 + 24], [-textWidth / 2, fontSize / 2 - 24]] : [[10, -9], [-textWidth - 10, -9], [10, fontSize + 8], [-textWidth - 10, fontSize + 8]];
-    for (const [dx, dy] of positions) {
-      const box = [x + dx - 4, y + dy - fontSize - 3, x + dx + textWidth + 4, y + dy + 4];
-      if (box[0] < 7 || box[1] < 7 || box[2] > width - 7 || box[3] > height - 7) continue;
-      if (boxes.some(other => box[0] < other[2] + 4 && box[2] > other[0] - 4 && box[1] < other[3] + 4 && box[3] > other[1] - 4)) continue;
-      boxes.push(box); return { dx, dy, fontSize, box };
-    }
-    return null;
-  }
+  const label = mapLabelPlacer(viewport, width, height, boxes);
   const orderedStops = stops.map((stop, index) => ({ ...stop, index, endpoint:stop.endpoint ?? (index === 0 || index === stops.length - 1) })).sort((a, b) => Number(b.endpoint) - Number(a.endpoint));
   for (const stop of orderedStops) result.stops.push({ ...stop, label: label(stop, 13) });
   result.lines=railLineAnnotations(lineLabels,viewport,width,height,boxes);

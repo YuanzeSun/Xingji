@@ -2,7 +2,8 @@ import { FlightConnector } from './mcp.js';
 import { FLIGHT_TRACK_SOURCE, flightTrackRequest, readFlightTrack } from './flight-track.js';
 import { longitudeCenter, projectPoint, unwrapLongitude } from './journey-map-model.js';
 import { createMapBasemap } from './map-basemap.js';
-import { AIRPORT_POINTS, LAND_PATH, COUNTRY_PATH } from './data/map-reference.js';
+import { flightTrackLabelRenderer } from './flight-track-labels.js';
+import { AIRPORT_POINTS, LAND_PATH, COUNTRY_PATH, PROVINCE_PATH } from './data/map-reference.js';
 
 const PLAYBACK_MS = 2000;
 const clamp = value => Math.max(0, Math.min(1, value));
@@ -17,10 +18,11 @@ function inFlightDirection(track) {
     ? track.segments : track.segments.toReversed().map(line => line.toReversed());
 }
 
-function mountTrackMap(frame, track) {
+function mountTrackMap(frame, track, record) {
   const view = frame.ownerDocument.defaultView, svg = frame.querySelector('svg');
-  const basemap = createMapBasemap(frame.querySelector('canvas'), view);
+  const basemap = createMapBasemap(frame.querySelector('canvas'), view, { provinceContrast: true });
   const center = longitudeCenter(track.segments.flatMap(line => line.map(point => point[0])));
+  const renderLabels = flightTrackLabelRenderer(record, track.flightStr, center);
   const lines = inFlightDirection(track).map(line => line.map(point => projectPoint(point, center)));
   const points = lines.flat();
   const xs = points.map(point => point[0]), ys = points.map(point => point[1]);
@@ -39,12 +41,14 @@ function mountTrackMap(frame, track) {
     segments.push({ start, length: distance - start });
   }
   const markup = lines.map(line => `<path pathLength="1" d="M${line.join('L')}"/>`).join('');
-  const background = basemap ? '' : '<defs><g id="flight-track-world" class="rail-base"><path class="rail-land" d="' + LAND_PATH + '"/><path class="rail-countries" d="' + COUNTRY_PATH + '"/></g></defs><use href="#flight-track-world" x="-1000"/><use href="#flight-track-world"/><use href="#flight-track-world" x="1000"/>';
-  svg.innerHTML = `${background}<g class="flight-track-line">${markup}</g><g class="flight-track-highlight" aria-hidden="true">${markup}</g><g data-flight-track-aircraft aria-hidden="true"><path d="M10 0 1-2-3-9H-6l2 7-5-1v6l5-1-2 7h3l4-7z"/></g>`;
+  const background = basemap ? '' : `<defs><g id="flight-track-world" class="rail-base"><path class="rail-land" d="${LAND_PATH}"/><path class="rail-countries" d="${COUNTRY_PATH}"/><path class="rail-provinces" d="${PROVINCE_PATH}"/></g></defs><use href="#flight-track-world" x="-1000"/><use href="#flight-track-world"/><use href="#flight-track-world" x="1000"/>`;
+  svg.innerHTML = `${background}<g class="flight-track-line">${markup}</g><g class="flight-track-highlight" aria-hidden="true">${markup}</g><g data-flight-track-labels></g><g data-flight-track-aircraft aria-hidden="true"><path d="M10 0 1-2-3-9H-6l2 7-5-1v6l5-1-2 7h3l4-7z"/></g>`;
   const overlay = [...svg.querySelector('.flight-track-highlight').children];
+  const labelLayer = svg.querySelector('[data-flight-track-labels]');
   const aircraft = svg.querySelector('[data-flight-track-aircraft]');
   const motion = view.matchMedia?.('(prefers-reduced-motion: reduce)');
   let unit = 1, animation = 0, started, traveled = 0, edgeIndex = 0, playing = false;
+  let drawnWidth, drawnHeight;
 
   function positionAircraft() {
     if (!playing || !edges.length) return;
@@ -56,12 +60,17 @@ function mountTrackMap(frame, track) {
 
   function draw() {
     const rect = frame.getBoundingClientRect(), width = rect.width || 640, height = rect.height || 290;
+    if (width === drawnWidth && height === drawnHeight) return;
+    drawnWidth = width;
+    drawnHeight = height;
     const [left, top, right, bottom] = bounds;
     unit = Math.max((right - left) / (width * .8), (bottom - top) / (height * .73), .001);
     const x = (left + right) / 2, y = (top + bottom) / 2;
     svg.setAttribute('viewBox', `${x - width * unit / 2} ${y - height * unit / 2} ${width * unit} ${height * unit}`);
     svg.style.setProperty('--flight-track-stroke', String(unit * 3));
-    basemap?.draw({ x, y, zoom: 1000 / (unit * width) }, width, height);
+    const viewport = { x, y, zoom: 1000 / (unit * width) };
+    basemap?.draw(viewport, width, height);
+    labelLayer.innerHTML = renderLabels(viewport, width, height, unit);
     positionAircraft();
   }
 
@@ -69,7 +78,8 @@ function mountTrackMap(frame, track) {
     traveled = progress * distance;
     for (const [index, { start, length }] of segments.entries()) {
       const shown = progress === 1 ? 1 : clamp((traveled - start) / (length || 1));
-      overlay[index].style.strokeDashoffset = String(1 - shown);
+      const offset = String(1 - shown);
+      if (overlay[index].style.strokeDashoffset !== offset) overlay[index].style.strokeDashoffset = offset;
     }
     positionAircraft();
   }
@@ -124,7 +134,7 @@ export function mountFlightTrack(container, record, { getKey, desktop, canSave, 
     const [, dep, arr] = track.flightStr.split('_');
     frame.querySelector('svg').setAttribute('aria-label', `${dep} 至 ${arr}飞行航迹图`);
     source.querySelector('span').textContent = ` · ${dep} → ${arr} · 查询于 ${track.queriedAt.slice(0, 10)}`;
-    map = mountTrackMap(frame, track);
+    map = mountTrackMap(frame, track, record);
     if (focusPlay) playButton.focus();
   }
 
