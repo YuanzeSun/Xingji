@@ -18,12 +18,12 @@ function editor(lookup) {
   const draft=createRecord({type:'flight',template:'air-boarding-pass'}),fields=[...BOARDING_SHARED_FIELDS,'ticketNumber','gate','boardingTime','departureTime','arrivalDate','arrivalTime','airline','aircraft','terminal'];
   const dom=new JSDOM('<form>'+fields.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+ticketCodeEditor(draft)+flightLookupMarkup()+'</form>'),form=dom.window.document.querySelector('form');
   let scanned=code(),applies=0;
-  const stopCode=bindTicketCodeEditor(form,draft,()=>{},{replaceDefaults:true,loadRebuilder:async()=>async()=>({codes:[{data:scanned,format:'PDF417'}],issues:[]})});
+  const stopCode=bindTicketCodeEditor(form,draft,()=>{},{loadRebuilder:async()=>async()=>({codes:[{data:scanned,format:'PDF417'}],issues:[]})});
   const stopLookup=bindFlightLookup(form,{getRecord:()=>draft,getKey:()=> 'fictional-key',canQuery:()=>true,desktop:()=>true,lookup,apply:changes=>{applies++;Object.assign(draft,changes);for(const [key,value]of Object.entries(changes))if(form.elements[key])form.elements[key].value=value;}});
   const photo=form.querySelector('#code-photo');Object.defineProperty(photo,'files',{value:[new Blob(['synthetic QR'])]});
   return {dom,form,draft,get applies(){return applies;},async scan(number='1234'){scanned=code(number);photo.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await settle();},date(value){draft.departureDate=value;form.elements.departureDate.value=value;form.elements.departureDate.dispatchEvent(new dom.window.Event('input',{bubbles:true}));},query(){form.querySelector('[data-flight-lookup]').click();},dispose(){stopLookup();stopCode();dom.window.close();}};
 }
-const schedule=()=>createRecord({type:'flight',template:'air-boarding-pass',service:'CA1234',origin:'PEK',destination:'SHA',departureDate:'2026-05-18',departureTime:'18:00',arrivalDate:'2026-05-18',arrivalTime:'20:00',airline:'中国国际航空',aircraft:'A320',terminal:'T3',gate:'B2',passenger:'UNRELATED/NAME',seat:'99Z',pnr:'OTHER',ticketNumber:'9999999999999',boardingTime:'16:00',boardingCode:code('4321')});
+const schedule=()=>createRecord({type:'flight',template:'air-boarding-pass',service:'CA1234',origin:'PEK',destination:'SHA',departureDate:'2026-05-18',departureTime:'18:00',arrivalDate:'2026-05-18',arrivalTime:'20:00',airline:'中国国际航空',aircraft:'A320',terminal:'T3',gate:'B2',passenger:'UNRELATED/NAME',seat:'99Z',pnr:'OTHER',ticketNumber:'9999999999999',boardingTime:'16:00',boardingCode:code('4321'),boardingCodeSource:'original',boardingLegIndex:'0'});
 
 test('scanning then querying fills only missing schedule data and preserves the Chinese name, gate and rebuilt barcode',async()=>{
   const page=editor(async(provider,query,key)=>{assert.equal(provider,'variflight');assert.equal(key,'fictional-key');assert.deepEqual(query,{fnum:'CA1234',date:'2026-05-18',dep:'PEK',arr:'SHA'});return [schedule()];});

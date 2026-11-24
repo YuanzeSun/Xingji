@@ -1,4 +1,3 @@
-import { createImportFlow } from './import-flow.js';
 import {BOARDING_METADATA_LABELS,BOARDING_METADATA_FIELDS} from './boarding-metadata.js';
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
@@ -86,7 +85,7 @@ const icons = {
 };
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.ticket}</svg>`;
 const labels = { ...BOARDING_METADATA_LABELS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '二维码', boardingCode: '机票条码' };
-const imports = createImportFlow();
+const imports = { task: null, backup: null };
 let importView = 0;
 const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, routesOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null };
 const samples = demoRecords();
@@ -1046,9 +1045,13 @@ function advanceImportView() {
 }
 function startImport(kind) {
   if (!canWrite()) { toast('当前仅可查看缓存', true); return null; }
-  const task = imports.start(kind, archiveContext(), importView);
-  if (!task) toast('正在处理另一项请求，请稍候', true);
-  return task;
+  if (imports.task) { toast('正在处理另一项请求，请稍候', true); return null; }
+  return imports.task = { kind, context: archiveContext(), view: importView };
+}
+function finishImport(task) {
+  if (imports.task !== task) return false;
+  imports.task = null;
+  return true;
 }
 function currentImport(task) {
   return root.isConnected && imports.task === task && isArchiveContext(task.context);
@@ -1066,7 +1069,8 @@ function mayOpenImport(task) {
 }
 function clearImportedWork() {
   if (editor?.imported || modalRoot.querySelector('[data-backup-restore]')) closeModal(true);
-  imports.clear();
+  imports.task = null;
+  imports.backup = null;
 }
 function selectImportFile(files) {
   if (files.length > 1) return importStatus('请一次选择或拖入一个文件');
@@ -1096,7 +1100,7 @@ async function handleFile(file, { backupOnly = false } = {}) {
         else if (!state.showDemo && !modalRoot.querySelector('dialog')) render();
         return;
       }
-      records = content.schemaVersion ? readArchive(content) : mapFlightResult(content);
+      records = content?.format === 'xingji-archive' ? readArchive(content) : mapFlightResult(content);
     } else if (file.type?.startsWith('image/') || /\.(png|jpe?g|webp|bmp|heic)$/.test(name)) {
       const { recognize } = await import('./ocr.js');
       if (!currentImport(task)) return;
@@ -1121,7 +1125,7 @@ async function handleFile(file, { backupOnly = false } = {}) {
       if (backupOnly && state.page !== 'import') fail(error);
       else showStatus(`${file.name}：${error.message}`);
     }
-  } finally { if (imports.finish(task)) applyAccessPolicy(); }
+  } finally { if (finishImport(task)) applyAccessPolicy(); }
 }
 function reviewSingleImport(records, { photo, task } = {}) {
   if (!records.length || !mayOpenImport(task)) return false;
@@ -1437,7 +1441,7 @@ function clearArchiveView() {
   pageScroll.clear();
   backupRestoreOffer = null;
   closeModal(true);
-  imports.clear();
+  clearImportedWork();
   archiveSelected.clear();
   Object.assign(state, {
     profileDraft: null, profileBase: null, profileDirty: false, profileError: '',
@@ -1897,7 +1901,7 @@ async function checkFlights() {
       } catch { toast('接口已返回内容，请查看并校对字段'); }
     } else toast('已取得接口返回；尚需核对结构，请在数据页查看');
   } catch (error) { if (currentImport(task) && !state.showDemo) fail(error); }
-  finally { if (imports.finish(task) && root.isConnected && state.page === 'data' && !state.showDemo) render(); }
+  finally { if (finishImport(task) && root.isConnected && state.page === 'data' && !state.showDemo) render(); }
 }
 function showFlightResult() {
   const raw = JSON.stringify(state.flightResult, null, 2);

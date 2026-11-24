@@ -13,7 +13,7 @@ function geometry(value) {
 
 export function normalizeRailRoute(value) {
   if (!value) return '';
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !/^[A-Z]?\d{1,5}(?:\/[A-Z]?\d{1,5})*$/.test(service(value.service)) || !railStationKey(value.origin) || !railStationKey(value.destination) || railStationKey(value.origin) === railStationKey(value.destination) || typeof value.queriedAt !== 'string' || !/^\d{4}-\d\d-\d\dT/.test(value.queriedAt) || !Number.isFinite(Date.parse(value.queriedAt))) throw new Error('铁路线路资料格式不正确');
+  if (typeof value !== 'object' || Array.isArray(value) || !/^[A-Z]?\d{1,5}(?:\/[A-Z]?\d{1,5})*$/.test(service(value.service)) || !railStationKey(value.origin) || !railStationKey(value.destination) || railStationKey(value.origin) === railStationKey(value.destination) || typeof value.queriedAt !== 'string' || !/^\d{4}-\d\d-\d\dT/.test(value.queriedAt) || !Number.isFinite(Date.parse(value.queriedAt))) throw new Error('铁路线路资料格式不正确');
   const selected=geometry(value);
   if(selected.stops[0].name!==railStationKey(value.origin) || selected.stops.at(-1).name!==railStationKey(value.destination))throw new Error('铁路线路车站资料不正确');
   let fullRoute;

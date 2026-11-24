@@ -66,7 +66,7 @@ test('boarding QR codes preserve Chinese or binary extensions and autofill field
 
     const draft=createRecord({type:'flight',template:'air-boarding-pass'});
     const dom=new JSDOM('<form>'+BOARDING_SHARED_FIELDS.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+ticketCodeEditor(draft)+'</form>'),form=dom.window.document.querySelector('form');
-    const cleanup=bindTicketCodeEditor(form,draft,()=>{},{replaceDefaults:true,loadRebuilder:async()=>async()=>result});
+    const cleanup=bindTicketCodeEditor(form,draft,()=>{},{loadRebuilder:async()=>async()=>result});
     try{
       const photo=form.querySelector('#code-photo');Object.defineProperty(photo,'files',{value:[new Blob(['synthetic QR'])]});photo.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
       await new Promise(resolve=>setTimeout(resolve,0));
@@ -101,7 +101,7 @@ test('tagged Chinese names, ticket numbers and gates autofill from QR while reco
   const fields=[...BOARDING_SHARED_FIELDS.filter(key=>key!=='seatClass'),'ticketNumber','gate','boardingTime','airline'];
   const dom=new JSDOM('<form>'+fields.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+seatClassField(draft)+ticketCodeEditor(draft)+'</form>'),form=dom.window.document.querySelector('form');
   bindSeatClassFields(form);
-  const cleanup=bindTicketCodeEditor(form,draft,()=>{},{replaceDefaults:true,loadRebuilder:async()=>async()=>result});
+  const cleanup=bindTicketCodeEditor(form,draft,()=>{},{loadRebuilder:async()=>async()=>result});
   try{
     const photo=form.querySelector('#code-photo');Object.defineProperty(photo,'files',{value:[new Blob(['synthetic QR'])]});photo.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,0));
     assert.equal(draft.passenger,'张三');assert.equal(form.elements.passenger.value,'张三');assert.equal(draft.ticketNumber,'1230000000001');assert.equal(form.elements.gate.value,'A101');

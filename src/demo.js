@@ -56,7 +56,7 @@ export function demoRecords(today=localToday()){
       values.arrivalDate=values.actualDepartureDate=values.actualArrivalDate=values.departureDate;
       values.flightStatus='normal';
       values.boardingCode=createBoardingCode({passenger:values.passenger==='示例旅客' ? 'SHILI/LVKE' : values.passenger,pnr:values.pnr,origin:values.originCode,destination:values.destinationCode,carrier:values.service.slice(0,2),flightNumber:values.service.slice(2),date:values.departureDate,cabin:values.seatClass,seat:values.seat,sequence:String(42+index),status:'1',electronic:''});
-      values.boardingCodeSource='generated';values.fieldSources.boardingCode='generated';
+      values.boardingCodeSource='generated';values.boardingLegIndex='0';values.fieldSources.boardingCode='generated';
       values.sources=[source,{kind:'reference',label:row.service==='MU5403' ? '航班核对：东方航空 MU5403，上海虹桥—成都双流' : '航班核对：中国国际航空 CA181，北京首都—东京羽田',at:verifiedAt}];
     }
     markFieldSources(values,FIELDS.filter(key=>!values.fieldSources[key]),'default');

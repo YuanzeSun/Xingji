@@ -6,7 +6,7 @@ import { boardingPresentation } from '../src/boarding-language.js';
 import { ticketSVG } from '../src/tickets.js';
 import { DEMO_BOARDING_CODE } from '../src/demo-boarding-code.js';
 
-const flight = extra => createRecord({ type:'flight', template:'air-boarding-pass', origin:'北京首都', destination:'伦敦希思罗', passenger:'ZHANG/SAN', airline:'中国国际航空', departureDate:'2023-05-26', service:'CA937', seatClass:'Y', boardingCode:DEMO_BOARDING_CODE, ...extra });
+const flight = extra => createRecord({ type:'flight', template:'air-boarding-pass', origin:'北京首都', destination:'伦敦希思罗', passenger:'ZHANG/SAN', airline:'中国国际航空', departureDate:'2023-05-26', service:'CA937', seatClass:'Y', boardingCode:DEMO_BOARDING_CODE, boardingCodeSource:'original', boardingLegIndex:'0', ...extra });
 
 test('departure airport chooses the whole pass language, independently of destination or input language', () => {
   for (const [origin, destination, language, airport] of [

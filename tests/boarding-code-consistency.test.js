@@ -8,7 +8,7 @@ import {ticketCodeEditor,bindTicketCodeEditor} from '../src/code-editor.js';
 import {BOARDING_SHARED_FIELDS} from '../src/boarding-code-state.js';
 
 const values={passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:'2026-11-17',cabin:'Y',seat:'12A',sequence:'25',status:'3',electronic:'E'};
-const flight=extra=>createRecord({type:'flight',template:'air-boarding-pass',passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-11-17',seat:'12A',seatClass:'S',...extra});
+const flight=extra=>createRecord({type:'flight',template:'air-boarding-pass',passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-11-17',seat:'12A',seatClass:'S',boardingLegIndex:'0',...extra});
 function editor(draft,options={}){
   const dom=new JSDOM('<form>'+BOARDING_SHARED_FIELDS.map(key=>`<input name="${key}" value="${key.endsWith('Date')?calendarDate(draft[key]):draft[key]}">`).join('')+'<p id="editor-error" hidden></p>'+ticketCodeEditor(draft)+'<button type="submit">保存</button></form>'),form=dom.window.document.querySelector('form');
   let saves=0;
@@ -68,7 +68,7 @@ test('automatic regeneration retains explicit operating flights and a disposed e
 });
 
 test('scanning fills and locks decoded facts and enables manual editing and generation after removing the original',async()=>{
-  const code=createBoardingCode(values),draft=flight({passenger:'默认姓名',pnr:'MYPNR',seatClass:'M',airline:'手动航司',lockedFields:['pnr','seatClass','airline']}),page=editor(draft,{replaceDefaults:true,loadRebuilder:async()=>async()=>({codes:[{data:code,format:code.format}],issues:[]})});
+  const code=createBoardingCode(values),draft=flight({passenger:'默认姓名',pnr:'MYPNR',seatClass:'M',airline:'手动航司',lockedFields:['pnr','seatClass','airline']}),page=editor(draft,{loadRebuilder:async()=>async()=>({codes:[{data:code,format:code.format}],issues:[]})});
   try{
     const photo=page.form.querySelector('#code-photo');Object.defineProperty(photo,'files',{value:[new Blob(['fixture'])]});photo.dispatchEvent(new page.dom.window.Event('change',{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,0));
     assert.equal(draft.passenger,'DOE/JANE');assert.equal(draft.pnr,'ABC123');assert.equal(page.form.querySelector('[data-bcbp-fields]').disabled,true);

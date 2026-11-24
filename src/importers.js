@@ -77,7 +77,7 @@ function parseOne(text, sourceKind, label) {
 export function parseSingleTicket(text, sourceKind = 'text', label = '文字导入') { const order = parseRailOrder(text, sourceKind, label) || parseFlightScreenshot(text, sourceKind, label); return order ? order.length === 1 ? order[0] : null : parseOne(text, sourceKind, label); }
 export function parseText(raw, sourceKind = 'text', label = '文字导入') {
   const order = parseRailOrder(raw, sourceKind, label) || parseFlightScreenshot(raw, sourceKind, label); if (order) return order;
-  const text = raw.replace(/\r/g, '').replace(/：/g, '：');
+  const text = raw.replace(/\r/g, '');
   const chunks = text.split(/\n\s*\n|\n(?=\s*(?:旅程|行程)\s*\d+\s*[:：])/).filter(s => s.trim());
   const candidates = chunks.map(t => parseOne(t, sourceKind, label)).filter(Boolean);
   // A mail often splits one ticket into separate paragraphs: combine if only one service occurs.

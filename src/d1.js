@@ -8,8 +8,7 @@ function databaseError(code, action) {
     case 'D1_BINDING_MISSING': return 'Worker 缺少 ARCHIVE 绑定。请在 Bindings 添加 D1 database，变量名填 ARCHIVE。';
     case 'D1_DATABASE_NOT_FOUND': return 'Worker 找不到绑定的 D1 数据库。请在 Bindings 核对 ARCHIVE 指向的数据库。';
     case 'D1_SCHEMA_MISSING': return 'D1 票库表或初始化记录缺失。请在 ARCHIVE 所指数据库的 Console 执行行迹的初始化 SQL。';
-    case 'D1_DATABASE_UNAVAILABLE': return action + ' D1 票库失败（503）。请重试或查看 Worker 日志。';
-    default: return action + ' D1 票库失败（503）。请检查 Worker 的 ARCHIVE 绑定，以及绑定的数据库是否已执行初始化 SQL。';
+    default: return action + ' D1 票库失败（503）。请重试或查看 Worker 日志。';
   }
 }
 
@@ -46,8 +45,11 @@ export class D1Store {
   async read() {
     const result = await this.request({ head: this.cached?.head });
     if (!result) return this.cached;
+    if (typeof result.generation !== 'string' || !Object.hasOwn(result, 'settings')) {
+      throw new Error('Worker 票库接口返回无效');
+    }
     return {
-      id: result.id, head: result.head, generation: result.generation || '',
+      id: result.id, head: result.head, generation: result.generation,
       records: readArchive({ format: 'xingji-archive', schemaVersion: SCHEMA_VERSION, records: result.records }),
       settings: sharedSettings(result.settings)
     };

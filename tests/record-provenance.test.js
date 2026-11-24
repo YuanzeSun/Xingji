@@ -10,7 +10,7 @@ import {MemoryGitHub} from './helpers/cloud.js';
 import {GitHubStore,synchronize} from '../src/github.js';
 
 const options={passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:'2026-11-17',cabin:'Y',seat:'12A',sequence:'25',status:'3',electronic:'E'};
-const flight=extra=>createRecord({id:'flight',type:'flight',template:'air-boarding-pass',passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-11-17',seat:'12A',boardingCode:createBoardingCode(options),boardingCodeSource:'generated',...extra});
+const flight=extra=>createRecord({id:'flight',type:'flight',template:'air-boarding-pass',passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-11-17',seat:'12A',boardingCode:createBoardingCode(options),boardingCodeSource:'generated',boardingLegIndex:'0',...extra});
 const rail=extra=>createRecord({id:'rail',service:'G1',origin:'北京南',destination:'上海虹桥',departureDate:'2026-11-17',...extra});
 const result=record=>railDetails({success:true,data:{bureau:'H',bureauShortName:'上局',car:'CR400BF-S',runner:'上海客运段',carOwner:'上海动车段',numberFull:['G1'],rundays:['20261117'],timetable:[{station:'北京南',day:0,arrive:'06:30',depart:'06:30'},{station:'上海虹桥',day:0,arrive:'11:24',depart:'11:24'}]}},railQuery(record));
 

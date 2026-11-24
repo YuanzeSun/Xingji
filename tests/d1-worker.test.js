@@ -46,7 +46,7 @@ test('D1 connection requires a Worker root URL', () => {
   assert.equal(workerURL('http://127.0.0.1:8787/'), 'http://127.0.0.1:8787');
 });
 
-test('D1 reports a misnamed binding and missing schema before attempting migration', async () => {
+test('D1 reports a misnamed binding and missing schema', async () => {
   const misnamed = new D1Store({ url: endpoint }, token, (url, options) =>
     worker.fetch(new Request(url, options), { ARCHIVE_TOKEN: token, xingji: {} }));
   await assert.rejects(misnamed.read(), { status: 503, message: /Worker 缺少 ARCHIVE 绑定/ });
@@ -58,10 +58,16 @@ test('D1 reports a misnamed binding and missing schema before attempting migrati
   await assert.rejects(store.read(), { status: 503, message: /初始化 SQL/ });
   db.sqlite.exec('DROP TABLE archive_state');
   await assert.rejects(store.read(), { status: 503, message: /初始化 SQL/ });
+});
 
-  const oldWorker = new D1Store({ url: endpoint }, token, async () =>
-    Response.json({ error: 'D1 数据库操作失败，请检查 Worker 绑定和数据库迁移' }, { status: 503 }));
-  await assert.rejects(oldWorker.read(), { status: 503, message: /读取.*ARCHIVE 绑定/ });
+test('D1 archive responses require the reset generation and settings', async () => {
+  const current = { id: '0'.repeat(32), head: 'head', generation: '', settings: {}, records: [] };
+  for (const field of ['generation', 'settings']) {
+    const response = { ...current };
+    delete response[field];
+    const store = new D1Store({ url: endpoint }, token, async () => Response.json(response));
+    await assert.rejects(store.read(), /接口返回无效/);
+  }
 });
 
 test('D1 whole replacements are atomic and stale clients cannot delete or overwrite tickets', async () => {

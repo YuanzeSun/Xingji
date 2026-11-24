@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {journeyDate,calendarDate,dateWithYear,dateFromMonthDay,dateLabel} from '../src/journey-date.js';
+import {journeyDate,calendarDate,dateFromMonthDay,dateLabel} from '../src/journey-date.js';
 import {createRecord,archive,readArchive} from '../src/model.js';
 import {createBoardingCode,readBoardingCode} from '../src/bcbp.js';
 import {ticketDateField,bindTicketDates,readTicketDate,refreshTicketDateLocks} from '../src/date-field.js';
@@ -18,8 +18,8 @@ test('travel dates store the exact calendar year and ordinal day, including leap
 
 test('the barcode day survives without a guessed year and is decoded only after the year is supplied',()=>{
   const date=journeyDate({year:null,dayOfYear:60});assert.equal(calendarDate(date),'');assert.match(dateLabel(date),/年份未知/);
-  assert.equal(calendarDate(dateWithYear(date,2024)),'2024-02-29');assert.equal(calendarDate(dateWithYear(date,2025)),'2025-03-01');
-  assert.deepEqual(date,{year:null,dayOfYear:60});assert.throws(()=>dateWithYear({year:null,dayOfYear:366},2025));
+  assert.equal(calendarDate({...date,year:2024}),'2024-02-29');assert.equal(calendarDate({...date,year:2025}),'2025-03-01');
+  assert.deepEqual(date,{year:null,dayOfYear:60});
   const flight=createRecord({type:'flight',template:'air-boarding-pass',service:'CA1234',departureDate:date});assert.throws(()=>flightQuery(flight));
 });
 
@@ -37,7 +37,7 @@ test('all planned and actual dates and cached railway stop dates remain ordinal 
 
 test('barcode month and day are locked, while changing only the year preserves its recorded ordinal',()=>{
   const code=createBoardingCode({passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:{year:null,dayOfYear:60},cabin:'Y',seat:'12A',sequence:'25',status:'1'});
-  const record=createRecord({type:'flight',template:'air-boarding-pass',boardingCode:code,boardingCodeSource:'original'});
+  const record=createRecord({type:'flight',template:'air-boarding-pass',boardingCode:code,boardingCodeSource:'original',boardingLegIndex:'0'});
   assert.deepEqual(record.departureDate,{year:null,dayOfYear:60});assert.equal(readBoardingCode(code).dayOfYear,60);
   const dom=new JSDOM('<form>'+ticketDateField('departureDate',record,{label:'计划起飞日期',required:true})+'</form>'),form=dom.window.document.querySelector('form');
   bindTicketDates(form,()=>record);form.addEventListener('input',()=>{record.departureDate=readTicketDate(form,'departureDate',record);refreshTicketDateLocks(form,record);});

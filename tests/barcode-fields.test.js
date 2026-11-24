@@ -8,7 +8,7 @@ import {applyLookupValues,markManualFields} from '../src/lookup-values.js';
 import {applyProfileDefaults} from '../src/personal-profile.js';
 import {seatClassField} from '../src/seat-class-field.js';
 
-const record=()=>createRecord({type:'flight',template:'air-boarding-pass',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-11-17',passenger:'张三',seat:'12A',seatClass:'Z',gate:'A101',boardingCodeSource:'original',boardingCode:createBoardingCode({passenger:'ZHANG/SAN',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:'2026-11-17',cabin:'Z',seat:'12A',sequence:'25',status:'1'}),fieldSources:{passenger:'barcode',origin:'barcode',destination:'barcode',service:'barcode',seat:'barcode',seatClass:'barcode',gate:'barcode'}});
+const record=()=>createRecord({type:'flight',template:'air-boarding-pass',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-11-17',passenger:'张三',seat:'12A',seatClass:'Z',gate:'A101',boardingCodeSource:'original',boardingLegIndex:'0',boardingCode:createBoardingCode({passenger:'ZHANG/SAN',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:'2026-11-17',cabin:'Z',seat:'12A',sequence:'25',status:'1'}),fieldSources:{passenger:'barcode',origin:'barcode',destination:'barcode',service:'barcode',seat:'barcode',seatClass:'barcode',gate:'barcode'}});
 
 test('barcode-derived fields stay protected against manual attribution, provider updates and profile defaults after reopening',()=>{
   const current=readArchive(archive([record()]))[0];

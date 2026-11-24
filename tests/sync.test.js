@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GitHubStore, synchronize } from '../src/github.js';
 import { createRecord } from '../src/model.js';
+import { MemoryGitHub } from './helpers/cloud.js';
 const record = () => createRecord({ id: 'sync-test', origin: '北京', destination: '上海', seat: '01A' });
 test('initial connection and background sync call fetch with its global browser receiver', async () => {
   const previous = globalThis.fetch;
@@ -24,6 +25,17 @@ test('public data repositories are rejected before any write', async () => {
   const calls = [];
   const store = new GitHubStore({ owner: 'user', repo: 'data' }, 'redacted', async (url, options) => { calls.push(options); return new Response(JSON.stringify({ private: false, permissions: { push: true } })); });
   await assert.rejects(() => store.verify(), /私有仓库/); assert.equal(calls.length, 1); assert.equal(calls[0].method, undefined);
+});
+test('a GitHub archive index requires the reset generation and settings', async () => {
+  const server = new MemoryGitHub();
+  const store = new GitHubStore({ owner: 'user', repo: 'data', branch: 'main' }, 'test-key', server.fetch);
+  const { manifest } = await store.readArchiveIndex();
+  for (const [field, error] of [['generation', /重置标识/], ['settings', /索引无效/]]) {
+    const incomplete = { ...manifest };
+    delete incomplete[field];
+    server.corrupt('archive/index.json', JSON.stringify(incomplete));
+    await assert.rejects(store.read(), error);
+  }
 });
 test('conflicts do not write; explicit choices are rechecked against current remote', async () => {
   const base = record(), local = { ...base, seat: '02A' }, remote = { ...base, seat: '03A' };

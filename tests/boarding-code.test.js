@@ -7,7 +7,16 @@ import { ticketCodeEditor, bindTicketCodeEditor } from '../src/code-editor.js';
 import { createRecord, archive, readArchive, applyImport, mergeThreeWay } from '../src/model.js';
 import { ticketSVG, exportSVG } from '../src/tickets.js';
 import { DEMO_BOARDING_CODE as code } from '../src/demo-boarding-code.js';
-const flight = extra => createRecord({ id: 'flight-code', type: 'flight', template: 'air-boarding-pass', origin: '北京首都', destination: '东京羽田', service: 'CA181', departureDate: '2025-01-01', ...extra });
+const flight = extra => createRecord({ id: 'flight-code', type: 'flight', template: 'air-boarding-pass', origin: '北京首都', destination: '东京羽田', service: 'CA181', departureDate: '2025-01-01', boardingCodeSource: 'original', boardingLegIndex: '0', ...extra });
+
+test('archived boarding codes require their source and leg index', () => {
+  const current = archive([flight({ boardingCode: code })]);
+  for (const [field, error] of [['boardingCodeSource', /条码来源/], ['boardingLegIndex', /条码航段/]]) {
+    const record = { ...current.records[0] };
+    delete record[field];
+    assert.throws(() => readArchive({ ...current, records: [record] }), error);
+  }
+});
 const png = (width, height) => 'data:image/png;base64,' + new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="white"/></svg>`).render().asPng().toString('base64');
 test('flight codes accept payload data and reject all stored images', () => {
   assert.deepEqual(normalizeBoardingCode(code), code);

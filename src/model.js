@@ -101,22 +101,26 @@ export function validateRecord(input) {
     out.sources = []; out.lockedFields = [];
     return out;
   }
-  if(out.boardingCodeSource && !['original','generated'].includes(out.boardingCodeSource))throw new Error('条码来源无效');
-  if(out.type!=='flight' || !out.boardingCode){out.boardingCode='';out.boardingCodeSource='';out.boardingCodeOperatingFlight='';out.boardingLegIndex='';}
-  else {
-    out.boardingCodeSource ||= 'original';
-    if(out.boardingCodeSource==='original'){
-      const boarding=readBoardingCode(out.boardingCode);
-      if(boarding){
-        if(!/^[0-3]?$/.test(out.boardingLegIndex)||Number(out.boardingLegIndex)>=boarding.legCount)throw new Error('条码航段无效');
-        out.boardingLegIndex=String(Number(out.boardingLegIndex));
-        const leg=boarding.legs[Number(out.boardingLegIndex)];
+  if (out.type !== 'flight' || !out.boardingCode) {
+    for (const field of BOARDING_FIELDS) out[field] = '';
+  } else {
+    if (!['original', 'generated'].includes(out.boardingCodeSource)) throw new Error('条码来源无效');
+    if (!/^[0-3]$/.test(out.boardingLegIndex)) throw new Error('条码航段无效');
+    if (out.boardingCodeSource === 'original') {
+      const boarding = readBoardingCode(out.boardingCode);
+      const index = Number(out.boardingLegIndex);
+      if (index >= (boarding?.legCount ?? 1)) throw new Error('条码航段无效');
+      if (boarding) {
+        const leg = boarding.legs[index];
         for(const [key,value] of Object.entries(boardingMetadataValues(leg))){out[key]=value;out.fieldSources[key]='barcode';}
         out.departureDate=journeyDate({year:out.departureDate?.year??null,dayOfYear:leg.dayOfYear});out.fieldSources.departureDate='barcode';
       }
+      out.boardingCodeOperatingFlight = '';
+    } else {
+      if (out.boardingLegIndex !== '0') throw new Error('条码航段无效');
+      out.boardingCodeOperatingFlight = out.boardingCodeOperatingFlight.trim().toUpperCase().replace(/\s/g, '');
+      if (out.boardingCodeOperatingFlight) operatingFlight(out.boardingCodeOperatingFlight);
     }
-    out.boardingCodeOperatingFlight=out.boardingCodeSource==='generated' ? out.boardingCodeOperatingFlight.trim().toUpperCase().replace(/\s/g,'') : '';
-    if(out.boardingCodeOperatingFlight)operatingFlight(out.boardingCodeOperatingFlight);
   }
   normalizePlaces(out);
   for (const side of ['origin','destination']) out[side+'City']=cityLabel(out,side);

@@ -12,7 +12,7 @@ import {ticketCodeEditor,bindTicketCodeEditor} from '../src/code-editor.js';
 import {DEMO_BOARDING_CODE} from '../src/demo-boarding-code.js';
 
 const values=()=>({passenger:'DESMARAIS/LUC',pnr:'ABC123',origin:'YUL',destination:'FRA',carrier:'AC',flightNumber:'834',date:'2009-08-14',cabin:'F',seat:'1A',sequence:'25',status:'1',electronic:'E'});
-const flight=extra=>createRecord({type:'flight',template:'air-boarding-pass',passenger:'DESMARAIS/LUC',pnr:'ABC123',origin:'YUL',destination:'FRA',service:'AC834',departureDate:'2009-08-14',seat:'1A',seatClass:'F',...extra});
+const flight=extra=>createRecord({type:'flight',template:'air-boarding-pass',passenger:'DESMARAIS/LUC',pnr:'ABC123',origin:'YUL',destination:'FRA',service:'AC834',departureDate:'2009-08-14',seat:'1A',seatClass:'F',boardingCodeSource:'original',boardingLegIndex:'0',...extra});
 
 test('single-leg mandatory BCBP matches fixed-width reference fields, handles leap dates and never truncates values',()=>{
   const raw=encodeBCBP(values());

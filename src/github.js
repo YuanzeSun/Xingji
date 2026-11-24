@@ -55,14 +55,19 @@ export class GitHubStore {
     const shards = tree.tree.filter(e => /^archive\/(\d{4}|unknown)\.json$/.test(e.path) && e.type === 'blob');
     const index = tree.tree.find(entry => entry.path === 'archive/index.json' && entry.type === 'blob');
     const manifest = index ? JSON.parse(await this.readBlob(index.sha)) : null;
-    if (index && (manifest?.format !== 'xingji-index' || manifest.schemaVersion !== 1 ||
-        !manifest.files || typeof manifest.files !== 'object' || Array.isArray(manifest.files) ||
-        !Number.isSafeInteger(manifest.recordCount))) throw new Error('云端票库索引无效');
-    if (manifest?.generation !== undefined && (typeof manifest.generation !== 'string' ||
-        !/^[A-Za-z0-9-]{0,100}$/.test(manifest.generation))) throw new Error('云端票库重置标识无效');
+    if (index) {
+      if (manifest?.format !== 'xingji-index' || manifest.schemaVersion !== 1 ||
+          !manifest.files || typeof manifest.files !== 'object' || Array.isArray(manifest.files) ||
+          !Number.isSafeInteger(manifest.recordCount) || !Object.hasOwn(manifest, 'settings')) {
+        throw new Error('云端票库索引无效');
+      }
+      if (typeof manifest.generation !== 'string' || !/^[A-Za-z0-9-]{0,100}$/.test(manifest.generation)) {
+        throw new Error('云端票库重置标识无效');
+      }
+    }
     const snapshot = {
       records: [], settings: sharedSettings(manifest?.settings), head, tree: commit.tree.sha,
-      paths: shards.map(item => item.path), contents: {}, initialized: !!index, generation: manifest?.generation || ''
+      paths: shards.map(item => item.path), contents: {}, initialized: !!index, generation: manifest?.generation ?? ''
     };
     return { snapshot, manifest, shards };
   }
@@ -72,8 +77,10 @@ export class GitHubStore {
       if (shards.length) throw new ArchiveResetError(snapshot);
       return snapshot;
     }
-    if (Object.keys(manifest.files).some(path => !snapshot.paths.includes(path))) throw new ArchiveResetError({ ...snapshot, initialized: false, settings: sharedSettings(), generation: '' });
-    if (JSON.stringify(Object.keys(manifest.files).sort()) !== JSON.stringify([...snapshot.paths].sort())) throw new Error('云端票库文件不完整，已停止同步');
+    const manifestPaths = Object.keys(manifest.files);
+    const shardPaths = new Set(snapshot.paths);
+    if (manifestPaths.some(path => !shardPaths.has(path))) throw new ArchiveResetError({ ...snapshot, initialized: false, settings: sharedSettings(), generation: '' });
+    if (manifestPaths.length !== snapshot.paths.length) throw new Error('云端票库文件不完整，已停止同步');
     const records = [], contents = {};
     // Bound API concurrency to avoid burst throttling on decades of history.
     for (let i = 0; i < shards.length; i += 4) {

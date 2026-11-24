@@ -12,8 +12,10 @@ export class MemoryGitHub {
   commit(tree, parent = this.head) { const sha = 'head-' + ++this.sequence; this.commits.set(sha, { tree, parent }); return sha; }
   push(records, settings = this.head ? this.settings() : {}) {
     const files = {}, digests = {};
+    const previousIndex = this.head && this.trees.get(this.commits.get(this.head).tree)['archive/index.json'];
+    const generation = previousIndex ? JSON.parse(this.blobs.get(previousIndex)).generation : '';
     for (const [year, rows] of Object.entries(partition(records))) { const path = `archive/${year}.json`, text = JSON.stringify(archive(rows), null, 2); files[path] = this.blob(text); digests[path] = hash(text); }
-    files['archive/index.json'] = this.blob(JSON.stringify({ format: 'xingji-index', schemaVersion: 1, recordCount: records.length, files: digests, settings: sharedSettings(settings) }));
+    files['archive/index.json'] = this.blob(JSON.stringify({ format: 'xingji-index', schemaVersion: 1, recordCount: records.length, generation, files: digests, settings: sharedSettings(settings) }));
     this.head = this.commit(this.tree(files)); return this.head;
   }
   ancestor(a, b) { while (b) { if (a === b) return true; b = this.commits.get(b)?.parent; } return false; }
