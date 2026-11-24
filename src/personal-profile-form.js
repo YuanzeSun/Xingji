@@ -70,9 +70,13 @@ export function bindPersonalProfileForm(form, { profile = {}, change, restructur
     profile.documents.push({id:crypto.randomUUID(),type:'other',label:'',number:'',expiry:''});
     restructure(profile);
   });
-  for (const button of form.querySelectorAll('[data-profile-remove]')) button.addEventListener('click',()=>{
-    const profile = collectPersonalProfile(form); profile.documents = profile.documents.filter(doc=>doc.id !== button.dataset.profileRemove);
-    restructure(profile);
+  for (const button of form.querySelectorAll('[data-profile-remove]')) button.addEventListener('click', () => {
+    const draft = collectPersonalProfile(form);
+    const selectedDocument = draft.documents.find(doc => doc.id === button.dataset.profileRemove);
+    if (!selectedDocument || !form.ownerDocument.defaultView.confirm(`移除「${documentName(selectedDocument)}」？保存个人资料后，自动预填和证件匹配将跳过这份证件。`)) return;
+    draft.documents = draft.documents.filter(doc => doc.id !== selectedDocument.id);
+    restructure(draft);
+    form.ownerDocument.querySelector('#profile-form [data-profile-add]')?.focus();
   });
   for (const button of form.querySelectorAll('[data-membership-remove]')) button.addEventListener('click', () => {
     const id = button.closest('[data-membership-id]').dataset.membershipId;
