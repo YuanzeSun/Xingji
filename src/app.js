@@ -961,6 +961,13 @@ function editRecord(record = newPersonalRecord(), {
   bindDatePickers(form);
   bindPlaceFields(form);
   bindReferenceFields(form, state.records);
+  function clearEditorLookupValues() {
+    const cleared=clearLookupValues(draft);
+    for (const key of Object.keys(cleared)) {
+      if (JOURNEY_DATE_FIELDS.includes(key)) writeTicketDate(form,key,'');
+      else if (form.elements[key]) form.elements[key].value='';
+    }
+  }
   form.addEventListener('change',event=>{
     const input=event.target;
     if(input.matches('[data-bcbp]') && !input.disabled)editor.dirty=true;
@@ -973,13 +980,7 @@ function editRecord(record = newPersonalRecord(), {
       document.querySelector('#editor-preview').innerHTML=ticketSVG(draft);
       return;
     }
-    if(lookupContext(previousRecord)!==lookupContext(draft)){
-      const cleared=clearLookupValues(draft);
-      for(const key of Object.keys(cleared)) {
-        if(JOURNEY_DATE_FIELDS.includes(key))writeTicketDate(form,key,'');
-        else if(form.elements[key])form.elements[key].value='';
-      }
-    }
+    if (lookupContext(previousRecord)!==lookupContext(draft)) clearEditorLookupValues();
     if (railFields || draft.template !== previousRecord.template) {
       const scannedRailQR = railFields ? { ...railFields, type:'rail' } : undefined;
       editRecord(draft, { imported, preserve: true, original, scannedRailQR });
@@ -1031,7 +1032,7 @@ function editRecord(record = newPersonalRecord(), {
       editRecord(draft, { imported, preserve: true, original });
       return;
     }
-    const previousRecord={...draft}, previousTemplate = draft.template, previousStatus = draft.flightStatus, previousQuery=lookupContext(draft);
+    const previousRecord={...draft}, previousQuery=lookupContext(draft);
     if (!lookupApplying && ['passenger','identity'].includes(event.target.name)) editor.personalEdited.add(event.target.name);
     const data = new FormData(form); for (const [key, value] of data) if (FIELDS.includes(key) && !JOURNEY_DATE_FIELDS.includes(key) && !ticketFieldLocked(draft,key)) draft[key] = value;
     for(const key of JOURNEY_DATE_FIELDS)if(form.elements[key+'Year'])draft[key]=readTicketDate(form,key,draft);
@@ -1042,18 +1043,15 @@ function editRecord(record = newPersonalRecord(), {
     }
     normalizePlaces(draft);
     if(!lookupApplying){
-      const key=event.target.name || (event.target.matches('[data-seat-number],[data-berth]') ? 'seat' : event.target.matches('[data-seat-preset]') ? 'seatClass' : event.target.matches('[data-refund-receipt]') ? 'template' : '');
+      const key=changedKey || (target.matches('[data-refund-receipt]') ? 'template' : '');
       if(event.target.closest('.ticket-mark-row'))markManualFields(draft,['ticketMarks']);
       if(dateKey){markManualFields(draft,[dateKey]);markFieldSources(draft,[dateKey+'Year'],'manual');if(barcodeDateDay(draft,dateKey))draft.fieldSources[dateKey]='barcode';}
       else if(FIELDS.includes(key))markManualFields(draft,[key,...(['origin','destination'].includes(key) ? [key+'Code'] : [])]);
-      if(previousQuery!==lookupContext(draft)){
-        const cleared=clearLookupValues(draft);
-        for(const key of Object.keys(cleared))if(JOURNEY_DATE_FIELDS.includes(key))writeTicketDate(form,key,'');else if(form.elements[key])form.elements[key].value='';
-      }
+      if (previousQuery!==lookupContext(draft)) clearEditorLookupValues();
     }
     if (draft.railJourney && !railJourneyMatches(draft)) draft.railJourney='';
     editor.dirty = true;
-    if (previousStatus !== draft.flightStatus || previousTemplate !== draft.template) { editRecord(draft, { imported, preserve: true, original }); return; }
+    if (previousRecord.flightStatus !== draft.flightStatus || previousRecord.template !== draft.template) { editRecord(draft, { imported, preserve: true, original }); return; }
     if(flight)updatePersonalFields(previousRecord);
     refreshFieldSources(form,draft);
     refreshTicketFieldLocks(form,draft);
@@ -1110,38 +1108,33 @@ function editRecord(record = newPersonalRecord(), {
       }
     } catch (err) { release(); release = () => {}; applyAccessPolicy(); showError(err); } finally { release(); applyAccessPolicy(); }
   });
-  if (flight) flightLookupCleanup = bindFlightLookup(form, {
-    getRecord: () => draft, getKey: flightKey, canQuery: canWrite, desktop: supportsDesktopMcp,
-    apply(changes, source) {
-      lookupApplying=true;
-      try {
+  function applyEditorLookup(changes, source) {
+    lookupApplying=true;
+    try {
       applyLookupValues(draft,changes,!!source,source);
-      for (const [field, value] of Object.entries(changes)) if(JOURNEY_DATE_FIELDS.includes(field))writeTicketDate(form,field,draft[field]);else if (form.elements[field]) form.elements[field].value = value;
-      for (const side of ['origin', 'destination']) if (changes[side] || changes[side + 'Code']) {
-        const input = form.elements[side];
-        input.value = draft[side + 'Code'] || draft[side];
-        input.dispatchEvent(new window.Event('input', { bubbles: true }));
-        input.dispatchEvent(new window.Event('change', { bubbles: true }));
+      for (const [key,value] of Object.entries(changes)) {
+        if (JOURNEY_DATE_FIELDS.includes(key)) writeTicketDate(form,key,draft[key]);
+        else if (form.elements[key]) form.elements[key].value=value;
       }
-      normalizePlaces(draft);
+      if (flight) {
+        for (const side of ['origin', 'destination']) if (changes[side] || changes[side + 'Code']) {
+          const input = form.elements[side];
+          input.value = draft[side + 'Code'] || draft[side];
+          input.dispatchEvent(new window.Event('input', { bubbles: true }));
+          input.dispatchEvent(new window.Event('change', { bubbles: true }));
+        }
+        normalizePlaces(draft);
+      }
       if (!draft.sources.length) draft.sources.push({ kind: 'manual', label: '录入', at: now() });
-      if (!draft.sources.some(item => item.kind === source.kind && item.label === source.label)) draft.sources.push(source);
+      if (source && !draft.sources.some(item => item.kind === source.kind && item.label === source.label)) draft.sources.push(source);
       form.elements.service.dispatchEvent(new window.Event('input', { bubbles: true }));
-      } finally {lookupApplying=false;}
-    }
+    } finally {lookupApplying=false;}
+  }
+  if (flight) flightLookupCleanup = bindFlightLookup(form, {
+    getRecord: () => draft, getKey: flightKey, canQuery: canWrite, desktop: supportsDesktopMcp, apply: applyEditorLookup
   });
   else railLookupCleanup = bindRailLookup(form, {
-    getRecord: () => draft, canQuery: canWrite, scannedRail, scannedRailQR,
-    apply(changes, source) {
-      lookupApplying=true;
-      try {
-      applyLookupValues(draft,changes,!!source,source);
-      for (const [key,value] of Object.entries(changes)) if(JOURNEY_DATE_FIELDS.includes(key))writeTicketDate(form,key,draft[key]);else if (form.elements[key]) form.elements[key].value=value;
-      if (!draft.sources.length) draft.sources.push({ kind:'manual', label:'录入', at:now() });
-      if (source && !draft.sources.some(item=>item.kind===source.kind && item.label===source.label)) draft.sources.push(source);
-      form.elements.service.dispatchEvent(new window.Event('input', { bubbles:true }));
-      } finally {lookupApplying=false;}
-    }
+    getRecord: () => draft, canQuery: canWrite, scannedRail, scannedRailQR, apply: applyEditorLookup
   });
   applyAccessPolicy();
 }

@@ -26,13 +26,15 @@ export function markManualFields(record,fields) {
   record.lockedFields=[...locked].sort();
 }
 export function applyLookupValues(record,changes,automatic=true,source) {
-  changes=Object.fromEntries(Object.entries(changes).filter(([key])=>!ticketFieldLocked(record,key)));
+  changes=Object.fromEntries(Object.entries(changes)
+    .filter(([key])=>!ticketFieldLocked(record,key))
+    .map(([key,value])=>[key,JOURNEY_DATE_FIELDS.includes(key) ? journeyDate(value) : value]));
   record.lookupValues={...record.lookupValues};
-  changes=Object.fromEntries(Object.entries(changes).map(([key,value])=>[key,JOURNEY_DATE_FIELDS.includes(key)?journeyDate(value):value]));
   Object.assign(record,changes);
-  markFieldSources(record,Object.keys(changes),automatic ? importFieldSource(source?.kind) || 'lookup' : 'manual');
-  markFieldSources(record,Object.keys(changes).filter(key=>JOURNEY_DATE_FIELDS.includes(key)).map(key=>key+'Year'),automatic ? importFieldSource(source?.kind) || 'lookup' : 'manual');
-  if(!automatic)for(const key of Object.keys(changes))if(!changes[key] && !record.lockedFields?.includes(key))delete record.fieldSources[key];
+  const fields=Object.keys(changes);
+  const years=fields.filter(key=>JOURNEY_DATE_FIELDS.includes(key)).map(key=>key+'Year');
+  markFieldSources(record,[...fields,...years],automatic ? importFieldSource(source?.kind) || 'lookup' : 'manual');
+  if(!automatic)for(const key of fields)if(!changes[key] && !record.lockedFields?.includes(key))delete record.fieldSources[key];
   for(const [key,value] of Object.entries(changes))if(LOOKUP_FIELDS.includes(key)){
     if(automatic && value && !record.lockedFields?.includes(key))record.lookupValues[key]=value;
     else delete record.lookupValues[key];

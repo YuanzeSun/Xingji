@@ -7,6 +7,7 @@ import { bureauFromCode, normalizeRailBureau, parseRailGoModel } from './rail-de
 import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, sameRailTimetable } from './rail-journey.js';
 
 export const shiftRailDate = (date, days) => { const result = new Date(calendarDate(date) + 'T00:00:00Z'); result.setUTCDate(result.getUTCDate() + days); return result.toISOString().slice(0, 10); };
+export const railDepartureDay = (day, arrival, departure) => day + (arrival && departure < arrival ? 1 : 0);
 function endpoint(record, side) {
   const place = resolvePlace(record, side);
   if (['ambiguous', 'conflict'].includes(place.status)) throw new Error('请先确认出发站和到达站');
@@ -28,7 +29,7 @@ const runDateLabel = value => `${value.slice(0, 4)}-${value.slice(4, 6)}-${value
 function nearestRunDate(runDays, boardingDate) {
   const boardingTime = Date.parse(boardingDate);
   const distance = date => Math.abs(Date.parse(date) - boardingTime);
-  return (runDays || []).filter(value => typeof value === 'string' && /^\d{8}$/.test(value))
+  return runDays.filter(value => typeof value === 'string' && /^\d{8}$/.test(value))
     .map(runDateLabel).filter(validDate).sort((a, b) => distance(a) - distance(b) || a.localeCompare(b))[0];
 }
 
@@ -45,7 +46,7 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
   if (row.timetable.filter(stop => stationName(stop?.station) === query.origin).length !== 1 || row.timetable.filter(stop => stationName(stop?.station) === query.destination).length !== 1) throw new Error('乘车站点存在多个匹配，未填入');
   const stop = row.timetable[from];
   if (!Number.isInteger(stop.day) || stop.day < 0 || stop.day > 7 || !railTime(stop.depart)) throw new Error('无法确认该站的发车日期，未填入');
-  const offset = stop.day + (railTime(stop.arrive) && stop.depart < stop.arrive ? 1 : 0);
+  const offset = railDepartureDay(stop.day, railTime(stop.arrive), railTime(stop.depart));
   const startDate = runDateLabel(query.date);
   const boardingDate = shiftRailDate(startDate, offset);
   if (!runDays.includes(query.date)) {
@@ -66,7 +67,7 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
   const stops = row.timetable.map(item => {
     if (!Number.isInteger(item.day) || item.day < 0 || item.day > 7) throw new Error('经停站跨日资料异常，未填入');
     const arrivalTime = railTime(item.arrive), departureTime = railTime(item.depart);
-    return { station:stationName(item.station), trainCode:service(item.trainCode), arrivalDate:arrivalTime ? shiftRailDate(startDate, item.day) : '', arrivalTime, departureDate:departureTime ? shiftRailDate(startDate, item.day + (arrivalTime && departureTime < arrivalTime ? 1 : 0)) : '', departureTime, stopMinutes:Number.isInteger(item.stopTime) ? item.stopTime : null };
+    return { station:stationName(item.station), trainCode:service(item.trainCode), arrivalDate:arrivalTime ? shiftRailDate(startDate, item.day) : '', arrivalTime, departureDate:departureTime ? shiftRailDate(startDate, railDepartureDay(item.day, arrivalTime, departureTime)) : '', departureTime, stopMinutes:Number.isInteger(item.stopTime) ? item.stopTime : null };
   });
   let previous = calendarDate(stops[0].departureDate) + 'T' + stops[0].departureTime;
   for (const [i, item] of stops.entries()) {

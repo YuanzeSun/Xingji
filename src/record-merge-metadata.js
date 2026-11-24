@@ -3,12 +3,19 @@ import {BOARDING_FIELDS,generatedCodeSettings} from './boarding-code-state.js';
 import {copyFieldSource} from './field-sources.js';
 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+
+function copyFieldLock(target,source,field) {
+  target.lockedFields=(target.lockedFields || []).filter(key=>key!==field);
+  if(source.lockedFields?.includes(field))target.lockedFields.push(field);
+  target.lockedFields.sort();
+}
+
 export function fieldState(record,field,trackFieldLock=false) {
   if(!record)return undefined;
-  if(trackFieldLock && !LOOKUP_FIELDS.includes(field))return {
-    value:record[field], locked:record.lockedFields?.includes(field) || false, source:record.fieldSources?.[field]
-  };
-  if(!LOOKUP_FIELDS.includes(field))return record[field];
+  if(!LOOKUP_FIELDS.includes(field)) {
+    if(!trackFieldLock)return record[field];
+    return {value:record[field],locked:record.lockedFields?.includes(field) || false,source:record.fieldSources?.[field]};
+  }
   return {value:record[field],manual:record.lockedFields?.includes(field) || false,lookup:isLookupValue(record,field),
     ...(trackFieldLock && {source:record.fieldSources?.[field]})};
 }
@@ -21,16 +28,12 @@ export function takeField(target,source,field,trackFieldLock=false) {
     if(isLookupValue(source,field))target.lookupValues[field]=source[field];
     else delete target.lookupValues[field];
   }else if(!trackFieldLock)return;
-  target.lockedFields=(target.lockedFields || []).filter(key=>key!==field);
-  if(source.lockedFields?.includes(field))target.lockedFields.push(field);
-  target.lockedFields.sort();
+  copyFieldLock(target,source,field);
 }
 export function takeBoardingCode(target,source) {
   for(const field of BOARDING_FIELDS)target[field]=structuredClone(source[field] || '');
   copyFieldSource(target,source,'boardingCode');
-  target.lockedFields=(target.lockedFields || []).filter(key=>key!=='boardingCode');
-  if(source.lockedFields?.includes('boardingCode'))target.lockedFields.push('boardingCode');
-  target.lockedFields.sort();
+  copyFieldLock(target,source,'boardingCode');
 }
 function boardingState(record) {
   if(!record)return undefined;
@@ -48,8 +51,7 @@ export function resolveRecordConflict(record,conflict,choice) {
   choice=choice==='remote' ? 'remote' : 'local';
   const source=conflict.context?.[choice];
   if(conflict.field==='boardingCode' && source)takeBoardingCode(record,source);
-  else if(conflict.trackFieldLock && source)takeField(record,source,conflict.field,true);
-  else if(LOOKUP_FIELDS.includes(conflict.field) && source)takeField(record,source,conflict.field);
+  else if(source && (conflict.trackFieldLock || LOOKUP_FIELDS.includes(conflict.field)))takeField(record,source,conflict.field,conflict.trackFieldLock);
   else {
     record[conflict.field]=structuredClone(conflict[choice]);
     record.fieldSources={...record.fieldSources};

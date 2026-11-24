@@ -2,7 +2,7 @@ import {calendarDate} from './journey-date.js';
 import { loadRailRoute } from './rail-route.js';
 import { railRouteMatches } from './rail-route-snapshot.js';
 import { loadRailLineNames } from './rail-line-names.js';
-import { railDetails } from './rail-lookup-model.js';
+import { railDepartureDay, railDetails, shiftRailDate } from './rail-lookup-model.js';
 import {resolvePlace} from './places.js';
 import { railText as clean, railService, railTime, railStation, isEmuModel, normalizeRailJourney, railJourneyRange, sameRailTimetable } from './rail-journey.js';
 export const RAIL_DETAILS_SOURCE = 'https://api.railgo.dev/479755220e0';
@@ -46,7 +46,7 @@ async function stockDetails(id, options, queriedAt) {
   return { id, model:clean(row.model), subModel:clean(row.sub_model), manufactureMonth:clean(row.manufacture_month), manufacturer:clean(row.trainset_manufacturer), trailerManufacturer:clean(row.trailer_manufacturer), depot:clean(row.depot), trainDepot:clean(row.train_depot), socket:clean(row.socket_location),customType:clean(row.custom_type),modelRemark:clean(row.remark?.model),carRemark:clean(row.remark?.car?.note), queriedAt };
 }
 
-export function compactRailGates(gates) {
+function compactRailGates(gates) {
   return [...new Set(gates.flatMap(value=>{
     const match=value.match(/([A-Z]?\d+[A-Z]?(?:[-/、至—][A-Z]?\d+[A-Z]?)*)\s*检票口$/i);
     return match ? match[1].split(/[、/]/) : [value];
@@ -168,7 +168,14 @@ export async function lookupRailDetails(query, { fetcher = globalThis.fetch, sig
     const url=new URL('https://data.railgo.zenglingkun.cn/api/train/query');url.searchParams.set('train',result.query.trainNum);
     const payload=await requestJSON(url,options),row=payload.data || payload,rows=row.timetable;
     if(!Array.isArray(row.numberFull) || !row.numberFull.includes(result.query.trainNum) || !Array.isArray(row.rundays) || !row.rundays.includes(result.query.date) || !Array.isArray(rows) || rows.length!==journey.stops.length)return;
-    if(rows.some((stop,i)=>railStation(stop.station)!==journey.stops[i].station || railTime(stop.arrive)!==journey.stops[i].arrivalTime || railTime(stop.depart)!==journey.stops[i].departureTime || !Number.isInteger(stop.day) || (railTime(stop.arrive) && shiftRailDateForMileage(result.query.date,stop.day)!==calendarDate(journey.stops[i].arrivalDate)) || (railTime(stop.depart) && shiftRailDateForMileage(result.query.date,stop.day+(railTime(stop.arrive) && stop.depart<stop.arrive ? 1 : 0))!==calendarDate(journey.stops[i].departureDate))))return;
+    const startDate=calendarDate(journey.query.startDate);
+    const timetableMatches=rows.every((stop,i)=>{
+      const expected=journey.stops[i], arrival=railTime(stop.arrive), departure=railTime(stop.depart);
+      if (railStation(stop.station)!==expected.station || arrival!==expected.arrivalTime || departure!==expected.departureTime || !Number.isInteger(stop.day)) return false;
+      return (!arrival || shiftRailDate(startDate,stop.day)===calendarDate(expected.arrivalDate)) &&
+        (!departure || shiftRailDate(startDate,railDepartureDay(stop.day,arrival,departure))===calendarDate(expected.departureDate));
+    });
+    if (!timetableMatches) return;
     if (!validDistances(rows.map(stop => stop.distance))) return;
     journey.stops.forEach((stop,i)=>{stop.distanceKm=rows[i].distance;});journey.distanceQueriedAt=queriedAt;
   };
@@ -202,5 +209,3 @@ export async function lookupRailDetails(query, { fetcher = globalThis.fetch, sig
   result.partial = partialStock || extras.some(item => item.status === 'rejected');
   return result;
 }
-
-function shiftRailDateForMileage(date,days){const value=new Date(date.slice(0,4)+'-'+date.slice(4,6)+'-'+date.slice(6)+'T00:00:00Z');value.setUTCDate(value.getUTCDate()+days);return value.toISOString().slice(0,10);}
