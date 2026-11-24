@@ -370,7 +370,7 @@ dialog:is(.ticket-editor-modal,.ticket-detail-modal)::backdrop{backdrop-filter:n
 .map-playback-button:hover:not(:disabled){background:#305a73}.map-playback-button:disabled{opacity:.55}
 .map-playback-status{position:absolute;top:16px;left:16px;max-width:calc(100% - 86px);margin:0;padding:7px 11px;border:1px solid #42637b;border-radius:7px;background:#112a3df2;color:#f0f8fc;font-size:13px;line-height:1.45;font-variant-numeric:tabular-nums;pointer-events:none}
 .map-playback{pointer-events:none;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:calc(2.1 * var(--map-playback-unit,1px));stroke:#6cdaef}
-.map-playback-trip.rail{stroke:#ffc077}.map-playback-trip.is-current{stroke:#c6faff;stroke-width:calc(3.6 * var(--map-playback-unit,1px))}.map-playback-trip.is-current.rail{stroke:#fff0bf}
+.map-playback-trip.rail{stroke:#ffc077}
 .journey-map-canvas[data-map-playing] .map-real-tracks,.journey-map-canvas[data-map-playing] ~ .map-empty{display:none}
 .journey-map-canvas[data-map-playing] .map-node{pointer-events:none}
 

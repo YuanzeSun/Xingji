@@ -39,7 +39,7 @@ test('map playback reveals trips in departure order for one year or the whole ar
   t.after(() => { cleanup(); dom.window.close(); globalThis.window = previous; });
   const select = selector => container.querySelector(selector);
   const playback = () => select('[data-map-playback-button]');
-  const current = () => select('.map-playback-trip.is-current');
+  const current = () => select('.map-playback').lastElementChild;
   const currentPath = () => current().querySelector('path');
   const lines = () => container.querySelectorAll('[data-rail-line-name="京津城际线"]').length;
   const year = value => {
@@ -65,8 +65,10 @@ test('map playback reveals trips in departure order for one year or the whole ar
   assert.ok(half.length > 2 && half.length < 33);
   frame(5999);
   assert.equal(current().dataset.mapPlaybackTrip, 'outbound');
+  const outboundOverlay = current(), outboundClass = outboundOverlay.getAttribute('class');
   frame(6000);
   assert.equal(current().dataset.mapPlaybackTrip, 'rail-early');
+  assert.equal(outboundOverlay.getAttribute('class'), outboundClass);
   const outbound = select('[data-map-playback-trip="outbound"] path').getAttribute('d').slice(1).split('L');
   assert.equal(outbound.length, 33);
   assert.deepEqual(half.slice(0, -1), outbound.slice(0, half.length - 1));
@@ -94,8 +96,9 @@ test('map playback reveals trips in departure order for one year or the whole ar
   assert.equal(current().dataset.mapPlaybackTrip, 'fallback');
   frame(22400);
   assert.ok(select('[data-map-playing]'));
-  assert.equal(current(), null);
+  assert.equal(current().dataset.mapPlaybackTrip, 'fallback');
   frame(22850);
+  assert.equal(current(), null);
   assert.equal(frames.size, 0);
   assert.equal(playback().textContent, '重播年度行程');
   assert.ok(select('.map-route'));
@@ -127,8 +130,9 @@ test('map playback reveals trips in departure order for one year or the whole ar
   frame(timestamp + 1999);
   assert.equal(current().dataset.mapPlaybackTrip, 'same-city');
   frame(timestamp + 2000);
-  assert.equal(current(), null);
+  assert.equal(current().dataset.mapPlaybackTrip, 'same-city');
   frame(timestamp + 2450);
+  assert.equal(current(), null);
   assert.equal(playback().textContent, '重播全部行程');
   assert.equal(select('[data-map-playback-status]').textContent, '已播放 7 程');
   assert.equal(select('.journey-map-canvas').getAttribute('viewBox'), allRoutesView);

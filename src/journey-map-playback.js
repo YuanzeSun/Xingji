@@ -62,7 +62,7 @@ function drawTrip(layer, trip, id, visitStation) {
     paths.push({ path, points, coordinates, distances, end: total });
   }
   const overlay = layer.ownerDocument.createElementNS(SVG_NS, 'g');
-  overlay.setAttribute('class', `map-playback-trip ${trip.record.type} is-current`);
+  overlay.setAttribute('class', `map-playback-trip ${trip.record.type}`);
   overlay.dataset.mapPlaybackTrip = trip.record.id;
   overlay.append(group);
   for (const offset of [-1000, 1000]) {
@@ -93,10 +93,7 @@ function drawTrip(layer, trip, id, visitStation) {
       while (arrival < arrivals.length && arrivals[arrival].distance <= distance) visitStation(arrivals[arrival++].station);
       return arrival > firstArrival;
     },
-    finish(keep) {
-      if (!keep) overlay.remove();
-      else overlay.classList.remove('is-current');
-    }
+    remove: () => overlay.remove()
   };
 }
 
@@ -143,8 +140,8 @@ export function bindMapPlayback(svg, button, status, trips, { scope, requestFram
     const reachedStation = !reducedMotion && current.paint(progress);
     if (progress === 1) {
       const trip = trips[tripIndex];
-      current.finish(!drawn.has(trip.key));
-      drawn.add(trip.key);
+      if (drawn.has(trip.key)) current.remove();
+      else drawn.add(trip.key);
       reached.add(trip.to);
       for (const label of trip.rail?.lineLabels || []) labels.add(label);
       tripIndex++;
