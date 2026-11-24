@@ -35,13 +35,14 @@ import { MARK_SHAPES, describeMarks } from './ticket-marks.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from './code-editor.js';
 import {ticketViewOptions,ticketViewControls,ticketCollection, appendTicketCollection,bindTicketViewControls} from './ticket-view.js';
 import {mountTicketSpace} from './ticket-space.js';
-import { requiredTicketFields, ticketRequiredMark, ticketFieldLabel, validateTicketForm, ticketFormFeedback } from './ticket-form.js';
+import { requiredRecordFields, ticketRequiredMark, ticketFieldLabel, validateTicketForm, ticketFormFeedback } from './ticket-form.js';
 import { seatClassField, bindSeatClassFields } from './seat-class-field.js';
 import { seatField, bindSeatFields } from './seat-field.js';
-import { bindDatePickers,ticketDateField,bindTicketDates,readTicketDate,writeTicketDate,barcodeDateDay } from './date-field.js';
+import { bindDatePickers,dateControl,ticketDateField,bindTicketDates,readTicketDate,writeTicketDate,barcodeDateDay } from './date-field.js';
 import { flightLookupMarkup, bindFlightLookup } from './flight-lookup.js';
 import { flightTrackRequest } from './flight-track.js';
 import { railLookupMarkup, bindRailLookup, railTrainsetField } from './rail-lookup.js';
+import { RAIL_POINTS_PAGE, railPointsRange, readRailPoints, railPointsRecords } from './rail-points.js';
 import { railJourneyMarkup, bindRailJourney } from './rail-journey-ui.js';
 import { railJourneyMatches } from './rail-journey.js';
 import { openRailCamera } from './rail-camera.js';
@@ -89,7 +90,7 @@ const icons = {
 };
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.ticket}</svg>`;
 const labels = { ...BOARDING_METADATA_LABELS, ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightTrack: '飞行航迹', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '条码', boardingCode: '机票条码' };
-const imports = { task: null, backup: null };
+const imports = { task: null, backup: null, railPoints: null };
 let importView = 0;
 const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, routesOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null };
 const samples = demoRecords();
@@ -304,6 +305,9 @@ function applyAccessPolicy() {
   for (const input of document.querySelectorAll('[data-setting-control]')) input.disabled = !canWrite() || state.saving;
   const refresh = document.querySelector('[data-action="flight-refresh"]'); if (refresh) refresh.disabled = !flightKey() || imports.task?.kind === 'flight' || !navigator.onLine || (state.flightKeyDraft !== null && state.flightKeyDraft.trim() !== flightKey());
   const flightYear = document.querySelector('#flight-year'); if (flightYear) flightYear.disabled = imports.task?.kind === 'flight';
+  for (const button of document.querySelectorAll('[data-action="rail-points"],[data-action="rail-points-trip"],#rail-points-form [type="submit"]')) {
+    button.disabled = !canWrite() || state.saving || !!imports.task || !navigator.onLine;
+  }
   if (!canWrite()) stopRailCamera();
   const form = document.querySelector('#editor-form');
   if (form) for (const input of form.querySelectorAll('input,select,textarea,button:not([data-action="close-modal"])')) {
@@ -608,6 +612,10 @@ function flightSettingsPanel() {
   if (!supportsDesktopMcp()) return '';
   return `<section class="panel desktop-flight-settings"><div class="panel-heading"><span class="panel-icon">${icon('plane')}</span><div><h2>飞常准历史行程</h2><p>电脑端 · 按年手动查询</p></div></div><label class="field"><span>历史行程年份</span><input id="flight-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" step="1" value="${e(state.flightYear)}" /></label><form id="flight-form"><label class="field"><span>个人MCP Key</span><input type="password" name="key" value="${e(state.flightKeyDraft ?? flightKey())}" autocomplete="off" data-setting-control /></label><p class="form-error" role="alert">${e(state.settingsError)}</p><div class="button-row flight-actions"><button class="button secondary" type="submit" data-setting-control>保存并同步</button><button class="button secondary" type="button" data-action="flight-refresh">${icon('refresh', imports.task?.kind === 'flight' ? 'spin' : '')}${imports.task?.kind === 'flight' ? '正在查询…' : '查询历史行程'}</button></div></form><p class="body-copy">电脑 Chrome 或 Edge 安装连接扩展后，可按年份查询历史行程。</p><a class="button secondary" href="./downloads/xingji-variflight-extension.zip" download="行迹-飞常准连接.zip">下载电脑连接扩展</a>${state.flightResult ? '<button class="text-button" data-action="flight-result">查看本次接口返回</button>' : ''}<a class="small-link" href="https://cmcp.variflight.com/tools/" target="_blank" rel="noopener noreferrer">平台文档与授权说明 ↗</a></section>`;
 }
+function railPointsPanel() {
+  if (!supportsDesktopMcp() || !/Chrome\/|Chromium\/|Edg\//.test(navigator.userAgent)) return '';
+  return `<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('ticket')}</span><div><h2>12306 乘车记录</h2><p>铁路畅行会员 · 电脑 Chrome 或 Edge</p></div></div><div class="button-row"><button type="button" class="button secondary" data-action="rail-points">从 12306 导入</button><a class="button secondary" href="./downloads/xingji-12306-extension.zip" download="行迹-12306连接.zip">下载连接扩展</a></div></section>`;
+}
 function dataPage() {
   const count = state.records.filter(r => !r.deleted).length;
   return header('数据与同步', '管理个人资料、同步与外部连接。') + `<div class="data-layout">
@@ -615,6 +623,7 @@ function dataPage() {
     ${personalProfilePanel(state.profileDraft || state.settings.profile,state.profileError)}
     <div class="data-column">${d1ConnectionPanel()}<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h2>GitHub 私有仓库</h2><p data-cloud-label>${state.d1 ? '手动备份' : e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError)}</p>${githubExtras()}</section></div>
     ${flightSettingsPanel()}
+    ${railPointsPanel()}
     <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button></div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div><div data-restore-followup>${backupRestoreMarkup()}</div>${queuedBackupButton()}${cloudActions()}</section>
   </div>`;
 }
@@ -857,7 +866,7 @@ function field(key, r, options = {}) {
   const type = options.type || (['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime', 'actualBoardingTime'].includes(key) ? 'time' : 'text');
   const airportField = r.type === 'flight' && ['origin', 'destination', 'originCode', 'destinationCode'].includes(key);
   const placeholders = { railBureau: '如：上海局', railModel: '如：25T、CR400BF-S', railPowerSupply:'如：DC600V、AC380V', railMileage:'如：1463', departureDate: '如 2026-11-15', arrivalDate: '如 2026-11-15', origin: r.type === 'rail' ? '如：北京南' : '如：PEK / 北京首都', destination: r.type === 'rail' ? '如：上海虹桥' : '如：HND / 东京羽田', service: r.type === 'rail' ? '如：G103' : '如：CA181', originCode: r.type === 'rail' ? '如：Beijingnan' : '如：PEK', destinationCode: r.type === 'rail' ? '如：Shanghaihongqiao' : '如：HND', identity: '请输入完整证件号', departureZone: '如：Asia/Shanghai', arrivalZone: '如：Asia/Tokyo' };
-  const required = requiredTicketFields(r.type, r.template, r.flightStatus, r.railStanding, !!r.railInvoice?.electronicTicketNumber).includes(key) || ['type', 'template'].includes(key);
+  const required = requiredRecordFields(r).includes(key) || ['type', 'template'].includes(key);
   const requiredAttrs = required ? 'required aria-required="true"' : '';
   if(JOURNEY_DATE_FIELDS.includes(key))return ticketDateField(key,r,{label:ticketFieldLabel(key,r.type,labels[key]),required});
   const control = options.options ? `<select name="${key}" ${requiredAttrs}>${selectOptions(options.options, r[key])}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${options.type === 'number' ? 'min="-30" max="30" step="1"' : ''} ${['price','railMileage','flightDistance','railSupplementFee','railSupplementSurcharge'].includes(key) ? 'inputmode="decimal"' : ''} ${key === 'identity' ? 'autocomplete="off" spellcheck="false"' : ''} />`;
@@ -1171,9 +1180,10 @@ function mayOpenImport(task) {
   return canWrite() && (!task || task.view === importView) && !modalRoot.querySelector('dialog');
 }
 function clearImportedWork() {
-  if (editor?.imported || modalRoot.querySelector('[data-backup-restore]')) closeModal(true);
+  if (editor?.imported || modalRoot.querySelector('[data-backup-restore],#rail-points-form')) closeModal(true);
   imports.task = null;
   imports.backup = null;
+  imports.railPoints = null;
 }
 async function importBackup(file) {
   const task = startImport('backup');
@@ -1972,6 +1982,64 @@ function showFlightResult() {
   const raw = JSON.stringify(state.flightResult, null, 2);
   openModal(modalHead(`${state.flightResultYear} 年历史行程返回`, '查询结果供本人查看。') + `<div class="detail-body"><pre class="raw-result">${e(raw)}</pre></div><div class="modal-footer"><button class="button secondary" data-action="close-modal">关闭</button></div>`);
 }
+function railPointsResults(records) {
+  if (!records.length) return '';
+  return `<ul class="rail-points-list" aria-label="乘车记录">${records.map(({ record, event }) => {
+    const details = [calendarDate(record.departureDate), record.passenger, record.railStanding ? '无座' : record.seatClass, event].filter(Boolean).join(' · ');
+    const leg = `${record.service} ${record.origin} → ${record.destination}`;
+    return `<li><div><strong>${e(leg)}</strong><small>${e(details)}</small></div><button type="button" class="button secondary" data-action="rail-points-trip" data-id="${e(record.id)}" aria-label="核对并录入 ${e(leg + ' ' + details)}">核对并录入</button></li>`;
+  }).join('')}</ul>`;
+}
+function showRailPoints() {
+  if (!canWrite() || !navigator.onLine) return;
+  const session = imports.railPoints;
+  const available = railPointsRange();
+  const { start, end } = session?.range || available;
+  openModal(modalHead('导入 12306 乘车记录', '在铁路畅行积分查询页扫码登录后，保持该页面打开。') + `<div class="detail-body"><form id="rail-points-form"><div class="form-grid"><label class="field"><span>开始日期</span>${dateControl('start', start, true)}</label><label class="field"><span>结束日期</span>${dateControl('end', end, true)}</label></div><div class="button-row"><a class="button secondary" target="_blank" rel="noopener noreferrer" href="${RAIL_POINTS_PAGE}">打开 12306 登录</a><button class="button primary" type="submit">查询乘车记录</button></div></form><p class="import-status" data-rail-points-status role="status">${session ? `找到 ${session.records.length} 条乘车记录` : ''}</p><div data-rail-points-results>${session ? railPointsResults(session.records) : ''}</div></div>`);
+  const form = modalRoot.querySelector('#rail-points-form');
+  bindDatePickers(form);
+  form.addEventListener('submit', event => { event.preventDefault(); void queryRailPoints(form); });
+}
+async function queryRailPoints(form) {
+  const dialog = form.closest('dialog');
+  const status = dialog.querySelector('[data-rail-points-status]');
+  const results = dialog.querySelector('[data-rail-points-results]');
+  const range = { start: form.elements.start.value, end: form.elements.end.value };
+  const span = Date.parse(range.end) - Date.parse(range.start);
+  if (!Number.isFinite(span) || span < 0 || span > 365 * 86400000 || range.end > railPointsRange().end) {
+    status.textContent = '请选择截至今天、不超过一年的日期范围。';
+    return;
+  }
+  const task = startImport('rail-points');
+  if (!task) return;
+  const release = freezeForm(form);
+  applyAccessPolicy();
+  imports.railPoints = null;
+  results.replaceChildren();
+  status.textContent = '正在读取积分流水和乘车明细…';
+  try {
+    const rides = await readRailPoints(range);
+    if (!form.isConnected || !await acceptsImport(task) || !form.isConnected) return;
+    const records = railPointsRecords(rides);
+    imports.railPoints = { range, records, context: task.context };
+    status.textContent = records.length ? `找到 ${records.length} 条乘车记录` : '这个日期范围没有可导入的乘车记录。';
+    results.innerHTML = railPointsResults(records);
+  } catch (error) {
+    if (form.isConnected && currentImport(task)) status.textContent = error.message;
+  } finally {
+    release();
+    finishImport(task);
+    applyAccessPolicy();
+  }
+}
+async function editRailPointsTrip(button) {
+  const session = imports.railPoints;
+  const record = session?.records.find(item => item.record.id === button.dataset.id)?.record;
+  if (!record || !canWrite() || !await currentArchive(session.context) || !button.isConnected || !canWrite()) return;
+  const entry = root.querySelector('[data-action="rail-points"]');
+  editRecord(record, { imported: true });
+  modalFocus = entry;
+}
 const actions = {
   navigate: button => navigate(button.dataset.page),
   'toggle-routes': button => { state.routesOpen = !state.routesOpen; button.closest('.route-shortcuts-section').dataset.expanded = String(state.routesOpen); button.setAttribute('aria-expanded', String(state.routesOpen)); },
@@ -2031,6 +2099,8 @@ const actions = {
   'disconnect-all': disconnectCloud,
   'flight-refresh': checkFlights,
   'flight-result': showFlightResult,
+  'rail-points': showRailPoints,
+  'rail-points-trip': editRailPointsTrip,
   install: async () => { if (installPrompt) { await installPrompt.prompt(); installPrompt = null; render(); } }
 };
 document.addEventListener('change', event => {

@@ -3,6 +3,7 @@ import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import { requireCompleteIdentity } from './identity.js';
 import { isAnonymousRedTemplate } from './rail-template.js';
 import { railQRNeedsField } from './rail-ticket-qr.js';
+import { RAIL_POINTS_SOURCE } from './field-sources.js';
 
 export const barcodeRequiredMark = '<b class="required-mark barcode-required-mark" aria-label="生成条码必填">*</b>';
 
@@ -31,6 +32,13 @@ export function requiredTicketFields(type, template, flightStatus = 'normal', ra
   return fromRailInvoice ? fields.filter(key => key !== 'identity') : fields;
 }
 
+export function requiredRecordFields(record) {
+  if (record.type === 'rail' && record.template !== 'rail-refund-receipt' && record.sources?.some(source => source.kind === RAIL_POINTS_SOURCE)) {
+    return ['origin', 'destination', 'service', 'departureDate'];
+  }
+  return requiredTicketFields(record.type, record.template, record.flightStatus, record.railStanding, !!record.railInvoice?.electronicTicketNumber);
+}
+
 export function ticketFieldLabel(key, type, fallback = key) {
   const flight = type === 'flight';
   if (flight && FLIGHT_TIME_LABELS[key]) return FLIGHT_TIME_LABELS[key];
@@ -38,7 +46,7 @@ export function ticketFieldLabel(key, type, fallback = key) {
 }
 
 const datePresent=value=>{try{return !!journeyDate(value)?.dayOfYear;}catch{return false;}};
-export const missingTicketFields = record => requiredTicketFields(record.type, record.template, record.flightStatus, record.railStanding, !!record.railInvoice?.electronicTicketNumber).filter(key => JOURNEY_DATE_FIELDS.includes(key) ? !datePresent(record[key]) : !record[key]?.trim());
+export const missingTicketFields = record => requiredRecordFields(record).filter(key => JOURNEY_DATE_FIELDS.includes(key) ? !datePresent(record[key]) : !record[key]?.trim());
 
 export function validateTicketForm(record) {
   requireCompleteIdentity(record.identity);
