@@ -52,9 +52,9 @@ test('demo flights have independent boarding codes and cover the aircraft groupi
   assert.equal(rows.find(record=>record.service==='MU5403').destinationCode,'CTU');assert.equal(rows.find(record=>record.service==='CA181').destinationCode,'HND');assert.equal(rows.find(record=>record.service==='CA181').passenger,'EXAMPLE/TRAVELER');
   assert.equal(new Set(rows.map(record=>record.boardingCode.rawBytes)).size, rows.length);
   assert.deepEqual(rows.slice(2).map(record=>record.aircraft),['737-8Q8','737-800','737-8']);
-  const counts = grouping => Object.fromEntries(journeyStatistics(rows,{aircraftGrouping:grouping}).aircraft.map(({name,count})=>[name,count]));
-  assert.deepEqual(counts('model'),{'737-800':2,'737 MAX 8':1,A321ceo:1,'A330-300':1});
-  assert.deepEqual(counts('series'),{'737':3,A321:1,A330:1});
+  const counts = aircraftSubtypes => Object.fromEntries(journeyStatistics(rows,{aircraftSubtypes}).aircraft.map(({name,count})=>[name,count]));
+  assert.deepEqual(counts(true),{'737-800':2,'737 MAX 8':1,A321ceo:1,'A330-300':1});
+  assert.deepEqual(counts(false),{'737':3,A321:1,A330:1});
   const mileage = journeyStatistics(rows, { dateTo: '2026-11-17' }, '2026-11-17');
   assert.equal(mileage.actualFlightDistanceTrips, 1);
   assert.ok(mileage.actualFlightDistance > 2000);

@@ -214,11 +214,11 @@ test('verified registration variants survive provider completion, saving, render
     assert.ok(dom.window.document.querySelector('[data-boarding-aircraft]').textContent.includes(expected));
     dom.window.close();
   }
-  for (const [aircraftGrouping, expected] of [
-    ['model', { '737-800': 2, '737 MAX 8': 1, A321neo: 1 }],
-    ['series', { '737': 3, A321: 1 }],
+  for (const [aircraftSubtypes, expected] of [
+    [true, { '737-800': 2, '737 MAX 8': 1, A321neo: 1 }],
+    [false, { '737': 3, A321: 1 }],
   ]) {
-    const { aircraft, unknownAircraft } = journeyStatistics(restored, { aircraftGrouping, dateTo: '2023-12-31' });
+    const { aircraft, unknownAircraft } = journeyStatistics(restored, { aircraftSubtypes, dateTo: '2023-12-31' });
     assert.deepEqual(Object.fromEntries(aircraft.map(({ name, count }) => [name, count])), expected);
     assert.equal(unknownAircraft, 0);
   }
