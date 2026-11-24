@@ -1,10 +1,11 @@
 const ENDPOINT = 'https://c-gw.variflight.com/chat_message/mcp/api';
-import { flightQuery } from './flight-lookup-model.js';
+import { flightQuery } from './flight-query.js';
 export class FlightConnector {
-  constructor(key) { this.key = key.trim(); this.sequence = 0; this.session = null; this.endpoint = ENDPOINT; this.protocolVersion = '2025-03-26'; }
+  constructor(key, signal) { this.key = key.trim(); this.signal = signal; this.sequence = 0; this.session = null; this.endpoint = ENDPOINT; this.protocolVersion = '2025-03-26'; }
   async send(method, params = {}, notification = false) {
     const id = notification ? undefined : ++this.sequence;
-    const response = await fetch(this.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Authorization: `Bearer ${this.key}`, 'MCP-Protocol-Version': this.protocolVersion, ...(this.session ? { 'Mcp-Session-Id': this.session } : {}) }, body: JSON.stringify({ jsonrpc: '2.0', ...(id === undefined ? {} : { id }), method, params }), signal: AbortSignal.timeout(45000) });
+    const timeout = AbortSignal.timeout(45000), signal = this.signal ? AbortSignal.any([timeout, this.signal]) : timeout;
+    const response = await fetch(this.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Authorization: `Bearer ${this.key}`, 'MCP-Protocol-Version': this.protocolVersion, ...(this.session ? { 'Mcp-Session-Id': this.session } : {}) }, body: JSON.stringify({ jsonrpc: '2.0', ...(id === undefined ? {} : { id }), method, params }), signal });
     if (!response.ok) {
       let detail = '';
       try { const body = await response.json(); detail = body.error?.message || body.message || ''; } catch {}
@@ -59,6 +60,12 @@ export class FlightConnector {
     await this.connect();
     const result = await this.send('tools/call', { name: 'getFlightStatus', arguments: query });
     if (result.isError) throw new Error('平台未能查询航班，请检查日期、授权或账户权益');
+    return result;
+  }
+  async flightTrack(flightStr) {
+    await this.connect();
+    const result = await this.send('tools/call', { name: 'getFlightTrackLine', arguments: { flightStr } });
+    if (result?.isError) throw new Error('飞常准未能查询航迹，请检查账号权限或剩余额度');
     return result;
   }
 }

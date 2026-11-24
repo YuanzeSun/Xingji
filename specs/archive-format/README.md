@@ -10,6 +10,8 @@
 
 铁路电子发票导入可附带 `railInvoice`，包含 `electronicTicketNumber`（电子客票号）、`buyerName`（购买方名称）和 `buyerTaxId`（统一社会信用代码）。电子客票号和纸票的 `ticketNumber` 分别保存。
 
+机票可附带 `flightTrack`，包含飞常准查询标识 `flightStr`、查询时间 `queriedAt` 和按段保存的经纬度 `segments`。快照仅匹配本票的航班号、出发日期和起降机场。
+
 ## GitHub 文件
 
 - `archive/2026.json` 等按出发年份分组；年份未知写入 `archive/unknown.json`。

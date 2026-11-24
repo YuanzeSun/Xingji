@@ -40,6 +40,7 @@ import { seatClassField, bindSeatClassFields } from './seat-class-field.js';
 import { seatField, bindSeatFields } from './seat-field.js';
 import { bindDatePickers,ticketDateField,bindTicketDates,readTicketDate,writeTicketDate,barcodeDateDay } from './date-field.js';
 import { flightLookupMarkup, bindFlightLookup } from './flight-lookup.js';
+import { flightTrackRequest } from './flight-track.js';
 import { railLookupMarkup, bindRailLookup, railTrainsetField } from './rail-lookup.js';
 import { railJourneyMarkup, bindRailJourney } from './rail-journey-ui.js';
 import { railJourneyMatches } from './rail-journey.js';
@@ -87,7 +88,7 @@ const icons = {
   chart: '<path d="M4 3v17h17M7 14l4-5 4 3 5-7"/>'
 };
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.ticket}</svg>`;
-const labels = { ...BOARDING_METADATA_LABELS, ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '条码', boardingCode: '机票条码' };
+const labels = { ...BOARDING_METADATA_LABELS, ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightTrack: '飞行航迹', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '条码', boardingCode: '机票条码' };
 const imports = { task: null, backup: null };
 let importView = 0;
 const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, routesOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null };
@@ -99,7 +100,7 @@ let mapCleanup = null, mapEpoch = 0;
 let statisticsCleanup = null;
 let flightLookupCleanup = null, railLookupCleanup = null;
 const statisticsView = {};
-let railRouteCleanup = null, railJourneyCleanup = null;
+let railRouteCleanup = null, railJourneyCleanup = null, flightTrackCleanup = null;
 let codeCleanup = null, railCameraCleanup = null, exportCleanup = null, searchTimer, renderedRecords = '', renderedSettings = '', composing = false, deferredRender = false;
 let editor = null, syncTimer, syncPromise, syncAbort, authEpoch = 0, syncFailures = 0, localFileURL = null, installPrompt, modalFocus;
 const root = document.querySelector('#app');
@@ -782,6 +783,7 @@ function disposeModalBindings() {
   railLookupCleanup?.(); railLookupCleanup = null;
   railRouteCleanup?.(); railRouteCleanup = null;
   railJourneyCleanup?.(); railJourneyCleanup = null;
+  flightTrackCleanup?.(); flightTrackCleanup = null;
   exportCleanup?.(); exportCleanup = null;
   stopRailCamera();
   codeCleanup?.(); codeCleanup = null;
@@ -813,15 +815,36 @@ function setImportReference(image) {
 }
 const modalHead = (title, subtitle = '') => `<div class="modal-heading"><div><h2>${title}</h2>${subtitle ? `<p>${subtitle}</p>` : ''}</div><button class="icon-button" data-action="close-modal" aria-label="关闭对话框">${icon('close')}</button></div>`;
 function findRecord(id) { return live().find(r => r.id === id); }
+function bindFlightTrackDetail(container, record) {
+  const context = archiveContext();
+  const canSave = () => isArchiveContext(context) && canWrite() && !state.saving;
+  const save = async track => {
+    const current = findRecord(record.id);
+    if (!canSave() || !current || flightTrackRequest(current) !== track.flightStr) throw new Error('票据或同步状态已变化，请重新打开详情。');
+    if (current.flightTrack) return current.flightTrack;
+    const next = validateRecord({ ...current, flightTrack: track, updatedAt: now() });
+    await persist(state.records.map(row => row.id === current.id ? next : row));
+    const saved = findRecord(current.id)?.flightTrack;
+    if (!isArchiveContext(context) || saved?.flightStr !== track.flightStr) throw new Error('航班信息已变化，请重新打开详情。');
+    return saved;
+  };
+  import('./flight-track-ui.js').then(({ mountFlightTrack }) => {
+    if (container.isConnected) flightTrackCleanup = mountFlightTrack(container, record, { getKey: flightKey, desktop: supportsDesktopMcp, canSave, save });
+  }).catch(() => {
+    if (container.isConnected) container.textContent = '航迹未能加载，请刷新后再试。';
+  });
+}
 function viewRecord(id) {
   const r = findRecord(id); if (!r) return;
   const demo = id.startsWith('demo-');
   const details = ticketDetails(r);
-  openModal(modalHead(`<span class="heading-service">${e(r.service || (r.flightStatus === 'open' ? 'OPEN' : '班次待补充'))}</span><span class="heading-route">${e(r.origin || '出发地')} <span class="muted">→</span> ${e(r.destination || '到达地')}</span>`, demo ? '虚构示例' : '') + `<div class="detail-preview">${ticketSVG(r)}</div><div class="detail-body"><dl class="detail-grid">${details.map(([key, value]) => `<div><dt>${e(key === 'price' && isRefundReceipt(r) ? '退票费（元）' : key === 'seat' && r.type === 'flight' ? '座位 / 舱位' : key === 'gate' && r.type === 'flight' ? '登机口' : ticketFieldLabel(key,r.type,labels[key]))}</dt><dd>${e(value || '未收录')}</dd></div>`).join('')}</dl>${boardingJourneyMarkup(r,live())}${railJourneyMarkup(r,live())}${r.type === 'rail' ? '<section class="rail-route" data-rail-route hidden aria-label="铁路线路"></section>' : ''}<details class="source-details"><summary>数据来源 · ${r.sources.length} 条</summary>${r.sources.map(s => `<p>${e(s.label)}<span>${e(s.at.slice(0, 10))}</span></p>`).join('') || '<p>录入</p>'}</details></div><div class="modal-footer"><button class="button secondary" data-action="export-png" data-id="${e(id)}">${icon('download')}导出图片</button><button class="button secondary" data-action="export-svg" data-id="${e(id)}">SVG</button><div class="spacer"></div>${!demo ? `<button class="icon-button danger" data-action="delete" data-id="${e(id)}" aria-label="删除票据">${icon('trash')}</button><button class="button primary" data-action="edit" data-id="${e(id)}">${icon('edit')}编辑票据</button>` : ''}</div>`);
+  openModal(modalHead(`<span class="heading-service">${e(r.service || (r.flightStatus === 'open' ? 'OPEN' : '班次待补充'))}</span><span class="heading-route">${e(r.origin || '出发地')} <span class="muted">→</span> ${e(r.destination || '到达地')}</span>`, demo ? '虚构示例' : '') + `<div class="detail-preview">${ticketSVG(r)}</div><div class="detail-body"><dl class="detail-grid">${details.map(([key, value]) => `<div><dt>${e(key === 'price' && isRefundReceipt(r) ? '退票费（元）' : key === 'seat' && r.type === 'flight' ? '座位 / 舱位' : key === 'gate' && r.type === 'flight' ? '登机口' : ticketFieldLabel(key,r.type,labels[key]))}</dt><dd>${e(value || '未收录')}</dd></div>`).join('')}</dl>${boardingJourneyMarkup(r,live())}${railJourneyMarkup(r,live())}${r.type === 'rail' ? '<section class="rail-route" data-rail-route hidden aria-label="铁路线路"></section>' : !demo && isJourneyRecord(r) ? '<section class="rail-route flight-track" data-flight-track aria-label="飞行航迹"></section>' : ''}<details class="source-details"><summary>数据来源 · ${r.sources.length} 条</summary>${r.sources.map(s => `<p>${e(s.label)}<span>${e(s.at.slice(0, 10))}</span></p>`).join('') || '<p>录入</p>'}</details></div><div class="modal-footer"><button class="button secondary" data-action="export-png" data-id="${e(id)}">${icon('download')}导出图片</button><button class="button secondary" data-action="export-svg" data-id="${e(id)}">SVG</button><div class="spacer"></div>${!demo ? `<button class="icon-button danger" data-action="delete" data-id="${e(id)}" aria-label="删除票据">${icon('trash')}</button><button class="button primary" data-action="edit" data-id="${e(id)}">${icon('edit')}编辑票据</button>` : ''}</div>`);
   const journeyContainer=modalRoot.querySelector('.rail-journey');
   if(journeyContainer)railJourneyCleanup=bindRailJourney(journeyContainer,()=>r);
   const routeContainer = modalRoot.querySelector('[data-rail-route]');
   if (routeContainer && isJourneyRecord(r)) import('./rail-route-map.js').then(({ mountRailRoute }) => { if (routeContainer.isConnected) railRouteCleanup = mountRailRoute(routeContainer, r); }).catch(() => {});
+  const flightTrackContainer = modalRoot.querySelector('[data-flight-track]');
+  if (flightTrackContainer) bindFlightTrackDetail(flightTrackContainer, r);
 }
 function field(key, r, options = {}) {
   if (key === 'seatClass') return seatClassField(r);

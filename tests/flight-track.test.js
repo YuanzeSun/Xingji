@@ -1,0 +1,123 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { JSDOM } from 'jsdom';
+import { indexedDB } from 'fake-indexeddb';
+import { createRecord, validateRecord } from '../src/model.js';
+import { flightTrackRequest, readFlightTrack } from '../src/flight-track.js';
+import { journeyNetwork, networkGeometry } from '../src/journey-map-model.js';
+import { prepareCloud } from './helpers/cloud.js';
+
+const flight = createRecord({
+  id: 'test-flight', type: 'flight', template: 'air-boarding-pass', service: 'JL62',
+  origin: 'NRT', destination: 'LAX', departureDate: '2026-11-23', passenger: 'TEST/PASSENGER',
+});
+const flightStr = 'JL62_NRT_LAX_2026-11-23_0';
+const coordinates = [
+  [[140.39, 35.77], [154.5, 43.3], [177.4, 46.9], [-177.2, 47.1]],
+  [[-151.3, 45.5], [-136.2, 40.1], [-118.41, 33.94]],
+];
+const payload = { kind: 'collection', items: [{ flightStr, trackLine: { type: 'MultiLineString', coordinates } }] };
+
+test('flight tracks are keyed to the dated airport pair and never change the journey map', () => {
+  assert.equal(flightTrackRequest(flight), flightStr);
+  assert.throws(() => flightTrackRequest({ ...flight, destination: '', destinationCode: '' }), /到达机场/);
+  assert.throws(() => flightTrackRequest({ ...flight, flightStatus: 'open' }), /无法查询/);
+  const track = readFlightTrack({ content: [{ type: 'text', text: JSON.stringify(payload) }] }, flightStr, '2026-11-24T00:00:00.000Z');
+  assert.deepEqual(track.segments, coordinates);
+  assert.equal(readFlightTrack({ structuredContent: { items: [] } }, flightStr), undefined);
+  assert.throws(() => readFlightTrack({ structuredContent: { ...payload, items: [{ ...payload.items[0], flightStr: 'other-flight' }] } }, flightStr), /无法识别/);
+  assert.throws(() => readFlightTrack({ structuredContent: { type: 'LineString', coordinates: [[180.01, 35], [181, 20]] } }, flightStr), /没有可绘制/);
+  const saved = validateRecord({ ...flight, flightTrack: track });
+  assert.deepEqual(saved.flightTrack, track);
+  assert.equal(validateRecord({ ...saved, service: 'JL63' }).flightTrack, undefined);
+  assert.equal(validateRecord({ ...saved, deleted: true }).flightTrack, undefined);
+  const geometry = record => networkGeometry(journeyNetwork([record]));
+  assert.equal(geometry(saved).routes[0].path, geometry(flight).routes[0].path);
+});
+
+test('flight details query once, save the chart, then replay it on a phone without using the quota', async () => {
+  const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', {
+    url: 'http://localhost/#archive', pretendToBeVisual: true,
+  });
+  const { window } = dom;
+  for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData']) {
+    Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
+  }
+  Object.defineProperty(globalThis, 'navigator', { value: window.navigator, configurable: true });
+  Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true });
+  window.scrollTo = () => {};
+  window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+  let sequence = 0;
+  const frames = new Map();
+  window.requestAnimationFrame = callback => { frames.set(++sequence, callback); return sequence; };
+  window.cancelAnimationFrame = id => frames.delete(id);
+  const step = time => {
+    const pending = [...frames.values()];
+    frames.clear();
+    pending.forEach(callback => callback(time));
+  };
+  const server = await prepareCloud([flight], { flightMcpKey: 'fixture-key' });
+  const requests = [];
+  globalThis.fetch = async (url, options = {}) => {
+    if (!String(url).startsWith('https://c-gw.variflight.com/')) return server.fetch(url, options);
+    const message = JSON.parse(options.body);
+    assert.equal(options.headers.Authorization, 'Bearer fixture-key');
+    if (message.method === 'notifications/initialized') return new Response(null, { status: 202 });
+    if (message.method === 'tools/call') requests.push(message.params);
+    const result = message.method === 'initialize' ? { protocolVersion: '2025-03-26' } : { structuredContent: payload };
+    return Response.json({ id: message.id, result }, { headers: { 'Mcp-Session-Id': 'fixture-session' } });
+  };
+  function element(selector) { return window.document.querySelector(selector); }
+  async function waitFor(predicate) {
+    for (let attempt = 0; attempt < 300; attempt++) {
+      const result = predicate();
+      if (result) return result;
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    assert.fail('Flight track UI did not settle');
+  }
+
+  try {
+    await import('../src/app.js');
+    await waitFor(() => element('[data-action=new]:not(:disabled)'));
+    element('[data-action=view]').click();
+    const query = await waitFor(() => element('[data-flight-track-query]:not(:disabled)'));
+    assert.equal(requests.length, 0);
+    query.click();
+    query.click();
+    const play = await waitFor(() => element('[data-flight-track-play]:not([hidden])'));
+    assert.deepEqual(requests, [{ name: 'getFlightTrackLine', arguments: { flightStr } }]);
+    assert.deepEqual(server.records()[0].flightTrack.segments, coordinates);
+    assert.equal(server.records()[0].passenger, 'TEST/PASSENGER');
+    const svg = element('.flight-track-frame svg'), [first, second] = svg.querySelectorAll('.flight-track-highlight path');
+    assert.ok(Number(svg.getAttribute('viewBox').split(' ')[2]) < 400, 'fits across the date line');
+    assert.equal(svg.hasAttribute('data-flight-track-played'), false);
+    play.click();
+    step(0);
+    step(650);
+    assert.ok(Number(first.style.strokeDashoffset) < 1);
+    assert.equal(second.style.strokeDashoffset, '1');
+    assert.ok(svg.querySelector('[data-flight-track-aircraft]').hasAttribute('transform'));
+    step(2000);
+    assert.equal(second.style.strokeDashoffset, '0');
+    assert.equal(svg.hasAttribute('data-flight-track-playing'), false);
+    play.click();
+    assert.equal(first.style.strokeDashoffset, '1');
+    element('[data-action=close-modal]').click();
+    await waitFor(() => !element('dialog'));
+    assert.equal(frames.size, 0);
+
+    Object.defineProperty(window.navigator, 'userAgent', { value: 'iPhone' });
+    window.matchMedia = () => ({ matches: true });
+    element('[data-action=view]').click();
+    const savedPlay = await waitFor(() => element('[data-flight-track-play]:not([hidden])'));
+    savedPlay.click();
+    assert.equal(frames.size, 0);
+    assert.equal(element('.flight-track-highlight path').style.strokeDashoffset, '0');
+    assert.equal(requests.length, 1);
+  } finally {
+    window.dispatchEvent(new window.Event('offline'));
+    window.close();
+  }
+});
