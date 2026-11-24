@@ -23,6 +23,7 @@ export function journeyNetwork(records, { type = 'all', year = 'all', deduplicat
       if (!nodes.has(point.id)) nodes.set(point.id, { ...point, trips: new Set(), routes: new Set() });
       nodes.get(point.id).trips.add(record.id);
     }
+    if (record.type === 'rail' && from.id === to.id) continue;
     const pair = [from, to].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0), pairId = JSON.stringify([record.type, pair[0].id, pair[1].id]);
     const id = deduplicate ? pairId : JSON.stringify([record.type, record.id]);
     if (!routes.has(id)) routes.set(id, { id, pairId, aggregated: deduplicate, type: record.type, from: deduplicate ? pair[0] : from, to: deduplicate ? pair[1] : to, records: [] });
@@ -72,7 +73,7 @@ export function networkGeometry(network, railway = null) {
     return { ...route, ...routeArc(from, to, route.type, spread) };
   });
   let bounds = [700, 98, 885, 215];
-  if (routes.length) {
+  if (routes.length || nodes.length) {
     bounds = [Infinity, Infinity, -Infinity, -Infinity];
     const include = ([x, y]) => {
       bounds[0] = Math.min(bounds[0], x); bounds[1] = Math.min(bounds[1], y);

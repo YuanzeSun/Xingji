@@ -34,7 +34,11 @@ test('viewing a missing route does not query the provider or attempt to repair s
   const previous=globalThis.fetch,dom=new JSDOM('<section id="route"></section>');let calls=0;
   globalThis.fetch=()=>{calls++;throw Error('No lookup on viewing');};
   try{
-    const data=await loadRailwayNetwork([record()]);assert.equal(data.routes.length,0);assert.equal(data.unmatched.length,1);
+    const missing = record();
+    const saved = record({id:'saved', railRoute:selectRailRoute(record(),payload())});
+    const data=await loadRailwayNetwork([missing,saved]);
+    assert.deepEqual(data.routes.map(group=>group.records.map(ticket=>ticket.id)),[['saved']]);
+    assert.deepEqual(data.unmatched,[missing]);
     const container=dom.window.document.querySelector('#route'),cleanup=mountRailRoute(container,record());assert.equal(container.innerHTML,'');cleanup();assert.equal(calls,0);
   }finally{globalThis.fetch=previous;dom.window.close();}
 });

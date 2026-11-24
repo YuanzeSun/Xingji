@@ -24,8 +24,8 @@ test('map playback reveals trips in departure order for one year or the whole ar
     origin: '北京首都', destination: '东京羽田', departureDate: '2025-01-03', ...changes });
   const records = [rail('rail-late', { departureTime: '10:00' }), flight('return', { origin: '东京羽田', destination: '北京首都', departureTime: '12:00' }),
     rail('other-year', { departureDate: '2026-01-03' }), rail('rail-early', { departureTime: '08:00' }), flight('outbound', { departureTime: '07:00' }),
-    rail('fallback', { service: 'G5', destination: '济南西', departureDate: '2025-01-04' }),
-    rail('same-city', { service: 'G6', origin: '北京西', destination: '北京南', departureDate: '2026-02-01' }),
+    rail('failed-rail', { service: 'G5', destination: '济南西', departureDate: '2025-01-04' }),
+    rail('same-city', { service: 'D8882', origin: '武威东', destination: '古浪北', departureDate: '2026-02-01' }),
     flight('unknown-date', { origin: 'JFK', destination: 'LHR', departureDate: '' }), flight('unknown-shared', { departureDate: '' }),
     rail('unknown-rail', { service: 'G10', origin: '哈尔滨', destination: '大连', departureDate: '' })];
   const from = [116.3794, 39.8641], middle = [117.016, 39.373], to = [117.21, 39.137];
@@ -35,7 +35,10 @@ test('map playback reveals trips in departure order for one year or the whole ar
   const undatedRoute = { segments: [[harbin, dalian]], stops: [{ name: '哈尔滨', coordinates: harbin }, { name: '大连', coordinates: dalian }] };
   const container = window.document.querySelector('#map');
   const options = { layers: ['airway'] };
-  const cleanup = mountJourneyMap(container, records, { icon: () => '', options, railLoader: record => ({ G1: route, G10: undatedRoute })[record.service] || null });
+  const cleanup = mountJourneyMap(container, records, { icon: () => '', options, railLoader: record => {
+    if (record.service === 'G5') throw new Error('No railway response');
+    return ({ G1: route, G10: undatedRoute })[record.service] || null;
+  } });
   t.after(() => { cleanup(); dom.window.close(); globalThis.window = previous; });
   const select = selector => container.querySelector(selector);
   const playback = () => select('[data-map-playback-button]');
@@ -59,7 +62,7 @@ test('map playback reveals trips in departure order for one year or the whole ar
   assert.equal(lines(), 0);
   assert.equal(current().dataset.mapPlaybackTrip, 'outbound');
   assert.equal(currentPath().hasAttribute('d'), false);
-  assert.match(select('[data-map-playback-status]').textContent, /1 \/ 5.*CA181/);
+  assert.match(select('[data-map-playback-status]').textContent, /1 \/ 4.*CA181/);
   frame(0); frame(3000);
   const half = currentPath().getAttribute('d').slice(1).split('L');
   assert.ok(half.length > 2 && half.length < 33);
@@ -93,11 +96,9 @@ test('map playback reveals trips in departure order for one year or the whole ar
   frame(18399);
   assert.equal(currentPath().getAttribute('d').slice(1).split('L')[0], outbound.at(-1));
   frame(18400);
-  assert.equal(current().dataset.mapPlaybackTrip, 'fallback');
-  frame(22400);
   assert.ok(select('[data-map-playing]'));
-  assert.equal(current().dataset.mapPlaybackTrip, 'fallback');
-  frame(22850);
+  assert.equal(select('[data-map-playback-trip="failed-rail"]'), null);
+  frame(18850);
   assert.equal(current(), null);
   assert.equal(frames.size, 0);
   assert.equal(playback().textContent, '重播年度行程');
@@ -120,21 +121,17 @@ test('map playback reveals trips in departure order for one year or the whole ar
   playback().click();
   assert.notEqual(select('.journey-map-canvas').getAttribute('viewBox'), allRoutesView);
   let timestamp = 24000;
-  for (const [id, duration] of [['outbound', 6000], ['rail-early', 3200], ['rail-late', 3200], ['return', 6000], ['fallback', 4000], ['other-year', 3200]]) {
+  for (const [id, duration] of [['outbound', 6000], ['rail-early', 3200], ['rail-late', 3200], ['return', 6000], ['other-year', 3200]]) {
     frame(timestamp);
     assert.equal(current().dataset.mapPlaybackTrip, id);
     timestamp += duration;
   }
   frame(timestamp);
-  assert.match(select('[data-map-playback-status]').textContent, /7 \/ 7 · 2026-02-01/);
-  frame(timestamp + 1999);
-  assert.equal(current().dataset.mapPlaybackTrip, 'same-city');
-  frame(timestamp + 2000);
-  assert.equal(current().dataset.mapPlaybackTrip, 'same-city');
-  frame(timestamp + 2450);
+  assert.match(select('[data-map-playback-status]').textContent, /5 \/ 5 · 2026-01-03/);
+  frame(timestamp + 450);
   assert.equal(current(), null);
   assert.equal(playback().textContent, '重播全部行程');
-  assert.equal(select('[data-map-playback-status]').textContent, '已播放 7 程');
+  assert.equal(select('[data-map-playback-status]').textContent, '已播放 5 程');
   assert.equal(select('.journey-map-canvas').getAttribute('viewBox'), allRoutesView);
   assert.equal(frames.size, 0);
   year('unknown');

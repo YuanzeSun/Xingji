@@ -11,13 +11,16 @@ const railJourneyKey = record => JSON.stringify([record.service.trim().toUpperCa
 
 export async function loadRailwayNetwork(records, { loader = savedRailRoute, onProgress = () => {}, signal, concurrency = 4 } = {}) {
   const rows = records.filter(record => isJourneyRecord(record) && record.type === 'rail'), groups = new Map();
+  const routes = [], unmatched = [], failed = [];
   for (const record of rows) {
+    if (loader === savedRailRoute && !railRouteMatches(record)) { unmatched.push(record); continue; }
     const key = railJourneyKey(record);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(record);
   }
-  const queue = [...groups.values()], routes = [], unmatched = [], failed = [];
-  let cursor = 0, completed = 0;
+  const queue = [...groups.values()];
+  let cursor = 0, completed = unmatched.length;
+  if (completed && !signal?.aborted) onProgress({ completed, total: rows.length });
   async function worker() {
     while (cursor < queue.length && !signal?.aborted) {
       const group = queue[cursor++];

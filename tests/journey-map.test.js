@@ -65,9 +65,11 @@ test('routes crossing the fit window seam keep all airport markers in a single w
 });
 
 test('same-city and empty maps remain finite and retain their tickets', () => {
-  const same = journeyNetwork([rail({ origin: '北京南', destination: '清河' })]);
-  assert.equal(same.mapped, 1); assert.equal(same.nodes.length, 1); assert.equal(same.routes.length, 1);
-  assert.ok(!/NaN|Infinity/.test(networkGeometry(same).routes[0].path));
+  const same = journeyNetwork([rail({ origin: '武威东', destination: '古浪北' })]);
+  assert.equal(same.mapped, 1); assert.equal(same.nodes.length, 1); assert.equal(same.routes.length, 0);
+  const geometry = networkGeometry(same);
+  assert.equal(geometry.nodes[0].name, '武威');
+  assert.deepEqual(geometry.bounds, [...geometry.nodes[0].point, ...geometry.nodes[0].point]);
   assert.deepEqual(networkGeometry(journeyNetwork([])).routes, []);
   assert.ok(networkGeometry(journeyNetwork([])).bounds.every(Number.isFinite));
 });
