@@ -12,7 +12,7 @@ const flight=extra=>createRecord({type:'flight',template:'air-boarding-pass',ser
 test('defaults, profile values and OCR record their actual origins without relabelling existing data',()=>{
   const blank=createRecord();assert.equal(blank.fieldSources.type,'default');assert.equal(blank.fieldSources.template,'default');assert.equal(fieldSourceLabel(blank,'passenger'),'未填写');
   const profile={chineseName:'张三',lastName:'ZHANG',firstName:'SAN',documents:[{id:'id',type:'national-id',number:'000000200001011234'}]};
-  const filled=applyProfileDefaults({type:'rail',passenger:'',identity:''},profile);assert.equal(filled.fieldSources.passenger,'profile');assert.equal(filled.fieldSources.identity,undefined);
+  const filled=applyProfileDefaults({type:'rail',passenger:'',identity:''},profile);assert.equal(filled.fieldSources.passenger,'profile');assert.equal(filled.fieldSources.identity,'profile');
   const supplied={...filled,fieldSources:{passenger:'barcode'}};assert.equal(applyProfileDefaults(supplied,profile).fieldSources.passenger,'barcode');
   const [scan]=parseScanText('车次：G21\n出发站：北京南\n到达站：南京南\n日期：2026-11-16');assert.equal(scan.fieldSources.service,'ocr');
   assert.equal(fieldSourceLabel(scan,'service'),'图片识别');assert.match(fieldSourceBadge('service',scan),/data-source-kind="ocr"/);

@@ -1,7 +1,6 @@
 import { airlineLogo } from './airline-logo.js';
 import { readBoardingCode } from './bcbp.js';
 import { BOARDING_METADATA_LABELS, boardingMetadataValues } from './boarding-metadata.js';
-import { flightPassengerName } from './flight-passenger.js';
 import { daysInYear, journeyDate, dateLabel } from './journey-date.js';
 import { resolvePlace } from './places.js';
 
@@ -26,15 +25,15 @@ export function boardingScanReview(record, read, rescan) {
   const date = { year: year && read.dayOfYear <= daysInYear(year) ? year : null, dayOfYear: read.dayOfYear };
   const incoming = {
     service: read.service, departureDate: date, origin: read.originCode, destination: read.destinationCode,
-    passenger: flightPassengerName({ type: 'flight', originCode: read.originCode, destinationCode: read.destinationCode }, read),
+    passenger: read.passengerChinese || read.passenger,
     pnr: read.pnr, seat: read.seat, seatClass: read.cabin, airline: read.airline,
     ticketNumber: read.ticketNumber, gate: read.gate, ...boardingMetadataValues(read)
   };
   const previous = rescan && record.boardingCodeSource === 'original' ? readBoardingCode(record.boardingCode, record.boardingLegIndex) : null;
-  const same = (key, value) => {
-    const old = record[key];
+  const airports = rescan ? { origin: airportCode(record, 'origin'), destination: airportCode(record, 'destination') } : {};
+  const same = (key, old, value) => {
     if (key === 'departureDate') return currentDate?.dayOfYear === value.dayOfYear;
-    if (isAirport(key)) return airportCode(record,key) === value;
+    if (isAirport(key)) return airports[key] === value;
     if (key === 'service') return serviceKey(old) === serviceKey(value);
     if (key === 'seat') return compact(old).replace(/^0+/, '') === compact(value).replace(/^0+/, '');
     if (key === 'passenger') {
@@ -55,20 +54,19 @@ export function boardingScanReview(record, read, rescan) {
   for (const [key, value] of Object.entries(incoming)) {
     if (!value) continue;
     const airport = isAirport(key);
-    const oldCode = airport ? airportCode(record, key) : '';
+    const oldCode = airport ? airports[key] : '';
     const old = record[key] || oldCode;
     const present = key === 'departureDate' ? !!currentDate?.dayOfYear : !!old;
-    const equal = present && same(key, value);
     const update = airport ? { [key]: value, [key + 'Code']: value } : { [key]: value };
-    if (rescan && present && !equal) {
-      conflicts.push({ key, label: labels[key], existing: describe(key, old, oldCode), scanned: describe(key, value), update });
-    } else if (!rescan || !present) {
+    if (!rescan || !present) {
       Object.assign(values, update);
       if (!present) added++;
+    } else if (!same(key, old, value)) {
+      conflicts.push({ key, label: labels[key], existing: describe(key, old, oldCode), scanned: describe(key, value), update });
     }
   }
   const conflicting = key => conflicts.some(conflict => conflict.key === key);
   const rejected = (conflicting('service') && conflicting('departureDate')) ||
-    (conflicting('origin') && conflicting('destination') && !!airportCode(record, 'origin') && !!airportCode(record, 'destination'));
+    (conflicting('origin') && conflicting('destination') && !!airports.origin && !!airports.destination);
   return { values, conflicts, rejected, added };
 }

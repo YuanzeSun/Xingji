@@ -52,7 +52,7 @@ import { bindStationPicker } from './station-picker.js';
 import { FLIGHT_STATUSES, normalizeFlightStatus } from './flight-status.js';
 import { isRefundReceipt, isJourneyRecord } from './record-kind.js';
 import { bindUppercaseInputs } from './uppercase-input.js';
-import { personalProfile, applyProfileDefaults, lockMatchedIdentity, matchProfileIdentity } from './personal-profile.js';
+import { personalProfile, applyProfileDefaults, applyTicketIdentity } from './personal-profile.js';
 import { personalProfilePanel, collectPersonalProfile, bindPersonalProfileForm, personalProfileSummary } from './personal-profile-form.js';
 import { cityOverview } from './locations.js';
 import { DEFAULT_SEARCH, searchOptions, searchTickets, clearSearchField } from './search.js';
@@ -501,7 +501,7 @@ function bindRailReceipt(form, activeEditor) {
       next.lockedFields = [...new Set([...next.lockedFields, ...Object.keys(changes)])].sort();
       markFieldSources(next, Object.keys(changes), 'pdf');
       markFieldSources(next, JOURNEY_DATE_FIELDS.filter(key => changes[key]).map(key => key + 'Year'), 'pdf');
-      lockMatchedIdentity(next, matchProfileIdentity(identityHint, state.settings.profile));
+      applyTicketIdentity(next, identityHint, state.settings.profile, 'pdf');
       if (!draft.sources.some(item => item.kind === 'pdf' && item.label === '电子报销凭证')) next.sources = [...draft.sources, ...record.sources];
       const returnFocus = modalFocus;
       editRecord(next, { imported, preserve: true, original });
@@ -595,7 +595,9 @@ function bindRailPhoto(form) {
     const next = { ...draft, ...changes, sources: record ? [...draft.sources, ...record.sources] : draft.sources };
     if (changes.template) next.lockedFields = draft.lockedFields.filter(key => key !== 'template');
     markFieldSources(next, Object.keys(changes), 'ocr');
-    if (!draft.identity) lockMatchedIdentity(next, matchProfileIdentity(identityHint, state.settings.profile));
+    if (!draft.identity || (!activeEditor.editingSaved && draft.fieldSources.identity === 'profile')) {
+      applyTicketIdentity(next, identityHint, state.settings.profile, 'ocr');
+    }
     if (changes.departureDate?.year) markFieldSources(next, ['departureDateYear'], 'ocr');
     if (lookupContext(draft) !== lookupContext(next)) clearLookupValues(next);
     editRecord(next, { imported, preserve: true, original, photo, scannedRail: record });
@@ -657,7 +659,7 @@ function archiveSyncPanel() {
 function dataPage() {
   const count = state.records.filter(r => !r.deleted).length;
   return header('数据与同步', '管理个人资料、同步与外部连接。') + `<div class="data-layout">
-    <section class="panel quiet-panel install-panel"><h3>${icon('ticket')}随身票夹</h3><p>在 iPhone 的 Safari 中打开行迹，点「共享」，选择「添加到主屏幕」。如果有「作为网页 App 打开」开关，保持开启，再点「添加」。</p><p>「共享」也可能在页面菜单里。找不到「添加到主屏幕」时，点共享菜单底部的「编辑操作」。</p>${installPrompt ? '<button class="button secondary" data-action="install">安装行迹</button>' : ''}</section>
+    <section class="panel install-panel"><div><h3>${icon('ticket')}随身票夹</h3><p>在浏览器菜单、地址栏或分享菜单中，选择「安装应用」「添加到主屏幕」或「添加到程序坞」。</p></div>${installPrompt ? '<button class="button secondary" data-action="install">安装行迹</button>' : ''}</section>
     ${personalProfilePanel(state.profileDraft || state.settings.profile,state.profileError)}
     ${archiveSyncPanel()}
     ${travelServicesPanel()}
@@ -1015,10 +1017,11 @@ function editRecord(record, {
   const draft = normalizePlaces(clone(record));
   const generatorSettings = preserve && draft.type==='flight' ? readBoardingGenerator(modalRoot) : undefined;
   draft.flightStatus = draft.type === 'flight' ? normalizeFlightStatus(draft.flightStatus) : '';
-  const personalEdited = preserve ? new Set(editor?.personalEdited || []) : new Set(record.lockedFields || []);
+  const passengerEdited = preserve ? !!editor?.passengerEdited : !!record.lockedFields?.includes('passenger');
   const editingSaved = state.records.some(record => record.id === draft.id);
   const typeFixed = imported || editingSaved;
-  editor = { original, draft, imported, context, dirty: preserve, personalEdited, photo };
+  if (preserve && !typeFixed) Object.assign(draft, applyProfileDefaults(draft, state.settings.profile, { passengerEdited }));
+  editor = { original, draft, imported, editingSaved, context, dirty: preserve, passengerEdited, photo };
   const flight = draft.type === 'flight';
   const basics = flight ? ['origin','destination','service','departureDate','departureTime','arrivalTime','arrivalDate','boardingTime','passenger','identity','airline','seat','seatClass','price','gate'] : ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seatClass','seat','price','gate','railPlatform'];
   const extra = flight ? ['orderNumber', 'terminal', 'aircraft', 'aircraftRegistration', 'pnr', 'ticketNumber', 'flightDistance'] : ['arrivalDate','arrivalTime','railBureau','railRunner','railCarOwner','railModel','railPowerSupply','railMileage','orderNumber','ticketNumber','saleCode','issuer'];
@@ -1027,12 +1030,12 @@ function editRecord(record, {
     + (flight
       ? '<input type="hidden" name="template" value="air-boarding-pass" />'
         + field('flightStatus', draft, { options: Object.entries(FLIGHT_STATUSES) })
-        + ticketCodeEditor(draft, { generator:false, editingSaved })
+        + ticketCodeEditor(draft, { editingSaved })
       : ticketCodeEditor(draft, { fromScan:!!localFileURL }) + railReceiptControls() + railPhotoControls() + railTicketOptions(draft));
   const invoiceRows = railInvoiceDetails(draft.railInvoice);
   const invoiceDetails = invoiceRows.length ? `<details class="editor-extra"><summary>电子报销凭证资料</summary><dl class="detail-grid">${invoiceRows.map(([label, value]) => `<div><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`).join('')}</dl></details>` : '';
   const requiredHint = `<span class="editor-required-hint"><span><b class="required-mark" role="img" aria-label="红色星号">*</b> 保存必填</span><span><b class="required-mark barcode-required-mark" role="img" aria-label="蓝色星号">*</b> 生成${flight ? '条码' : '二维码'}必填</span></span>`;
-  openModal(modalHead(imported ? '核对这张票据' : state.records.some(r => r.id === draft.id) ? '编辑票据' : '添加一张票据', requiredHint) + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${ticketEntry}${basics.filter(key => !(draft.railStanding && key === 'seat')).map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : invoiceDetails + marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ''}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div><div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="close-modal">取消</button><div class="spacer"></div><button class="button primary" type="submit">${icon('check')}保存票据</button></div></form>`, true);
+  openModal(modalHead(imported ? '核对这张票据' : editingSaved ? '编辑票据' : '添加一张票据', requiredHint) + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${ticketEntry}${basics.filter(key => !(draft.railStanding && key === 'seat')).map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : invoiceDetails + marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ''}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div><div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="close-modal">取消</button><div class="spacer"></div><button class="button primary" type="submit">${icon('check')}保存票据</button></div></form>`, true);
   // openModal replaces the DOM, but keeps the editor state deliberately.
   const form = document.querySelector('#editor-form');
   form.closest('dialog').classList.add('ticket-editor-modal');
@@ -1049,8 +1052,9 @@ function editRecord(record, {
   form.elements.type.disabled = typeFixed;
   let lookupApplying=false;
   function updatePersonalFields(previousRecord) {
-    if(!imported && !editingSaved)Object.assign(draft,applyProfileDefaults(draft,state.settings.profile,{edited:[...editor.personalEdited],previousRecord}));
+    if(!imported && !editingSaved)Object.assign(draft,applyProfileDefaults(draft,state.settings.profile,{passengerEdited:editor.passengerEdited,previousRecord}));
     form.elements.passenger.value=draft.passenger;
+    form.elements.identity.value=draft.identity;
     if(draft.passenger!==previousRecord.passenger)refreshBoardingPassenger(form,draft,{profile:state.settings.profile,resetName:draft.boardingCodeSource!=='original'});
   }
   form.setAttribute('autocapitalize', 'characters');
@@ -1073,7 +1077,7 @@ function editRecord(record, {
     if(input.matches('[data-refund-receipt]'))input.dispatchEvent(new window.Event('input',{bubbles:true}));
     if(input.tagName==='SELECT'&&FIELDS.includes(input.name)&&draft[input.name]!==input.value)input.dispatchEvent(new window.Event('input',{bubbles:true}));
   });
-  codeCleanup = bindTicketCodeEditor(form, draft, ({filled=[],previousRecord={...draft},automatic=false,codeStatus='',railFields,rescan}={}) => {
+  codeCleanup = bindTicketCodeEditor(form, draft, ({previousRecord={...draft},automatic=false,codeStatus='',railFields,rescan}={}) => {
     if(automatic){
       refreshFieldSources(form,draft);
       document.querySelector('#editor-preview').innerHTML=ticketSVG(draft);
@@ -1091,9 +1095,7 @@ function editRecord(record, {
     }
     refreshRailReceipt(form, editor);
     if(!flight)refreshRailPhotoLock(form,draft);
-    normalizePlaces(draft);
     updatePersonalFields(previousRecord);
-    for(const key of filled)if(form.elements[key])form.elements[key].value=draft[key];
     editor.dirty=true;
     refreshFieldSources(form,draft);
     refreshTicketFieldLocks(form,draft);
@@ -1135,7 +1137,7 @@ function editRecord(record, {
       return;
     }
     const previousRecord={...draft}, previousQuery=lookupContext(draft);
-    if (!lookupApplying && event.target.name === 'passenger') editor.personalEdited.add('passenger');
+    if (!lookupApplying && event.target.name === 'passenger') editor.passengerEdited = true;
     const data = new FormData(form); for (const [key, value] of data) if (FIELDS.includes(key) && !JOURNEY_DATE_FIELDS.includes(key) && !ticketFieldLocked(draft,key)) draft[key] = value;
     for(const key of JOURNEY_DATE_FIELDS)if(form.elements[key+'Year'])draft[key]=readTicketDate(form,key,draft);
     if (!flight) {

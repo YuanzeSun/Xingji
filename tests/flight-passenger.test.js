@@ -6,9 +6,10 @@ import {readBCBP} from '../src/bcbp-reader.js';
 import {readBoardingCode} from '../src/bcbp.js';
 import {flightNameLanguage} from '../src/flight-passenger.js';
 import {boardingPresentation} from '../src/boarding-language.js';
-import {profileDefaults,applyProfileDefaults} from '../src/personal-profile.js';
+import {profilePassengerName,applyProfileDefaults} from '../src/personal-profile.js';
 import {createRecord} from '../src/model.js';
 import {ticketCodeEditor,bindTicketCodeEditor} from '../src/code-editor.js';
+import {boardingGeneratorMarkup} from '../src/boarding-code-generator.js';
 import {BOARDING_SHARED_FIELDS,refreshGeneratedCode} from '../src/boarding-code-state.js';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
 import {ticketSVG} from '../src/tickets.js';
@@ -31,21 +32,21 @@ test('structured ticket numbers and tagged Chinese names are decoded without inv
 test('profile names follow domestic and international routes without replacing manual corrections',()=>{
   const unknown={type:'flight'},domestic={...unknown,origin:'PEK',destination:'SHA'},international={...domestic,destination:'LHR'};
   assert.equal(flightNameLanguage(domestic),'zh');assert.equal(flightNameLanguage(international),'en');
-  assert.equal(profileDefaults('flight',profile,domestic).passenger,'张三');assert.equal(profileDefaults('flight',profile,domestic).identity,undefined);
+  assert.equal(profilePassengerName(domestic,profile),'张三');
   for(const route of [international,{...domestic,origin:'LHR',destination:'MAN'},{...domestic,destination:'HKG'}]){
-    assert.equal(profileDefaults('flight',profile,route).passenger,'ZHANG/SAN');assert.equal(profileDefaults('flight',profile,route).identity,undefined);
+    assert.equal(profilePassengerName(route,profile),'ZHANG/SAN');
   }
-  const initial={...unknown,...profileDefaults('flight',profile,unknown)};
+  const initial=applyProfileDefaults(unknown,profile);
   const cn=applyProfileDefaults({...initial,...domestic},profile,{previousRecord:initial});
-  assert.equal(cn.passenger,'张三');assert.equal(cn.identity,undefined);
+  assert.equal(cn.passenger,'张三');assert.equal(cn.identity,'000000200001011234');
   const en=applyProfileDefaults({...cn,...international},profile,{previousRecord:cn});
-  assert.equal(en.passenger,'ZHANG/SAN');assert.equal(en.identity,undefined);
-  const manual=applyProfileDefaults({...cn,...international,passenger:'其他旅客',identity:''},profile,{previousRecord:cn,edited:['passenger','identity']});
+  assert.equal(en.passenger,'ZHANG/SAN');assert.equal(en.identity,'E00000000');
+  const manual=applyProfileDefaults({...cn,...international,passenger:'其他旅客',identity:'',fieldSources:{identity:'manual'}},profile,{previousRecord:cn,passengerEdited:true});
   assert.equal(manual.passenger,'其他旅客');assert.equal(manual.identity,'');
 });
 
 test('a domestic Chinese ticket can generate an English-name BCBP without changing its printed Chinese name',()=>{
-  const draft=flight(),dom=new JSDOM('<form>'+BOARDING_SHARED_FIELDS.map(key=>`<input name="${key}" value="${key.endsWith('Date')?calendarDate(draft[key]):draft[key]}">`).join('')+ticketCodeEditor(draft)+'</form>'),form=dom.window.document.querySelector('form');
+  const draft=flight(),dom=new JSDOM('<form>'+BOARDING_SHARED_FIELDS.map(key=>`<input name="${key}" value="${key.endsWith('Date')?calendarDate(draft[key]):draft[key]}">`).join('')+ticketCodeEditor(draft)+boardingGeneratorMarkup(draft)+'</form>'),form=dom.window.document.querySelector('form');
   const cleanup=bindTicketCodeEditor(form,draft,()=>{},{profile});
   try{
     assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'ZHANG/SAN');assert.ok(form.querySelector('[data-bcbp-passenger-field] .barcode-required-mark'));
@@ -58,7 +59,7 @@ test('a domestic Chinese ticket can generate an English-name BCBP without changi
 });
 
 test('a different Chinese passenger never inherits the profile owner’s English name',()=>{
-  const draft=flight({passenger:'其他旅客'}),dom=new JSDOM('<form>'+ticketCodeEditor(draft)+'</form>'),form=dom.window.document.querySelector('form');
+  const draft=flight({passenger:'其他旅客'}),dom=new JSDOM('<form>'+ticketCodeEditor(draft)+boardingGeneratorMarkup(draft)+'</form>'),form=dom.window.document.querySelector('form');
   const cleanup=bindTicketCodeEditor(form,draft,()=>{},{profile});
   assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'');cleanup();dom.window.close();
 });

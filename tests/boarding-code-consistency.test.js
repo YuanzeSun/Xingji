@@ -6,13 +6,14 @@ import {createRecord, archive, readArchive} from '../src/model.js';
 import {createBoardingCode,readBoardingCode} from '../src/bcbp.js';
 import {normalizeCodeData} from '../src/barcode-data.js';
 import {ticketCodeEditor,bindTicketCodeEditor} from '../src/code-editor.js';
+import {boardingGeneratorMarkup} from '../src/boarding-code-generator.js';
 import {BOARDING_SHARED_FIELDS} from '../src/boarding-code-state.js';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
 
 const values={passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:'2026-11-17',cabin:'Y',seat:'12A',sequence:'25',status:'3',electronic:'E'};
 const flight=extra=>createRecord({type:'flight',template:'air-boarding-pass',passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-11-17',seat:'12A',seatClass:'S',boardingLegIndex:'0',...extra});
 function editor(draft,options={}){
-  const dom=new JSDOM('<form>'+BOARDING_SHARED_FIELDS.map(key=>`<input name="${key}" value="${key.endsWith('Date')?calendarDate(draft[key]):draft[key]}">`).join('')+'<p id="editor-error" hidden></p>'+ticketCodeEditor(draft,options)+'<button type="submit">保存</button></form>'),form=dom.window.document.querySelector('form');
+  const dom=new JSDOM('<form>'+BOARDING_SHARED_FIELDS.map(key=>`<input name="${key}" value="${key.endsWith('Date')?calendarDate(draft[key]):draft[key]}">`).join('')+'<p id="editor-error" hidden></p>'+ticketCodeEditor(draft,options)+boardingGeneratorMarkup(draft)+'<button type="submit">保存</button></form>'),form=dom.window.document.querySelector('form');
   let saves=0;
   const cleanup=bindTicketCodeEditor(form,draft,()=>{},options);
   form.addEventListener('submit',event=>{event.preventDefault();saves++;});

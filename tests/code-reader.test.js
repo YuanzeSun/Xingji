@@ -10,6 +10,7 @@ import { readBCBP } from '../src/bcbp-reader.js';
 import { createRecord } from '../src/model.js';
 import { applyReviewedTicket } from '../src/ticket-import-review.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from '../src/code-editor.js';
+import {boardingGeneratorMarkup} from '../src/boarding-code-generator.js';
 import { BOARDING_SHARED_FIELDS } from '../src/boarding-code-state.js';
 import { JSDOM } from 'jsdom';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
@@ -67,7 +68,7 @@ test('boarding QR codes preserve Chinese or binary extensions and autofill field
     assert.equal(readBCBP(String.fromCharCode(...bytes.slice(0,60+conditional.length-1))),null,'truncated extensions are still rejected');
 
     const draft=createRecord({type:'flight',template:'air-boarding-pass'});
-    const dom=new JSDOM('<form>'+BOARDING_SHARED_FIELDS.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+ticketCodeEditor(draft)+'</form>'),form=dom.window.document.querySelector('form');
+    const dom=new JSDOM('<form>'+BOARDING_SHARED_FIELDS.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+ticketCodeEditor(draft)+boardingGeneratorMarkup(draft)+'</form>'),form=dom.window.document.querySelector('form');
     const cleanup=bindTicketCodeEditor(form,draft,()=>{},{loadRebuilder:async()=>async()=>result});
     try{
       const photo=form.querySelector('#code-photo');Object.defineProperty(photo,'files',{value:[new Blob(['synthetic QR'])]});photo.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
@@ -101,7 +102,7 @@ test('tagged Chinese names, ticket numbers and gates autofill from QR while reco
   const result=await rebuildCodeSymbols(image,'flight',{boardingPass:true});assert.deepEqual(result.issues,[]);assert.equal(result.codes.length,1);
   const draft=createRecord({type:'flight',template:'air-boarding-pass',boardingTime:'17:30'});
   const fields=[...BOARDING_SHARED_FIELDS.filter(key=>key!=='seatClass'),'ticketNumber','gate','boardingTime','airline'];
-  const dom=new JSDOM('<form>'+fields.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+seatClassField(draft)+ticketCodeEditor(draft)+'</form>'),form=dom.window.document.querySelector('form');
+  const dom=new JSDOM('<form>'+fields.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+seatClassField(draft)+ticketCodeEditor(draft)+boardingGeneratorMarkup(draft)+'</form>'),form=dom.window.document.querySelector('form');
   bindSeatClassFields(form);
   const cleanup=bindTicketCodeEditor(form,draft,()=>{},{loadRebuilder:async()=>async()=>result});
   try{

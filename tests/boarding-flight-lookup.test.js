@@ -6,6 +6,7 @@ import {createRecord} from '../src/model.js';
 import {normalizeCodeData} from '../src/barcode-data.js';
 import {BOARDING_SHARED_FIELDS} from '../src/boarding-code-state.js';
 import {ticketCodeEditor,bindTicketCodeEditor} from '../src/code-editor.js';
+import {boardingGeneratorMarkup} from '../src/boarding-code-generator.js';
 import {flightLookupMarkup,bindFlightLookup} from '../src/flight-lookup.js';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
 
@@ -16,7 +17,7 @@ function code(flightNumber='1234') {
 }
 function editor(lookup) {
   const draft=createRecord({type:'flight',template:'air-boarding-pass'}),fields=[...BOARDING_SHARED_FIELDS,'ticketNumber','gate','boardingTime','departureTime','arrivalDate','arrivalTime','airline','aircraft','terminal'];
-  const dom=new JSDOM('<form>'+fields.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+ticketCodeEditor(draft)+flightLookupMarkup()+'</form>'),form=dom.window.document.querySelector('form');
+  const dom=new JSDOM('<form>'+fields.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+ticketCodeEditor(draft)+boardingGeneratorMarkup(draft)+flightLookupMarkup()+'</form>'),form=dom.window.document.querySelector('form');
   let scanned=code(),applies=0;
   const stopCode=bindTicketCodeEditor(form,draft,()=>{},{loadRebuilder:async()=>async()=>({codes:[{data:scanned,format:'PDF417'}],issues:[]})});
   const stopLookup=bindFlightLookup(form,{getRecord:()=>draft,getKey:()=> 'fictional-key',canQuery:()=>true,desktop:()=>true,lookup,apply:changes=>{applies++;Object.assign(draft,changes);for(const [key,value]of Object.entries(changes))if(form.elements[key])form.elements[key].value=value;}});

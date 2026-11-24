@@ -9,6 +9,7 @@ import {symbolImage} from '../src/barcode-symbols.js';
 import {codeBytes,symbolFromCodeData} from '../src/barcode-data.js';
 import {createRecord,archive,readArchive} from '../src/model.js';
 import {ticketCodeEditor,bindTicketCodeEditor} from '../src/code-editor.js';
+import {boardingGeneratorMarkup} from '../src/boarding-code-generator.js';
 import {DEMO_BOARDING_CODE} from '../src/demo-boarding-code.js';
 import {bindUppercaseInputs} from '../src/uppercase-input.js';
 
@@ -51,7 +52,7 @@ test('all generated symbologies decode to the complete BCBP and survive metadata
 test('the generator gets shared fields from the ticket and creates or updates the preview automatically',async()=>{
   const draft=flight({boardingCode:DEMO_BOARDING_CODE});
   const shared=['passenger','pnr','origin','destination','service','departureDate','seat','seatClass'];
-  const dom=new JSDOM(`<form>${shared.map(key=>`<input name="${key}" value="${key.endsWith('Date')?calendarDate(draft[key]):draft[key]}">`).join('')}${ticketCodeEditor(draft)}</form>`),form=dom.window.document.querySelector('form');
+  const dom=new JSDOM(`<form>${shared.map(key=>`<input name="${key}" value="${key.endsWith('Date')?calendarDate(draft[key]):draft[key]}">`).join('')}${ticketCodeEditor(draft)}${boardingGeneratorMarkup(draft)}</form>`),form=dom.window.document.querySelector('form');
   bindUppercaseInputs(form);
   const cleanup=bindTicketCodeEditor(form,draft,()=>{});
   const set=(key,value)=>{const input=form.querySelector(`[data-bcbp="${key}"]`) || form.elements[key];input.value=value;input.dispatchEvent(new dom.window.InputEvent('input',{bubbles:true}));};

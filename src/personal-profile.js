@@ -2,6 +2,8 @@ import {flightNameLanguage} from './flight-passenger.js';
 import {markFieldSources} from './field-sources.js';
 import {ticketFieldLocked} from './barcode-fields.js';
 import { identityPattern, requireCompleteIdentity } from './identity.js';
+import { calendarDate } from './journey-date.js';
+import { resolvePlace } from './places.js';
 
 export const PROFILE_FIELDS = [
   ['chineseName','中文姓名','text',100], ['firstName','英文名（First name）','text',150], ['lastName','英文姓（Last name）','text',100],
@@ -46,7 +48,7 @@ export const hasPersonalProfile = value => JSON.stringify(personalProfile(value)
 
 export function matchProfileIdentity(hint, profile) {
   const pattern = identityPattern(hint);
-  if (!/^[A-Z0-9*]{3,128}$/.test(pattern) || !/[A-Z0-9]/.test(pattern)) return '';
+  if (!pattern.includes('*') || !/^[A-Z0-9*]{3,128}$/.test(pattern) || !/[A-Z0-9]/.test(pattern)) return '';
   const matches = (profile?.documents || []).filter(doc => {
     const number = identityPattern(doc.number);
     return /^[A-Z0-9]+$/.test(number) && number.length === pattern.length &&
@@ -55,27 +57,64 @@ export function matchProfileIdentity(hint, profile) {
   return matches.length === 1 ? matches[0].number : '';
 }
 
-export function lockMatchedIdentity(record, identity) {
+export function applyTicketIdentity(record, hint, profile, source) {
+  const pattern = identityPattern(hint);
+  const masked = pattern.includes('*');
+  const identity = masked ? matchProfileIdentity(pattern, profile) : /^[A-Z0-9]{3,128}$/.test(pattern) ? pattern : '';
   if (!identity) return;
   record.identity = identity;
-  record.lockedFields = [...new Set([...record.lockedFields, 'identity'])].sort();
-  markFieldSources(record, ['identity'], 'profile-match');
+  if (masked || source === 'pdf' || source === 'barcode') record.lockedFields = [...new Set([...record.lockedFields, 'identity'])].sort();
+  markFieldSources(record, ['identity'], masked ? 'profile-match' : source);
+  return true;
 }
 
-export function profileDefaults(type, value, record={}) {
-  const profile = personalProfile(value), defaults = { passenger: '' };
-  if (!profile.autoFill) return defaults;
-  const domestic=type==='flight' && flightNameLanguage(record)==='zh';
-  defaults.passenger = type === 'flight' && !domestic ? [profile.lastName,profile.firstName].filter(Boolean).join('/') : profile.chineseName;
-  return defaults;
+export function profilePassengerName(record, profile = {}) {
+  if (profile.autoFill === false) return '';
+  return record.type === 'flight' && flightNameLanguage(record) !== 'zh'
+    ? [profile.lastName, profile.firstName].filter(Boolean).join('/')
+    : profile.chineseName || '';
 }
-export function applyProfileDefaults(record, profile, { edited = [], previousProfile = profile, previousType = record.type, previousRecord = record } = {}) {
-  const next = profileDefaults(record.type, profile,record), previous = profileDefaults(previousType, previousProfile,previousRecord), out = { ...record };
-  const protectedFields = new Set(edited);
-  for (const key of Object.keys(next)) {
-    if (!ticketFieldLocked(record,key) && !protectedFields.has(key) && (!record[key] || record[key] === previous[key])) {
-      out[key] = next[key];
-      if(out[key]!==record[key] || !record[key])markFieldSources(out,[key],'profile');
+
+function prefilledDocument(record, profile) {
+  if (!profile.autoFill || !profile.documents.length) return '';
+  let type = 'national-id';
+  if (record.type === 'flight') {
+    const countries = ['origin', 'destination'].map(side => {
+      const place = resolvePlace(record, side);
+      return place.status === 'matched' ? place.country : '';
+    });
+    if (countries.some(country => country && !['CN','HK','MO','TW'].includes(country))) type = 'passport';
+    else if (!countries.every(country => country === 'CN')) return '';
+  }
+  const documents = profile.documents.filter(doc => doc.type === type);
+  if (type === 'national-id') {
+    const numbers = [...new Set(documents.map(doc => doc.number).filter(Boolean))];
+    return numbers.length === 1 ? numbers[0] : '';
+  }
+  if (documents.length === 1) return documents[0].number;
+  const departure = calendarDate(record.departureDate);
+  if (departure.length !== 10 || documents.some(doc => !doc.expiry)) return '';
+  const eligible = documents.filter(doc => doc.expiry >= departure).sort((a, b) => a.expiry.localeCompare(b.expiry));
+  const [first, second] = eligible;
+  return first && first.expiry !== second?.expiry ? first.number : '';
+}
+
+export function applyProfileDefaults(record, profile, { passengerEdited = false, previousProfile = profile, previousRecord = record } = {}) {
+  const out = { ...record };
+  const settings = personalProfile(profile);
+  if (!passengerEdited && !ticketFieldLocked(record, 'passenger') &&
+      (!record.passenger || record.passenger === profilePassengerName(previousRecord, previousProfile === profile ? settings : personalProfile(previousProfile)))) {
+    out.passenger = profilePassengerName(record, settings);
+    if (out.passenger !== record.passenger || !record.passenger) markFieldSources(out, ['passenger'], 'profile');
+  }
+  const source = record.fieldSources?.identity;
+  if (source !== 'manual' && !ticketFieldLocked(record, 'identity') && (!record.identity || source === 'profile')) {
+    const hasTicketSource = record.boardingCodeSource === 'original' || record.ticketCode ||
+      record.sources?.some(item => item.kind === 'pdf' || item.kind === 'scan');
+    const identity = hasTicketSource ? '' : prefilledDocument(record, settings);
+    if (identity !== (record.identity || '')) {
+      out.identity = identity;
+      markFieldSources(out, ['identity'], 'profile');
     }
   }
   return out;

@@ -54,7 +54,8 @@ test('saving or receiving a shared MCP key never consumes quota; explicit refres
    assert.equal(document.querySelector('#flight-form'),null);
  }
  const install=document.querySelector('.data-layout').firstElementChild;
- assert.ok(install.classList.contains('install-panel'));assert.match(install.textContent,/随身票夹.*Safari.*共享.*添加到主屏幕.*编辑操作/);
+ assert.ok(install.classList.contains('install-panel'));
+ assert.match(install.textContent,/随身票夹.*浏览器.*安装应用.*添加到主屏幕.*添加到程序坞/);
  assert.equal(queries,2);
  dom.window.close();
 });

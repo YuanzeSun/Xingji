@@ -19,7 +19,7 @@
 
 ### 票据录入
 
-![票夹中的机票和火车录入入口](docs/images/ticket-entry.jpg)
+![按月份整理的票夹及机票、火车票录入入口](docs/images/ticket-entry.jpg)
 
 ![核对登机牌扫码结果并实时预览票面](docs/images/manual-entry.jpg)
 

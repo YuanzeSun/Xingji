@@ -43,7 +43,7 @@ export function editBoardingGeneratorField(input) {
   if(badge)badge.outerHTML=fieldSourceBadge(field,{[field]:input.value || (input.dataset.bcbp==='electronic' ? '无' : ''),fieldSources:{[field]:'manual'}});
 }
 
-export function boardingGeneratorValues(record,{profile}={}) {
+function boardingGeneratorValues(record,{profile}={}) {
   const values=boardingCodeDefaults(record,{profile}),current=boardingCodeDefaults(record,{useSaved:false,profile});
   values.operatingFlight='';
   if(record.boardingCodeSource==='generated')values.operatingFlight=record.boardingCodeOperatingFlight || '';
