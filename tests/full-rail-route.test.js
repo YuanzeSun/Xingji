@@ -87,6 +87,8 @@ test('ticket route playback follows track distance, keeps its progress on zoom, 
     const button = container.querySelector('[data-rail-play-route]');
     const status = container.querySelector('[data-rail-play-status]');
     const [first, second] = svg.querySelectorAll('.rail-playback-track path');
+    const controls = [...container.querySelectorAll('[data-route-zoom]')];
+    assert.deepEqual(controls.map(button => button.dataset.routeZoom), ['in', 'out', 'fit']);
     const litStops = () => [...svg.querySelectorAll('[data-rail-stop-lit] title')].map(node => node.textContent).sort();
     advance(0);
     assert.equal(button.textContent, '播放行程');
@@ -97,7 +99,7 @@ test('ticket route playback follows track distance, keeps its progress on zoom, 
     advance(10);
     assert.deepEqual(litStops(), ['济南西']);
     const viewBox = svg.getAttribute('viewBox');
-    container.querySelector('[data-route-zoom="in"]').click();
+    controls[0].click();
     advance(3010);
     assert.notEqual(svg.getAttribute('viewBox'), viewBox);
     assert.deepEqual(litStops(), ['徐州东', '济南西']);
@@ -111,6 +113,9 @@ test('ticket route playback follows track distance, keeps its progress on zoom, 
     assert.equal(second.style.strokeDashoffset, '0');
     assert.equal(status.textContent, '已点亮济南西至南京南');
     assert.equal(button.textContent, '重播行程');
+    controls[2].click();
+    advance(6020);
+    assert.equal(svg.getAttribute('viewBox'), viewBox);
 
     button.click();
     assert.equal(first.style.strokeDashoffset, '1');

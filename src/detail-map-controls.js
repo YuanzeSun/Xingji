@@ -2,15 +2,15 @@ import { escape as e } from './html.js';
 
 export const ROUTE_PLAYBACK_MS = 6000;
 
-export function detailMapControls(label, { regional = false } = {}) {
-  return `<div class="map-controls"><button type="button" data-route-zoom="in" aria-label="放大${e(label)}">＋</button><button type="button" data-route-zoom="out" aria-label="缩小${e(label)}">−</button><button type="button" data-route-zoom="fit" aria-label="显示完整${e(label)}">↔</button>${regional ? '<button type="button" data-route-zoom="region" aria-label="区域总览，查看周边省界" title="区域总览，查看周边省界">区域</button>' : ''}</div>`;
+export function detailMapControls(label) {
+  return `<div class="map-controls"><button type="button" data-route-zoom="in" aria-label="放大${e(label)}">＋</button><button type="button" data-route-zoom="out" aria-label="缩小${e(label)}">−</button><button type="button" data-route-zoom="fit" aria-label="显示完整${e(label)}">↔</button></div>`;
 }
 
 export function bindDetailMapControls(frame, { fitViewport, draw }) {
   const view = frame.ownerDocument.defaultView, svg = frame.querySelector('svg');
   const listeners = new view.AbortController(), { signal } = listeners;
   const pointers = new Map();
-  let width, height, viewport, fitted, fitMode = 'fit', adjusted = false, animation = 0, gesture;
+  let width, height, viewport, fitted, adjusted = false, animation = 0, gesture;
 
   function measure() {
     const rect = frame.getBoundingClientRect(), nextWidth = rect.width || 640, nextHeight = rect.height || 340;
@@ -26,10 +26,9 @@ export function bindDetailMapControls(frame, { fitViewport, draw }) {
   function schedule() {
     if (!animation) animation = view.requestAnimationFrame(paint);
   }
-  function fit(mode = 'fit') {
-    fitMode = mode;
+  function fit() {
     adjusted = false;
-    fitted = fitViewport(width, height, mode === 'region');
+    fitted = fitViewport(width, height);
     viewport = { ...fitted };
   }
   const unit = () => 1000 / viewport.zoom / width;
@@ -86,7 +85,7 @@ export function bindDetailMapControls(frame, { fitViewport, draw }) {
   frame.addEventListener('click', event => {
     const mode = event.target.closest('[data-route-zoom]')?.dataset.routeZoom;
     if (mode === 'in' || mode === 'out') zoom(mode === 'in' ? 1.5 : 1 / 1.5);
-    else if (mode) { fit(mode); schedule(); }
+    else if (mode === 'fit') { fit(); schedule(); }
   }, { signal });
   svg.addEventListener('keydown', event => {
     const { key } = event;
@@ -105,7 +104,7 @@ export function bindDetailMapControls(frame, { fitViewport, draw }) {
 
   const observer = typeof view.ResizeObserver === 'function' ? new view.ResizeObserver(() => {
     if (!measure()) return;
-    if (!adjusted) fit(fitMode);
+    if (!adjusted) fit();
     schedule();
   }) : null;
   measure();

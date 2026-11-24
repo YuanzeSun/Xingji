@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { projectPoint } from '../src/journey-map-model.js';
 import { createRailMapContext, railMapAnnotations } from '../src/rail-map-context.js';
-import { PROVINCE_LABELS } from '../src/data/map-reference.js';
 
 const line = [[109.387, 24.309], [109.33, 24.1], [109.24, 23.75]].map(point => projectPoint(point));
 const stops = [{ name: '柳州', point: line[0] }, { name: '来宾北', point: line.at(-1) }];
@@ -19,24 +18,17 @@ test('short railway view adds real nearby cities and province labels without dup
   assert.deepEqual(context.bounds, [Math.min(...line.map(point => point[0])), line[0][1], line[0][0], line.at(-1)[1]]);
 });
 
-test('regional view expands to the nearest provincial boundary and neighboring provinces', () => {
-  const context = createRailMapContext([line]), view = fitted(context.regionalBounds, 690, 340);
-  const labels = railMapAnnotations(context, stops, view, 690, 340);
-  assert.ok(labels.provinces.some(province => province.name === '贵州'));
-  assert.ok(labels.provinces.some(province => province.name === '广西'));
-  assert.ok(labels.cities.length >= 5);
-  assert.equal(Object.keys(PROVINCE_LABELS).length, 31);
-});
-
 test('labels stay inside desktop and mobile frames, avoid controls and each other, and update when panning', () => {
   const context = createRailMapContext([line]);
   for (const [width, height] of [[690, 340], [295, 290]]) {
-    const viewport = fitted(context.regionalBounds, width, height), labels = railMapAnnotations(context, stops, viewport, width, height);
+    const viewport = fitted(context.bounds, width, height);
+    viewport.zoom *= .5;
+    const labels = railMapAnnotations(context, stops, viewport, width, height);
     const boxes = Object.values(labels).flat().map(row => row.label?.box).filter(Boolean);
     assert.ok(boxes.length >= 4);
     for (const [index, box] of boxes.entries()) {
       assert.ok(box[0] >= 7 && box[1] >= 7 && box[2] <= width - 7 && box[3] <= height - 7);
-      assert.equal(overlaps(box, [width - 62, 8, width - 8, 184]), false);
+      assert.equal(overlaps(box, [width - 62, 8, width - 8, 144]), false);
       assert.equal(overlaps(box, [8, height - 33, 132, height - 4]), false);
       for (const other of boxes.slice(index + 1)) assert.equal(overlaps(box, other), false);
     }
