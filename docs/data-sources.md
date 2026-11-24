@@ -12,11 +12,14 @@
 
 航班状态可提供机场、计划与实际起降时刻、航程距离、航司、机型、飞机编号、出发航站楼和登机口。计划登机时间只取明确标为计划的值。带时区偏移的时间转换为所在机场的当地时间。飞机编号优先读取航班状态的 `aircraftNumber`，缺失时用 `getAircraftRotation` 核对实际执飞机。机型依据多个字段的一致性识别，存在冲突时提示核对。
 
+代码共享航班有明确执飞航班号时，按票面航班号和执飞航班号分别识别营销航司和承运航司。出发航站楼可读取 `FlightDepTerminal` 或 `FlightHTerminal`。这些资料来自同一次航班状态查询。符合现有导入格式的历史行程也可保留已有的航站楼、登机口、营销航司和登机时刻。
+
 机型识别已覆盖 DHC-6/7/8、ATR、ERJ/E-Jet、CRJ、C909/C919 等，支持常见名称和明确的设备代码；扫描、导入、补全、登机牌与统计使用相同的名称处理。[覆盖范围和参考来源](aircraft.md)。
 
 已核对实际服务端工具定义，并用公开样例 `CA181 / 2023-11-18` 验证历史查询。该次返回有机场、计划时刻、航站楼、登机口和具体型号；这只证明该样例可查询，不承诺所有历史日期都齐全。测试样例不涉及本人行程或个人身份信息。
 
 - [现有平台的 getFlightStatus 文档](https://cmcp.variflight.com/tools/#getFlightStatus)：`fnum + date`，可加具体机场 `dep / arr`。
+- [飞常准航班状态字段](https://dataworks.variflight.com/about-us/download-zone/flight-status-query-api-docs/)
 - [飞机编号查询 getAircraftRotation](https://cmcp.variflight.com/en/tools/#getAircraftRotation)
 - [另一套飞友 AI Aviation MCP 文档](https://ai.variflight.com/zh/docs/aviation)：`searchFlightsByNumber`，公开标价 50 积分／次，1 积分为 0.01 元。它采用不同端点、工具名和认证方式，不能将该价格或 Key 直接套用到现有平台。应用没有擅自迁移。
 

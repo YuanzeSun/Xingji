@@ -1,12 +1,24 @@
 import { createRecord, now } from './model.js';
+import { JOURNEY_DATE_FIELDS } from './journey-date.js';
 import { parseRailInvoicePage } from './rail-invoice.js';
+
+const flightHistoryTextFields = [
+  'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'departureZone', 'arrivalZone',
+  'departureTime', 'arrivalTime', 'actualDepartureTime', 'actualArrivalTime', 'boardingTime', 'actualBoardingTime',
+  'flightDistance', 'passenger', 'seat', 'airline', 'marketingCarrier', 'terminal', 'gate', 'flightStatus', 'aircraft', 'aircraftRegistration'
+];
 
 export function mapFlightResult(payload) {
   // Intentionally conservative: only this documented intermediate shape is accepted.
   // Raw provider responses stay in the review screen until a provider mapping is verified.
   const items = Array.isArray(payload) ? payload : payload?.flights;
   if (!Array.isArray(items)) throw new Error('尚未识别飞常准接口返回结构');
-  return items.map(item => createRecord({ type: 'flight', template: 'air-boarding-pass', service: String(item.flightNumber || ''), origin: String(item.origin || ''), destination: String(item.destination || ''), originCity: String(item.originCity || ''), destinationCity: String(item.destinationCity || ''), originCode: String(item.originCode || ''), destinationCode: String(item.destinationCode || ''), departureDate: item.departureDate || '', departureTime: String(item.departureTime || ''), arrivalDate: item.arrivalDate || '', arrivalTime: String(item.arrivalTime || ''), actualDepartureDate: item.actualDepartureDate || '', actualDepartureTime: String(item.actualDepartureTime || ''), actualArrivalDate: item.actualArrivalDate || '', actualArrivalTime: String(item.actualArrivalTime || ''), flightDistance: String(item.flightDistance || ''), departureZone: String(item.departureZone || ''), arrivalZone: String(item.arrivalZone || ''), passenger: String(item.passenger || ''), seat: String(item.seat || ''), airline: String(item.airline || ''), flightStatus: String(item.flightStatus || ''), aircraft: String(item.aircraft || ''), aircraftRegistration: String(item.aircraftRegistration || ''), sources: [{ kind: 'flight-lookup', label: '飞常准历史行程', at: now() }] }));
+  return items.map(item => createRecord({
+    type: 'flight', template: 'air-boarding-pass', service: String(item.flightNumber || ''),
+    ...Object.fromEntries(flightHistoryTextFields.map(field => [field, String(item[field] || '')])),
+    ...Object.fromEntries(JOURNEY_DATE_FIELDS.map(field => [field, item[field] || ''])),
+    sources: [{ kind: 'flight-lookup', label: '飞常准历史行程', at: now() }]
+  }));
 }
 export async function readRailInvoicePDF(file) {
   const pdfjs = await import('pdfjs-dist/build/pdf.mjs');

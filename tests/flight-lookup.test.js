@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord } from '../src/model.js';
-import { flightCandidates, flightCompletion, rotationRegistration } from '../src/flight-lookup-model.js';
+import { flightCandidates, flightCompletion, flightLookupNeeds, rotationRegistration } from '../src/flight-lookup-model.js';
 import { flightQuery } from '../src/flight-query.js';
 import { bindFlightLookup, flightLookupMarkup } from '../src/flight-lookup.js';
 import { FlightConnector } from '../src/mcp.js';
@@ -51,6 +51,41 @@ test('offset-bearing timestamps convert to airport-local dates, including intern
   assert.equal(candidates.length, 1); assert.equal(candidates[0].departureTime, '17:00'); assert.equal(calendarDate(candidates[0].departureDate), '2026-07-18');
   assert.equal(candidates[0].arrivalTime, '16:00'); assert.equal(calendarDate(candidates[0].arrivalDate), '2026-07-19');
   assert.equal(flightCandidates(payload([row({ FlightDeptimePlanDate: '2026-07-18 00:00:00' })]), input)[0].departureTime, '00:00');
+});
+
+test('a codeshare keeps the booked flight while identifying the marketing and operating airlines', () => {
+  const input = { service: 'CA7941', departureDate: '2025-01-06', origin: 'SZX', destination: 'KIX' };
+  const codeshare = row({
+    FlightNo: 'CA7941', FlightDepcode: 'SZX', FlightArrcode: 'KIX', FlightDeptimePlanDate: '2025-01-06 08:30:00',
+    FlightCompany: '中国国际航空', airlinesCode: 'CA', shareFlight: 'ZH661', FlightDepTerminal: 'T3', FlightArrTerminal: 'T1', aircraftNumber: 'B8078'
+  });
+  const [candidate] = flightCandidates(payload([codeshare]), input);
+  assert.equal(candidate.service, 'CA7941');
+  assert.equal(candidate.airline, '深圳航空');
+  assert.equal(candidate.marketingCarrier, 'CA');
+  assert.equal(candidate.terminal, 'T3');
+  const booking = createRecord({ ...input, type:'flight', template:'air-boarding-pass' });
+  assert.equal(flightCompletion(booking, candidate).marketingCarrier, 'CA');
+  assert.equal(flightCompletion({ ...booking, marketingCarrier: 'ZH', lockedFields: ['marketingCarrier'] }, candidate).marketingCarrier, undefined);
+  const [aliased] = flightCandidates(payload([{ ...codeshare, shareFlight: '', ShareFlightNo: 'ZH0661' }]), input);
+  assert.equal(aliased.airline, '深圳航空');
+  const [conflict] = flightCandidates(payload([{ ...codeshare, ShareFlightNo: 'NH97' }]), input);
+  assert.equal(conflict.airline, '');
+  assert.equal(conflict.marketingCarrier, 'CA');
+});
+
+test('departure-terminal and airline aliases are reused without introducing another lookup', () => {
+  const [fallback] = flightCandidates(payload([row({
+    FlightDepTerminal: '', FlightHTerminal: 'T2', FlightArrTerminal: 'T1', FlightTerminal: 'T1',
+    FlightCompany: '', aircraftNumber: '', AircraftNumber: 'B5846'
+  })]), input);
+  assert.equal(fallback.terminal, 'T2');
+  assert.equal(fallback.airline, '中国国际航空');
+  assert.equal(fallback.aircraftRegistration, 'B-5846');
+  assert.equal(fallback.marketingCarrier, '');
+  assert.deepEqual(flightLookupNeeds(fallback), { schedule: false, registration: false });
+  const [arrivalOnly] = flightCandidates(payload([row({ FlightDepTerminal: '', FlightArrTerminal: 'T1', FlightTerminal: 'T1' })]), input);
+  assert.equal(arrivalOnly.terminal, '');
 });
 
 test('completion protects nonempty and manually corrected fields, private ticket data and unmatched handwritten endpoints', () => {

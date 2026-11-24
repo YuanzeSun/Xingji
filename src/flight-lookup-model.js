@@ -4,9 +4,23 @@ import { resolvePlace } from './places.js';
 import { AIRPORT_TIMEZONES } from './data/airport-timezones.js';
 import { reconcileAircraft } from './aircraft.js';
 import { flightNumber, flightQuery } from './flight-query.js';
+import { airlineNameForCode } from './airline-codes.js';
 
 const clean = value => typeof value === 'string' && !/^(?:-+|null|undefined|n\/?a)$/i.test(value.trim()) ? value.trim().slice(0, 1000) : '';
 const flightIdentity = value => flightNumber(value).replace(/^([A-Z0-9]{2})0+(?=\d)/, '$1');
+
+function flightCarriers(row, marketedFlight) {
+  const marketedCarrier = marketedFlight.slice(0, 2);
+  const operatingCarriers = new Set([row.shareFlight, row.ShareFlightNo].map(flightIdentity)
+    .filter(number => /^(?=[A-Z0-9]{0,1}[A-Z])[A-Z0-9]{2}\d{1,5}[A-Z]?$/.test(number))
+    .map(number => number.slice(0, 2)).filter(carrier => carrier !== marketedCarrier));
+  if (!operatingCarriers.size) return { airline: clean(row.FlightCompany) || airlineNameForCode(marketedCarrier), marketingCarrier: '' };
+  const [operatingCarrier] = operatingCarriers;
+  return {
+    airline: operatingCarriers.size === 1 ? airlineNameForCode(operatingCarrier) || operatingCarrier : '',
+    marketingCarrier: marketedCarrier
+  };
+}
 
 function airportTime(value, zone) {
   const text = clean(value), match = text.match(/^(\d{4}-\d{2}-\d{2})[ T]([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/);
@@ -35,18 +49,18 @@ export function flightCandidates(result, input) {
     const distance = typeof row.distance === 'number' || typeof row.distance === 'string' ? String(row.distance).trim() : '';
     const record = { type: 'flight', template: 'air-boarding-pass', service: query.fnum, departureDate: departure.date, departureTime: departure.time,
       origin: dep, originCode: dep, destination: arr, destinationCode: arr,
-      arrivalDate: arrival?.date || '', arrivalTime: arrival?.time || '', airline: clean(row.FlightCompany),
+      arrivalDate: arrival?.date || '', arrivalTime: arrival?.time || '', ...flightCarriers(row, query.fnum),
       actualDepartureDate: actualDeparture?.date || '', actualDepartureTime: actualDeparture?.time || '', actualArrivalDate: actualArrival?.date || '', actualArrivalTime: actualArrival?.time || '',
       flightDistance: /^(?:0|[1-9]\d{0,5})(?:\.\d{1,3})?$/.test(distance) && Number(distance) > 0 && Number(distance) <= 100000 ? distance : '',
-      terminal: clean(row.FlightDepTerminal), gate: clean(row.BoardGate),
-      boardingTime: plannedBoardingTime(row.scheduledBoardingTime ?? row.FlightBoardingTimePlanDate, departure.date, AIRPORT_TIMEZONES[dep]) };
+      terminal: clean(row.FlightDepTerminal) || clean(row.FlightHTerminal), gate: clean(row.BoardGate),
+      boardingTime: plannedBoardingTime(row.scheduledBoardingTime || row.FlightBoardingTimePlanDate, departure.date, AIRPORT_TIMEZONES[dep]) };
     const key = JSON.stringify(record);
     if (!candidates.has(key)) candidates.set(key, { record, aircraftValues: new Set(), registrations: new Set() });
     const { aircraftValues, registrations } = candidates.get(key);
     for (const value of [row.miniAirplaneModels, row.generic, row.aircraftType]) {
       aircraftValues.add(Number.isInteger(value) ? String(value) : clean(value));
     }
-    const registration = aircraftRegistration(row.aircraftNumber ?? row.AircraftNumber);
+    const registration = aircraftRegistration(row.aircraftNumber) || aircraftRegistration(row.AircraftNumber);
     if (registration) registrations.add(registration);
   }
   return [...candidates.values()].map(({ record, aircraftValues, registrations }) => {
@@ -131,7 +145,7 @@ export function flightCompletion(record, candidate) {
       if (canCompletePair(record, [side, code])) { fill(side, candidate[side]); fill(code, candidate[code]); }
     }
   }
-  for (const field of [...scheduleFields, 'aircraftRegistration']) fill(field, candidate[field]);
+  for (const field of [...scheduleFields, 'aircraftRegistration', 'marketingCarrier']) fill(field, candidate[field]);
   for (const [date, time] of timePairs) fillTimePair(date, time);
   return changes;
 }
