@@ -127,7 +127,6 @@ test('rail QR entry queries RailGo once and locks the separate photo scan until 
     assert.equal(photoEntry().querySelector('[data-rail-photo-lock]').hidden, false);
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, true);
     assert.equal(receipt().disabled, true);
-    assert.equal(form().querySelector('#rail-receipt-lock').hidden, false);
     assert.ok(form().querySelector('[data-code-examples][hidden]'));
     await waitFor(() => field('railModel').value === 'CR400BF-S');
     assert.deepEqual(railQueries, [[['trainNum', 'G103'], ['date', '20251124']]]);

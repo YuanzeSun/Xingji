@@ -32,6 +32,7 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
     assert.equal(document.querySelector('[data-code-editor]').nextElementSibling, document.querySelector('[data-rail-receipt-entry]'));
     assert.equal(document.querySelector('[data-rail-receipt-entry]').nextElementSibling, document.querySelector('[data-rail-photo-entry]'));
     assert.equal(document.querySelector('[data-rail-receipt-file]').accept, '.pdf,application/pdf');
+    assert.equal(document.querySelector('[data-rail-receipt]').textContent, '识别电子报销凭证录入');
 
     for (const name of ['发票.json', '发票.txt', '发票.eml']) {
       pickReceipt(window, { name, arrayBuffer() { assert.fail('Only PDFs should be read'); } });

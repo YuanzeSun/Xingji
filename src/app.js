@@ -423,10 +423,8 @@ function newPersonalRecord(type = 'rail') {
 }
 function railReceiptControls() {
   return `<section class="editor-extra full-field rail-receipt-entry" data-rail-receipt-entry>
-    <button type="button" class="button small secondary" data-rail-receipt aria-describedby="rail-receipt-help rail-receipt-lock">电子报销凭证</button>
+    <button type="button" class="button small secondary" data-rail-receipt>识别电子报销凭证录入</button>
     <input type="file" accept=".pdf,application/pdf" data-rail-receipt-file hidden />
-    <p class="fine-print" id="rail-receipt-help">上传铁路电子报销凭证 PDF。</p>
-    <p class="fine-print" id="rail-receipt-lock" hidden>移除已录入的二维码后可上传。</p>
     <p class="fine-print" data-rail-receipt-status role="status"></p>
   </section>`;
 }
@@ -434,9 +432,7 @@ function railReceiptControls() {
 function refreshRailReceipt(form, activeEditor) {
   const button = form.querySelector('[data-rail-receipt]');
   if (!button) return;
-  const locked = !!activeEditor.draft.ticketCode;
-  button.disabled = locked || !!activeEditor.receiptPending || !!activeEditor.railPhotoPending || !canWrite();
-  form.querySelector('#rail-receipt-lock').hidden = !locked;
+  button.disabled = !!activeEditor.draft.ticketCode || !!activeEditor.receiptPending || !!activeEditor.railPhotoPending || !canWrite();
 }
 
 function bindRailReceipt(form, activeEditor) {
