@@ -17,7 +17,7 @@ const rankings = {
   'rail-models': { title: '乘坐车型', data: 'railModels', unit: '种', option: 'railPowerSupplies', label: '细分供电制式' },
   'rail-bureaus': { title: '担当路局', data: 'railBureaus', unit: '个', option: 'railUnits', label: '细分车辆归属单位' },
   aircraft: { title: '乘坐机型', data: 'aircraft', unit: '种', option: 'aircraftSubtypes', label: '细分子型号', unknown: 'unknownAircraft', unknownLabel: '未识别机型' },
-  airlines: { title: '乘坐航司', data: 'airlines', unit: '家', defaultView: 'bars', unknown: 'unknownAirlines', unknownLabel: '未识别航司' }
+  airlines: { title: '乘坐航司', data: 'airlines', unit: '家', unknown: 'unknownAirlines', unknownLabel: '未识别航司' }
 };
 
 export function mountStatistics(container, records, { options = {} } = {}) {
@@ -28,12 +28,11 @@ export function mountStatistics(container, records, { options = {} } = {}) {
   let series = [],chartCleanup=()=>{};
   const scrollPositions = { year: null, month: null };
   function rankingPanel(kind) {
-    const { title, data, unit, option, label, defaultView = 'donut', unknown, unknownLabel } = rankings[kind];
-    const rows = statistics[data], view = rankingCharts[kind] || defaultView;
+    const { title, data, unit, option, label, unknown, unknownLabel } = rankings[kind];
+    const rows = statistics[data], view = rankingCharts[kind] || 'donut';
     const chooser = Object.entries(rankingViews).map(([value, name]) => `<button type="button" data-stat-view="${value}" aria-pressed="${view === value}">${name}</button>`).join('');
-    const basis = options.marketingAirlines ? '按购票航司' : '按实际承运';
     const grouping = kind === 'airlines'
-      ? `<button type="button" class="button secondary small" data-stat-option="marketingAirlines" aria-label="${basis}，点击切换代码共享统计口径" title="切换代码共享统计口径">${basis}</button>`
+      ? `<fieldset class="statistics-airline-basis"><legend class="visually-hidden">共享航班统计口径</legend>${[['operating', '按实际承运'], ['marketing', '按购票航司']].map(([value, name]) => `<label><input type="radio" name="airline-basis" value="${value}" data-stat-option="marketingAirlines" ${options.marketingAirlines === (value === 'marketing') ? 'checked' : ''}/>${name}</label>`).join('')}</fieldset>`
       : option ? `<label><input type="checkbox" data-stat-option="${option}" ${options[option] ? 'checked' : ''}/>${label}</label>` : '';
     const unidentified = statistics[unknown] ? `<p class="fine-print">${unknownLabel} · ${statistics[unknown]} 次</p>` : '';
     return `<section class="statistics-panel statistics-ranking" data-stat-ranking="${kind}"><header><h2>${title}</h2><span>${rows.length} ${unit}</span></header><div class="statistics-ranking-controls"><div class="statistics-view-picker" role="group" aria-label="${title}图表样式">${chooser}</div>${grouping}</div><div data-stat-plot>${rankingChartMarkup(title, rows, view)}</div>${unidentified}</section>`;
@@ -137,17 +136,16 @@ export function mountStatistics(container, records, { options = {} } = {}) {
     else render();
   }
   const visibility = () => { if (doc.visibilityState === 'visible') refreshDay(); };
-  function setRankingOption(key, value) {
-    options[key] = value;
-    const scroll = container.querySelector('.statistics-chart-scroll');
-    if (scroll) scrollPositions[options.period] = scroll.scrollLeft;
-    render();
-    container.querySelector(`[data-stat-option="${key}"]`).focus();
-  }
   const change = event => {
     const target = event.target;
-    if (target.matches('[data-stat-option]') && ['railUnits','railPowerSupplies','aircraftSubtypes'].includes(target.dataset.statOption)) {
-      setRankingOption(target.dataset.statOption, target.checked); return;
+    if (target.matches('[data-stat-option]')) {
+      const key = target.dataset.statOption, radio = target.type === 'radio';
+      options[key] = radio ? target.value === 'marketing' : target.checked;
+      const scroll = container.querySelector('.statistics-chart-scroll');
+      if (scroll) scrollPositions[options.period] = scroll.scrollLeft;
+      render();
+      container.querySelector(`[data-stat-option="${key}"]${radio ? ':checked' : ''}`).focus({ preventScroll: true });
+      return;
     }
     else if (target.matches('[data-stat-merge-routes]')) {
       options.mergeDirections=target.checked;
@@ -159,7 +157,6 @@ export function mountStatistics(container, records, { options = {} } = {}) {
   const click = event => {
     const date = event.target.closest('[data-stat-date]');
     if (date) { openDate(date); return; }
-    if (event.target.closest('[data-stat-option="marketingAirlines"]')) { setRankingOption('marketingAirlines', !options.marketingAirlines); return; }
     const view = event.target.closest('[data-stat-view]');
     if (view) {
       if (view.getAttribute('aria-pressed') === 'true') return;
