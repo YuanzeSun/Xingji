@@ -1,6 +1,10 @@
 import {calendarDate} from './journey-date.js';
 import { resolvePlace } from './places.js';
 import { aircraftClassification } from './aircraft.js';
+import { airlineNameForCode, airlineNameForLabel } from './airline-codes.js';
+import { readBoardingCode } from './bcbp.js';
+import { operatingFlight } from './boarding-code-state.js';
+import { flightNumber } from './flight-query.js';
 import { dateInterval } from './search.js';
 import { CONTINENT_AIRPORT_CODES } from './data/airport-geography.js';
 import { isJourneyRecord } from './record-kind.js';
@@ -28,7 +32,7 @@ export function todayDate(date = new Date()) {
 export function statisticsOptions(input = {}, today = todayDate()) {
   const selectedEnd = input.dateTo || today;
   const dateTo = dateInterval(selectedEnd)?.end > today ? today : selectedEnd;
-  return { dateFrom: input.dateFrom ?? '', dateTo, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railPowerSupplies:input.railPowerSupplies === true, aircraftSubtypes:input.aircraftSubtypes !== false };
+  return { dateFrom: input.dateFrom ?? '', dateTo, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railPowerSupplies:input.railPowerSupplies === true, aircraftSubtypes:input.aircraftSubtypes !== false, marketingAirlines:input.marketingAirlines === true };
 }
 
 export function statisticsRange(records, input = {}, today = todayDate()) {
@@ -55,11 +59,23 @@ function placeGeography(record, side) {
   return { ...place, country: ['HK', 'MO', 'TW'].includes(place.country) ? 'CN' : place.country, continent: airportContinents.get(place.code) || '' };
 }
 
+function flightAirline(record, byMarketing) {
+  const operated = operatingFlight(record.boardingCodeOperatingFlight)?.carrier;
+  const saved = airlineNameForLabel(operated || record.airline);
+  if (!byMarketing && saved) return saved;
+  const original = record.boardingCodeSource === 'original' && readBoardingCode(record.boardingCode, record.boardingLegIndex);
+  const fromBoardingCode = airlineNameForLabel(original?.carrier);
+  const marketed = airlineNameForLabel(record.marketingCarrier) || airlineNameForLabel(original?.marketingCarrier);
+  const carrier = /^([A-Z]{2,3}|[A-Z]\d|\d[A-Z])\d{1,5}[A-Z]?$/.exec(flightNumber(record.service))?.[1];
+  const byFlightNumber = airlineNameForCode(carrier);
+  return byMarketing ? marketed || byFlightNumber || saved || fromBoardingCode : fromBoardingCode || (marketed ? '' : byFlightNumber);
+}
+
 export function journeyStatistics(records, input = {}, today = todayDate()) {
   const options=statisticsOptions(input, today), range = statisticsRange(records, options, today), rows = range.records;
   const airports = new Map(), stations = new Map(), countries = new Map(), continents = new Set(), routes = new Map(), aircraft = new Map();
-  const railModels = new Map(), railBureaus = new Map();
-  let unknownAircraft = 0, unknownPlaces = 0, unknownRoutes = 0;
+  const railModels = new Map(), railBureaus = new Map(), airlines = new Map();
+  let unknownAircraft = 0, unknownAirlines = 0, unknownPlaces = 0, unknownRoutes = 0;
   let actualFlightDistance = 0, actualFlightDistanceTrips = 0;
   for (const record of rows) {
     if (record.type === 'rail') {
@@ -80,6 +96,9 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
       if (place.continent) continents.add(place.continent);
     }
     if (record.type !== 'flight') continue;
+    const airline = flightAirline(record, options.marketingAirlines);
+    if (airline) airlines.set(airline, (airlines.get(airline) || 0) + 1);
+    else unknownAirlines++;
     const trackDistance = flightTrackDistanceKm(record.flightTrack);
     if (trackDistance > 0) {
       actualFlightDistance += trackDistance;
@@ -102,11 +121,11 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   return { ...range, rail: rows.filter(record => record.type === 'rail').length, flight: rows.filter(record => record.type === 'flight').length,
     years, airports: byName(airports.values()), stations: byName(stations.values()), countries: byName(countries.values()),
     continents: [...continents].sort().map(code => ({ code, name: CONTINENTS[code] })),
-    aircraft: ranked(aircraft),
+    aircraft: ranked(aircraft), airlines: ranked(airlines),
     railMileage:Math.round(mileageTrips.reduce((sum,row)=>sum+Number(row.railMileage),0)*1000)/1000,
     railMileageTrips: mileageTrips.length, actualFlightDistance, actualFlightDistanceTrips,
     railModels: ranked(railModels), railBureaus: ranked(railBureaus),
-    routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)), unknownAircraft, unknownPlaces, unknownRoutes };
+    routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)), unknownAircraft, unknownAirlines, unknownPlaces, unknownRoutes };
 }
 
 export function tripSeries(records, { period = 'year' } = {}) {

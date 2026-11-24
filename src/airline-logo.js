@@ -10,7 +10,7 @@ for (const [id, logo] of Object.entries(AIRLINE_LOGOS)) {
     names.get(normalized).add(id);
   }
 }
-for (const [name, code] of Object.entries({ 国航:'CA', 东航:'MU', 南航:'CZ', 海航:'HU', 深航:'ZH', 川航:'3U', 厦航:'MF', 厦门航空:'MF', 山航:'SC', 新航:'SQ', 国泰:'CX', 中国春秋航空:'9C' })) {
+for (const [name, code] of Object.entries({ 国航:'CA', 东航:'MU', 南航:'CZ', 海航:'HU', 深航:'ZH', 川航:'3U', 厦航:'MF', 厦门航空:'MF', 山航:'SC', 新航:'SQ', 国泰:'CX', 中国春秋航空:'9C', 美国航空:'AA', 全日空航空:'NH' })) {
   const matches = Object.entries(AIRLINE_LOGOS).filter(([, logo]) => logo.code === code);
   if (matches.length === 1) names.set(key(name), new Set([matches[0][0]]));
 }

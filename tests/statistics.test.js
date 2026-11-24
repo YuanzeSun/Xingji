@@ -7,6 +7,7 @@ import { journeyDate } from '../src/journey-date.js';
 import { statisticsOptions, statisticsRange, todayDate, journeyStatistics, tripSeries } from '../src/statistics-model.js';
 import { mountStatistics } from '../src/statistics.js';
 import { flightTrackRequest } from '../src/flight-track.js';
+import { createBoardingCode } from '../src/bcbp.js';
 
 const rail = extra => createRecord({ origin: '北京南', destination: '上海虹桥', departureDate: '2024-02-29', ...extra });
 const flight = extra => createRecord({ type: 'flight', template: 'air-boarding-pass', origin: 'PEK', destination: 'HND', departureDate: '2024-03-01', aircraft: 'Boeing 737-800', ...extra });
@@ -46,7 +47,7 @@ test('rail mileage and flown distance share the date filter and show independent
 });
 
 test('statistics default to an unbounded start and today, compare dates only and respect edited bounds', () => {
-  assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railPowerSupplies:false, aircraftSubtypes:true });
+  assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railPowerSupplies:false, aircraftSubtypes:true, marketingAirlines:false });
   const rows = [rail({ id: 'past' }), flight({ id: 'today', departureDate: '2026-11-16', departureTime: '23:59' }), rail({ id: 'future', departureDate: '2026-11-17' }), rail({ id: 'deleted', deleted: true }), rail({ id: 'undated', departureDate: '' })];
   const result = statisticsRange(rows, range);
   assert.deepEqual(result.records.map(row => row.id), ['past', 'today']); assert.equal(result.omittedDates, 1);
@@ -86,6 +87,56 @@ test('statistics keep airport and station identities, combine return air routes 
   assert.equal(data.unknownAircraft, 1); assert.equal(data.unknownRoutes, 1); assert.equal(data.unknownPlaces, 1);
   assert.deepEqual(data.countries.map(row => row.code).sort(), ['CN', 'JP']);
   assert.equal(JSON.stringify(rows), before);
+});
+
+test('the airline ranking merges recognized aliases and switches between operating and marketing carriers', () => {
+  const boarding = {
+    passenger: 'EXAMPLE/TRAVELER', pnr: 'AB1234', origin: 'PEK', destination: 'HND',
+    date: '2024-03-01', carrier: 'CX', flightNumber: '1234', seat: '12A', cabin: 'Y', sequence: '12', status: '1'
+  };
+  const code = createBoardingCode(boarding);
+  const rows = [
+    ...['国航', 'ＣＡ', 'CCA', 'Air China', '中国国际航空股份有限公司'].map(airline => flight({ airline })),
+    flight({ service: 'CA 181' }), flight({ service: 'AA81' }), flight({ airline: '美国航空' }),
+    flight({ service: 'CA121', airline: 'CZ', marketingCarrier: 'CA' }),
+    flight({ service: 'CA122', marketingCarrier: 'CA', boardingCode: code, boardingCodeSource: 'original', boardingLegIndex: '0' }),
+    flight({ ...boarding, seatClass: boarding.cabin, service: 'CA123', airline: '国航', marketingCarrier: 'CA',
+      boardingCode: code, boardingCodeSource: 'generated', boardingLegIndex: '0', boardingCodeOperatingFlight: 'CX1234' }),
+    flight({ service: 'CA124', marketingCarrier: 'CA' }), flight({ service: 'YY12' }),
+    flight({ airline: 'JL', departureDate: '2024-01-01' }), flight({ airline: 'JL', departureDate: '2200-01-01' }),
+    flight({ airline: 'JL', flightStatus: 'open' }), flight({ airline: 'JL', deleted: true })
+  ];
+  const options = { ...range, dateFrom: '2024-03-01' }, before = JSON.stringify(rows);
+  const result = journeyStatistics(rows, options, '2026-11-25');
+  assert.equal(result.airlines[0].name, '中国国际航空');
+  assert.deepEqual(Object.fromEntries(result.airlines.map(({ name, count }) => [name, count])), {
+    中国国际航空: 6, 国泰航空: 2, 美國航空: 2, 中国南方航空: 1
+  });
+  assert.equal(result.unknownAirlines, 2);
+  const purchased = journeyStatistics(rows, { ...options, marketingAirlines: true }, '2026-11-25');
+  assert.deepEqual(purchased.airlines, [{ name: '中国国际航空', count: 10 }, { name: '美國航空', count: 2 }]);
+  assert.equal(purchased.unknownAirlines, 1);
+  assert.equal(purchased.flight, result.flight);
+  assert.equal(JSON.stringify(rows), before);
+
+  const dom = new JSDOM('<div id="root"></div>'), root = dom.window.document.querySelector('#root');
+  const cleanup = mountStatistics(root, rows, { options: { ...options } });
+  const panel = () => root.querySelector('[data-stat-ranking="airlines"]');
+  const toggle = () => panel().querySelector('[data-stat-option="marketingAirlines"]');
+  assert.equal(panel().querySelector('header span').textContent, '4 家');
+  assert.match(panel().querySelector('li').textContent, /中国国际航空6 次/);
+  assert.match(panel().textContent, /未识别航司 · 2 次/);
+  panel().querySelector('[data-stat-view="donut"]').click();
+  assert.equal(panel().querySelector('.statistics-ring strong').textContent, '11');
+  assert.equal(toggle().textContent, '按实际承运');
+  toggle().click();
+  assert.equal(toggle().textContent, '按购票航司');
+  assert.equal(dom.window.document.activeElement, toggle());
+  assert.equal(panel().querySelector('.statistics-ring strong').textContent, '12');
+  assert.match(panel().textContent, /未识别航司 · 1 次/);
+  toggle().click();
+  assert.equal(panel().querySelector('.statistics-ring strong').textContent, '11');
+  cleanup(); dom.window.close();
 });
 
 test('geography uses each airport continent and correctly assigns Chinese regions and Lao railway stations', () => {

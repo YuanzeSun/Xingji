@@ -11,7 +11,8 @@ function placesPanel(title, places, type) {
 const rankings = {
   'rail-models': { title: '乘坐车型', data: 'railModels', unit: '种', option: 'railPowerSupplies', label: '细分供电制式' },
   'rail-bureaus': { title: '担当路局', data: 'railBureaus', unit: '个', option: 'railUnits', label: '细分车辆归属单位' },
-  aircraft: { title: '乘坐机型', data: 'aircraft', unit: '种', option: 'aircraftSubtypes', label: '细分子型号' }
+  aircraft: { title: '乘坐机型', data: 'aircraft', unit: '种', option: 'aircraftSubtypes', label: '细分子型号', unknown: 'unknownAircraft', unknownLabel: '未识别机型' },
+  airlines: { title: '乘坐航司', data: 'airlines', unit: '家', defaultView: 'bars', unknown: 'unknownAirlines', unknownLabel: '未识别航司' }
 };
 
 export function mountStatistics(container, records, { options = {} } = {}) {
@@ -22,14 +23,15 @@ export function mountStatistics(container, records, { options = {} } = {}) {
   let series = [],chartCleanup=()=>{};
   const scrollPositions = { year: null, month: null };
   function rankingPanel(kind) {
-    const { title, data, unit, option, label } = rankings[kind];
-    const rows = statistics[data], view = rankingCharts[kind] || 'donut';
+    const { title, data, unit, option, label, defaultView = 'donut', unknown, unknownLabel } = rankings[kind];
+    const rows = statistics[data], view = rankingCharts[kind] || defaultView;
     const chooser = Object.entries(rankingViews).map(([value, name]) => `<button type="button" data-stat-view="${value}" aria-pressed="${view === value}">${name}</button>`).join('');
-    const grouping = `<label><input type="checkbox" data-stat-option="${option}" ${options[option] ? 'checked' : ''}/>${label}</label>`;
-    const unknown = kind === 'aircraft' && statistics.unknownAircraft
-      ? `<p class="fine-print">未识别机型 · ${statistics.unknownAircraft} 次</p>`
-      : '';
-    return `<section class="statistics-panel statistics-ranking" data-stat-ranking="${kind}"><header><h2>${title}</h2><span>${rows.length} ${unit}</span></header><div class="statistics-ranking-controls"><div class="statistics-view-picker" role="group" aria-label="${title}图表样式">${chooser}</div>${grouping}</div><div data-stat-plot>${rankingChartMarkup(title, rows, view)}</div>${unknown}</section>`;
+    const basis = options.marketingAirlines ? '按购票航司' : '按实际承运';
+    const grouping = kind === 'airlines'
+      ? `<button type="button" class="button secondary small" data-stat-option="marketingAirlines" aria-label="${basis}，点击切换代码共享统计口径" title="切换代码共享统计口径">${basis}</button>`
+      : option ? `<label><input type="checkbox" data-stat-option="${option}" ${options[option] ? 'checked' : ''}/>${label}</label>` : '';
+    const unidentified = statistics[unknown] ? `<p class="fine-print">${unknownLabel} · ${statistics[unknown]} 次</p>` : '';
+    return `<section class="statistics-panel statistics-ranking" data-stat-ranking="${kind}"><header><h2>${title}</h2><span>${rows.length} ${unit}</span></header><div class="statistics-ranking-controls"><div class="statistics-view-picker" role="group" aria-label="${title}图表样式">${chooser}</div>${grouping}</div><div data-stat-plot>${rankingChartMarkup(title, rows, view)}</div>${unidentified}</section>`;
   }
   function render() {
     chartCleanup();
@@ -52,8 +54,8 @@ export function mountStatistics(container, records, { options = {} } = {}) {
         `<div><span>${label}</span><strong>${count ? `${distance.toLocaleString('zh-CN', { maximumFractionDigits })} <small>km</small>` : '—'}</strong><span>${count} / ${total} ${coverage}</span></div>`).join('')}</section>
       <section class="statistics-panel statistics-trend"><header><h2>乘坐次数</h2><div class="statistics-period-controls"><div role="group" aria-label="统计图时间粒度">${[['year', '按年'], ['month', '按月']].map(([value, label]) => `<button data-stat-scale="${value}" aria-pressed="${options.period === value}">${label}</button>`).join('')}</div><label ${options.period === 'month' ? '' : 'hidden'}><span class="visually-hidden">月度图年份</span><select data-stat-year aria-label="月度图年份">${[...yearChoices].reverse().map(year => `<option ${options.year === year ? 'selected' : ''}>${e(year)}</option>`).join('')}</select></label></div></header>${tripChartMarkup(series,{zoom:options.chartZoom,viewportWidth:container.clientWidth || 720})}</section>
       <div class="statistics-columns">${rankingPanel('rail-models')}${rankingPanel('rail-bureaus')}</div>
-      <div class="statistics-columns">${rankingPanel('aircraft')}
-      <section class="statistics-panel"><header><h2>去过的大洲和国家</h2></header><h3>大洲 <span>${data.continents.length}</span></h3>${data.continents.length ? `<ul class="statistics-chips">${data.continents.map(row => `<li>${e(row.name)}</li>`).join('')}</ul>` : empty('暂无已识别的大洲')}<h3>国家 <span>${data.countries.length}</span></h3>${data.countries.length ? `<ul class="statistics-chips countries">${data.countries.map(row => `<li>${e(row.name)}</li>`).join('')}</ul>` : empty('暂无已识别的国家')}</section></div>
+      <div class="statistics-columns">${rankingPanel('airlines')}${rankingPanel('aircraft')}</div>
+      <section class="statistics-panel"><header><h2>去过的大洲和国家</h2></header><h3>大洲 <span>${data.continents.length}</span></h3>${data.continents.length ? `<ul class="statistics-chips">${data.continents.map(row => `<li>${e(row.name)}</li>`).join('')}</ul>` : empty('暂无已识别的大洲')}<h3>国家 <span>${data.countries.length}</span></h3>${data.countries.length ? `<ul class="statistics-chips countries">${data.countries.map(row => `<li>${e(row.name)}</li>`).join('')}</ul>` : empty('暂无已识别的国家')}</section>
       <div class="statistics-columns">${placesPanel('去过的机场', data.airports, 'airport')}${placesPanel('去过的火车站', data.stations, 'station')}</div>
       <section class="statistics-panel" data-stat-routes><header><h2>乘坐过的航线</h2><div class="statistics-route-controls"><label><input type="checkbox" data-stat-merge-routes ${options.mergeDirections ? 'checked' : ''}/>合并双向航线</label><span>${data.routes.length} 条</span></div></header>${data.routes.length ? `<div class="statistics-table-scroll"><table class="statistics-routes"><thead><tr><th>航线</th><th>次数</th></tr></thead><tbody>${data.routes.map(route => `<tr><td><div class="statistics-route-pair"><span class="statistics-route-endpoint">${e(route.from.name)} <code>${e(route.from.code)}</code></span><span class="statistics-route-arrow" role="img" aria-label="${options.mergeDirections ? '双向' : '前往'}">${options.mergeDirections ? '↔' : '→'}</span><span class="statistics-route-endpoint">${e(route.to.name)} <code>${e(route.to.code)}</code></span></div></td><td>${route.count}</td></tr>`).join('')}</tbody></table></div>` : empty('暂无可识别的航线')}</section>`}`;
     chartCleanup=bindTripChart(container,series,options,{onZoom:()=>{const scroll=container.querySelector('.statistics-chart-scroll');if(scroll)scrolled({target:scroll});}});
@@ -130,12 +132,17 @@ export function mountStatistics(container, records, { options = {} } = {}) {
     else render();
   }
   const visibility = () => { if (doc.visibilityState === 'visible') refreshDay(); };
+  function setRankingOption(key, value) {
+    options[key] = value;
+    const scroll = container.querySelector('.statistics-chart-scroll');
+    if (scroll) scrollPositions[options.period] = scroll.scrollLeft;
+    render();
+    container.querySelector(`[data-stat-option="${key}"]`).focus();
+  }
   const change = event => {
     const target = event.target;
     if (target.matches('[data-stat-option]') && ['railUnits','railPowerSupplies','aircraftSubtypes'].includes(target.dataset.statOption)) {
-      options[target.dataset.statOption] = target.checked;
-      const scroll=container.querySelector('.statistics-chart-scroll'); if(scroll) scrollPositions[options.period]=scroll.scrollLeft;
-      const key=target.dataset.statOption; render(); container.querySelector(`[data-stat-option="${key}"]`).focus(); return;
+      setRankingOption(target.dataset.statOption, target.checked); return;
     }
     else if (target.matches('[data-stat-merge-routes]')) {
       options.mergeDirections=target.checked;
@@ -147,6 +154,7 @@ export function mountStatistics(container, records, { options = {} } = {}) {
   const click = event => {
     const date = event.target.closest('[data-stat-date]');
     if (date) { openDate(date); return; }
+    if (event.target.closest('[data-stat-option="marketingAirlines"]')) { setRankingOption('marketingAirlines', !options.marketingAirlines); return; }
     const view = event.target.closest('[data-stat-view]');
     if (view) {
       if (view.getAttribute('aria-pressed') === 'true') return;
