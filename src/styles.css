@@ -472,10 +472,11 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 .statistics-ranking-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 14px;margin-bottom:19px}
 .statistics-ranking-controls>label{display:flex;align-items:center;gap:6px;min-height:32px;font-size:13px;color:#596c58}
 .statistics-ranking-controls input{accent-color:var(--green);margin:0}
-.statistics-airline-basis{display:flex;flex-wrap:wrap;gap:4px;min-width:0;padding:0;margin:0;border:0}
-.statistics-airline-basis label{display:flex;align-items:center;gap:6px;min-height:36px;padding:4px 8px;border:1px solid transparent;border-radius:6px;color:#52654e;font-size:13px;white-space:nowrap;cursor:pointer}
-.statistics-airline-basis label:has(:checked){border-color:#9faf96;background:#e6ede0;color:var(--green)}
-.statistics-airline-basis label:has(:focus-visible){outline:2px solid #638363;outline-offset:2px}
+.statistics-airline-basis{display:flex;align-items:center;flex-wrap:wrap;column-gap:8px;color:#52654e;font-size:13px}
+.statistics-airline-basis>span{font-weight:600;white-space:nowrap}
+.statistics-airline-basis label{display:flex;align-items:center;gap:6px;min-height:36px;white-space:nowrap;cursor:pointer}
+.statistics-airline-basis input{border-radius:50%}
+.statistics-airline-basis input:focus:not(:focus-visible){outline:none}
 .statistics-view-picker{display:inline-flex;max-width:100%;gap:2px;padding:3px;border:1px solid var(--line);border-radius:8px;background:#eef0e8}
 .statistics-view-picker button{min-height:34px;padding:4px 9px;border:0;border-radius:5px;background:transparent;color:#52654e;font:inherit;font-size:13px;line-height:1.3}
 .statistics-view-picker button[aria-pressed=true]{background:var(--surface);color:var(--green);font-weight:650;box-shadow:0 1px 3px #263e2218}

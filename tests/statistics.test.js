@@ -169,6 +169,9 @@ test('the airline ranking merges recognized aliases and switches between operati
   assert.match(panel().textContent, /未识别航司 · 2 次/);
   assert.equal(panel().querySelector('[data-stat-view][aria-pressed="true"]').dataset.statView, 'donut');
   assert.equal(panel().querySelector('.statistics-ring strong').textContent, '11');
+  const group = panel().querySelector('[role="radiogroup"]');
+  assert.equal(group.firstElementChild.textContent, '联程航班');
+  assert.equal(group.getAttribute('aria-labelledby'), group.firstElementChild.id);
   assert.equal(basis('operating').closest('label').textContent, '按实际承运');
   assert.equal(basis('marketing').closest('label').textContent, '按购票航司');
   assert.equal(basis('operating').checked, true);
