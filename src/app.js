@@ -513,7 +513,7 @@ function bindRailReceipt(form, activeEditor) {
 
 function railPhotoControls() {
   return `<details class="editor-extra full-field rail-photo-entry" data-rail-photo-entry>
-    <summary>扫描票面 <span class="fine-print" data-rail-photo-lock hidden>已锁定</span></summary>
+    <summary>扫描票面（alpha） <span class="fine-print" data-rail-photo-lock hidden>已锁定</span></summary>
     <fieldset data-rail-photo-controls>
       <div class="code-actions">
         <button type="button" class="button small secondary" data-rail-photo>相机扫描</button>

@@ -21,6 +21,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   click('[data-action="new"]'); await wait(()=>document.querySelector('#editor-preview'));
   assert.equal(document.querySelector('.editor-fields details:not(.rail-start-override):not(.rail-lookup-result):not([data-rail-photo-entry])'),null);
   assert.equal(document.querySelector('[data-rail-photo-entry]').open,false);
+  assert.equal(document.querySelector('[data-rail-photo-entry] > summary').firstChild.textContent.trim(), '扫描票面（alpha）');
   assert.equal(document.querySelector('[data-code-editor]').tagName,'SECTION');
   const ticketOptions=document.querySelector('.rail-ticket-options');
   assert.equal(document.querySelector('[data-rail-photo-entry]').nextElementSibling,ticketOptions);
