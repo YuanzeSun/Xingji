@@ -55,7 +55,7 @@ import { bindAirportPicker } from './airport-picker.js';
 import { bindStationPicker } from './station-picker.js';
 import { FLIGHT_STATUSES, normalizeFlightStatus } from './flight-status.js';
 import { isRefundReceipt, isJourneyRecord } from './record-kind.js';
-import { bindUppercaseNames } from './name-case.js';
+import { bindUppercaseInputs } from './uppercase-input.js';
 import { personalProfile, applyProfileDefaults, profileDefaults } from './personal-profile.js';
 import { personalProfilePanel, collectPersonalProfile, bindPersonalProfileForm, personalProfileSummary } from './personal-profile-form.js';
 import { cityOverview } from './locations.js';
@@ -1055,7 +1055,8 @@ function editRecord(record = newPersonalRecord(), {
     for(const key of ['passenger','identity'])if(form.elements[key])form.elements[key].value=draft[key];
     if(draft.passenger!==previousRecord.passenger)refreshBoardingPassenger(form,draft,{profile:state.settings.profile,resetName:draft.boardingCodeSource!=='original'});
   }
-  bindUppercaseNames(form, ['passenger'], () => form.elements.type.value === 'flight');
+  form.setAttribute('autocapitalize', 'characters');
+  bindUppercaseInputs(form);
   bindSeatClassFields(form);
   bindSeatFields(form);
   bindDatePickers(form);

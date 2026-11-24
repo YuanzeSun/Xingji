@@ -39,11 +39,6 @@ export function automaticBoardingCode(record,settings,{profile}={}) {
 }
 
 export function editBoardingGeneratorField(input) {
-  if(input.tagName==='INPUT' && input.value!==input.value.toUpperCase()){
-    const start=input.selectionStart,end=input.selectionEnd;
-    input.value=input.value.toUpperCase();
-    if(start!==null)input.setSelectionRange(start,end);
-  }
   const field='bcbp:'+input.dataset.bcbp,badge=input.closest('.field').querySelector('[data-field-source]');
   if(badge)badge.outerHTML=fieldSourceBadge(field,{[field]:input.value || (input.dataset.bcbp==='electronic' ? '无' : ''),fieldSources:{[field]:'manual'}});
 }

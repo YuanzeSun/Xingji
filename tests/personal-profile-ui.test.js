@@ -17,7 +17,7 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   const server=await prepareCloud([old],{flightMcpKey:'keep-this-key'}), db=await import('../src/db.js');
   const wait=async fn=>{for(let i=0;i<400;i++){if(await fn())return;await new Promise(r=>setTimeout(r,10));}assert.fail('Profile UI did not settle');};
   const click=selector=>{const button=document.querySelector(selector);assert.ok(button,selector);button.click();};
-  const fill=(selector,value,event='input')=>{const input=document.querySelector(selector);assert.ok(input,selector);input.value=value;input.dispatchEvent(new window.Event(event,{bubbles:true}));};
+  const fill=(selector,value,event='input')=>{const input=document.querySelector(selector);assert.ok(input,selector);input.value=value;const EventType=event==='input' ? window.InputEvent : window.Event;input.dispatchEvent(new EventType(event,{bubbles:true}));};
   const go=async page=>{click(`[data-action=navigate][data-page=${page}]`);await wait(()=>document.querySelector(page==='data'?'#profile-form':'.ticket-card'));};
   const save=async check=>{document.querySelector('#profile-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await wait(async()=>check()&&!(await db.get('syncMeta')).pending&&!document.querySelector('#profile-form [type=submit]').disabled);};
   await import('../src/app.js'); await wait(()=>document.querySelector('#profile-form [name=chineseName]')?.disabled===false);

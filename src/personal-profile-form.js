@@ -1,7 +1,7 @@
 import { PROFILE_FIELDS, DOCUMENT_TYPES, personalProfile, hasPersonalProfile, GENDER_OPTIONS } from './personal-profile.js';
 import { bindIdentityInput, maskRailIdentity } from './identity.js';
 import { escape as e } from './html.js';
-import { bindUppercaseNames } from './name-case.js';
+import { bindUppercaseInputs } from './uppercase-input.js';
 
 const documentName = doc => doc.label || DOCUMENT_TYPES[doc.type] || '其他证件';
 const maskedDocument = (number, type) => maskRailIdentity(number, { isNationalId: type === 'national-id' });
@@ -35,7 +35,7 @@ export function bindPersonalProfileForm(form, { documents = [], change, restruct
     input.addEventListener('blur', hideNumber);
     type.addEventListener('change', hideNumber);
   }
-  bindUppercaseNames(form, ['firstName', 'lastName']);
+  bindUppercaseInputs(form, '[name="firstName"], [name="lastName"]');
   const capture = () => {
     const profile = collectPersonalProfile(form);
     for (const key of ['railDocument','flightDocument']) form.elements[key].innerHTML = options(profile.documents,profile[key]);

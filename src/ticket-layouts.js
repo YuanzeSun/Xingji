@@ -10,7 +10,7 @@ import { escape as esc } from './html.js';
 import { renderMarks } from './ticket-marks.js';
 import { isLinearTicketCode, renderTicketCode } from './ticket-code.js';
 import { codeSize } from './barcode-data.js';
-import { uppercaseName } from './name-case.js';
+import { uppercaseName } from './uppercase-input.js';
 import { renderBoardingCode, boardingCodeSize } from './boarding-code.js';
 import { airlineLogo } from './airline-logo.js';
 import { isRefundReceipt } from './record-kind.js';

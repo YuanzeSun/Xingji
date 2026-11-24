@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { bindUppercaseNames } from '../src/name-case.js';
+import { bindUppercaseInputs } from '../src/uppercase-input.js';
 import { createRecord } from '../src/model.js';
 import { ticketSVG } from '../src/tickets.js';
 
 test('name inputs capitalize typing and paste without moving the cursor or changing separators', () => {
   const dom = new JSDOM('<form><input name="firstName"><input name="lastName"><input name="chineseName"></form>');
   const form = dom.window.document.querySelector('form');
-  bindUppercaseNames(form, ['firstName', 'lastName']);
+  bindUppercaseInputs(form, '[name="firstName"], [name="lastName"]');
   for (const name of ['firstName', 'lastName']) {
     const input = form.elements[name];
     input.value = "élise Anne/o'neil-smith";
@@ -23,19 +23,29 @@ test('name inputs capitalize typing and paste without moving the cursor or chang
   dom.window.close();
 });
 
-test('ticket input capitalization applies to flights and waits for composition to finish', () => {
-  const dom = new JSDOM('<form><input name="passenger"></form>');
+test('ticket input capitalization waits for composition and preserves supplied and locked values', () => {
+  const dom = new JSDOM('<form><input name="passenger"><input name="locked" readonly><input name="code" type="hidden"></form>');
+  const { InputEvent, CompositionEvent, Event } = dom.window;
   const form = dom.window.document.querySelector('form'), input = form.elements.passenger;
-  let type = 'rail';
-  bindUppercaseNames(form, ['passenger'], () => type === 'flight');
+  bindUppercaseInputs(form);
+  let lastRead;
+  input.addEventListener('input', () => { lastRead = input.value; });
   input.value = 'Zhang/San';
-  input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('input', { bubbles: true }));
   assert.equal(input.value, 'Zhang/San');
-  type = 'flight';
-  input.dispatchEvent(new dom.window.InputEvent('input', { bubbles: true, isComposing: true }));
-  assert.equal(input.value, 'Zhang/San');
-  input.dispatchEvent(new dom.window.CompositionEvent('compositionend', { bubbles: true }));
-  assert.equal(input.value, 'ZHANG/SAN');
+  input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+  input.value = 'aßé 张三/8f';
+  input.setSelectionRange(2, 3, 'backward');
+  input.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true }));
+  assert.equal(input.value, 'aßé 张三/8f');
+  input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+  assert.equal(lastRead, 'ASSÉ 张三/8F');
+  assert.deepEqual([input.selectionStart, input.selectionEnd, input.selectionDirection], [3, 4, 'backward']);
+  for (const field of [form.elements.locked, form.elements.code]) {
+    field.value = 'aBc123';
+    field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+    assert.equal(field.value, 'aBc123');
+  }
   dom.window.close();
 });
 

@@ -13,7 +13,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   window.HTMLDialogElement.prototype.showModal=function(){this.open=true;}; window.HTMLDialogElement.prototype.close=function(){this.open=false;};
   const wait=async fn=>{for(let i=0;i<300;i++){if(await fn())return;await new Promise(r=>setTimeout(r,10));}assert.fail('Editor did not settle');};
   const click=selector=>{const el=document.querySelector(selector);assert.ok(el,selector);el.click();};
-  const fill=(name,value)=>{const input=document.querySelector(`#editor-form [name="${name}"]`);assert.ok(input,name);input.value=value;input.dispatchEvent(new window.Event('input',{bubbles:true}));};
+  const fill=(name,value)=>{const input=document.querySelector(`#editor-form [name="${name}"]`);assert.ok(input,name);input.value=value;input.dispatchEvent(new window.InputEvent('input',{bubbles:true}));};
   const submit=()=>document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
   const requiredHint=()=>document.querySelector('.modal-heading .editor-required-hint');
   const db=await import('../src/db.js'); await prepareCloud();
@@ -48,10 +48,16 @@ test('manual entry always previews, validates required fields and resolves airpo
   fill('origin','清河');fill('destination','天津');fill('service','G103');fill('departureDate','2025-02-29');fill('departureTime','08:00');fill('passenger','示例旅客');fill('identity','000000200001011234');fill('carriage','05');fill('seat','08F');fill('seatClass','二等座');
   submit();await wait(()=>document.querySelector('#editor-error').textContent.includes('日期'));
   assert.deepEqual(await db.get('records',[]),[]);
-  fill('departureDate','2026-11-15');fill('departureTime','08:00');fill('passenger','示例旅客');fill('carriage','05');fill('seatClass','二等座');fill('identity','000000200001011234');fill('gate','5B');fill('seat','08F');fill('orderNumber','E000000001');
+  fill('departureDate','2026-11-15');fill('departureTime','08:00');fill('passenger','示例旅客');fill('carriage','05');fill('seatClass','二等座');fill('identity','000000200001011234');fill('service','g103');fill('gate','5b');fill('orderNumber','e000000001');
+  const seatNumber = document.querySelector('[data-seat-number]');
+  seatNumber.value = '08f';
+  seatNumber.dispatchEvent(new window.InputEvent('input',{bubbles:true,inputType:'insertFromPaste'}));
+  assert.equal(seatNumber.value,'08F');
+  assert.equal(document.querySelector('[name="seat"]').value,'08F');
+  assert.match(document.querySelector('#editor-preview').textContent,/G103.*08F/s);
   assert.match(document.querySelector('#editor-preview').textContent,/0000002000\*{4}1234/);
   submit();await wait(()=>!document.querySelector('dialog'));
-  let records=await db.get('records',[]);assert.equal(records.length,1);assert.equal(records[0].gate,'5B');assert.equal(records[0].orderNumber,'E000000001');
+  let records=await db.get('records',[]);assert.equal(records.length,1);assert.equal(records[0].service,'G103');assert.equal(records[0].seat,'08F');assert.equal(records[0].gate,'5B');assert.equal(records[0].orderNumber,'E000000001');
   const startSupplement = async () => {
     click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
     fill('origin','清河');fill('destination','天津');fill('service','G103');fill('departureDate','2026-11-15');fill('departureTime','08:00');fill('passenger','示例旅客');fill('carriage','05');fill('seatClass','二等座');fill('identity','000000200001011234');fill('seat','08F');fill('price','100');
@@ -68,7 +74,10 @@ test('manual entry always previews, validates required fields and resolves airpo
   click('.duplicate-dialog [data-duplicate-value]:not([data-duplicate-value=""])');await wait(()=>!document.querySelector('dialog'));
   records=await db.get('records',[]);assert.equal(records.length,1);assert.equal(records[0].price,'100');assert.equal(records[0].seat,'08F');
   click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
-  fill('type','flight');fill('passenger','示例旅客');fill('identity','P000001');fill('seat','24K');fill('seatClass','Y');fill('departureTime','12:00');assert.match(document.querySelector('[name="seat"]').closest('.field').textContent.trim(),/^座位号\*/);assert.equal(document.querySelector('[data-field-source="seat"]').textContent,'手动输入');
+  fill('type','flight');fill('passenger','示例旅客');fill('identity','p000001');fill('seat','24k');fill('seatClass','Y');fill('departureTime','12:00');assert.match(document.querySelector('[name="seat"]').closest('.field').textContent.trim(),/^座位号\*/);assert.equal(document.querySelector('[data-field-source="seat"]').textContent,'手动输入');
+  const englishName=document.querySelector('[data-bcbp="passenger"]');
+  englishName.value='li/ming';englishName.dispatchEvent(new window.InputEvent('input',{bubbles:true}));
+  assert.equal(englishName.value,'LI/MING');
   assert.deepEqual([...requiredHint().children].map(note=>note.textContent),['* 保存必填','* 生成条码必填']);
   assert.equal(document.querySelector('[name="originCode"]').type,'hidden');
   assert.equal(document.querySelector('[name="departureZone"], [name="arrivalZone"]'),null);
@@ -88,6 +97,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   submit();await wait(()=>!document.querySelector('dialog'));
   const flight=(await db.get('records',[])).find(r=>r.type==='flight');
   assert.equal(flight.originCode,'PEK');assert.equal(flight.destinationCode,'HND');
+  assert.equal(flight.identity,'P000001');assert.equal(flight.seat,'24K');
   assert.equal(flight.departureZone,'Asia/Shanghai');assert.equal(flight.arrivalZone,'Asia/Tokyo');
   assert.equal(document.querySelector('#city-reference'),null);
   click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
