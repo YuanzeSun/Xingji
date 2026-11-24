@@ -6,6 +6,10 @@ let reading = false;
 
 chrome.runtime.onMessageExternal.addListener((message, sender, reply) => {
   if (sender.frameId !== 0 || ![appPage, appPage + 'index.html'].includes(sender.url?.split(/[?#]/)[0])) return;
+  if (message?.action === 'connectorStatus') {
+    reply({ installed: true });
+    return;
+  }
   if (message?.action !== 'readRailPoints') return;
   if (reading) { reply({ error: '正在查询 12306，请稍候。' }); return; }
   reading = true;

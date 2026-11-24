@@ -5,7 +5,8 @@ import { readFile } from 'node:fs/promises';
 import { unzipSync } from 'fflate';
 import { readTrips } from '../extensions/xingji-connector/read-trips.js';
 import { extensionArchive } from '../scripts/package-extension.mjs';
-import { RAIL_POINTS_EXTENSION, RAIL_POINTS_PAGE, railPointsRange, railPointsRecords } from '../src/rail-points.js';
+import { RAIL_POINTS_PAGE, railPointsRange, railPointsRecords } from '../src/rail-points.js';
+import { XINGJI_CONNECTOR_ID } from '../src/browser-connector.js';
 import { browser, until } from './helpers/d1-app.js';
 import { prepareCloud } from './helpers/cloud.js';
 
@@ -16,7 +17,7 @@ test('the shared extension keeps the 12306 messaging ID and packages both integr
   const manifest = JSON.parse(await readFile(new URL('../extensions/xingji-connector/manifest.json', import.meta.url), 'utf8'));
   const digest = createHash('sha256').update(Buffer.from(manifest.key, 'base64')).digest('hex').slice(0, 32);
   const id = [...digest].map(digit => String.fromCharCode(97 + parseInt(digit, 16))).join('');
-  assert.equal(id, RAIL_POINTS_EXTENSION);
+  assert.equal(id, XINGJI_CONNECTOR_ID);
   const recordedFiles = Object.keys(unzipSync(await extensionArchive(process.cwd())));
   assert.deepEqual(recordedFiles, ['manifest.json', 'background.js', 'read-trips.js', 'rules.json', 'INSTALL.txt', 'LICENSE'].map(file => 'xingji-connector/' + file));
 });
@@ -73,17 +74,27 @@ test('12306 results stay in review until a single user-selected trip is saved', 
   const github = await prepareCloud();
   t.after(() => { window.close(); delete globalThis.chrome; });
   Object.defineProperty(window.navigator, 'userAgent', { configurable: true, value: 'Mozilla/5.0 Chrome/142.0' });
-  let reply;
+  let reply, installed = false;
   globalThis.chrome = { runtime: { sendMessage(id, request, callback) {
-    assert.equal(id, RAIL_POINTS_EXTENSION);
+    assert.equal(id, XINGJI_CONNECTOR_ID);
+    if (request.action === 'connectorStatus') { callback(installed ? { installed: true } : undefined); return; }
     assert.deepEqual(request, { action: 'readRailPoints', ...railPointsRange() });
     reply = callback;
   } } };
   await import('../src/app.js');
   const action = '[data-action="rail-points"]';
   await until(() => document.querySelector(action)?.disabled === false);
-  assert.equal(document.querySelector(action).closest('section').querySelector('a[download]').getAttribute('href'),
-    document.querySelector('.desktop-flight-settings a[download]').getAttribute('href'));
+  const services = document.querySelector('[aria-labelledby="travel-services-title"]');
+  assert.ok(services.contains(document.querySelector(action)));
+  assert.ok(services.contains(document.querySelector('.desktop-flight-settings')));
+  assert.equal(services.querySelectorAll('a[download]').length, 1);
+  assert.ok(services.querySelector('.travel-services-heading a[download]'));
+  assert.equal(services.querySelector('[data-connector-installation]').hidden, true);
+  assert.equal(reply, undefined);
+  installed = true;
+  window.dispatchEvent(new window.Event('focus'));
+  await until(() => document.querySelector('[data-connector-installation]')?.hidden === false);
+  assert.equal(document.querySelector('[data-connector-installation]').textContent, '已安装');
   document.querySelector(action).click();
   await until(() => document.querySelector('#rail-points-form'));
   assert.equal(document.querySelector('#rail-points-form a').href, RAIL_POINTS_PAGE);

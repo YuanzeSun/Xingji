@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "行迹 · 连接扩展",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "供行迹读取 12306 乘车明细和查询飞常准行程。",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAje0i2ImuOuRgkCt6rKVqtGQKtHguNJHt80Vs+wZU6CihUFxOzm+IWnz1GIc1yIegnqiTLmAnVnLJpDhvUb/FkUCCoshIzvxoYNpWgJ2VU0qKO68Nng7TWP7jbehhDTB4CMzl0SyCMNK23QLjnwjZN3bWbMLDHvZmM9z08prRT6LIShAspkBxLzbY088sw+u91+0Ob+agwFzh5Uw3fTawFGZkr1BZqV+opIY+ZLIhYt2cpCllHRxZECypfQ+Z3+Fyemx1hZGxMVmaTcVZzFLxwTBZfzdXagz9YITqeySlFLVU4cUHkTaqgf/yaalAv5I3aw9y8mmwnhPQsfPUqtZUSQIDAQAB",

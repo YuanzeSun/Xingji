@@ -19,7 +19,8 @@ test('saving or receiving a shared MCP key never consumes quota; explicit refres
  await import('../src/app.js');await wait(()=>document.querySelector('#flight-form [name="key"]')?.disabled===false);
  const yearInput=document.querySelector('#flight-year');assert.equal(yearInput.value,String(new Date().getFullYear()));yearInput.value='2024';yearInput.dispatchEvent(new window.Event('input',{bubbles:true}));assert.equal(queries,0);
  assert.equal(document.querySelector('#flight-form [name="key"]').value,'initial-key');assert.equal(queries,0);
- assert.equal(document.querySelector('.desktop-flight-settings a[download]').getAttribute('href'),'./downloads/xingji-connector-extension.zip');
+ assert.equal(document.querySelector('[aria-labelledby="travel-services-title"] a[download]').getAttribute('href'),'./downloads/xingji-connector-extension.zip');
+ assert.deepEqual([...document.querySelectorAll('[aria-labelledby="archive-sync-title"] h3')].map(heading => heading.textContent), ['Cloudflare D1', 'GitHub 私有仓库']);
  let form=document.querySelector('#flight-form');form.elements.key.value='saved-once-key';form.dispatchEvent(new window.Event('input',{bubbles:true}));form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
  await wait(async()=>server.settings().flightMcpKey==='saved-once-key'&&!(await db.get('syncMeta')).pending&&!document.querySelector('#flight-form [name="key"]').disabled);
  assert.equal(queries,0,'saving credentials must not query the metered service');

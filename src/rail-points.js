@@ -2,9 +2,9 @@ import { createRecord, validDate } from './model.js';
 import { calendarDate } from './journey-date.js';
 import { resolvePlace } from './places.js';
 import { RAIL_POINTS_SOURCE } from './field-sources.js';
+import { XINGJI_CONNECTOR_ID } from './browser-connector.js';
 
 export const RAIL_POINTS_PAGE = 'https://cx.12306.cn/tlcx/jfinformation.html';
-export const RAIL_POINTS_EXTENSION = 'cdfbjakbkjobffeijnoghaaccohghome';
 
 const seatNames = {
   '1': '硬座', '2': '软座', '3': '硬卧', '4': '软卧', '5': '包厢硬卧', '6': '高级软卧',
@@ -34,7 +34,7 @@ export function readRailPoints({ start, end }, runtime = globalThis.chrome?.runt
   return new Promise((resolve, reject) => {
     const missing = () => reject(new Error('请安装「行迹 · 连接扩展」，然后刷新行迹。'));
     if (typeof runtime?.sendMessage !== 'function') { missing(); return; }
-    runtime.sendMessage(RAIL_POINTS_EXTENSION, { action: 'readRailPoints', start, end }, result => {
+    runtime.sendMessage(XINGJI_CONNECTOR_ID, { action: 'readRailPoints', start, end }, result => {
       if (runtime.lastError || !result) { missing(); return; }
       if (result.error) { reject(new Error(result.error)); return; }
       if (!Array.isArray(result.rides)) { reject(new Error('未能识别返回的乘车明细。')); return; }

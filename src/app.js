@@ -19,6 +19,7 @@ import * as db from './db.js';
 import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageImport, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, replaceWithRemote } from './sync-state.js';
 import { sharedSettings, sameSettings, maskedKey, wasUnlinked } from './shared-settings.js';
 import { watchAppUpdates } from './app-update.js';
+import { isBrowserConnectorInstalled } from './browser-connector.js';
 import { supportsDesktopMcp } from './device.js';
 import { archiveResetMarkup, prepareArchiveReset, createPairedReset, matchesResetPair, continuePairedReset } from './archive-reset.js';
 import { ArchiveResetError, GitHubStore, synchronize } from './github.js';
@@ -231,8 +232,9 @@ function connectionForm() {
 function captureConnectionDraft(form) {
   state.connectionDraft = { ...state.connectionDraft, owner: form.elements.owner.value, repo: form.elements.repo.value, token: form.elements.token.value };
 }
-function d1ConnectionPanel() {
+function d1ConnectionPanel({ grouped = false } = {}) {
   const draft = state.d1Draft, bound = !!state.d1;
+  const heading = grouped ? 'h3' : 'h2';
   const help = bothClouds()
     ? '两边绑定后，新增和修改都保存到 D1。点击「立即备份到 GitHub」才会用 D1 的当前数据更新 GitHub。换设备时，登录任一账号都会打开同一份 D1 票库。'
     : !bound && state.config ? firstBindingHelp
@@ -241,7 +243,7 @@ function d1ConnectionPanel() {
   const controls = d1Token()
     ? `<p class="body-copy">${e(state.d1?.url)}</p>${exit}`
     : `<form id="d1-form"><label class="field"><span>Worker 地址</span><input type="url" name="url" placeholder="https://your-archive.workers.dev" value="${e(state.d1?.url ?? draft?.url)}" ${bound ? 'readonly' : ''} required autocomplete="off" /></label><label class="field"><span>访问凭证</span><input type="password" name="token" value="${e(draft?.token)}" required autocomplete="off" /></label><p class="form-error" role="alert">${e(state.d1Error)}</p><div class="button-row"><button class="button primary" type="submit" ${state.syncing || state.connecting ? 'disabled' : ''}>${bound ? '重新登录 D1' : '连接 D1'}</button></div></form>`;
-  return `<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('database')}</span><div><h2>Cloudflare D1</h2><p data-d1-cloud-label>${bound ? e(syncLabel()) : '可作为主票库'}</p></div></div>${controls}<div class="setup-help">${help ? `<p>${help}</p>` : ''}<p><a href="https://github.com/YuanzeSun/Xingji/blob/main/docs/cloudflare-d1.md" target="_blank" rel="noopener noreferrer">D1 部署 ↗</a></p></div></section>`;
+  return `<section class="${grouped ? 'settings-provider' : 'panel'}"><div class="panel-heading"><span class="panel-icon">${icon('database')}</span><div><${heading}>Cloudflare D1</${heading}><p data-d1-cloud-label>${bound ? e(syncLabel()) : '可作为主票库'}</p></div></div>${controls}<div class="setup-help">${help ? `<p>${help}</p>` : ''}<p><a href="https://github.com/YuanzeSun/Xingji/blob/main/docs/cloudflare-d1.md" target="_blank" rel="noopener noreferrer">D1 部署 ↗</a></p></div></section>`;
 }
 function githubBackupPair(d1, config) {
   return JSON.stringify([activeBinding({ d1 }), config.id, config.branch]);
@@ -608,23 +610,45 @@ function journeyMapPage() {
 function statisticsPage() {
   return header('数据统计', '从票据中回看走过的旅程') + (guestDemoNotice() || (state.showDemo ? '<div class="demo-banner">' + icon('info') + '<span><strong>示例数据</strong> · 虚构记录</span></div>' : '')) + '<div id="statistics-root"><div class="map-loading" role="status">正在整理统计…</div></div>';
 }
-const connectorDownload = '<a class="button secondary" href="./downloads/xingji-connector-extension.zip" download="行迹连接扩展.zip">下载行迹连接扩展</a>';
+let connectorInstalled = false, checkingConnector = false;
+async function refreshConnectorStatus() {
+  if (checkingConnector || !root.querySelector('[data-connector-installation]')) return;
+  checkingConnector = true;
+  try {
+    connectorInstalled = await isBrowserConnectorInstalled();
+    const status = root.querySelector('[data-connector-installation]');
+    if (status) status.hidden = !connectorInstalled;
+  } finally {
+    checkingConnector = false;
+  }
+}
 function flightSettingsPanel() {
-  if (!supportsDesktopMcp()) return '';
-  return `<section class="panel desktop-flight-settings"><div class="panel-heading"><span class="panel-icon">${icon('plane')}</span><div><h2>飞常准历史行程</h2><p>电脑端 · 按年手动查询</p></div></div><label class="field"><span>历史行程年份</span><input id="flight-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" step="1" value="${e(state.flightYear)}" /></label><form id="flight-form"><label class="field"><span>个人MCP Key</span><input type="password" name="key" value="${e(state.flightKeyDraft ?? flightKey())}" autocomplete="off" data-setting-control /></label><p class="form-error" role="alert">${e(state.settingsError)}</p><div class="button-row flight-actions"><button class="button secondary" type="submit" data-setting-control>保存并同步</button><button class="button secondary" type="button" data-action="flight-refresh">${icon('refresh', imports.task?.kind === 'flight' ? 'spin' : '')}${imports.task?.kind === 'flight' ? '正在查询…' : '查询历史行程'}</button></div></form><p class="body-copy">电脑 Chrome 或 Edge 安装行迹连接扩展后，可按年份查询历史行程。</p>${connectorDownload}${state.flightResult ? '<button class="text-button" data-action="flight-result">查看本次接口返回</button>' : ''}<a class="small-link" href="https://cmcp.variflight.com/tools/" target="_blank" rel="noopener noreferrer">平台文档与授权说明 ↗</a></section>`;
+  return `<section class="settings-provider desktop-flight-settings"><div class="panel-heading"><span class="panel-icon">${icon('plane')}</span><div><h3>飞常准历史行程</h3><p>按年手动查询</p></div></div><label class="field"><span>历史行程年份</span><input id="flight-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" step="1" value="${e(state.flightYear)}" /></label><form id="flight-form"><label class="field"><span>个人MCP Key</span><input type="password" name="key" value="${e(state.flightKeyDraft ?? flightKey())}" autocomplete="off" data-setting-control /></label><p class="form-error" role="alert">${e(state.settingsError)}</p><div class="button-row flight-actions"><button class="button secondary" type="submit" data-setting-control>保存并同步</button><button class="button secondary" type="button" data-action="flight-refresh">${icon('refresh', imports.task?.kind === 'flight' ? 'spin' : '')}${imports.task?.kind === 'flight' ? '正在查询…' : '查询历史行程'}</button></div></form>${state.flightResult ? '<button class="text-button" data-action="flight-result">查看本次接口返回</button>' : ''}<a class="small-link" href="https://cmcp.variflight.com/tools/" target="_blank" rel="noopener noreferrer">平台文档与授权说明 ↗</a></section>`;
 }
 function railPointsPanel() {
-  if (!supportsDesktopMcp() || !/Chrome\/|Chromium\/|Edg\//.test(navigator.userAgent)) return '';
-  return `<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('ticket')}</span><div><h2>12306 乘车记录</h2><p>铁路畅行会员 · 电脑 Chrome 或 Edge</p></div></div><div class="button-row"><button type="button" class="button secondary" data-action="rail-points">从 12306 导入</button>${connectorDownload}</div></section>`;
+  if (!/Chrome\/|Chromium\/|Edg\//.test(navigator.userAgent)) return '';
+  return `<section class="settings-provider"><div class="panel-heading"><span class="panel-icon">${icon('ticket')}</span><div><h3>12306 乘车记录</h3><p>铁路畅行会员</p></div></div><div class="button-row"><button type="button" class="button secondary" data-action="rail-points">从 12306 导入</button></div></section>`;
+}
+function travelServicesPanel() {
+  if (!supportsDesktopMcp()) return '';
+  return `<section class="panel" aria-labelledby="travel-services-title">
+    <div class="panel-heading travel-services-heading"><div><h2 id="travel-services-title">行程服务</h2><p>连接扩展适用于电脑 Chrome 或 Edge</p></div><div class="button-row connector-controls"><a class="button secondary" href="./downloads/xingji-connector-extension.zip" download="行迹连接扩展.zip">下载行迹连接扩展</a><span class="status-pill connected" data-connector-installation role="status" ${connectorInstalled ? '' : 'hidden'}>已安装</span></div></div>
+    <div class="settings-grid">${railPointsPanel()}${flightSettingsPanel()}</div>
+  </section>`;
+}
+function archiveSyncPanel() {
+  return `<section class="panel" aria-labelledby="archive-sync-title"><div class="panel-heading"><h2 id="archive-sync-title">票库同步</h2></div><div class="settings-grid">
+    ${d1ConnectionPanel({ grouped: true })}
+    <section class="settings-provider"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h3>GitHub 私有仓库</h3><p data-cloud-label>${state.d1 ? '手动备份' : e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError)}</p>${githubExtras()}</section>
+  </div></section>`;
 }
 function dataPage() {
   const count = state.records.filter(r => !r.deleted).length;
   return header('数据与同步', '管理个人资料、同步与外部连接。') + `<div class="data-layout">
     <section class="panel quiet-panel install-panel"><h3>${icon('ticket')}随身票夹</h3><p>在 iPhone 的 Safari 中打开行迹，点「共享」，选择「添加到主屏幕」。如果有「作为网页 App 打开」开关，保持开启，再点「添加」。</p><p>「共享」也可能在页面菜单里。找不到「添加到主屏幕」时，点共享菜单底部的「编辑操作」。</p>${installPrompt ? '<button class="button secondary" data-action="install">安装行迹</button>' : ''}</section>
     ${personalProfilePanel(state.profileDraft || state.settings.profile,state.profileError)}
-    <div class="data-column">${d1ConnectionPanel()}<section class="panel"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h2>GitHub 私有仓库</h2><p data-cloud-label>${state.d1 ? '手动备份' : e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError)}</p>${githubExtras()}</section></div>
-    ${flightSettingsPanel()}
-    ${railPointsPanel()}
+    ${archiveSyncPanel()}
+    ${travelServicesPanel()}
     <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button></div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div><div data-restore-followup>${backupRestoreMarkup()}</div>${queuedBackupButton()}${cloudActions()}</section>
   </div>`;
 }
@@ -715,6 +739,7 @@ function mountCollectionSpace() {
   ticketSpaceCleanup=mountTicketSpace(container,result.records);
 }
 function bindPage() {
+  void refreshConnectorStatus();
   if(state.page==='archive'){
     bindTicketViewControls(root,{value:ticketView,change:mode=>{ticketView.mode=mode;render();root.querySelector(`[data-ticket-view="${mode}"]`)?.focus({preventScroll:true});}});
     mountCollectionSpace();
@@ -2129,6 +2154,7 @@ window.addEventListener('online', () => {
   else renderSyncState();
 });
 window.addEventListener('offline', renderSyncState);
+window.addEventListener('focus', refreshConnectorStatus);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') clearTimeout(syncTimer);
   else if (state.syncMeta.pending) doSync();
