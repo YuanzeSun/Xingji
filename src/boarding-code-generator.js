@@ -6,7 +6,7 @@ import {fieldSourceBadge} from './field-sources.js';
 import {barcodeRequiredMark} from './ticket-form.js';
 
 function generatorBadge(key,values,record,profile) {
-  const kind=record.boardingCode ? record.boardingCodeSource==='generated' ? 'generated' : 'barcode' : key==='passenger' && profile && values.passenger ? 'profile' : ['format','electronic'].includes(key) ? 'default' : '';
+  const kind=record.boardingCode ? record.boardingCodeSource==='generated' ? 'generated' : 'barcode' : key==='passenger' && profile && values.passenger ? 'profile' : ['format','electronic','status'].includes(key) ? 'default' : '';
   const field='bcbp:'+key;
   return fieldSourceBadge(field,{[field]:key==='electronic' ? values[key] || '无' : values[key],fieldSources:{[field]:kind}});
 }

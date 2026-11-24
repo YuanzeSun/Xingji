@@ -71,22 +71,21 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
     assert.equal(form.elements.seatClass.value, '动卧');
     assert.equal(form.elements.price.value, '503.50');
     assert.equal(form.elements.ticketNumber.value, '');
+    assert.equal(form.elements.saleCode.value, '');
     assert.equal(form.elements.identity.required, false);
     assert.equal(form.elements.identity.value, '');
     assert.doesNotMatch(form.textContent, /1101012000\*{4}0012/);
     assert.equal(form.querySelector('[data-field-source="service"]').dataset.sourceKind, 'pdf');
-    assert.match(form.textContent, /电子报销凭证资料.*示例单位/s);
+    assert.match(form.textContent, /电子报销凭证资料.*电子客票号.*2600000000000000000000001/s);
+    assert.doesNotMatch(form.textContent, /购买方名称|统一社会信用代码|示例单位|100000000000000001/);
     assert.deepEqual(github.records(), []);
     form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     await until(() => github.records().length === 1);
     const [saved] = github.records();
-    assert.deepEqual(saved.railInvoice, {
-      electronicTicketNumber: '2600000000000000000000001',
-      buyerName: '示例单位', buyerTaxId: '100000000000000001'
-    });
+    assert.deepEqual(saved.railInvoice, { electronicTicketNumber: '2600000000000000000000001' });
     assert.equal(saved.identity, '');
     assert.equal(saved.ticketCode, '');
-    assert.doesNotMatch(JSON.stringify(saved), /26000000000000000001(?!\d)|2026-06-01|1101012000\*{4}0012/);
+    assert.doesNotMatch(JSON.stringify(saved), /26000000000000000001(?!\d)|2026-06-01|1101012000\*{4}0012|示例单位|100000000000000001/);
 
     const printed = createRecord({ ...saved, id: 'printed-ticket', ticketNumber: 'A000001', railInvoice: undefined });
     const { records: merged } = applyImport([printed], [saved]);
@@ -106,13 +105,12 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
 });
 
 test('rail invoices discard masked values before preview and storage', () => {
-  const page = receiptPage({ passenger: '示例＊' });
-  page.items.find(item => item.str === '示例单位').str = '示例＊＊';
-  page.items.find(item => item.str === '100000000000000001').str = '100000********0001';
-  const parsed = parseRailInvoicePage(page);
+  const parsed = parseRailInvoicePage(receiptPage({ passenger: '示例＊' }));
   assert.equal(parsed.passenger, '');
   assert.equal(parsed.identity, '');
-  const expected = { electronicTicketNumber: '2600000000000000000000001', buyerName: '', buyerTaxId: '' };
+  const expected = { electronicTicketNumber: '2600000000000000000000001' };
   assert.deepEqual(parsed.railInvoice, expected);
-  assert.deepEqual(normalizeRailInvoice({ ...parsed.railInvoice, maskedIdentity: '1101012000****0012' }), expected);
+  assert.deepEqual(normalizeRailInvoice({
+    ...parsed.railInvoice, maskedIdentity: '1101012000****0012', buyerName: '示例单位', buyerTaxId: '100000000000000001'
+  }), expected);
 });

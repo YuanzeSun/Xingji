@@ -24,14 +24,14 @@ test('single-leg mandatory BCBP matches fixed-width reference fields, handles le
   for(const [key,value] of [['passenger','姓名'],['passenger','SURNAME/GIVENNAMETOOLONG'],['pnr','ABCD1234'],['origin','PE'],['flightNumber','12345'],['date','2025-02-29'],['date','2024'],['seat','12345A'],['sequence','123456'],['status',''],['cabin','K1']])assert.throws(()=>encodeBCBP({...values(),[key]:value}));
 });
 
-test('new generators default to no electronic marker and economy Y while saved codes retain their values',()=>{
+test('new generators default to check-in status 1, no electronic marker and economy Y while saved codes retain their values',()=>{
   const defaults=boardingCodeDefaults(flight({seatClass:''}));
-  assert.equal(defaults.electronic,'');assert.equal(defaults.cabin,'Y');
+  assert.equal(defaults.electronic,'');assert.equal(defaults.cabin,'Y');assert.equal(defaults.status,'1');
   for(const code of ['S','M','Z','J'])assert.equal(boardingCodeDefaults(flight({seatClass:code})).cabin,code);
   assert.equal(boardingCodeDefaults(flight({seatClass:'头等舱'})).cabin,'F');
   for(const electronic of ['','E']){
-    const saved=boardingCodeDefaults(flight({boardingCode:createBoardingCode({...values(),electronic})}));
-    assert.equal(saved.electronic,electronic);assert.equal(saved.cabin,'F');
+    const saved=boardingCodeDefaults(flight({boardingCode:createBoardingCode({...values(),electronic,status:'0'})}));
+    assert.equal(saved.electronic,electronic);assert.equal(saved.cabin,'F');assert.equal(saved.status,'0');
   }
 });
 
@@ -71,10 +71,13 @@ test('the generator gets shared fields from the ticket and creates or updates th
       assert.equal(input.required,false);
     }
     assert.equal(form.querySelector('.barcode-required-legend'), null);
-    set('sequence','25');submit();assert.equal(draft.boardingCode,'');
-    set('electronic','E');set('passenger','desmarais/luc');set('status','1');
-    await waitForPreview();
+    assert.equal(form.querySelector('[data-bcbp="status"]').value,'1');
     const payload=()=>String.fromCharCode(...codeBytes(draft.boardingCode.rawBytes));
+    set('sequence','25');submit();assert.equal(payload(),encodeBCBP({...values(),electronic:''}));
+    set('electronic','E');set('passenger','desmarais/luc');set('status','3');submit();
+    assert.equal(payload(),encodeBCBP({...values(),status:'3'}));
+    set('status','1');
+    await waitForPreview();
     assert.equal(payload(),encodeBCBP(values()));
     assert.match(form.querySelector('#code-status').textContent,/自动生成/);
     assert.equal(form.querySelector('#code-remove').hidden,true);

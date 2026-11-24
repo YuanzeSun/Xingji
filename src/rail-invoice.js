@@ -2,26 +2,20 @@ import { journeyDate } from './journey-date.js';
 import { readRailSeatClasses } from './seat-classes.js';
 
 const compact = value => value.normalize('NFKC').replace(/\s+/g, '');
-const completeText = value => value.normalize('NFKC').includes('*') ? '' : value;
-const invoiceLabels = {
-  electronicTicketNumber: '电子客票号',
-  buyerName: '购买方名称',
-  buyerTaxId: '统一社会信用代码'
-};
 
 export function normalizeRailInvoice(value) {
   if (!value) return undefined;
   if (typeof value !== 'object' || Array.isArray(value)) throw new Error('铁路电子发票资料格式不正确');
-  const { electronicTicketNumber = '', buyerName = '', buyerTaxId = '' } = value;
-  if (typeof electronicTicketNumber !== 'string' || (electronicTicketNumber && !/^\d{25}$/.test(electronicTicketNumber)) ||
-      typeof buyerName !== 'string' || typeof buyerTaxId !== 'string' ||
-      (completeText(buyerTaxId) && !/^[A-Z0-9]+$/i.test(buyerTaxId))) throw new Error('铁路电子发票资料格式不正确');
-  const fields = { electronicTicketNumber, buyerName: completeText(buyerName).trim().slice(0, 200), buyerTaxId: completeText(buyerTaxId).slice(0, 40) };
-  return Object.values(fields).some(Boolean) ? fields : undefined;
+  const { electronicTicketNumber = '' } = value;
+  if (electronicTicketNumber === '') return undefined;
+  if (typeof electronicTicketNumber !== 'string' || !/^\d{25}$/.test(electronicTicketNumber)) {
+    throw new Error('铁路电子发票资料格式不正确');
+  }
+  return { electronicTicketNumber };
 }
 
 export function railInvoiceDetails(invoice) {
-  return Object.entries(invoiceLabels).filter(([key]) => invoice?.[key]).map(([key, label]) => [label, invoice[key]]);
+  return invoice?.electronicTicketNumber ? [['电子客票号', invoice.electronicTicketNumber]] : [];
 }
 
 export function parseRailInvoicePage({ view: [left, bottom, right, top], items }) {
@@ -55,8 +49,6 @@ export function parseRailInvoicePage({ view: [left, bottom, right, top], items }
   const identityOnInvoice = compact(text(.39, .45, 0, .28));
   const identity = /^[A-Z0-9]{3,40}$/i.test(identityOnInvoice) ? identityOnInvoice : '';
   const electronicTicketNumber = /^电子客票号:(\d{25})$/.exec(compact(text(.24, .30, 0, .64)))?.[1] || '';
-  const buyerName = text(.18, .238, 0, .6).replace(/^购买方名称:?\s*/, '');
-  const buyerTaxId = /^统一社会信用代码:([A-Z0-9]+)$/i.exec(compact(text(.18, .238, .6)))?.[1] || '';
 
   if (!/^\p{Script=Han}+$/u.test(origin) || !/^\p{Script=Han}+$/u.test(destination) ||
       !/^[A-Z]?\d{1,5}$/.test(service) || !date || !time || !price || !passenger || !electronicTicketNumber ||
@@ -69,6 +61,6 @@ export function parseRailInvoicePage({ view: [left, bottom, right, top], items }
   return {
     type: 'rail', origin, destination, originCode, destinationCode, service, departureDate,
     departureTime: time[1].padStart(2, '0') + ':' + time[2], carriage, seat, seatClass, railStanding,
-    price, passenger: completeText(passenger), identity, railInvoice: normalizeRailInvoice({ electronicTicketNumber, buyerName, buyerTaxId })
+    price, passenger: passenger.includes('*') ? '' : passenger, identity, railInvoice: { electronicTicketNumber }
   };
 }

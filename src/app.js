@@ -903,8 +903,7 @@ function railTicketOptions(draft) {
   const refundOption = ['rail-receipt', 'rail-refund-receipt'].includes(draft.template)
     ? `<label class="checkbox-row"><input type="checkbox" data-refund-receipt ${refund ? 'checked' : ''} />退票费凭证${fieldSourceBadge('template', draft)}</label>`
     : '';
-  const standingOption = refund ? ''
-    : `<label class="checkbox-row"><input type="checkbox" data-rail-standing ${draft.railStanding ? 'checked' : ''} />无座${fieldSourceBadge('railStanding', draft)}</label>`;
+  const standingOption = `<label class="checkbox-row"><input type="checkbox" data-rail-standing ${draft.railStanding ? 'checked' : ''} />无座${fieldSourceBadge('railStanding', draft)}</label>`;
   return `<div class="rail-ticket-options full-field" role="group" aria-label="票面选项">
     ${field('template', { ...draft, template: refund ? 'rail-receipt' : draft.template }, { options: ticketTemplateChoices() })}
     <div class="rail-ticket-flags">${refundOption}${standingOption}</div>
@@ -1033,7 +1032,7 @@ function editRecord(record = newPersonalRecord(), {
     const data = new FormData(form); for (const [key, value] of data) if (FIELDS.includes(key) && !JOURNEY_DATE_FIELDS.includes(key) && !barcodeFieldLocked(draft,key)) draft[key] = value;
     for(const key of JOURNEY_DATE_FIELDS)if(form.elements[key+'Year'])draft[key]=readTicketDate(form,key,draft);
     if (!flight) {
-      if(!barcodeFieldLocked(draft,'railStanding') && !barcodeFieldLocked(draft,'seat'))draft.railStanding = form.querySelector('[data-rail-standing]')?.checked === true;
+      if(!barcodeFieldLocked(draft,'railStanding') && !barcodeFieldLocked(draft,'seat'))draft.railStanding = form.querySelector('[data-rail-standing]').checked;
       draft.ticketMarks = collectMarks(form).filter(mark => mark.text);
       if (data.get('template') === 'rail-receipt' && form.querySelector('[data-refund-receipt]')?.checked) draft.template = 'rail-refund-receipt';
     }
