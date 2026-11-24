@@ -1,5 +1,4 @@
-import { FlightConnector } from './mcp.js';
-import { FLIGHT_TRACK_SOURCE, flightTrackDistanceKm, flightTrackRequest, readFlightTrack } from './flight-track.js';
+import { FLIGHT_TRACK_SOURCE, flightTrackDistanceKm } from './flight-track.js';
 import { longitudeCenter, projectPoint, unwrapLongitude } from './journey-map-model.js';
 import { createMapBasemap } from './map-basemap.js';
 import { flightTrackLabelRenderer } from './flight-track-labels.js';
@@ -112,81 +111,26 @@ function mountTrackMap(frame, track, record) {
   return { play, dispose() { view.cancelAnimationFrame(animation); unbind(); } };
 }
 
-export function mountFlightTrack(container, record, { getKey, desktop, canSave, save }) {
+export function mountFlightTrack(container, record) {
+  const track = record.flightTrack;
   const demo = record.sources?.some(source => source.kind === 'demo');
   const attribution = demo ? '航迹数据：示例' : `<a href="${FLIGHT_TRACK_SOURCE}" target="_blank" rel="noopener noreferrer">航迹数据：飞常准</a>`;
-  container.innerHTML = `<div class="rail-route-heading"><h3>飞行航迹</h3><div class="rail-route-actions"><button class="button secondary small" type="button" data-flight-track-query>查询航迹</button><button class="button secondary small" type="button" data-flight-track-play hidden>播放航迹</button></div></div><p class="flight-track-status fine-print" role="status"></p><div class="flight-track-frame rail-route-frame" hidden><canvas aria-hidden="true"></canvas><svg tabindex="0" role="group" aria-label="飞行航迹图，可拖动及缩放"></svg>${detailMapControls('飞行航迹')}</div><p class="rail-route-caption" data-flight-track-source hidden>${attribution}<span></span></p>`;
-  const queryButton = container.querySelector('[data-flight-track-query]'), playButton = container.querySelector('[data-flight-track-play]');
-  const status = container.querySelector('[role=status]'), frame = container.querySelector('.flight-track-frame'), source = container.querySelector('[data-flight-track-source]');
-  const controller = new AbortController();
-  let map, candidate, busy = false;
-  let flightStr;
-  try { flightStr = flightTrackRequest(record); }
-  catch (error) { status.textContent = error.message; }
-
-  function show(track) {
-    const focusPlay = queryButton === container.ownerDocument.activeElement;
-    queryButton.hidden = true;
-    playButton.hidden = frame.hidden = source.hidden = false;
-    status.classList.add('visually-hidden');
-    const [, dep, arr] = track.flightStr.split('_');
-    frame.querySelector('svg').setAttribute('aria-label', `${dep} 至 ${arr}飞行航迹图，可拖动及缩放`);
-    const distance = flightTrackDistanceKm(track).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
-    source.querySelector('span').textContent = ` · ${dep} → ${arr} · 航迹约 ${distance} km${demo ? '' : ' · 查询于 ' + track.queriedAt.slice(0, 10)}`;
-    map = mountTrackMap(frame, track, record);
-    if (focusPlay) playButton.focus();
-  }
-
-  if (record.flightTrack) show(record.flightTrack);
-  else if (flightStr && !desktop()) status.textContent = '请在电脑 Chrome 或 Edge 安装行迹连接扩展后查询航迹。';
-  else if (flightStr && !getKey()) status.textContent = '请先在「数据与同步」配置飞常准 Key。';
-  else if (flightStr) status.textContent = '查询使用你的飞常准账户额度。';
-  queryButton.disabled = !flightStr || !desktop() || !getKey();
-
-  async function query() {
-    if (busy || controller.signal.aborted || !flightStr || !desktop()) return;
-    const key = getKey();
-    if (!key || !canSave()) {
-      status.textContent = key ? '请先恢复票夹同步，再查询并保存航迹。' : '请先在「数据与同步」配置飞常准 Key。';
-      return;
-    }
-    busy = queryButton.disabled = true;
-    queryButton.textContent = '查询中…';
-    status.textContent = '正在查询飞常准…';
-    try {
-      if (!candidate) {
-        const result = await new FlightConnector(key, controller.signal).flightTrack(flightStr);
-        if (controller.signal.aborted) return;
-        if (getKey() !== key) throw new Error('飞常准连接已变化，请重新查询');
-        candidate = readFlightTrack(result, flightStr);
-      }
-      if (!candidate) {
-        status.textContent = '飞常准暂无这班航班的航迹。';
-        return;
-      }
-      const saved = await save(candidate);
-      if (controller.signal.aborted) return;
-      show(saved);
-      status.textContent = '';
-    } catch (error) {
-      if (!controller.signal.aborted) status.textContent = error.name === 'TimeoutError' ? '查询超时，请稍后再试。' : error.message;
-    } finally {
-      busy = queryButton.disabled = false;
-      queryButton.textContent = candidate ? '重试保存' : '查询航迹';
-    }
-  }
+  const [, dep, arr] = track.flightStr.split('_');
+  const distance = flightTrackDistanceKm(track).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+  const queriedAt = demo ? '' : ' · 查询于 ' + track.queriedAt.slice(0, 10);
+  container.innerHTML = `<div class="rail-route-heading"><h3>飞行航迹</h3><button class="button secondary small" type="button" data-flight-track-play>播放航迹</button></div><p class="flight-track-status visually-hidden" role="status"></p><div class="flight-track-frame rail-route-frame"><canvas aria-hidden="true"></canvas><svg tabindex="0" role="group" aria-label="${dep} 至 ${arr}飞行航迹图，可拖动及缩放"></svg>${detailMapControls('飞行航迹')}</div><p class="rail-route-caption" data-flight-track-source>${attribution}<span> · ${dep} → ${arr} · 航迹约 ${distance} km${queriedAt}</span></p>`;
+  const playButton = container.querySelector('[data-flight-track-play]');
+  const status = container.querySelector('[role=status]');
+  const map = mountTrackMap(container.querySelector('.flight-track-frame'), track, record);
 
   function play() {
     playButton.textContent = '重播航迹';
     status.textContent = '正在播放航迹';
     map.play(() => { status.textContent = '航迹播放完成'; });
   }
-  queryButton.addEventListener('click', query);
   playButton.addEventListener('click', play);
   return () => {
-    controller.abort();
-    map?.dispose();
-    queryButton.removeEventListener('click', query);
+    map.dispose();
     playButton.removeEventListener('click', play);
   };
 }

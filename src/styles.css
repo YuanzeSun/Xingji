@@ -127,6 +127,14 @@
 h1,h2,h3{font-family:inherit;letter-spacing:0}
 h1{font-size:32px;font-weight:700;line-height:1.25}
 .page-header{margin-bottom:28px;align-items:center;flex-wrap:wrap}.header-actions>.button,.header-actions>.demo-toggle{flex-shrink:0}
+.archive-entry-actions{display:flex;gap:inherit}
+@media(max-width:680px){
+  .archive-header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px 14px;align-items:center}
+  .archive-header .header-actions{display:contents}
+  .archive-header .demo-toggle{grid-column:2;grid-row:1;justify-self:end}
+  .archive-entry-actions{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .archive-entry-actions>.button{justify-content:center;min-height:44px}
+}
 .subtitle{font-size:16px;color:#657268;letter-spacing:0;margin-top:10px}
 .nav-item{font-size:16px;min-height:50px}.nav-label{font-size:13px;letter-spacing:.5px}
 .button{font-size:16px;min-height:46px;padding:10px 18px;border-radius:8px}
@@ -506,7 +514,9 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 .map-railway-caption .text-button{color:#d3e6f0;margin-left:14px;font-size:12px}
 .map-railway-status{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 18px;padding:6px 12px;background:#10263a;color:#a2bacb;border-top:1px solid #2a4459;font-size:11px}.map-railway-status strong{font-weight:500;color:#d4e3ec}.map-legend:empty{display:none}
 .flight-lookup{grid-column:1/-1;padding:15px 16px;margin:0 0 20px;background:#eff3e9;border:1px solid #dce5d4;border-radius:8px;min-width:0}
-.flight-lookup-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:#59714f}
+.flight-lookup-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;font-size:13px;color:#59714f}
+.flight-lookup-actions{margin:0 0 0 auto}
+.flight-lookup-actions [hidden]{display:none}
 .flight-lookup-heading .button{flex:none;font-size:13px}
 .flight-lookup-status{font-size:13px;line-height:1.8;color:#5a754c;margin:10px 0 0;overflow-wrap:anywhere}
 .flight-lookup-status:empty{display:none}

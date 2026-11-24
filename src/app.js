@@ -41,7 +41,6 @@ import { seatClassField, bindSeatClassFields } from './seat-class-field.js';
 import { seatField, bindSeatFields } from './seat-field.js';
 import { bindDatePickers,dateControl,ticketDateField,bindTicketDates,readTicketDate,writeTicketDate,barcodeDateDay } from './date-field.js';
 import { flightLookupMarkup, bindFlightLookup } from './flight-lookup.js';
-import { flightTrackRequest } from './flight-track.js';
 import { railLookupMarkup, bindRailLookup, railTrainsetField } from './rail-lookup.js';
 import { RAIL_POINTS_PAGE, railPointsRange, readRailPoints, railPointsRecords } from './rail-points.js';
 import { railJourneyMarkup, railReferenceNotice, bindRailJourney } from './rail-journey-ui.js';
@@ -325,9 +324,9 @@ function nav() {
   const count=live().length;
   return `<aside class="sidebar"><a class="brand" href="#archive" aria-label="行迹首页"><span class="brand-symbol">${icon('ticket')}</span><span class="brand-name">行迹<small>${versionMarkup()}</small></span></a><div class="nav-label">票据存档</div><nav aria-label="主要导航">${items.map(([id, i, text]) => `<button aria-label="${text}${id === 'archive' ? ' ' + count : ''}" data-action="navigate" data-page="${id}" class="nav-item ${state.page === id ? 'active' : ''}" ${state.page === id ? 'aria-current="page"' : ''}>${icon(i)}<span class="nav-desktop-text">${text}</span><span class="nav-mobile-text" aria-hidden="true">${({archive:'票夹',map:'地图',statistics:'统计',data:'同步'})[id]}</span>${id === 'archive' ? `<span class="nav-count">${count}</span>` : ''}</button>`).join('')}</nav><div class="sidebar-bottom"><div class="private-note">${state.showDemo ? '' : icon('lock')+'<span>'+(state.d1?'D1':'GitHub')+' 云同步</span>'}</div>${authorCredit('sidebar-credit')}</div></aside>`;
 }
-function header(title, subtitle, actions = '') {
+function header(title, subtitle, actions = '', archive = false) {
   const syncButton=className=>state.showDemo ? '' : `<button class="sync-button ${className}" data-action="sync" title="${e(syncLabel())}">${icon(state.syncing ? 'refresh' : 'cloud', state.syncing ? 'spin' : '')}<span>${e(syncLabel())}</span></button>`;
-  return `<div class="mobile-brand"><a href="#archive">${icon('ticket')} 行迹 ${versionMarkup()}</a>${syncButton('')}</div><header class="page-header"><div><h1>${title}</h1>${subtitle ? '<p class="subtitle">' + subtitle + '</p>' : ''}</div><div class="header-actions">${syncButton('desktop-sync')}${demoToggle()}${actions}</div></header>`;
+  return `<div class="mobile-brand"><a href="#archive">${icon('ticket')} 行迹 ${versionMarkup()}</a>${syncButton('')}</div><header class="page-header${archive ? ' archive-header' : ''}"><div><h1>${title}</h1>${subtitle ? '<p class="subtitle">' + subtitle + '</p>' : ''}</div><div class="header-actions">${syncButton('desktop-sync')}${demoToggle()}${actions}</div></header>`;
 }
 const archiveSelected = new Set();
 function selectedArchiveRecords() {
@@ -387,8 +386,8 @@ function archivePage() {
   const result = searchTickets(rs, state.filters);
   reconcileSelection(archiveSelected,result.error ? [] : result.records);
   const railCount = rs.filter(r => isJourneyRecord(r) && r.type === 'rail').length, flightCount = rs.filter(r => isJourneyRecord(r) && r.type === 'flight').length;
-  const entry = state.showDemo ? '' : `<button type="button" class="button primary" data-action="new" data-type="rail">${icon('train')}录入火车</button><button type="button" class="button primary" data-action="new" data-type="flight">${icon('plane')}录入机票</button>`;
-  const intro = header('我的票据', '', entry);
+  const entry = state.showDemo ? '' : `<div class="archive-entry-actions"><button type="button" class="button primary" data-action="new" data-type="rail">${icon('train')}录入火车</button><button type="button" class="button primary" data-action="new" data-type="flight">${icon('plane')}录入机票</button></div>`;
+  const intro = header('我的票据', '', entry, true);
   const demo = guestDemoNotice() || (state.showDemo ? `<div class="demo-banner">${icon('info')}<span><strong>示例数据</strong> · 虚构记录</span><button data-action="exit-demo">${hasCloud() && state.syncMeta.verified ? '返回我的票据' : '退出示例模式'} ${icon('arrow')}</button></div>` : '');
   const stats = `<section class="stats" aria-label="票夹概览"><div><span class="stat-label">${icon('ticket')}票据总数</span><strong>${rs.length}<small>张${state.showDemo ? '示例' : ''}</small></strong></div><div><span class="stat-label">${icon('train')}火车票</span><strong>${railCount}<small>程</small></strong></div><div><span class="stat-label">${icon('plane')}机票</span><strong>${flightCount}<small>程</small></strong></div><div><span class="stat-label">${icon('map')}涉及城市</span><strong>${cities.length}<small>城</small></strong></div></section>`;
   return intro + demo + stats + searchPanel(rs, state.filters, result, { open: state.filterOpen, routesOpen: state.routesOpen, demo: state.showDemo }) + ticketViewControls(ticketView) + '<div id="archive-selection">' + (archiveIsSpace() ? '' : archiveSelectionMarkup(result, archiveSelected, { canDelete:canWrite() && !state.showDemo && !state.saving })) + '</div><section id="search-results" aria-label="票据总数">' + searchResults(rs, result) + '</section>' + pageFooter('<span id="archive-match-count">' + (state.showDemo ? '示例' : '私人') + '票夹 · ' + result.records.length + ' 张票据</span>');
@@ -925,20 +924,8 @@ async function saveReviewedTicket(ticket, form, context) {
 }
 function findRecord(id) { return live().find(r => r.id === id); }
 function bindFlightTrackDetail(container, record) {
-  const context = archiveContext();
-  const canSave = () => isArchiveContext(context) && canWrite() && !state.saving;
-  const save = async track => {
-    const current = findRecord(record.id);
-    if (!canSave() || !current || flightTrackRequest(current) !== track.flightStr) throw new Error('票据或同步状态已变化，请重新打开详情。');
-    if (current.flightTrack) return current.flightTrack;
-    const next = validateRecord({ ...current, flightTrack: track, updatedAt: now() });
-    await persist(state.records.map(row => row.id === current.id ? next : row));
-    const saved = findRecord(current.id)?.flightTrack;
-    if (!isArchiveContext(context) || saved?.flightStr !== track.flightStr) throw new Error('航班信息已变化，请重新打开详情。');
-    return saved;
-  };
   import('./flight-track-ui.js').then(({ mountFlightTrack }) => {
-    if (container.isConnected) flightTrackCleanup = mountFlightTrack(container, record, { getKey: flightKey, desktop: supportsBrowserConnector, canSave, save });
+    if (container.isConnected) flightTrackCleanup = mountFlightTrack(container, record);
   }).catch(() => {
     if (container.isConnected) container.textContent = '航迹未能加载，请刷新后再试。';
   });
@@ -948,7 +935,7 @@ function viewRecord(id) {
   const demo = id.startsWith('demo-');
   const details = ticketDetails(r);
   const reference = railReferenceNotice(r);
-  openModal(modalHead(`<span class="heading-service">${e(r.service || (r.flightStatus === 'open' ? 'OPEN' : '班次待补充'))}</span><span class="heading-route">${e(r.origin || '出发地')} <span class="muted">→</span> ${e(r.destination || '到达地')}</span>`, demo ? '虚构示例' : '') + `<div class="detail-preview">${ticketSVG(r)}</div><div class="detail-body">${reference ? `<div class="code-consistency" data-rail-reference>${reference}</div>` : ''}<dl class="detail-grid">${details.map(([key, value]) => `<div><dt>${e(key === 'price' && isRefundReceipt(r) ? '退票费（元）' : key === 'seat' && r.type === 'flight' ? '座位 / 舱位' : key === 'gate' && r.type === 'flight' ? '登机口' : ticketFieldLabel(key,r.type,labels[key]))}${r.fieldSources?.[key]===RAILGO_REFERENCE_SOURCE ? fieldSourceBadge(key,r) : ''}</dt><dd>${e(value || '未收录')}</dd></div>`).join('')}</dl>${boardingJourneyMarkup(r,live())}${railJourneyMarkup(r,live())}${r.type === 'rail' ? '<section class="rail-route" data-rail-route hidden aria-label="铁路线路"></section>' : !demo && isJourneyRecord(r) ? '<section class="rail-route flight-track" data-flight-track aria-label="飞行航迹"></section>' : ''}<details class="source-details"><summary>数据来源 · ${r.sources.length} 条</summary>${r.sources.map(s => `<p>${e(s.label)}<span>${e(s.at.slice(0, 10))}</span></p>`).join('') || '<p>录入</p>'}</details></div><div class="modal-footer"><button class="button secondary" data-action="export-png" data-id="${e(id)}">${icon('download')}导出图片</button><button class="button secondary" data-action="export-svg" data-id="${e(id)}">SVG</button><div class="spacer"></div>${!demo ? `<button class="icon-button danger" data-action="delete" data-id="${e(id)}" aria-label="删除票据">${icon('trash')}</button><button class="button primary" data-action="edit" data-id="${e(id)}">${icon('edit')}编辑票据</button>` : ''}</div>`);
+  openModal(modalHead(`<span class="heading-service">${e(r.service || (r.flightStatus === 'open' ? 'OPEN' : '班次待补充'))}</span><span class="heading-route">${e(r.origin || '出发地')} <span class="muted">→</span> ${e(r.destination || '到达地')}</span>`, demo ? '虚构示例' : '') + `<div class="detail-preview">${ticketSVG(r)}</div><div class="detail-body">${reference ? `<div class="code-consistency" data-rail-reference>${reference}</div>` : ''}<dl class="detail-grid">${details.map(([key, value]) => `<div><dt>${e(key === 'price' && isRefundReceipt(r) ? '退票费（元）' : key === 'seat' && r.type === 'flight' ? '座位 / 舱位' : key === 'gate' && r.type === 'flight' ? '登机口' : ticketFieldLabel(key,r.type,labels[key]))}${r.fieldSources?.[key]===RAILGO_REFERENCE_SOURCE ? fieldSourceBadge(key,r) : ''}</dt><dd>${e(value || '未收录')}</dd></div>`).join('')}</dl>${boardingJourneyMarkup(r,live())}${railJourneyMarkup(r,live())}${r.type === 'rail' ? '<section class="rail-route" data-rail-route hidden aria-label="铁路线路"></section>' : r.flightTrack ? '<section class="rail-route flight-track" data-flight-track aria-label="飞行航迹"></section>' : ''}<details class="source-details"><summary>数据来源 · ${r.sources.length} 条</summary>${r.sources.map(s => `<p>${e(s.label)}<span>${e(s.at.slice(0, 10))}</span></p>`).join('') || '<p>录入</p>'}</details></div><div class="modal-footer"><button class="button secondary" data-action="export-png" data-id="${e(id)}">${icon('download')}导出图片</button><button class="button secondary" data-action="export-svg" data-id="${e(id)}">SVG</button><div class="spacer"></div>${!demo ? `<button class="icon-button danger" data-action="delete" data-id="${e(id)}" aria-label="删除票据">${icon('trash')}</button><button class="button primary" data-action="edit" data-id="${e(id)}">${icon('edit')}编辑票据</button>` : ''}</div>`);
   modalRoot.querySelector('dialog').classList.add('ticket-detail-modal');
   const journeyContainer=modalRoot.querySelector('.rail-journey');
   if(journeyContainer)railJourneyCleanup=bindRailJourney(journeyContainer,()=>r);
@@ -2183,6 +2170,11 @@ const actions = {
   'quick-route': button => { state.filters = searchOptions({ ...state.filters, city: '', originCity: button.dataset.from, destinationCity: button.dataset.to, origin: '', destination: '', bothDirections: true }); state.limit = 48; render(); },
   'export-album': () => exportArchiveSelection('pdf'),
   'export-images': () => exportArchiveSelection('zip'),
+  'finish-selection': () => {
+    archiveSelected.clear();
+    refreshArchiveSelection();
+    document.querySelector('[data-archive-select-all]')?.focus();
+  },
   'delete-selected': async () => {
     const selected = selectedArchiveRecords();
     if (!selected.length || state.showDemo || !canWrite() || state.saving) return;
@@ -2242,6 +2234,14 @@ document.addEventListener('change', event => {
   }
 });
 document.addEventListener('click', event => {
+  if (archiveSelected.size && !event.target.closest('.card-select')) {
+    const card = event.target.closest('#search-results .ticket-card, #search-results .timeline-ticket');
+    const checkbox = card?.querySelector('[data-archive-select]');
+    if (checkbox) {
+      checkbox.click();
+      return;
+    }
+  }
   const button = event.target.closest('[data-action]'); if (!button || button.disabled) return;
   if (['new', 'edit', 'delete', 'delete-selected'].includes(button.dataset.action) && !canWrite()) return toast('当前仅可查看缓存，请恢复云端连接', true);
   const fn = actions[button.dataset.action]; if (fn) Promise.resolve().then(() => fn(button)).catch(fail);

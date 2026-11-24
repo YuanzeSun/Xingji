@@ -10,7 +10,7 @@ import { prepareCloud } from './helpers/cloud.js';
 
 const flight = createRecord({
   id: 'test-flight', type: 'flight', template: 'air-boarding-pass', service: 'JL62',
-  origin: 'NRT', destination: 'LAX', departureDate: '2026-11-23', passenger: 'TEST/PASSENGER',
+  origin: 'NRT', destination: 'LAX', departureDate: '2026-11-23', passenger: 'TEST/PASSENGER', identity: 'P000001', seat: '12A', seatClass: 'Y',
 });
 const flightStr = 'JL62_NRT_LAX_2026-11-23_0';
 const coordinates = [
@@ -43,7 +43,7 @@ test('flight tracks are keyed to the dated airport pair and never change the jou
   assert.throws(() => readFlightTrack({ structuredContent: { items: [{ ...domesticRow, date: '2026-08-12_0' }] } }, domesticFlightStr), /无法识别/);
 });
 
-test('flight tracks save with a lookup in the editor or from details and can replay without another request', async () => {
+test('flight track queries run in the editor and saved tracks replay in details', async () => {
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', {
     url: 'http://localhost/#archive', pretendToBeVisual: true,
   });
@@ -80,7 +80,7 @@ test('flight tracks save with a lookup in the editor or from details and can rep
     if (message.method === 'initialize') result = { protocolVersion: '2025-03-26' };
     else if (message.params.name === 'getFlightStatus') result = { structuredContent: { kind: 'collection', items: [{
       FlightNo: 'MF8179', FlightDepcode: 'PKX', FlightArrcode: 'XNN', FlightDeptimePlanDate: '2026-08-11 18:05:00',
-      FlightArrtimePlanDate: '2026-08-11 20:30:00', FlightCompany: '厦门航空',
+      FlightArrtimePlanDate: '2026-08-11 20:30:00', FlightCompany: '厦门航空', aircraftNumber: 'B5846',
     }] }};
     else if (message.params.arguments.flightStr === domesticFlightStr) {
       await new Promise(resolve => { finishTrack = resolve; });
@@ -102,11 +102,21 @@ test('flight tracks save with a lookup in the editor or from details and can rep
     await import('../src/app.js');
     await waitFor(() => element('[data-action=new]:not(:disabled)'));
     element('[data-action=view]').click();
+    await waitFor(() => element('.ticket-detail-modal'));
+    assert.equal(element('[data-flight-track]'), null);
+    assert.equal(element('[data-flight-track-query]'), null);
+    element('[data-action=edit]').click();
     const query = await waitFor(() => element('[data-flight-track-query]:not(:disabled)'));
     assert.equal(requests.length, 0);
     query.click();
     query.click();
+    await waitFor(() => element('[data-flight-status]')?.textContent.includes('已带入飞行航迹'));
+    assert.equal(server.records()[0].flightTrack, undefined);
+    element('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await waitFor(() => !element('dialog'));
+    element('[data-action=view]').click();
     const play = await waitFor(() => element('[data-flight-track-play]:not([hidden])'));
+    assert.equal(element('[data-flight-track-query]'), null);
     assert.deepEqual(requests, [{ name: 'getFlightTrackLine', arguments: { flightStr } }]);
     assert.deepEqual(server.records()[0].flightTrack.segments, coordinates);
     assert.equal(server.records()[0].passenger, 'TEST/PASSENGER');

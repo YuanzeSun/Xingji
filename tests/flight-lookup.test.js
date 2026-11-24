@@ -3,13 +3,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord } from '../src/model.js';
-import { flightCandidates, flightCompletion } from '../src/flight-lookup-model.js';
+import { flightCandidates, flightCompletion, rotationRegistration } from '../src/flight-lookup-model.js';
 import { flightQuery } from '../src/flight-query.js';
 import { bindFlightLookup, flightLookupMarkup } from '../src/flight-lookup.js';
 import { FlightConnector } from '../src/mcp.js';
 
 const input = { type: 'flight', service: 'CA181', departureDate: '2026-07-18' };
-const row = extra => ({ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:00:00', FlightArrtimePlanDate: '2026-07-18 12:20:00', FlightDeptimeDate: '2026-07-18 09:00:00', FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', BoardGate: 'E18', aircraftType: 'Airbus A330-300', ...extra });
+const row = extra => ({ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:00:00', FlightArrtimePlanDate: '2026-07-18 12:20:00', FlightDeptimeDate: '2026-07-18 09:00:00', FlightArrtimeDate: '2026-07-18 13:20:00', distance: 2100, scheduledBoardingTime: '07:25', aircraftNumber: 'B306R', FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', BoardGate: 'E18', aircraftType: 'Airbus A330-300', ...extra });
 const payload = items => ({ structuredContent: { kind: 'collection', items } });
 const record = extra => createRecord({ ...input, template: 'air-boarding-pass', ...extra });
 
@@ -65,14 +65,55 @@ test('completion protects nonempty and manually corrected fields, private ticket
   assert.deepEqual(flightCompletion(record({ origin: 'PVG' }), candidate), {});
 });
 
-function component({ rows, lookup, desktop = () => true } = {}) {
+function component({ rows, lookup, applyTrack, desktop = () => true } = {}) {
   const dom = new JSDOM(`<form><input name="service" value="CA181">${flightLookupMarkup()}</form>`), form = dom.window.document.querySelector('form');
   let current = record(), calls = 0, applied = 0;
   const dispose = bindFlightLookup(form, { getRecord: () => current, getKey: () => 'local-test-only', canQuery: () => true, desktop,
-    apply: changes => { Object.assign(current, changes); applied++; }, lookup: async (...args) => { calls++; return lookup ? lookup(...args) : rows; } });
+    apply: changes => { Object.assign(current, changes); applied++; }, applyTrack, lookup: async (...args) => { calls++; return lookup ? lookup(...args) : rows; } });
   return { dom, form, dispose, get current() { return current; }, get calls() { return calls; }, get applied() { return applied; } };
 }
 const settle = async () => { await new Promise(resolve => setTimeout(resolve, 5)); };
+
+test('only explicit scheduled boarding times fill the planned boarding field', () => {
+  const [planned] = flightCandidates(payload([row({ aircraftNumber: 'b5846', scheduledBoardingTime: '2026-07-17T23:05:00Z' })]), input);
+  assert.equal(planned.aircraftRegistration, 'B-5846');
+  assert.equal(planned.boardingTime, '07:05');
+  const [other] = flightCandidates(payload([row({ scheduledBoardingTime: '', EstimateBoardingStartTime: '07:05', actualBoardingTime: '07:10' })]), input);
+  assert.equal(other.boardingTime, '');
+  assert.equal(other.actualBoardingTime, '');
+  const scanned = { ...record(), boardingTime: '07:15', actualBoardingTime: '07:40', lockedFields: ['boardingTime'],
+    fieldSources: { boardingTime: 'barcode', actualBoardingTime: 'barcode' } };
+  assert.equal(flightCompletion(scanned, planned).boardingTime, undefined);
+  assert.equal(flightCompletion(scanned, planned).actualBoardingTime, undefined);
+});
+
+test('a missing registration queries only the aircraft rotation, despite a missing track', async () => {
+  const [complete] = flightCandidates(payload([row()]), input);
+  const instance = component({ rows: [complete], applyTrack: () => assert.fail('unexpected track query') });
+  const calls = [], previousFetch = globalThis.fetch;
+  const response = (arr = 'HND') => ({ structuredContent: { kind: 'item', item: {
+    fnum: 'CA181', date: '2026-07-18', aircraftNumber: 'B5846',
+    currentFlight: { fnum: 'CA181', departureCode: 'PEK', arrivalCode: arr, aircraftNumber: 'B-5846' }
+  } } });
+  assert.equal(rotationRegistration(response('NRT'), { fnum: 'CA181', date: '2026-07-18', dep: 'PEK', arr: 'HND' }), '');
+  globalThis.fetch = async (_url, options) => {
+    const message = JSON.parse(options.body);
+    if (message.method === 'notifications/initialized') return new Response(null, { status: 202 });
+    if (message.method === 'tools/call') calls.push(message.params);
+    const result = message.method === 'initialize' ? { protocolVersion: '2025-03-26' } : response();
+    return Response.json({ id: message.id, result }, { headers: { 'Mcp-Session-Id': 'flight-session' } });
+  };
+  try {
+    Object.assign(instance.current, complete, { aircraftRegistration: '',
+      fieldSources: { boardingTime: 'barcode', departureTime: 'variflight' }, lockedFields: ['boardingTime'] });
+    instance.form.querySelector('[data-flight-lookup]').click(); await settle();
+    assert.deepEqual(calls, [{ name: 'getAircraftRotation', arguments: { fnum: 'CA181', date: '2026-07-18', dep: 'PEK', arr: 'HND' } }]);
+    assert.equal(instance.calls, 0);
+    assert.equal(instance.current.aircraftRegistration, 'B-5846');
+    instance.form.querySelector('[data-flight-lookup]').click(); await settle();
+    assert.equal(calls.length, 1);
+  } finally { globalThis.fetch = previousFetch; instance.dispose(); instance.dom.window.close(); }
+});
 
 test('typing never calls a provider; one candidate fills automatically and repeat clicks reuse the local result', async () => {
   const instance = component({ rows: flightCandidates(payload([row()]), input) });

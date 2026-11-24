@@ -61,6 +61,11 @@ export class FlightConnector {
   async flightStatus(input) {
     return this.#callTool('getFlightStatus', flightQuery(input), '平台未能查询航班，请检查日期、授权或账户权益');
   }
+  aircraftRotation(input) {
+    const query = flightQuery(input);
+    if (!query.dep || !query.arr) throw new Error('请先补全出发和到达机场');
+    return this.#callTool('getAircraftRotation', query, '飞常准未能查询飞机编号，请检查账号权限或剩余额度');
+  }
   flightTrack(flightStr) {
     return this.#callTool('getFlightTrackLine', { flightStr }, '飞常准未能查询航迹，请检查账号权限或剩余额度');
   }
