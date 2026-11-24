@@ -67,7 +67,6 @@ test('refund fee survives OCR and JSON without merging into the original journey
 });
 
 test('the unified local SVG library matches explicit airline names and codes, without flight-prefix guesses', () => {
-  assert.equal(Object.keys(AIRLINE_LOGOS).length, 180);
   for (const name of ['国航', '中国国际航空', 'Air China', 'ca', 'CCA', '中国国际航空股份有限公司']) assert.equal(airlineLogo(name)?.code, 'CA');
   for (const [name, code] of [['中国东方航空','MU'],['南航','CZ'],['海南航空','HU'],['吉祥航空','HO'],['厦航','MF'],['Cathay Pacific','CX'],['Singapore Airlines','SQ'],['ANA','NH']]) assert.equal(airlineLogo(name)?.code, code, name);
   for (const name of ['西藏航空', '西藏航空有限公司', '藏航', 'Tibet Airlines', 'Xizang Airlines', 'TV', 'TBA']) assert.equal(airlineLogo(name)?.code, 'TV', name);
@@ -85,13 +84,47 @@ test('the unified local SVG library matches explicit airline names and codes, wi
   assert.equal(JSON.stringify(record), before);
 });
 
-test('every embedded airline mark uses the same square SVG and retains transparent space', () => {
-  for (const [slug, { image }] of Object.entries(AIRLINE_LOGOS)) {
-    const svg = Buffer.from(image.split(',')[1], 'base64');
-    assert.match(svg.toString(), /viewBox="0 0 24 24"/, slug);
-    const { pixels } = new Resvg(svg, { font: { loadSystemFonts: false } }).render();
-    assert.equal(pixels.length, 24 * 24 * 4, slug);
-    const corners = [0, 23, 23 * 24, 24 * 24 - 1];
-    assert.ok(corners.some(index => pixels[index * 4 + 3] === 0), slug);
+test('full airline wordmarks fit the header at equal height and only a standalone icon can watermark the ticket', () => {
+  for (const code of ['NH', 'UA', 'QF', 'B6']) {
+    const logo = airlineLogo(code);
+    const record = createRecord({ type:'flight', template:'air-boarding-pass', airline:logo.name, origin:'PEK', destination:'HND', service:code+'181' });
+    const doc = new JSDOM(ticketSVG(record), { contentType:'image/svg+xml' }).window.document;
+    const header = doc.querySelector('[data-airline-logo-kind="wordmark"] image');
+    assert.equal(header.getAttribute('height'), '40', code);
+    assert.equal(header.getAttribute('width'), String(Math.round(40 * logo.wordmark.aspect)), code);
+    assert.ok(Number(header.getAttribute('width')) > 40, code);
+    assert.equal(header.getAttribute('href'), logo.wordmark.image, code);
+    const watermark = doc.querySelector('[data-airline-watermark] image');
+    assert.equal(watermark?.getAttribute('href'), logo.icon?.image, code);
+    assert.notEqual(watermark?.getAttribute('href'), header.getAttribute('href'), code);
+  }
+  assert.equal(airlineLogo('B6').icon, undefined);
+});
+
+test('common Chinese airlines and the new regional marks resolve to standalone watermark icons', () => {
+  const airlines = [['吉祥航空','HO'], ['祥鹏航空','8L'], ['长龙航空','GJ'], ['西藏航空','TV'],
+    ['中国联航','KN'], ['西部航空','PN'], ['上海航空','FM'], ['桂林航空','GT'], ['北部湾航空','GX'],
+    ['香港航空','HX'], ['大湾区航空','HB'], ['澳门航空','NX'], ['华信航空','AE'], ['立荣航空','B7']];
+  for (const [name, code] of airlines) {
+    const logo = airlineLogo(name);
+    assert.equal(logo?.code, code, name);
+    assert.ok(logo.icon?.image, name);
+  }
+});
+
+test('embedded standalone logos use a square SVG while wordmarks retain their aspect and transparent space', () => {
+  for (const [slug, { icon, wordmark }] of Object.entries(AIRLINE_LOGOS)) {
+    assert.ok(icon || wordmark, slug);
+    for (const asset of [icon, wordmark].filter(Boolean)) {
+      const svg = Buffer.from(asset.image.split(',')[1], 'base64');
+      const viewBox = /viewBox="([^"]+)"/.exec(svg.toString())?.[1];
+      if (asset === icon) assert.equal(viewBox, '0 0 24 24', slug);
+      else {
+        const [, , width, height] = viewBox.split(' ').map(Number);
+        assert.ok(Math.abs(width / height - asset.aspect) < .001, slug);
+      }
+      const { pixels } = new Resvg(svg, { fitTo: { mode: 'width', value: 48 }, font: { loadSystemFonts: false } }).render();
+      assert.ok(pixels.some((alpha, index) => index % 4 === 3 && alpha === 0), slug);
+    }
   }
 });

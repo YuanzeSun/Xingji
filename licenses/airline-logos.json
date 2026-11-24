@@ -256,6 +256,16 @@
       "sha256": "d05c4bc1f267a1f5fb94701edf9b21b66c4f49d6d5dd8a209c315e2039a5d92f"
     },
     {
+      "slug": "all-nippon-airways",
+      "iata": "NH",
+      "icao": "ANA",
+      "asset": "all-nippon-airways-icon.svg",
+      "type": "icon",
+      "source": "https://www.ana.co.jp/group/investors/data/kessan/pdf/2024_04_1.pdf",
+      "bytes": 258,
+      "sha256": "7394d4fbe6fd2aa528fe7cbf5fd5d9801aaa5a8f90da13e4da64d5695e4bccf5"
+    },
+    {
       "slug": "american-airlines",
       "iata": "AA",
       "icao": "AAL",
@@ -455,6 +465,16 @@
       "sha256": "3006d89930ac570bac470a5cf3f74760d87e63fde2485929aaaa85d74e9a3ac2"
     },
     {
+      "slug": "copa-airlines",
+      "iata": "CM",
+      "icao": "CMP",
+      "asset": "copa-airlines-icon.svg",
+      "type": "icon",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/copa-airlines/icon.svg",
+      "bytes": 1793,
+      "sha256": "9ec75dc3e1848839d5bf95804e40d0d40edd2394b42532214777d2ec86d0f4bb"
+    },
+    {
       "slug": "delta-air-lines",
       "iata": "DL",
       "icao": "DAL",
@@ -472,6 +492,16 @@
       "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/easyjet/logo.svg",
       "bytes": 3099,
       "sha256": "10834b2bee847f93fe34a604b31830363368656dad0c62977cae9ae1115be5c6"
+    },
+    {
+      "slug": "easyjet",
+      "iata": "U2",
+      "icao": "EZY",
+      "asset": "easyjet-icon.svg",
+      "type": "icon",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/easyjet/icon.svg",
+      "bytes": 606,
+      "sha256": "67979f94bc4974ec9626f9a75d06281a65795482e4ef5a4d75c3d20db8423f47"
     },
     {
       "slug": "egyptair",
@@ -508,6 +538,16 @@
       "type": "logo",
       "bytes": 4798,
       "sha256": "b67a3efc5c8bbb99f965e2568df66e561a9e5836cae856bd7ce005592bdd37d4"
+    },
+    {
+      "slug": "etihad-airways",
+      "iata": "EY",
+      "icao": "ETD",
+      "asset": "etihad-airways-icon.svg",
+      "type": "icon",
+      "source": "https://www.etihad.com/favicon.ico",
+      "bytes": 7437,
+      "sha256": "6acdd9f428a812ebf01d78ef3fb06e5bfeda8bcebc79507f89e4b058071e9e4c"
     },
     {
       "slug": "eurowings",
@@ -580,6 +620,16 @@
       "type": "logo",
       "bytes": 2597,
       "sha256": "f89270a6c167a78b5b824a3888bb2f2c34528c9aede932e950f9a2516e58f435"
+    },
+    {
+      "slug": "flydubai",
+      "iata": "FZ",
+      "icao": "FDB",
+      "asset": "flydubai-icon.svg",
+      "type": "icon",
+      "source": "https://www.flydubai.com/favicon.ico",
+      "bytes": 3590,
+      "sha256": "2f4e612e3447f74cda18660fb7f62bcb10ada4b475b8f76aea59d0b3e7bf7bdd"
     },
     {
       "slug": "flynas",
@@ -688,6 +738,16 @@
       "type": "logo",
       "bytes": 2100,
       "sha256": "688440c5eb6b9fff00245b0afe4bfee953f55e7fb54bc808053bf9f1ed88d311"
+    },
+    {
+      "slug": "ita-airways",
+      "iata": "AZ",
+      "icao": "ITY",
+      "asset": "ita-airways-icon.svg",
+      "type": "icon",
+      "source": "https://www.ita-airways.com/favicon.ico",
+      "bytes": 6808,
+      "sha256": "1266bf6d90f591c90c7bae78a563c5d526524c6e2716fc1bbcfb7635669b23a2"
     },
     {
       "slug": "japan-airlines",
@@ -871,6 +931,16 @@
       "sha256": "5cc3f6f6e35f4e4c177d2f61bbba8945e75a9981a0c6d89a21f5319d8b96097e"
     },
     {
+      "slug": "level",
+      "iata": "LL",
+      "icao": "LVL",
+      "asset": "level-icon.svg",
+      "type": "icon",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/level/icon.svg",
+      "bytes": 181,
+      "sha256": "8d73b5b82d7de1a6d00238b63b7224412943bcaeeb96c4501ba5eaeb03e96f4d"
+    },
+    {
       "slug": "lion-air",
       "iata": "JT",
       "icao": "LNI",
@@ -926,6 +996,16 @@
       "sha256": "46d210f7501f63fb4a7876132922b9a8853d244b0bf1ecd43513d5e2cece669e"
     },
     {
+      "slug": "norwegian-air-shuttle",
+      "iata": "DY",
+      "icao": "NOZ",
+      "asset": "norwegian-air-shuttle-icon.svg",
+      "type": "icon",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/norwegian-air-shuttle/icon.svg",
+      "bytes": 865,
+      "sha256": "f285f978b43aab0f1b5dc791b22f64f9f7748cda12e3a48dae5d9c8364a22fb5"
+    },
+    {
       "slug": "oman-air",
       "iata": "WY",
       "icao": "OMA",
@@ -962,6 +1042,16 @@
       "sha256": "ff54456586723d545bcd8ff7e745706e0a4c83fc26081a75141847bbd44ca972"
     },
     {
+      "slug": "peach-aviation",
+      "iata": "MM",
+      "icao": "APJ",
+      "asset": "peach-aviation-icon.svg",
+      "type": "icon",
+      "source": "https://www.flypeach.com/favicon.ico",
+      "bytes": 2250,
+      "sha256": "7019f9adac02a7be6bf8d638a29db65011bbfaa1b3cdc16b289dc9c001d9f813"
+    },
+    {
       "slug": "pegasus-airlines",
       "iata": "PC",
       "icao": "PGT",
@@ -996,6 +1086,16 @@
       "type": "logo",
       "bytes": 2353,
       "sha256": "dfc67d6f419c1fbc84fee10582e82f8a65409e45d869664cf209b12faa8c7d2a"
+    },
+    {
+      "slug": "qantas",
+      "iata": "QF",
+      "icao": "QFA",
+      "asset": "qantas-icon.svg",
+      "type": "icon",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/qantas/icon.svg",
+      "bytes": 616,
+      "sha256": "85f7f88f8f9fb7e75c7afc733805c413e4b6191bd0ee6a904b9cfe72316efd6e"
     },
     {
       "slug": "qatar-airways",
@@ -1251,6 +1351,16 @@
       "sha256": "dcd99a560753709edf9598bdee4ac6c16e81a6456b5ab09e79a6b1cf86ca5d5b"
     },
     {
+      "slug": "united-airlines",
+      "iata": "UA",
+      "icao": "UAL",
+      "asset": "united-airlines-icon.svg",
+      "type": "icon",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/united-airlines/icon.svg",
+      "bytes": 4226,
+      "sha256": "9a5940e4afa3da035d8ae90638bcf029079980d9847e743988356493d3fbab69"
+    },
+    {
       "slug": "vietjet-air",
       "iata": "VJ",
       "icao": "VJC",
@@ -1258,6 +1368,16 @@
       "type": "logo",
       "bytes": 3091,
       "sha256": "4bee3e27cd9248f37cce79063e7f26ea2d7af20c634cb37f07bc82b3cc1afc89"
+    },
+    {
+      "slug": "vietjet-air",
+      "iata": "VJ",
+      "icao": "VJC",
+      "asset": "vietjet-air-icon.svg",
+      "type": "icon",
+      "source": "https://www.vietjetair.com/favicon.ico",
+      "bytes": 3283,
+      "sha256": "ac83d1481d28bde54b757204bb5d79db3d88936c3b63f2f6cf3159f5e1d91d7a"
     },
     {
       "slug": "vietnam-airlines",
@@ -1501,9 +1621,19 @@
       "icao": "CBG",
       "asset": "gx-airlines.svg",
       "type": "logo",
-      "source": "https://www.szairport.com/szairport/hkgs/202008/049daf6b6f714674914b79c9b0c75c1f/images/d7895c9d8b0b45b79608d472809155c1.png",
-      "bytes": 5018,
-      "sha256": "d564c0c6b2563b5f1d5b5832a3414ce83feeb305c2e7bfd16d0933a3ba8bffc7"
+      "source": "https://www.gxairlines.com/gxair/front/dist/gxtest/stdair/airline/gx/images/01-1/logo-m.png",
+      "bytes": 9566,
+      "sha256": "d1edef1c49dea8c8a1f4b5f863658436234c99a066aeee232dfc6fc5cb3085b2"
+    },
+    {
+      "slug": "gx-airlines",
+      "iata": "GX",
+      "icao": "CBG",
+      "asset": "gx-airlines-icon.svg",
+      "type": "icon",
+      "source": "https://www.gxairlines.com/gxair/front/dist/gxtest/stdair/airline/gx/images/01-1/logo-m.png",
+      "bytes": 2579,
+      "sha256": "fc1c9985eaf833a79f402171ec0ededddb06804176730a571ccf665e48fdb218"
     },
     {
       "slug": "hebei-airlines",
@@ -1654,6 +1784,126 @@
       "source": "https://www.tibetairlines.com.cn/stdair/airline/tv/images/logo.png",
       "bytes": 4442,
       "sha256": "9d9338d742c00fc89d75e881e1cc55e41e92f0746376303c0079a2390367a215"
+    },
+    {
+      "slug": "shanghai-airlines",
+      "iata": "FM",
+      "icao": "CSH",
+      "asset": "shanghai-airlines.svg",
+      "type": "icon",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2022/10/20221014170108126.png",
+      "bytes": 5371,
+      "sha256": "09bcc24cd18c23413ac22739d76eb23852257858f0816dda2e76072eee1d9025"
+    },
+    {
+      "slug": "grand-china-air",
+      "iata": "CN",
+      "icao": "GDC",
+      "asset": "grand-china-air.svg",
+      "type": "icon",
+      "source": "https://www.hnair.com/lvxingxinxi/cxzb/ysztj/2017ysztj/202601/W020250519352496988870.pdf",
+      "bytes": 23484,
+      "sha256": "cf5a7ace592a71a1a5660e44efff7dc0927f2bbef1662766b7362e14f6176d11"
+    },
+    {
+      "slug": "air-guilin",
+      "iata": "GT",
+      "icao": "CGH",
+      "asset": "air-guilin.svg",
+      "type": "logo",
+      "source": "https://www.airguilin.com/gtair/front/dist/gttest/stdair/airline/gt/images/logo.png",
+      "bytes": 9098,
+      "sha256": "bf698d8bd50c013b2e1dd7a599f8c27a8e5b15816c863228da25cd5b2881560f"
+    },
+    {
+      "slug": "air-guilin",
+      "iata": "GT",
+      "icao": "CGH",
+      "asset": "air-guilin-icon.svg",
+      "type": "icon",
+      "source": "https://www.airguilin.com/gtair/front/dist/gttest/stdair/airline/gt/images/logo.png",
+      "bytes": 3106,
+      "sha256": "1140e5f7f9e9f6720d6c2138b2cb1f09fe697066c1a51b7445f772b1a3aaf1bf"
+    },
+    {
+      "slug": "hong-kong-airlines",
+      "iata": "HX",
+      "icao": "CRK",
+      "asset": "hong-kong-airlines.svg",
+      "type": "icon",
+      "source": "https://www.hongkongairlines.com/portal/hka_logo.png",
+      "bytes": 4502,
+      "sha256": "1f5a4afa8edeada16c8f682d2d990135a1e0056af3c4d21efb6371a305901bb9"
+    },
+    {
+      "slug": "greater-bay-airlines",
+      "iata": "HB",
+      "icao": "HGB",
+      "asset": "greater-bay-airlines.svg",
+      "type": "logo",
+      "source": "https://www.greaterbay-airlines.com/content/dam/gba/hk/logo/logo.svg",
+      "bytes": 21035,
+      "sha256": "9b2cad945257af21fd375b964b04f4dc642595b1550c2b1daaf9ae5b77aba89b"
+    },
+    {
+      "slug": "greater-bay-airlines",
+      "iata": "HB",
+      "icao": "HGB",
+      "asset": "greater-bay-airlines-icon.svg",
+      "type": "icon",
+      "source": "https://www.greaterbay-airlines.com/etc.clientlibs/gba/clientlibs/clientlib-site/resources/images/favicon.png",
+      "bytes": 3513,
+      "sha256": "8bd31b2deef767cd82012d707848224ad2680ef4816a18ff88ca091c9ccb288f"
+    },
+    {
+      "slug": "joy-air",
+      "iata": "JR",
+      "icao": "JOY",
+      "asset": "joy-air.svg",
+      "type": "icon",
+      "source": "https://www.comac.cc/include/yzzd.pdf",
+      "bytes": 11714,
+      "sha256": "906b535ddb546c32bc45985faa40b1ea3179b6298bd6a2aaa48aec1056f9ce53"
+    },
+    {
+      "slug": "mandarin-airlines",
+      "iata": "AE",
+      "icao": "MDA",
+      "asset": "mandarin-airlines.svg",
+      "type": "icon",
+      "source": "https://www.mandarin-airlines.com/Images/logo.png",
+      "bytes": 2273,
+      "sha256": "279d9290f67b9735a3f634230806371a5b30f3cc8f8d865337dfc8f9c096b2d4"
+    },
+    {
+      "slug": "tigerair-taiwan",
+      "iata": "IT",
+      "icao": "TTW",
+      "asset": "tigerair-taiwan.svg",
+      "type": "icon",
+      "source": "https://www.tigerairtw.com/icons/favicon-128x128.png",
+      "bytes": 2912,
+      "sha256": "a641c0920207b1a1ab0223c93f235e7a0ec3751e9c394d00cdb5b186d1668494"
+    },
+    {
+      "slug": "uni-air",
+      "iata": "B7",
+      "icao": "UIA",
+      "asset": "uni-air.svg",
+      "type": "icon",
+      "source": "https://www.uniair.com.tw/rwd/download/UNI%20%20Conditions%20of%20Carriage_zh-tw.pdf",
+      "bytes": 5249,
+      "sha256": "60423d98f70b217c5f1f814fd356e866ed3febc11f7bfe63a9228dd4872e1ac2"
+    },
+    {
+      "slug": "air-macau",
+      "iata": "NX",
+      "icao": "AMU",
+      "asset": "air-macau.svg",
+      "type": "icon",
+      "source": "https://www.airmacau.com.mo/static/js/app.c7d05061f9ad6bed9e88.js",
+      "bytes": 595,
+      "sha256": "766d981d404f922b9ab8ccb5f72b598d17813e1f2a6f1f8868f0a21ef72a7bc7"
     }
   ]
 }

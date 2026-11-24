@@ -252,7 +252,11 @@
       "icao": "ANA",
       "aliases": [],
       "type": "logo",
-      "file": "all-nippon-airways.svg"
+      "file": "all-nippon-airways.svg",
+      "icon": {
+        "file": "all-nippon-airways-icon.svg",
+        "source": "https://www.ana.co.jp/group/investors/data/kessan/pdf/2024_04_1.pdf"
+      }
     },
     {
       "name": "American Airlines",
@@ -451,7 +455,11 @@
       "aliases": [],
       "type": "logo",
       "file": "copa-airlines.svg",
-      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/copa-airlines/logo.svg"
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/copa-airlines/logo.svg",
+      "icon": {
+        "file": "copa-airlines-icon.svg",
+        "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/copa-airlines/icon.svg"
+      }
     },
     {
       "name": "Delta Air Lines",
@@ -470,7 +478,11 @@
       "aliases": [],
       "type": "logo",
       "file": "easyjet.svg",
-      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/easyjet/logo.svg"
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/easyjet/logo.svg",
+      "icon": {
+        "file": "easyjet-icon.svg",
+        "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/easyjet/icon.svg"
+      }
     },
     {
       "name": "EgyptAir",
@@ -506,7 +518,11 @@
       "icao": "ETD",
       "aliases": [],
       "type": "logo",
-      "file": "etihad-airways.svg"
+      "file": "etihad-airways.svg",
+      "icon": {
+        "file": "etihad-airways-icon.svg",
+        "source": "https://www.etihad.com/favicon.ico"
+      }
     },
     {
       "name": "Eurowings",
@@ -578,7 +594,11 @@
       "icao": "FDB",
       "aliases": [],
       "type": "logo",
-      "file": "flydubai.svg"
+      "file": "flydubai.svg",
+      "icon": {
+        "file": "flydubai-icon.svg",
+        "source": "https://www.flydubai.com/favicon.ico"
+      }
     },
     {
       "name": "flynas",
@@ -686,7 +706,11 @@
       "icao": "ITY",
       "aliases": [],
       "type": "logo",
-      "file": "ita-airways.svg"
+      "file": "ita-airways.svg",
+      "icon": {
+        "file": "ita-airways-icon.svg",
+        "source": "https://www.ita-airways.com/favicon.ico"
+      }
     },
     {
       "name": "Japan Airlines",
@@ -867,7 +891,11 @@
       "aliases": [],
       "type": "logo",
       "file": "level.svg",
-      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/level/logo.svg"
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/level/logo.svg",
+      "icon": {
+        "file": "level-icon.svg",
+        "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/level/icon.svg"
+      }
     },
     {
       "name": "Lion Air",
@@ -922,7 +950,11 @@
       "aliases": [],
       "type": "logo",
       "file": "norwegian-air-shuttle.svg",
-      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/norwegian-air-shuttle/logo.svg"
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/norwegian-air-shuttle/logo.svg",
+      "icon": {
+        "file": "norwegian-air-shuttle-icon.svg",
+        "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/norwegian-air-shuttle/icon.svg"
+      }
     },
     {
       "name": "Oman Air",
@@ -958,7 +990,11 @@
       "icao": "APJ",
       "aliases": [],
       "type": "logo",
-      "file": "peach-aviation.svg"
+      "file": "peach-aviation.svg",
+      "icon": {
+        "file": "peach-aviation-icon.svg",
+        "source": "https://www.flypeach.com/favicon.ico"
+      }
     },
     {
       "name": "Pegasus Airlines",
@@ -994,7 +1030,11 @@
       "icao": "QFA",
       "aliases": [],
       "type": "logo",
-      "file": "qantas.svg"
+      "file": "qantas.svg",
+      "icon": {
+        "file": "qantas-icon.svg",
+        "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/qantas/icon.svg"
+      }
     },
     {
       "name": "Qatar Airways",
@@ -1247,7 +1287,11 @@
       "aliases": [],
       "type": "logo",
       "file": "united-airlines.svg",
-      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/united-airlines/logo.svg"
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/united-airlines/logo.svg",
+      "icon": {
+        "file": "united-airlines-icon.svg",
+        "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/united-airlines/icon.svg"
+      }
     },
     {
       "name": "VietJet Air",
@@ -1256,7 +1300,11 @@
       "icao": "VJC",
       "aliases": [],
       "type": "logo",
-      "file": "vietjet-air.svg"
+      "file": "vietjet-air.svg",
+      "icon": {
+        "file": "vietjet-air-icon.svg",
+        "source": "https://www.vietjetair.com/favicon.ico"
+      }
     },
     {
       "name": "Vietnam Airlines",
@@ -1538,7 +1586,11 @@
       ],
       "type": "logo",
       "file": "gx-airlines.svg",
-      "source": "https://www.szairport.com/szairport/hkgs/202008/049daf6b6f714674914b79c9b0c75c1f/images/d7895c9d8b0b45b79608d472809155c1.png"
+      "source": "https://www.gxairlines.com/gxair/front/dist/gxtest/stdair/airline/gx/images/01-1/logo-m.png",
+      "icon": {
+        "file": "gx-airlines-icon.svg",
+        "source": "https://www.gxairlines.com/gxair/front/dist/gxtest/stdair/airline/gx/images/01-1/logo-m.png"
+      }
     },
     {
       "name": "Hebei Airlines",
@@ -1736,6 +1788,144 @@
       "type": "icon",
       "file": "xizang-airlines.svg",
       "source": "https://www.tibetairlines.com.cn/stdair/airline/tv/images/logo.png"
+    },
+    {
+      "slug": "shanghai-airlines",
+      "name": "Shanghai Airlines",
+      "iata": "FM",
+      "icao": "CSH",
+      "aliases": [
+        "上海航空",
+        "上航"
+      ],
+      "type": "icon",
+      "file": "shanghai-airlines.svg",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2022/10/20221014170108126.png"
+    },
+    {
+      "slug": "grand-china-air",
+      "name": "Grand China Air",
+      "iata": "CN",
+      "icao": "GDC",
+      "aliases": [
+        "大新华航空",
+        "大新华航"
+      ],
+      "type": "icon",
+      "file": "grand-china-air.svg",
+      "source": "https://www.hnair.com/lvxingxinxi/cxzb/ysztj/2017ysztj/202601/W020250519352496988870.pdf"
+    },
+    {
+      "slug": "air-guilin",
+      "name": "Air Guilin",
+      "iata": "GT",
+      "icao": "CGH",
+      "aliases": [
+        "桂林航空",
+        "桂航"
+      ],
+      "type": "logo",
+      "file": "air-guilin.svg",
+      "source": "https://www.airguilin.com/gtair/front/dist/gttest/stdair/airline/gt/images/logo.png",
+      "icon": {
+        "file": "air-guilin-icon.svg",
+        "source": "https://www.airguilin.com/gtair/front/dist/gttest/stdair/airline/gt/images/logo.png"
+      }
+    },
+    {
+      "slug": "hong-kong-airlines",
+      "name": "Hong Kong Airlines",
+      "iata": "HX",
+      "icao": "CRK",
+      "aliases": [
+        "香港航空",
+        "港航"
+      ],
+      "type": "icon",
+      "file": "hong-kong-airlines.svg",
+      "source": "https://www.hongkongairlines.com/portal/hka_logo.png"
+    },
+    {
+      "slug": "greater-bay-airlines",
+      "name": "Greater Bay Airlines",
+      "iata": "HB",
+      "icao": "HGB",
+      "aliases": [
+        "大湾区航空",
+        "大灣區航空"
+      ],
+      "type": "logo",
+      "file": "greater-bay-airlines.svg",
+      "source": "https://www.greaterbay-airlines.com/content/dam/gba/hk/logo/logo.svg",
+      "icon": {
+        "file": "greater-bay-airlines-icon.svg",
+        "source": "https://www.greaterbay-airlines.com/etc.clientlibs/gba/clientlibs/clientlib-site/resources/images/favicon.png"
+      }
+    },
+    {
+      "slug": "joy-air",
+      "name": "Joy Air",
+      "iata": "JR",
+      "icao": "JOY",
+      "aliases": [
+        "幸福航空"
+      ],
+      "type": "icon",
+      "file": "joy-air.svg",
+      "source": "https://www.comac.cc/include/yzzd.pdf"
+    },
+    {
+      "slug": "mandarin-airlines",
+      "name": "Mandarin Airlines",
+      "iata": "AE",
+      "icao": "MDA",
+      "aliases": [
+        "华信航空",
+        "華信航空"
+      ],
+      "type": "icon",
+      "file": "mandarin-airlines.svg",
+      "source": "https://www.mandarin-airlines.com/Images/logo.png"
+    },
+    {
+      "slug": "tigerair-taiwan",
+      "name": "Tigerair Taiwan",
+      "iata": "IT",
+      "icao": "TTW",
+      "aliases": [
+        "台湾虎航",
+        "台灣虎航"
+      ],
+      "type": "icon",
+      "file": "tigerair-taiwan.svg",
+      "source": "https://www.tigerairtw.com/icons/favicon-128x128.png"
+    },
+    {
+      "slug": "uni-air",
+      "name": "UNI Air",
+      "iata": "B7",
+      "icao": "UIA",
+      "aliases": [
+        "立榮航空",
+        "立荣航空"
+      ],
+      "type": "icon",
+      "file": "uni-air.svg",
+      "source": "https://www.uniair.com.tw/rwd/download/UNI%20%20Conditions%20of%20Carriage_zh-tw.pdf"
+    },
+    {
+      "slug": "air-macau",
+      "name": "Air Macau",
+      "iata": "NX",
+      "icao": "AMU",
+      "aliases": [
+        "澳门航空",
+        "澳門航空",
+        "澳航"
+      ],
+      "type": "icon",
+      "file": "air-macau.svg",
+      "source": "https://www.airmacau.com.mo/static/js/app.c7d05061f9ad6bed9e88.js"
     }
   ]
 }
