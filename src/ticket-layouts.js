@@ -168,7 +168,7 @@ function trainService(value, x, y, size, classic = false) {
   return text(start, y, value, size, 'TicketRailSerif', 'stroke-width=".2"') + text(start + width + 4, y, '次', 35, 'TicketSong');
 }
 function passenger(r, x, y, nameX) {
-  const identity = maskRailIdentity(r.identity);
+  const identity = maskRailIdentity(r.identity) || r.railInvoice?.maskedIdentity || '';
   const identitySize = Math.min(30, (nameX - x - 16) / Math.max(1, [...identity].length * .62));
   return text(x, y, identity, identitySize, 'TicketOCR', 'letter-spacing="0"') + text(nameX, y, r.passenger, 35, railBody(r));
 }

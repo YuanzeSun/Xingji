@@ -21,6 +21,7 @@ import { isStoredTimeZone } from './data/time-zone-ids.js';
 import { normalizeFlightStatus } from './flight-status.js';
 import { normalizeRailJourney, railJourneyMatches, normalizeRailTrainsets } from './rail-journey.js';
 import { requireCompleteIdentity } from './identity.js';
+import { normalizeRailInvoice } from './rail-invoice.js';
 export const SCHEMA_VERSION = 2;
 export const DEFAULT_RAIL_TEMPLATE = 'rail-receipt';
 export const TEMPLATES = {
@@ -31,12 +32,12 @@ export const TEMPLATES = {
   'rail-refund-receipt': '退票费凭证',
   'air-boarding-pass': '登机牌'
 };
-export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
+export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'railInvoice', 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
 export const now = () => new Date().toISOString();
 export const clone = value => structuredClone(value);
 export const sameRecords = (a, b) => JSON.stringify([...a].sort((x, y) => x.id.localeCompare(y.id))) === JSON.stringify([...b].sort((x, y) => x.id.localeCompare(y.id)));
 export function createRecord(values = {}) {
-  const record = Object.fromEntries(FIELDS.map(k => [k, '']));
+  const record = Object.fromEntries(FIELDS.filter(key => key !== 'railInvoice').map(k => [k, '']));
   Object.assign(record, { id: crypto.randomUUID(), type: 'rail', template: DEFAULT_RAIL_TEMPLATE, departureZone: 'Asia/Shanghai', arrivalZone: 'Asia/Shanghai', provenance: 'commemorative', offsetX: '0', offsetY: '0', deleted: false, sources: [], mergedIds: [], lockedFields: [], createdAt: now(), updatedAt: now() });
   for (const k of [...FIELDS, 'id', 'createdAt', 'updatedAt', 'sources', 'mergedIds', 'lockedFields']) if (Object.hasOwn(values, k)) record[k] = JOURNEY_DATE_FIELDS.includes(k) ? journeyDate(values[k]) : clone(values[k]);
   record.fieldSources=normalizeFieldSources(record.fieldSources,FIELDS);
@@ -61,6 +62,11 @@ export function validateRecord(input) {
   if ((input.type === 'flight') !== input.template.startsWith('air-')) throw new Error('票面与交通方式不匹配');
   const out = { id: input.id };
   for (const field of FIELDS) {
+    if (field === 'railInvoice') {
+      const invoice = input.type === 'rail' && !input.deleted ? normalizeRailInvoice(input.railInvoice) : undefined;
+      if (invoice) out.railInvoice = invoice;
+      continue;
+    }
     if (JOURNEY_DATE_FIELDS.includes(field)) {out[field]=storedJourneyDate(input[field]);continue;}
     if (field === 'fieldSources') { out.fieldSources = normalizeFieldSources(input.fieldSources,FIELDS); continue; }
     if (field === 'lookupValues') { out.lookupValues = normalizeLookupValues(input.lookupValues); continue; }
@@ -97,7 +103,7 @@ export function validateRecord(input) {
   out.mergedIds = [...new Set((Array.isArray(input.mergedIds) ? input.mergedIds : []).filter(id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id) && id !== out.id))].sort();
   if (out.deleted) {
     // Keep only an ID marker for synchronization; there is no recoverable ticket.
-    for (const field of FIELDS) if (!['type', 'template', 'deleted'].includes(field)) out[field] = ['lookupValues','fieldSources'].includes(field) ? {} : field === 'ticketMarks' ? [] : field === 'railStanding' ? false : '';
+    for (const field of FIELDS) if (!['type', 'template', 'deleted', 'railInvoice'].includes(field)) out[field] = ['lookupValues','fieldSources'].includes(field) ? {} : field === 'ticketMarks' ? [] : field === 'railStanding' ? false : '';
     out.sources = []; out.lockedFields = [];
     return out;
   }

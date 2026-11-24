@@ -8,6 +8,8 @@
 
 `fieldSources` 逐字段记录 `manual`、`barcode`、`ocr`、`railgo` 等来源。条码确定的字段锁定；出发日期只锁定年内天数。`lockedFields` 和 `lookupValues` 用于保留人工编辑的优先级，不在界面显示“人工矫正”。条码原始字节存 Base64，机票展示统一重建 PDF417。
 
+铁路电子发票导入可附带 `railInvoice`，包含 `electronicTicketNumber`（电子客票号）、`maskedIdentity`（票面脱敏证件号）、`buyerName`（购买方名称）和 `buyerTaxId`（统一社会信用代码）。电子客票号和纸票的 `ticketNumber` 分别保存。
+
 ## GitHub 文件
 
 - `archive/2026.json` 等按出发年份分组；年份未知写入 `archive/unknown.json`。

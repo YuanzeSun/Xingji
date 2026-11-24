@@ -4,7 +4,7 @@ import { registerHooks } from 'node:module';
 import { signOutCloud } from '../src/sync-state.js';
 import { prepareCloud } from './helpers/cloud.js';
 import { browser, until } from './helpers/d1-app.js';
-import { pickReceipt, stubReceiptPDF } from './helpers/receipt-pdf.js';
+import { pickReceipt, stubReceiptPDF, receiptBytes, receiptPage } from './helpers/receipt-pdf.js';
 
 test('photo references and pending receipts stay with their ticket editor', async t => {
   const window = browser();
@@ -22,7 +22,7 @@ test('photo references and pending receipts stay with their ticket editor', asyn
   const form = () => document.querySelector('#editor-form');
   async function deferredFile() {
     let reading = false;
-    const contents = new Promise(resolve => { finish = () => resolve(new TextEncoder().encode(text).buffer); });
+    const contents = new Promise(resolve => { finish = () => resolve(receiptBytes(receiptPage())); });
     pickReceipt(window, { name: 'receipt.pdf', size: 100, arrayBuffer() { reading = true; return contents; } });
     await until(() => reading);
   }

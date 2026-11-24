@@ -7,6 +7,7 @@ import { flightStatusFromText } from './flight-status.js';
 import { aircraftMentions, extractAircraft } from './aircraft.js';
 import {labelledFlightTimes} from './flight-times.js';
 import { readRailSeatClasses } from './seat-classes.js';
+import { parseRailInvoicePage } from './rail-invoice.js';
 
 const capture = (text, re) => text.match(re)?.[1]?.trim() || '';
 function parseOne(text, sourceKind, label) {
@@ -64,18 +65,22 @@ export function mapFlightResult(payload) {
   if (!Array.isArray(items)) throw new Error('尚未识别接口返回结构，请使用导出文件或文本导入');
   return items.map(item => createRecord({ type: 'flight', template: 'air-boarding-pass', service: String(item.flightNumber || ''), origin: String(item.origin || ''), destination: String(item.destination || ''), originCity: String(item.originCity || ''), destinationCity: String(item.destinationCity || ''), originCode: String(item.originCode || ''), destinationCode: String(item.destinationCode || ''), departureDate: item.departureDate || '', departureTime: String(item.departureTime || ''), arrivalDate: item.arrivalDate || '', arrivalTime: String(item.arrivalTime || ''), actualDepartureDate: item.actualDepartureDate || '', actualDepartureTime: String(item.actualDepartureTime || ''), actualArrivalDate: item.actualArrivalDate || '', actualArrivalTime: String(item.actualArrivalTime || ''), flightDistance: String(item.flightDistance || ''), departureZone: String(item.departureZone || ''), arrivalZone: String(item.arrivalZone || ''), passenger: String(item.passenger || ''), seat: String(item.seat || ''), airline: String(item.airline || ''), flightStatus: String(item.flightStatus || ''), aircraft: String(item.aircraft || ''), aircraftRegistration: String(item.aircraftRegistration || ''), sources: [{ kind: 'flight-json', label: '航空JSON导入', at: now() }] }));
 }
-export async function extractPDF(file) {
+export async function readRailInvoicePDF(file) {
   const pdfjs = await import('pdfjs-dist/build/pdf.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', location.href).href;
   const doc = await pdfjs.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false, useSystemFonts: true, cMapUrl: new URL('./vendor/cmaps/', location.href).href, cMapPacked: true, standardFontDataUrl: new URL('./vendor/standard_fonts/', location.href).href }).promise;
   if (doc.numPages > 50) { await doc.destroy(); throw new Error('请按50页以内拆分PDF'); }
-  let text = '';
+  let invoice;
   try {
     for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i); const content = await page.getTextContent();
-      text += content.items.map(item => item.str + (item.hasEOL ? '\n' : ' ')).join('') + '\n\n';
+      const page = await doc.getPage(i);
+      const { items } = await page.getTextContent();
+      const values = parseRailInvoicePage({ view: page.view, items });
+      if (!values) continue;
+      if (invoice) throw new Error('识别到多段行程，请逐段录入');
+      invoice = values;
     }
   } finally { await doc.destroy(); }
-  if (!text.trim()) throw new Error('这份PDF没有可提取的文字，请将票据页面保存为图片后扫描');
-  return text;
+  if (!invoice) throw new Error('未识别到铁路电子发票，请选择 12306 下载的 PDF');
+  return createRecord({ ...invoice, sources: [{ kind: 'pdf', label: '电子报销凭证', at: now() }] });
 }

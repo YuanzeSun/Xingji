@@ -12,7 +12,8 @@ export function fieldState(record,field,trackBarcodeLock=false) {
   return {value:record[field],manual:record.lockedFields?.includes(field) || false,lookup:isLookupValue(record,field)};
 }
 export function takeField(target,source,field,trackBarcodeLock=false) {
-  target[field]=structuredClone(source[field]);
+  if (source[field] === undefined) delete target[field];
+  else target[field]=structuredClone(source[field]);
   copyFieldSource(target,source,field);
   if(LOOKUP_FIELDS.includes(field)){
     target.lookupValues={...target.lookupValues};

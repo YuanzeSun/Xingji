@@ -1,19 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepareCloud } from './helpers/cloud.js';
+import { applyImport, createRecord } from '../src/model.js';
 import { browser, until } from './helpers/d1-app.js';
-import { pickReceipt, stubReceiptPDF } from './helpers/receipt-pdf.js';
+import { pickReceipt, stubReceiptPDF, receiptBytes, receiptPage } from './helpers/receipt-pdf.js';
 
 test('ticket entry is in the archive and rail receipts accept one PDF journey per review', async () => {
   const window = browser();
   location.hash = 'import';
   const github = await prepareCloud();
   const pdf = stubReceiptPDF();
-  const makeFile = (text, name = '发票.PDF') => ({
-    name, size: 100, arrayBuffer: async () => new TextEncoder().encode(text).buffer
-  });
+  const makeFile = (...pages) => ({ name: '发票.PDF', size: 100, arrayBuffer: async () => receiptBytes(...pages) });
   const status = () => document.querySelector('[data-rail-receipt-status]').textContent;
-  const journey = '车次：G21\n出发站：北京南\n到达站：南京南\n日期：2024-10-01\n时间：08:00\n座位：08F';
   const fill = (key, value) => {
     const field = document.querySelector('#editor-form').elements[key];
     field.value = value;
@@ -38,20 +36,44 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
       pickReceipt(window, { name, arrayBuffer() { assert.fail('Only PDFs should be read'); } });
       assert.match(status(), /PDF 格式/);
     }
-    pickReceipt(window, makeFile(journey + '\f车次：G33\n出发站：南京南\n到达站：上海虹桥\n日期：2024-10-02'));
+    pickReceipt(window, makeFile(receiptPage(), receiptPage({ service: 'G33' })));
     await until(() => status().includes('多段行程'));
     assert.equal(document.querySelector('[name="service"]').value, '');
     assert.deepEqual(github.records(), []);
 
     fill('passenger', '手动姓名');
-    pickReceipt(window, makeFile(journey + '\n旅客姓名：发票姓名'));
+    pickReceipt(window, makeFile(receiptPage({ service: 'D21', seat: '06车009号下铺', seatClass: '动卧' })));
     await until(() => status().includes('已填入'));
     const form = document.querySelector('#editor-form');
-    assert.equal(form.elements.service.value, 'G21');
+    assert.equal(form.elements.service.value, 'D21');
     assert.equal(form.elements.origin.value, '北京南');
     assert.equal(form.elements.passenger.value, '手动姓名');
+    assert.equal(form.elements.carriage.value, '06');
+    assert.equal(form.elements.seat.value, '009号下铺');
+    assert.equal(form.elements.seatClass.value, '动卧');
+    assert.equal(form.elements.price.value, '503.50');
+    assert.equal(form.elements.ticketNumber.value, '');
+    assert.equal(form.elements.identity.required, false);
+    assert.equal(form.elements.identity.value, '');
     assert.equal(form.querySelector('[data-field-source="service"]').dataset.sourceKind, 'pdf');
+    assert.match(form.textContent, /电子报销凭证资料.*示例单位/s);
     assert.deepEqual(github.records(), []);
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await until(() => github.records().length === 1);
+    const [saved] = github.records();
+    assert.deepEqual(saved.railInvoice, {
+      electronicTicketNumber: '2600000000000000000000001', maskedIdentity: '1101012000****0012',
+      buyerName: '示例单位', buyerTaxId: '100000000000000001'
+    });
+    assert.equal(saved.identity, '');
+    assert.equal(saved.ticketCode, '');
+    assert.doesNotMatch(JSON.stringify(saved), /26000000000000000001(?!\d)|2026-06-01/);
+
+    const printed = createRecord({ ...saved, id: 'printed-ticket', ticketNumber: 'A000001', railInvoice: undefined });
+    const { records: merged } = applyImport([printed], [saved]);
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0].ticketNumber, 'A000001');
+    assert.deepEqual(merged[0].railInvoice, saved.railInvoice);
   } finally {
     pdf.deregister();
     window.close();

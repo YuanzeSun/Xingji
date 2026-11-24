@@ -50,6 +50,7 @@
     "railPlatform",
     "railRoute",
     "railJourney",
+    "railInvoice",
     "pnr",
     "ticketMarks",
     "ticketCode",

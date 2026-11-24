@@ -8,6 +8,7 @@ import { flightPassengerName } from './flight-passenger.js';
 import { ACTUAL_FLIGHT_FIELDS } from './flight-times.js';
 import { FLIGHT_STATUSES } from './flight-status.js';
 import { boardingMetadataDetails } from './boarding-details.js';
+import { railInvoiceDetails } from './rail-invoice.js';
 
 const populatedFields = (record, keys) => keys.filter(key => record[key]).map(key => [key, record[key]]);
 
@@ -27,7 +28,7 @@ export function ticketDetails(record) {
     ['seat', [record.type === 'rail' && record.carriage && record.carriage + '车', record.railStanding ? '无座' : record.seat, record.seatClass].filter(Boolean).join(' · ')],
     ['price', record.price ? `¥${record.price}` : ''],
     ...populatedFields(record, ['orderNumber']),
-    ['ticketNumber', record.ticketNumber]
+    ...(!record.railInvoice || record.ticketNumber ? [['ticketNumber', record.ticketNumber]] : [])
   ];
   if (record.type === 'rail') {
     const trainsets = railTrainsetIds(record);
@@ -36,7 +37,8 @@ export function ticketDetails(record) {
       ...(trainsets.length ? [['railTrainsets', trainsets.join(' / ')]] : []),
       ...populatedFields(record, ['railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'saleCode', 'issuer']),
       ['ticketMarks', describeMarks(record.ticketMarks)],
-      ['ticketCode', record.ticketCode ? '已收录原码数据' : '未收录']
+      ['ticketCode', record.ticketCode ? '已收录原码数据' : '未收录'],
+      ...railInvoiceDetails(record.railInvoice)
     );
   }
   if (flight) rows.push(
