@@ -20,24 +20,26 @@ test('list view keeps ticket actions and selection without constructing ticket f
   dom.window.close();
 });
 
-test('appending tickets reuses nodes and merges the year group across page boundaries', () => {
+test('appending tickets reuses nodes and merges only the same month across page boundaries', () => {
   const options = { icon, selected: new Set(['a', 'b']) };
-  for (const mode of ['grid', 'list']) {
-    const view = { mode, size: 'medium' };
+  for (const [mode, size] of [['grid','medium'], ['list','medium'], ['grid','small'], ['list','small']]) {
+    const view = { mode, size };
     const dom = new JSDOM(ticketCollection([rail('a')], view, options));
     const root = dom.window.document.body, first = root.querySelector('[data-archive-select="a"]');
     try {
-      appendTicketCollection(root, [rail('b'), rail('c', { departureDate: '2025-01-01' })], view, options);
+      appendTicketCollection(root, [rail('b'), rail('c', { departureDate: '2026-09-01' }),
+        rail('d', { departureDate: '2025-11-01' }), rail('e', { departureDate: '2025' }), rail('f', { departureDate: '' })], view, options);
       assert.equal(root.querySelector('[data-archive-select="a"]'), first);
       assert.equal(first.checked, true);
       assert.equal(root.querySelector('[data-archive-select="b"]').checked, true);
-      const headings = [...root.querySelectorAll('.timeline-year-heading')].map(heading => heading.textContent);
-      assert.deepEqual(headings, ['20262 张票据', '20251 张票据']);
+      const headings = [...root.querySelectorAll('.ticket-period-heading h2')].map(heading => heading.textContent);
+      assert.deepEqual(headings, ['2026 年 11 月', '2026 年 9 月', '2025 年 11 月', '2025 年 · 月份未知', '日期未知']);
+      assert.equal(root.querySelector('.ticket-period-heading span').textContent, '2 张票据');
     } finally { dom.window.close(); }
   }
 });
 
-test('small grid is a ticket wall, while medium retains the original size and chronological groups',()=>{
+test('both grid sizes group dates and the small grid shows only ticket faces',()=>{
   assert.deepEqual(ticketViewOptions({mode:'unknown',size:'invalid'}),{mode:'grid',size:'medium'});
   assert.deepEqual(ticketViewOptions({},'list'),{mode:'list',size:'medium'});
   const value={mode:'grid',size:'medium'},dom=new JSDOM(ticketViewControls(value)+ticketCollection([rail('a')],value,{icon}));
@@ -50,17 +52,17 @@ test('small grid is a ticket wall, while medium retains the original size and ch
   root.querySelector('[data-ticket-size="small"]').click();
   assert.equal(root.querySelector('.ticket-grid').style.getPropertyValue('--ticket-min'),'156px');
   assert.equal(root.querySelector('.ticket-grid').dataset.facesOnly,'true');
-  assert.equal(root.querySelector('.timeline-year-heading'),null);
+  assert.equal(root.querySelector('.ticket-period-heading h2').textContent,'2026 年 11 月');
   assert.ok(root.querySelector('.ticket-face>.card-select'),'selection belongs to the face overlay');
   root.querySelector('[data-ticket-size="medium"]').click();assert.equal(root.querySelector('.ticket-grid').style.getPropertyValue('--ticket-min'),'390px');
-  assert.equal(root.querySelector('.ticket-grid').dataset.facesOnly,'false');assert.equal(root.querySelectorAll('[data-ticket-size][aria-pressed="true"]').length,1);assert.ok(root.querySelector('.timeline-year-heading'));
+  assert.equal(root.querySelector('.ticket-grid').dataset.facesOnly,'false');assert.equal(root.querySelectorAll('[data-ticket-size][aria-pressed="true"]').length,1);assert.ok(root.querySelector('.ticket-period-heading'));
   root.querySelector('[data-ticket-view="space"]').click();assert.equal(changed,'space');
   const rows=Array.from({length:55},(_,i)=>rail('row-'+i,{departureDate:i<20 ? '2026-11-16' : '2025-10-01'}));
   root.innerHTML=ticketCollection(rows.slice(0,48),{mode:'list',size:'medium'},{icon,selected:new Set(['row-2'])});
-  assert.equal(root.querySelectorAll('.timeline-item').length,48);assert.equal(root.querySelectorAll('.timeline-year-heading').length,2);
+  assert.equal(root.querySelectorAll('.timeline-item').length,48);assert.equal(root.querySelectorAll('.ticket-period-heading').length,2);
   assert.equal(root.querySelector('[data-archive-select="row-2"]').checked,true);assert.equal(root.querySelector('.ticket-preview'),null);
   root.innerHTML=ticketCollection([rows[0],rows[20],rows[1]],{mode:'list',size:'medium'},{icon,sort:'price-asc'});
-  assert.equal(root.querySelector('.timeline-year-heading'),null);assert.deepEqual([...root.querySelectorAll('.timeline-item')].map(button=>button.dataset.id),['row-0','row-20','row-1']);
+  assert.equal(root.querySelector('.ticket-period-heading'),null);assert.deepEqual([...root.querySelectorAll('.timeline-item')].map(button=>button.dataset.id),['row-0','row-20','row-1']);
   dom.window.close();
 });
 

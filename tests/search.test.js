@@ -73,6 +73,10 @@ test('sorting is stable, chronological in either direction and does not mutate t
   assert.equal(searchTickets(rows, { sort: 'newest' }).records.at(-1).id, 'undated');
   assert.equal(searchTickets(rows, { sort: 'oldest' }).records.at(-1).id, 'undated');
   assert.equal(searchTickets(rows, { sort: 'oldest' }).records[0].id, 'previous');
+  const times = [record('first',{departureTime:'18:00'}), record('second',{departureDate:'2025-08-17',departureTime:'08:00'}),
+    record('third',{departureDate:'2025-08-17',departureTime:'10:00'}), record('last',{departureDate:'2025-08-18'})];
+  assert.deepEqual(searchTickets(times,{sort:'oldest'}).records.map(row=>row.id), ['first','second','third','last']);
+  assert.deepEqual(searchTickets(times,{sort:'newest'}).records.map(row=>row.id), ['last','third','second','first']);
   assert.deepEqual(rows, copy);
 });
 

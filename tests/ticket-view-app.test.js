@@ -10,7 +10,7 @@ test('archive opens in medium newest-first grid and combines layouts with shared
   for(const key of ['window','document','location','history','sessionStorage','FormData','Image'])Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true});
   Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});
   window.scrollTo=()=>{};window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){this.open=false;};
-  const rows=Array.from({length:80},(_,i)=>createRecord({id:'trip-'+i,service:'G'+(i+1),origin:'北京南',destination:'南京南',departureDate:i<40 ? '2025-11-16' : '2026-11-16',passenger:'示例旅客',seatClass:'二等座',price:String(i+1)}));
+  const rows=Array.from({length:80},(_,i)=>createRecord({id:'trip-'+i,service:'G'+(i+1),origin:'北京南',destination:'南京南',departureDate:i<40 ? '2025-11-16' : i<60 ? '2026-11-16' : '2026-06-16',passenger:'示例旅客',seatClass:'二等座',price:String(i+1)}));
   const server=await prepareCloud(rows),db=await import('../src/db.js');
   const wait=async predicate=>{for(let i=0;i<300;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('Ticket view did not settle');};
   const click=selector=>{const element=document.querySelector(selector);assert.ok(element,selector);element.click();};
@@ -28,15 +28,16 @@ test('archive opens in medium newest-first grid and combines layouts with shared
     click('.space-ticket-current [data-action="view"]');await wait(()=>document.querySelector('.detail-grid'));click('[data-action="close-modal"]');
     await mode('list');assert.equal(document.querySelector('[data-archive-select="'+id+'"]').checked,true);
     click('[data-ticket-size="medium"]');await wait(()=>document.querySelectorAll('.timeline-item').length===48);
-    assert.deepEqual([...document.querySelectorAll('.timeline-year-heading h2')].map(node=>node.textContent),['2026','2025']);
+    assert.deepEqual([...document.querySelectorAll('.ticket-period-heading h2')].map(node=>node.textContent),['2026 年 11 月','2026 年 6 月','2025 年 11 月']);
     assert.equal(document.querySelector('[data-archive-select="'+id+'"]').checked,true);assert.equal(document.querySelector('.ticket-preview'),null);
     click('[data-archive-select-all]');assert.equal(document.querySelectorAll('.timeline-ticket input:checked').length,48);
     assert.match(document.querySelector('.archive-selection-count').textContent,/80/);click('[data-archive-select-all]');click('[data-archive-select="'+id+'"]');
     const sort=value=>{const select=document.querySelector('#search-sort');select.value=value;select.dispatchEvent(new window.Event('change',{bubbles:true}));};
-    sort('oldest');await wait(()=>document.querySelector('.timeline-year-heading h2')?.textContent==='2025');
+    sort('oldest');await wait(()=>document.querySelector('.ticket-period-heading h2')?.textContent==='2025 年 11 月');
     click('[data-action="load-more"]');await wait(()=>document.querySelectorAll('.timeline-item').length===80);
+    assert.deepEqual([...document.querySelectorAll('.ticket-period-heading span')].map(node=>node.textContent),['40 张票据','20 张票据','20 张票据']);
     assert.equal(document.querySelector('[data-archive-select="'+id+'"]').checked,true);
-    sort('price-asc');await wait(()=>!document.querySelector('.timeline-year-heading'));
+    sort('price-asc');await wait(()=>!document.querySelector('.ticket-period-heading'));
     assert.equal(document.querySelector('.timeline-service').textContent,'G1');
     click('[data-action="load-more"]');await wait(()=>document.querySelectorAll('.timeline-item').length===80);
     click('[data-ticket-size="small"]');await wait(()=>document.querySelectorAll('.ticket-list-row').length===80);

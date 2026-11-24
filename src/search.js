@@ -91,8 +91,9 @@ export function searchTickets(records, input = {}) {
     return true;
   });
   const byDate = (a, b) => {
-    if (!calendarDate(a.departureDate) || !calendarDate(b.departureDate)) return calendarDate(a.departureDate) ? -1 : calendarDate(b.departureDate) ? 1 : 0;
-    return collator.compare(calendarDate(a.departureDate) + (a.departureTime || ''), calendarDate(b.departureDate) + (b.departureTime || '')) * (f.sort === 'oldest' ? 1 : -1);
+    const left = calendarDate(a.departureDate), right = calendarDate(b.departureDate);
+    if (!left || !right) return left ? -1 : right ? 1 : 0;
+    return (collator.compare(left, right) || collator.compare(a.departureTime || '', b.departureTime || '')) * (f.sort === 'oldest' ? 1 : -1);
   };
   matched.sort((a, b) => {
     let order = 0;
