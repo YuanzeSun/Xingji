@@ -12,7 +12,7 @@ const flight = extra => createRecord({ type: 'flight', template: 'air-boarding-p
 const range = { dateFrom: '', dateTo: '2026-11-16' };
 
 test('statistics default to an unbounded start and today, compare dates only and respect edited bounds', () => {
-  assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railPowerSupplies:false, aircraftSubtypes:true });
+  assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railPowerSupplies:false, aircraftGrouping:'model' });
   const rows = [rail({ id: 'past' }), flight({ id: 'today', departureDate: '2026-11-16', departureTime: '23:59' }), rail({ id: 'future', departureDate: '2026-11-17' }), rail({ id: 'deleted', deleted: true }), rail({ id: 'undated', departureDate: '' })];
   const result = statisticsRange(rows, range);
   assert.deepEqual(result.records.map(row => row.id), ['past', 'today']); assert.equal(result.omittedDates, 1);
@@ -170,17 +170,17 @@ test('rail model rankings use saved trainsets, respect manual models and count e
 
 test('rail ownership and aircraft subtype toggles change only their own rankings and remain selected across remounts',()=>{
   const rows=[rail({id:'r1',railBureau:'上局',railCarOwner:'上海动车段'}),rail({id:'r2',railBureau:'上海局',railCarOwner:'南京动车段'}),rail({id:'r3',railBureau:'上海局'}),flight({id:'b1',aircraft:'737-800'}),flight({id:'b2',aircraft:'737-200'}),flight({id:'b3',aircraft:'737 MAX 8'}),flight({id:'d1',aircraft:'DHC-8-400'}),flight({id:'d2',aircraft:'DHC-8-402'})];
-  const before=JSON.stringify(rows),normal=journeyStatistics(rows,range),grouped=journeyStatistics(rows,{...range,railUnits:true,aircraftSubtypes:false});
+  const before=JSON.stringify(rows),normal=journeyStatistics(rows,range),grouped=journeyStatistics(rows,{...range,railUnits:true,aircraftGrouping:'series'});
   assert.deepEqual(normal.railBureaus,[{name:'上海局',count:3}]);
   assert.deepEqual(grouped.railBureaus.map(row=>row.name).sort(),['上海局 · 上海动车段','上海局 · 南京动车段','上海局 · 单位未收录'].sort());
   assert.deepEqual(grouped.aircraft,[{name:'737',count:3},{name:'DHC-8',count:2}]);
   for(const key of ['rail','flight','airports','stations','countries','continents','routes'])assert.deepEqual(grouped[key],normal[key]);
   const dom=new JSDOM('<div id="root"></div>'),root=dom.window.document.querySelector('#root'),options={...range};let cleanup=mountStatistics(root,rows,{options});
   const change=(key,attributes)=>{const input=root.querySelector(`[data-stat-option="${key}"]`);Object.assign(input,attributes);input.dispatchEvent(new dom.window.Event('change',{bubbles:true}));};
-  assert.equal(root.querySelector('[data-stat-option="railUnits"]').checked,false);assert.equal(root.querySelector('[data-stat-option="aircraftSubtypes"]').value,'model');
+  assert.equal(root.querySelector('[data-stat-option="railUnits"]').checked,false);assert.equal(root.querySelector('[data-stat-option="aircraftGrouping"]').value,'model');
   change('railUnits',{checked:true});assert.match(root.querySelector('[data-stat-ranking="rail-bureaus"]').textContent,/南京动车段/);
-  change('aircraftSubtypes',{value:'series'});assert.doesNotMatch(root.querySelector('[data-stat-ranking="aircraft"]').textContent,/737-800|737-200|MAX/);
-  cleanup();cleanup=mountStatistics(root,rows,{options});assert.equal(root.querySelector('[data-stat-option="railUnits"]').checked,true);assert.equal(root.querySelector('[data-stat-option="aircraftSubtypes"]').value,'series');
+  change('aircraftGrouping',{value:'series'});assert.doesNotMatch(root.querySelector('[data-stat-ranking="aircraft"]').textContent,/737-800|737-200|MAX/);
+  cleanup();cleanup=mountStatistics(root,rows,{options});assert.equal(root.querySelector('[data-stat-option="railUnits"]').checked,true);assert.equal(root.querySelector('[data-stat-option="aircraftGrouping"]').value,'series');
   assert.equal(JSON.stringify(rows),before);cleanup();dom.window.close();
 });
 
@@ -232,7 +232,7 @@ test('each ranking switches charts independently and keeps its grouping and date
     change('[data-stat-option=railPowerSupplies]', { checked: true });
     assert.equal(picked('rail-models'), 'columns');
     assert.match(card('rail-models').textContent, /DC600V/);
-    change('[data-stat-option=aircraftSubtypes]', { value: 'series' });
+    change('[data-stat-option=aircraftGrouping]', { value: 'series' });
     assert.equal(picked('aircraft'), 'donut');
     assert.equal(card('aircraft').querySelector('.statistics-ring strong').textContent, '7');
     assert.doesNotMatch(card('aircraft').textContent, /737-800/);

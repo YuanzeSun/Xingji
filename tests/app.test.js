@@ -1,4 +1,5 @@
 import { createRecord } from '../src/model.js';
+import { demoRecords } from '../src/demo.js';
 import { fullBackup } from '../src/archive-backup.js';
 import {answerArithmetic} from './helpers/arithmetic.js';
 import { codeDataFromResult } from '../src/barcode-data.js';
@@ -21,6 +22,7 @@ import { prepareCloud } from './helpers/cloud.js';
 test('app creates, reloads, edits, imports and filters personal records without persisting demos', async () => {
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost:4173/' });
   const { window } = dom;
+  const sampleCount = demoRecords().length;
   for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData', 'Image']) Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
   Object.defineProperty(globalThis, 'navigator', { value: window.navigator, configurable: true });
   Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true });
@@ -43,7 +45,7 @@ test('app creates, reloads, edits, imports and filters personal records without 
   assert.equal(document.querySelector('#demo-toggle').closest('label').textContent.trim(), '示例模式');
   document.querySelector('#demo-toggle').checked = true;
   document.querySelector('#demo-toggle').dispatchEvent(new window.Event('change', { bubbles: true }));
-  await waitFor(() => document.querySelectorAll('.ticket-card').length === 7);
+  await waitFor(() => document.querySelectorAll('.ticket-card').length === sampleCount);
   assert.equal(await get('showDemo'), true);
   click('[data-archive-select-all]');
   assert.equal(document.querySelector('[data-action="export-images"]').disabled,false,'sample tickets can be exported as rendered images too');
@@ -70,10 +72,10 @@ test('app creates, reloads, edits, imports and filters personal records without 
   let records = await get('records', []); assert.equal(records.length, 1); assert.equal(records[0].seat, '06C'); assert.equal(document.querySelectorAll('.ticket-card').length, 1);
   document.querySelector('#demo-toggle').checked = true;
   document.querySelector('#demo-toggle').dispatchEvent(new window.Event('change', { bubbles: true }));
-  await waitFor(() => document.querySelectorAll('.ticket-card').length === 7);
+  await waitFor(() => document.querySelectorAll('.ticket-card').length === sampleCount);
   assert.equal((await get('records')).length, 1);
-  assert.equal(document.querySelector('.nav-count').textContent,'7');
-  assert.equal(document.querySelector('.stats strong').textContent,'7张示例');
+  assert.equal(document.querySelector('.nav-count').textContent,String(sampleCount));
+  assert.equal(document.querySelector('.stats strong').textContent,`${sampleCount}张示例`);
   assert.ok([...document.querySelectorAll('.ticket-card [data-action="view"]')].every(button=>button.dataset.id.startsWith('demo-')));
   assert.equal(document.querySelector(`.ticket-card [data-id="${records[0].id}"]`),null);
   click('[data-action="exit-demo"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 1);

@@ -11,7 +11,7 @@ function placesPanel(title, places, type) {
 const rankings = {
   'rail-models': { title: '乘坐车型', data: 'railModels', unit: '种', option: 'railPowerSupplies', label: '细分供电制式' },
   'rail-bureaus': { title: '担当路局', data: 'railBureaus', unit: '个', option: 'railUnits', label: '细分车辆归属单位' },
-  aircraft: { title: '乘坐机型', data: 'aircraft', unit: '种', option: 'aircraftSubtypes' }
+  aircraft: { title: '乘坐机型', data: 'aircraft', unit: '种', option: 'aircraftGrouping' }
 };
 
 export function mountStatistics(container, records, { options = {} } = {}) {
@@ -26,7 +26,7 @@ export function mountStatistics(container, records, { options = {} } = {}) {
     const rows = statistics[data], view = rankingCharts[kind] || 'donut';
     const chooser = Object.entries(rankingViews).map(([value, name]) => `<button type="button" data-stat-view="${value}" aria-pressed="${view === value}">${name}</button>`).join('');
     const grouping = kind === 'aircraft'
-      ? `<select data-stat-option="${option}" aria-label="机型统计口径"><option value="model" ${options[option] ? 'selected' : ''}>按机型</option><option value="series" ${options[option] ? '' : 'selected'}>按系列</option></select>`
+      ? `<select data-stat-option="${option}" aria-label="机型统计口径"><option value="model" ${options[option] === 'model' ? 'selected' : ''}>按机型</option><option value="series" ${options[option] === 'series' ? 'selected' : ''}>按系列</option></select>`
       : `<label><input type="checkbox" data-stat-option="${option}" ${options[option] ? 'checked' : ''}/>${label}</label>`;
     const unknown = kind === 'aircraft' && statistics.unknownAircraft
       ? `<p class="fine-print">未识别机型 · ${statistics.unknownAircraft} 次</p>`
@@ -129,8 +129,8 @@ export function mountStatistics(container, records, { options = {} } = {}) {
   const visibility = () => { if (doc.visibilityState === 'visible') refreshDay(); };
   const change = event => {
     const target = event.target;
-    if (target.matches('[data-stat-option]') && ['railUnits','railPowerSupplies','aircraftSubtypes'].includes(target.dataset.statOption)) {
-      options[target.dataset.statOption] = target.dataset.statOption === 'aircraftSubtypes' ? target.value === 'model' : target.checked;
+    if (target.matches('[data-stat-option]') && ['railUnits','railPowerSupplies','aircraftGrouping'].includes(target.dataset.statOption)) {
+      options[target.dataset.statOption] = target.dataset.statOption === 'aircraftGrouping' ? target.value : target.checked;
       const scroll=container.querySelector('.statistics-chart-scroll'); if(scroll) scrollPositions[options.period]=scroll.scrollLeft;
       const key=target.dataset.statOption; render(); container.querySelector(`[data-stat-option="${key}"]`).focus(); return;
     }

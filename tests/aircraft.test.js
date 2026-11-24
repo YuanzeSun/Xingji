@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { aircraftClassification, identifyAircraft, normalizeAircraft } from '../src/aircraft.js';
-import { AIRCRAFT_ALIASES, AIRCRAFT_VARIANTS } from '../src/data/aircraft-reference.js';
+import { aircraftClassification, normalizeAircraft } from '../src/aircraft.js';
+import { AIRCRAFT_MODELS } from '../src/data/aircraft-reference.js';
 import { createRecord, archive, readArchive } from '../src/model.js';
 import { mapFlightResult } from '../src/importers.js';
 import { flightCandidates } from '../src/flight-lookup-model.js';
@@ -34,14 +34,17 @@ test('regional, turboprop and mainline aircraft share canonical names without lo
     assert.equal(normalizeAircraft(input), expected, input);
     assert.equal(normalizeAircraft(expected), expected, `Idempotent: ${expected}`);
   }
-  for (const [model, names] of Object.entries(AIRCRAFT_ALIASES)) for (const name of [model, ...names]) assert.equal(normalizeAircraft(name), model, name);
-  for (const [model, variants] of Object.entries(AIRCRAFT_VARIANTS)) for (const name of variants) {
-    assert.equal(normalizeAircraft(name), name, name);
-    assert.equal(aircraftClassification(name)?.label, model, name);
+  for (const [model, { aliases = [], variants = [] }] of Object.entries(AIRCRAFT_MODELS)) {
+    for (const name of [model, ...aliases]) assert.equal(normalizeAircraft(name), model, name);
+    for (const name of variants) {
+      assert.equal(normalizeAircraft(name), name, name);
+      assert.equal(aircraftClassification(name)?.label, model, name);
+    }
   }
   for (const value of ['CRJ7', 'CRJ9', 'E135']) assert.equal(normalizeAircraft(value), value);
   assert.equal(normalizeAircraft('  我的其他机型 X-900  '), '我的其他机型 X-900');
-  assert.equal(identifyAircraft('我的其他机型 X-900'), '');
+  assert.equal(aircraftClassification('我的其他机型 X-900'), null);
+  assert.equal(normalizeAircraft('Boeing 737-8ZZ'), 'Boeing 737-8ZZ');
   assert.notEqual(normalizeAircraft('DHC-8'), normalizeAircraft('Q400'));
   assert.notEqual(normalizeAircraft('DHC-8-402'), normalizeAircraft('Q400'));
 });

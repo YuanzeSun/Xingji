@@ -95,6 +95,13 @@ test('provider aircraft names agree across fields or leave the aircraft field fo
   const [conflicting] = flightCandidates(payload([row({ miniAirplaneModels: '737-8Q8', generic: 'B38M', aircraftType: '波音' })]), input);
   assert.equal(conflicting.aircraft, '');
   assert.deepEqual(conflicting.aircraftConflicts, ['737-8Q8', '737 MAX 8']);
+  const duplicate = code => flightCandidates(payload([
+    row({ miniAirplaneModels: '737-8Q8', aircraftType: '波音' }),
+    row({ generic: code, aircraftType: '波音' })
+  ]), input);
+  assert.equal(duplicate('B738').length, 1);
+  assert.equal(duplicate('B738')[0].aircraft, '737-8Q8');
+  assert.deepEqual(duplicate('B38M')[0].aircraftConflicts, conflicting.aircraftConflicts);
   for (const [candidate, current] of [[conflicting, ''], [compatible, '737 MAX 8']]) {
     const instance = component({ rows: [candidate] });
     try {

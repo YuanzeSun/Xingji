@@ -27,7 +27,7 @@ export function todayDate(date = new Date()) {
 export function statisticsOptions(input = {}, today = todayDate()) {
   const selectedEnd = input.dateTo || today;
   const dateTo = dateInterval(selectedEnd)?.end > today ? today : selectedEnd;
-  return { dateFrom: input.dateFrom ?? '', dateTo, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railPowerSupplies:input.railPowerSupplies === true, aircraftSubtypes:input.aircraftSubtypes !== false };
+  return { dateFrom: input.dateFrom ?? '', dateTo, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railPowerSupplies:input.railPowerSupplies === true, aircraftGrouping:input.aircraftGrouping === 'series' ? 'series' : 'model' };
 }
 
 export function statisticsRange(records, input = {}, today = todayDate()) {
@@ -80,7 +80,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     if (record.type !== 'flight') continue;
     const classification = aircraftClassification(record.aircraft);
     if (classification) {
-      const model = options.aircraftSubtypes ? classification.label : classification.series;
+      const model = options.aircraftGrouping === 'series' ? classification.series : classification.label;
       aircraft.set(model, (aircraft.get(model) || 0) + 1);
     } else unknownAircraft++;
     if (endpoints.some(place => !place)) { unknownRoutes++; continue; }

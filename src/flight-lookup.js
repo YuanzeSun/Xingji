@@ -23,13 +23,15 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     if (!validContext(candidateStamp) || !candidates[index]) { list.innerHTML = ''; status.textContent = '查询条件已改变，请重新查询'; return; }
     const previousRows = candidates, candidate = candidates[index], recordBeforeLookup = getRecord();
     const changes = flightCompletion(recordBeforeLookup, candidate);
-    const conflicts = candidate.aircraftConflicts || reconcileAircraft([recordBeforeLookup.aircraft, candidate.aircraft]).conflicts;
+    const conflicts = candidate.aircraftConflicts ??
+      (recordBeforeLookup.aircraft && candidate.aircraft ? reconcileAircraft([recordBeforeLookup.aircraft, candidate.aircraft]).conflicts : []);
     candidates = []; candidateStamp = ''; list.innerHTML = '';
     const count = Object.keys(changes).filter(field => !field.endsWith('Code')).length;
     if (count) apply(changes, { kind: 'flight-lookup', label: '飞常准航班查询', at: new Date().toISOString() });
     cache.set(JSON.stringify(flightQuery(getRecord())), { rows: previousRows, at: Date.now() });
-    const conflictNotice = conflicts.length ? `机型有出入（${conflicts.join('、')}），请核对。` : '';
-    const summary = (count ? `已补全 ${count} 项。` : conflictNotice ? '' : '已有信息均已填写。') + conflictNotice;
+    let summary = count ? `已补全 ${count} 项。` : '';
+    if (conflicts.length) summary += `机型有出入（${conflicts.join('、')}），请核对。`;
+    if (!summary) summary = '已有信息均已填写。';
     status.textContent = summary;
     if (!applyTrack) return;
     const record = getRecord(), context = stamp();

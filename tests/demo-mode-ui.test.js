@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {indexedDB} from 'fake-indexeddb';
 import {createRecord} from '../src/model.js';
+import {demoRecords} from '../src/demo.js';
 import {prepareCloud} from './helpers/cloud.js';
 
 test('sample mode exposes only browsing pages and preserves private records when switching back',async()=>{
@@ -27,7 +28,7 @@ test('sample mode exposes only browsing pages and preserves private records when
       assert.equal(document.querySelector('.guest-demo-notice'),null);
     }
     for(const page of ['data','import']){location.hash=page;await wait(()=>location.hash==='#archive');assert.equal(document.querySelector('#profile-form,#github-form,#import-text'),null);}
-    await go('archive','我的票据');assert.equal(document.querySelectorAll('.ticket-card').length,7);document.querySelector('[data-action="view"][data-id="demo-2"]').click();await wait(()=>document.querySelector('.detail-grid'));
+    await go('archive','我的票据');assert.equal(document.querySelectorAll('.ticket-card').length,demoRecords().length);document.querySelector('[data-action="view"][data-id="demo-2"]').click();await wait(()=>document.querySelector('.detail-grid'));
     assert.equal(document.querySelector('#modal-root [data-action="new"],#modal-root [data-action="edit"],#modal-root [data-action="delete"]'),null);
     document.querySelector('[data-action="close-modal"]').click();await go('archive','我的票据');await toggle(false);
     assert.ok(document.querySelector('[data-action="new"]'));assert.equal(document.querySelector('nav [data-page="import"]'),null);assert.ok(document.querySelector('nav [data-page="data"]'));

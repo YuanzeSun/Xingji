@@ -346,10 +346,10 @@ function flight(r) {
 }
 
 export function renderTicket(record) {
-  record = { ...record, aircraft: normalizeAircraft(record.aircraft) };
-  if (record.template === 'air-boarding-pass') record.passenger = uppercaseName(record.passenger);
   if (!dim[record.template]) throw new Error('Unsupported ticket layout');
-  if (record.template === 'air-boarding-pass') return flight(record);
+  if (record.template === 'air-boarding-pass') {
+    return flight({ ...record, passenger: uppercaseName(record.passenger), aircraft: normalizeAircraft(record.aircraft) });
+  }
   if (record.template.startsWith('rail-red')) return red(record);
   if (record.template === 'rail-supplement') return supplement(record);
   return blue(record);
