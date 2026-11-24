@@ -26,7 +26,7 @@ function editor(lookup) {
 const schedule=()=>createRecord({type:'flight',template:'air-boarding-pass',service:'CA1234',origin:'PEK',destination:'SHA',departureDate:'2026-05-18',departureTime:'18:00',arrivalDate:'2026-05-18',arrivalTime:'20:00',airline:'中国国际航空',aircraft:'A320',terminal:'T3',gate:'B2',passenger:'UNRELATED/NAME',seat:'99Z',pnr:'OTHER',ticketNumber:'9999999999999',boardingTime:'16:00',boardingCode:code('4321'),boardingCodeSource:'original',boardingLegIndex:'0'});
 
 test('scanning then querying fills only missing schedule data and preserves the Chinese name, gate and rebuilt barcode',async()=>{
-  const page=editor(async(provider,query,key)=>{assert.equal(provider,'variflight');assert.equal(key,'fictional-key');assert.deepEqual(query,{fnum:'CA1234',date:'2026-05-18',dep:'PEK',arr:'SHA'});return [schedule()];});
+  const page=editor(async(query,key)=>{assert.equal(key,'fictional-key');assert.deepEqual(query,{fnum:'CA1234',date:'2026-05-18',dep:'PEK',arr:'SHA'});return [schedule()];});
   try{
     await page.scan();assert.equal(calendarDate(page.draft.departureDate),'');page.date('2026-05-18');
     const before=structuredClone(page.draft);page.query();await settle();

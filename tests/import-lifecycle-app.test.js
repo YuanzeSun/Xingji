@@ -17,6 +17,7 @@ test('photo references and pending receipts stay with their ticket editor', asyn
   };
   const github = await prepareCloud();
   const text = '车次：G21\n出发站：北京南\n到达站：南京南\n日期：2025-05-03';
+  const familyOrder = '订单详情\n北京南 G103 上海虹桥\n发车时间:2026-11-15\n乘车人:示例甲\n二等座 05车08F号\n乘车人:示例乙\n二等座 06车12A号';
   let finish;
   const click = selector => document.querySelector(selector).click();
   const form = () => document.querySelector('#editor-form');
@@ -31,7 +32,9 @@ test('photo references and pending receipts stay with their ticket editor', asyn
   const ocr = registerHooks({
     load(url, context, next) {
       if (url !== ocrURL) return next(url, context);
-      return { format: 'module', shortCircuit: true, source: 'export async function recognize() { return { text: ' + JSON.stringify(text) + ' }; }' };
+      return { format: 'module', shortCircuit: true,
+        source: 'export async function recognize(file) { return { text: file.name === "family.png" ? ' +
+          JSON.stringify(familyOrder) + ' : ' + JSON.stringify(text) + ' }; }' };
     }
   });
   t.mock.method(URL, 'createObjectURL', blob => 'blob:fixture-' + blob.name);
@@ -39,7 +42,7 @@ test('photo references and pending receipts stay with their ticket editor', asyn
   try {
     await import('../src/app.js');
     await until(() => document.querySelector('[data-action="new"]:not(:disabled)'));
-    for (const name of ['first.png', 'second.png']) {
+    for (const name of ['first.png', 'family.png', 'second.png']) {
       click('[data-action="new"]');
       await until(form);
       const picker = form().querySelector('[data-rail-photo-file]');
@@ -47,6 +50,7 @@ test('photo references and pending receipts stay with their ticket editor', asyn
       picker.dispatchEvent(new window.Event('change', { bubbles: true }));
       await until(() => document.querySelector('.scan-reference img'));
       assert.equal(document.querySelector('.scan-reference img').getAttribute('src'), 'blob:fixture-' + name);
+      assert.equal(form().elements.service.value, name === 'family.png' ? '' : 'G21');
       click('dialog [data-action="close-modal"]');
       await until(() => !form());
       assert.equal(form(), null);

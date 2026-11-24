@@ -2,7 +2,7 @@ import { openCameraStream, stopCameraStream } from './camera-stream.js';
 import { bindCodeCameraControls } from './code-camera-controls.js';
 export function codeCameraMarkup() {
   return `<div class="code-camera" data-code-camera hidden>
-    <div class="code-camera-view" data-code-view><video data-code-video autoplay muted playsinline aria-label="二维码或条码相机预览"></video><span class="code-camera-focus-mark" data-code-focus-mark aria-hidden="true" hidden></span></div>
+    <div class="code-camera-view" data-code-view><video autoplay muted playsinline aria-label="二维码或条码相机预览"></video><span class="code-camera-focus-mark" data-code-focus-mark aria-hidden="true" hidden></span></div>
     <div class="code-camera-controls">
       <label class="code-camera-zoom" data-code-zoom hidden><input type="range" min="1" max="3" step="0.05" value="1" data-code-zoom-slider aria-label="缩放倍率" list="code-camera-zoom-stops"><output data-code-zoom-value aria-live="off">1×</output><datalist id="code-camera-zoom-stops"><option value="0.5"></option><option value="1"></option><option value="2"></option><option value="3"></option></datalist></label>
       <button type="button" class="button secondary" data-code-focus aria-label="在画面中央对焦" hidden>对焦</button>

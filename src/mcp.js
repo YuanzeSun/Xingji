@@ -46,26 +46,22 @@ export class FlightConnector {
     if (!this.session) throw new Error('请先在电脑 Chrome 或 Edge 安装并启用“行迹 · 飞常准连接”扩展，再刷新网页重试');
     await this.send('notifications/initialized', {}, true);
   }
+  async #callTool(name, args, failure) {
+    await this.connect();
+    const result = await this.send('tools/call', { name, arguments: args });
+    if (!result || result.isError) throw new Error(failure);
+    return result;
+  }
   async historyTrips(year) {
     year = String(year ?? '').trim();
     const currentYear = new Date().getFullYear();
     if (!/^\d{4}$/.test(year) || Number(year) < 1900 || Number(year) > currentYear) throw new Error(`请填写 1900 至 ${currentYear} 之间的历史行程年份`);
-    await this.connect();
-    const result = await this.send('tools/call', { name: 'queryUserHistoryTrip', arguments: { year, identityType: 0 } });
-    if (result.isError) throw new Error('平台未能查询本人历史行程，请检查授权和账户权益');
-    return result;
+    return this.#callTool('queryUserHistoryTrip', { year, identityType: 0 }, '平台未能查询本人历史行程，请检查授权和账户权益');
   }
   async flightStatus(input) {
-    const query = flightQuery(input);
-    await this.connect();
-    const result = await this.send('tools/call', { name: 'getFlightStatus', arguments: query });
-    if (result.isError) throw new Error('平台未能查询航班，请检查日期、授权或账户权益');
-    return result;
+    return this.#callTool('getFlightStatus', flightQuery(input), '平台未能查询航班，请检查日期、授权或账户权益');
   }
-  async flightTrack(flightStr) {
-    await this.connect();
-    const result = await this.send('tools/call', { name: 'getFlightTrackLine', arguments: { flightStr } });
-    if (result?.isError) throw new Error('飞常准未能查询航迹，请检查账号权限或剩余额度');
-    return result;
+  flightTrack(flightStr) {
+    return this.#callTool('getFlightTrackLine', { flightStr }, '飞常准未能查询航迹，请检查账号权限或剩余额度');
   }
 }

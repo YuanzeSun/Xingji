@@ -4,7 +4,6 @@ import { resolvePlace } from './places.js';
 import { AIRPORT_TIMEZONES } from './data/airport-timezones.js';
 import { identifyAircraft } from './aircraft.js';
 import { flightNumber, flightQuery } from './flight-query.js';
-export { flightQuery } from './flight-query.js';
 
 const clean = value => typeof value === 'string' && !/^(?:-+|null|undefined|n\/?a)$/i.test(value.trim()) ? value.trim().slice(0, 1000) : '';
 const flightIdentity = value => flightNumber(value).replace(/^([A-Z0-9]{2})0+(?=\d)/, '$1');

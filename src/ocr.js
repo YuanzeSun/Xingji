@@ -46,7 +46,7 @@ async function createRecognizer(progress) {
       image = await prepareOCRImage(image);
       let { data } = await worker.recognize(image, {}, { text: true, tsv: true });
       if (isFlightPhotoText(data.text)) {
-        return { text: '', flightImage: true };
+        return { text: '' };
       }
       const photo = image;
       await refineRailService(worker, image, data);

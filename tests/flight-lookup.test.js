@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord } from '../src/model.js';
-import { flightQuery, flightCandidates, flightCompletion } from '../src/flight-lookup-model.js';
+import { flightCandidates, flightCompletion } from '../src/flight-lookup-model.js';
+import { flightQuery } from '../src/flight-query.js';
 import { bindFlightLookup, flightLookupMarkup } from '../src/flight-lookup.js';
 import { FlightConnector } from '../src/mcp.js';
 

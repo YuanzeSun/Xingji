@@ -84,14 +84,14 @@ function readRailPhotoFields(text, label) {
 }
 
 export function parseScanText(raw, label = '相机自动扫描', {
-  singleTicket = false, layout = '', paperColor = '', flightImage = false, railFields = {}, route = null
+  layout = '', paperColor = '', railFields = {}, route = null
 } = {}) {
-  if (flightImage || isFlightPhotoText(raw)) return [];
+  if (isFlightPhotoText(raw)) return [];
   const text = raw.replace(/\b(\d{1,2}):(\d{2})\b/g, (all, hour, minute) => +hour <= 23 && +minute <= 59 ? all : '');
   const order = parseRailOrder(text, label, { layout });
   if (order) {
     for (const record of order) markFieldSources(record, ['template'], detectedRailTemplate(text) ? 'ocr' : 'default');
-    return singleTicket && order.length !== 1 ? [] : order;
+    return order;
   }
   const printed = parsePrintedRailTicket(text, label, { layout, paperColor, route });
   if (printed) return [createRecord({ ...printed, ...railFields, fieldSources: {

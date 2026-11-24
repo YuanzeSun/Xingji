@@ -106,7 +106,7 @@ function mountTrackMap(frame, track) {
   return { play, dispose() { view.cancelAnimationFrame(animation); observer?.disconnect(); } };
 }
 
-export function mountFlightTrack(container, record, { getKey, desktop, canSave, save, lookup = (flightStr, key, signal) => new FlightConnector(key, signal).flightTrack(flightStr) }) {
+export function mountFlightTrack(container, record, { getKey, desktop, canSave, save }) {
   container.innerHTML = `<div class="rail-route-heading"><h3>飞行航迹</h3><div class="rail-route-actions"><button class="button secondary small" type="button" data-flight-track-query>查询航迹</button><button class="button secondary small" type="button" data-flight-track-play hidden>播放航迹</button></div></div><p class="flight-track-status fine-print" role="status"></p><div class="flight-track-frame rail-route-frame" hidden><canvas aria-hidden="true"></canvas><svg role="img" aria-label="飞行航迹图"></svg></div><p class="rail-route-caption" data-flight-track-source hidden><a href="${FLIGHT_TRACK_SOURCE}" target="_blank" rel="noopener noreferrer">航迹数据：飞常准</a><span></span></p>`;
   const queryButton = container.querySelector('[data-flight-track-query]'), playButton = container.querySelector('[data-flight-track-play]');
   const status = container.querySelector('[role=status]'), frame = container.querySelector('.flight-track-frame'), source = container.querySelector('[data-flight-track-source]');
@@ -146,7 +146,7 @@ export function mountFlightTrack(container, record, { getKey, desktop, canSave, 
     status.textContent = '正在查询飞常准…';
     try {
       if (!candidate) {
-        const result = await lookup(flightStr, key, controller.signal);
+        const result = await new FlightConnector(key, controller.signal).flightTrack(flightStr);
         if (controller.signal.aborted) return;
         if (getKey() !== key) throw new Error('飞常准连接已变化，请重新查询');
         candidate = readFlightTrack(result, flightStr);

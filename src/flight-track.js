@@ -55,8 +55,8 @@ function structuredTrack(value, flightStr, depth = 0) {
   if (Array.isArray(value)) {
     if (!value.length) return [];
     if (value.some(item => readPoint(item))) return [value];
-    const lines = value.map(nested);
-    return lines.some(Boolean) ? lines.filter(Boolean).flat() : null;
+    const lines = value.map(nested).filter(Boolean);
+    return lines.length ? lines.flat() : null;
   }
   if (typeof value !== 'object' || (value.flightStr && value.flightStr !== flightStr)) return null;
   if (value.type === 'LineString') return [value.coordinates];

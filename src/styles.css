@@ -557,7 +557,7 @@ select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-w
 [data-rail-playback] [data-rail-segment="selected"] .rail-stop{fill:#a98d64}
 [data-rail-playback] [data-rail-stop-lit] .rail-stop{fill:#fff4d9;stroke:#e4bb79}
 .flight-track-status{margin:0}
-.flight-track-frame[hidden],.flight-track [hidden]{display:none}
+.flight-track [hidden]{display:none}
 .flight-track-frame{touch-action:auto}
 .flight-track-frame>svg,.flight-track-frame:active>svg{cursor:default}
 .flight-track-frame .flight-track-line path{stroke:#8fd0e3;stroke-width:2.5}

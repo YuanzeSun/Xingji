@@ -94,7 +94,6 @@ test('passengers on one order keep their names, seats and fares separate and sha
   assert.deepEqual(records.map(r => [r.passenger, r.carriage, r.seat, r.price]), [['示例甲', '05', '08F', '553'], ['示例乙', '06', '12A', '300']]);
   assert.ok(records.every(r => r.service === 'G103' && calendarDate(r.departureDate) === '2026-11-15'));
   assert.ok(records.every(r => r.orderNumber === 'E123456789' && !r.ticketNumber));
-  assert.deepEqual(parseScanText(text, 'camera', { singleTicket: true }), [], 'camera acceptance must not silently collapse a family order');
 });
 
 test('coordinates recover left departure and right arrival times even when OCR reads the columns in reverse', () => {

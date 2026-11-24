@@ -1,7 +1,12 @@
 import {calendarDate,sameDate} from './journey-date.js';
 import { escape as e } from './html.js';
-import { flightQuery, flightCompletion } from './flight-lookup-model.js';
-import { lookupFlight } from './flight-data.js';
+import { flightCandidates, flightCompletion } from './flight-lookup-model.js';
+import { flightQuery } from './flight-query.js';
+import { FlightConnector } from './mcp.js';
+
+async function lookupFlight(query, key) {
+  return flightCandidates(await new FlightConnector(key).flightStatus(query), query);
+}
 
 export function flightLookupMarkup() {
   return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div><p class="fine-print">填写航班号和出发日期后查询，仅补全空白信息。查询使用你的飞常准账户额度。</p><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><div data-flight-candidates></div></section>`;
@@ -36,7 +41,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
       selectedKey = key;
       const original = stamp(), cacheKey = JSON.stringify(request), cached = cache.get(cacheKey);
       busy = true; button.disabled = true; button.textContent = '正在查询…'; status.textContent = '正在查询飞常准…';
-      const fetched = cached && Date.now() - cached.at < 5 * 60 * 1000 ? cached.rows : await lookup('variflight', request, key);
+      const fetched = cached && Date.now() - cached.at < 5 * 60 * 1000 ? cached.rows : await lookup(request, key);
       const rows = fetched.filter(row => row.service === request.fnum && sameDate(row.departureDate,request.date) && (!request.dep || row.originCode === request.dep) && (!request.arr || row.destinationCode === request.arr));
       if (!validContext(original)) { if (!disposed && form.isConnected) status.textContent = '查询条件或连接已改变，本次结果未填入'; return; }
       cache.set(cacheKey, { rows, at: Date.now() }); candidates = rows; candidateStamp = original;

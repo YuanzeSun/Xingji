@@ -7,7 +7,7 @@ import {createBoardingCode,readBoardingCode} from '../src/bcbp.js';
 import {ticketDateField,bindTicketDates,readTicketDate,refreshTicketDateLocks} from '../src/date-field.js';
 import {railQuery,railDetails,railCompletion} from '../src/rail-lookup-model.js';
 import {demoRecords} from '../src/demo.js';
-import {flightQuery} from '../src/flight-lookup-model.js';
+import {flightQuery} from '../src/flight-query.js';
 
 test('travel dates store the exact calendar year and ordinal day, including leap-century boundaries',()=>{
   for(const [iso,expected] of [['2024-01-01',{year:2024,dayOfYear:1}],['2024-02-29',{year:2024,dayOfYear:60}],['2025-03-01',{year:2025,dayOfYear:60}],['2024-12-31',{year:2024,dayOfYear:366}],['2025-01-01',{year:2025,dayOfYear:1}],['2000-03-01',{year:2000,dayOfYear:61}],['2100-03-01',{year:2100,dayOfYear:60}]]){

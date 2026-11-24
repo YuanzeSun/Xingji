@@ -566,7 +566,8 @@ function bindRailPhoto(form) {
       if (!current()) return;
       const reading = await recognize(photo, progress => { if (current()) status.textContent = progress; });
       multiplePrintedTickets = reading.multiplePrintedTickets;
-      record = parseScanText(reading.text, '火车票照片', { ...reading, singleTicket: true })[0];
+      const candidates = parseScanText(reading.text, '火车票照片', reading);
+      if (candidates.length === 1) [record] = candidates;
     } catch { /* The photo is still available for manual entry. */ }
     finally {
       activeEditor.railPhotoPending = false;
