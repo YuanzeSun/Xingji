@@ -1,8 +1,11 @@
 import { calendarDate } from './journey-date.js';
+import { pathDistanceKm } from './geo-distance.js';
 import { mapPoint } from './journey-map-model.js';
 import { railMapPoint } from './rail-projection.js';
 
-const TRIP_DURATION = 4000;
+const MIN_TRIP_MS = 2000;
+const MAX_TRIP_MS = 6000;
+const LONG_TRIP_KM = 1800;
 const END_PAUSE = 450;
 const CHUNK_SIZE = 96;
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -30,6 +33,9 @@ export function mapPlaybackTrips(arcs, railways) {
 function drawTrip(layer, trip, id, visitStation) {
   const group = layer.ownerDocument.createElementNS(SVG_NS, 'g');
   group.id = id;
+  const routeCoordinates = trip.rail?.segments ?? [[trip.key.from.coordinates, trip.key.to.coordinates]];
+  const lengthRatio = Math.min(1, pathDistanceKm(routeCoordinates) / LONG_TRIP_KM);
+  const duration = MIN_TRIP_MS + (MAX_TRIP_MS - MIN_TRIP_MS) * Math.sqrt(lengthRatio);
   const segments = trip.rail ? trip.rail.segments.map(line => line.map(railMapPoint))
     : [trip.reversed ? trip.points.slice().reverse() : trip.points];
   const stations = new Map((trip.rail?.stops.slice(1, -1) || []).map(stop => {
@@ -68,6 +74,7 @@ function drawTrip(layer, trip, id, visitStation) {
   layer.append(overlay);
   let cursor = 0, arrival = 0;
   return {
+    duration,
     paint(progress) {
       const distance = total * progress;
       while (cursor < paths.length && distance >= paths[cursor].end) {
@@ -132,7 +139,7 @@ export function bindMapPlayback(svg, button, status, trips, { scope, requestFram
       return;
     }
     started ??= timestamp;
-    const progress = Math.min(1, (timestamp - started) / TRIP_DURATION);
+    const progress = Math.min(1, (timestamp - started) / current.duration);
     const reachedStation = !reducedMotion && current.paint(progress);
     if (progress === 1) {
       const trip = trips[tripIndex];
