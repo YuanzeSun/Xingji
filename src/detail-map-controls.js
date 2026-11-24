@@ -1,6 +1,6 @@
 import { escape as e } from './html.js';
 
-export const ROUTE_PLAYBACK_MS = 4000;
+export const ROUTE_PLAYBACK_MS = 6000;
 
 export function detailMapControls(label, { regional = false } = {}) {
   return `<div class="map-controls"><button type="button" data-route-zoom="in" aria-label="放大${e(label)}">＋</button><button type="button" data-route-zoom="out" aria-label="缩小${e(label)}">−</button><button type="button" data-route-zoom="fit" aria-label="显示完整${e(label)}">↔</button>${regional ? '<button type="button" data-route-zoom="region" aria-label="区域总览，查看周边省界" title="区域总览，查看周边省界">区域</button>' : ''}</div>`;

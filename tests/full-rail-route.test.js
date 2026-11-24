@@ -98,13 +98,15 @@ test('ticket route playback follows track distance, keeps its progress on zoom, 
     assert.deepEqual(litStops(), ['济南西']);
     const viewBox = svg.getAttribute('viewBox');
     container.querySelector('[data-route-zoom="in"]').click();
-    advance(2010);
+    advance(3010);
     assert.notEqual(svg.getAttribute('viewBox'), viewBox);
     assert.deepEqual(litStops(), ['徐州东', '济南西']);
     assert.equal(first.style.strokeDashoffset, '0');
     assert.ok(Number(second.style.strokeDashoffset) > 0.5 && Number(second.style.strokeDashoffset) < 0.75);
     assert.equal(status.textContent, '');
-    advance(4010);
+    advance(6009);
+    assert.equal(status.textContent, '');
+    advance(6010);
     assert.deepEqual(litStops(), ['南京南', '徐州东', '济南西']);
     assert.equal(second.style.strokeDashoffset, '0');
     assert.equal(status.textContent, '已点亮济南西至南京南');
