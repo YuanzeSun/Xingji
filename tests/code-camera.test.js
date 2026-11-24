@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { ticketCodeEditor, bindTicketCodeEditor } from '../src/code-editor.js';
-import { DEMO_TICKET_CODE } from '../src/demo-code.js';
+import { DEMO_RAIL_TICKET_CODE } from '../src/demo-code.js';
 import { createRecord } from '../src/model.js';
 import { createBoardingCode } from '../src/bcbp.js';
 
@@ -15,7 +15,7 @@ function fixture(values) {
   dom.window.HTMLCanvasElement.prototype.getContext = () => ({ drawImage() {} });
   dom.window.HTMLCanvasElement.prototype.toBlob = function (callback) { assert.equal(this.width, 1600); callback(new Blob(['captured frame'], { type: 'image/png' })); };
   const stream = { getTracks: () => [{ stop: () => stopped++ }] };
-  const options = { cameraOptions: { mediaDevices: { getUserMedia: async options => { assert.equal(options.audio, false); assert.equal(options.video.facingMode.ideal, 'environment'); return stream; } }, schedule: fn => { queue.set(++next, fn); return next; }, unschedule: id => queue.delete(id) }, loadRebuilder: async () => async file => { reads++; assert.ok(file instanceof Blob); return { codes: [{ format: 'QRCode', data: DEMO_TICKET_CODE }], issues: [] }; } };
+  const options = { cameraOptions: { mediaDevices: { getUserMedia: async options => { assert.equal(options.audio, false); assert.equal(options.video.facingMode.ideal, 'environment'); return stream; } }, schedule: fn => { queue.set(++next, fn); return next; }, unschedule: id => queue.delete(id) }, loadRebuilder: async () => async file => { reads++; assert.ok(file instanceof Blob); return { codes: [{ format: 'QRCode', data: DEMO_RAIL_TICKET_CODE }], issues: [] }; } };
   return { dom, form, draft, stream, queue, options, stopped: () => stopped, reads: () => reads };
 }
 
@@ -28,7 +28,7 @@ test('camera opens only on request, captures and rebuilds code data, then releas
   assert.equal(f.form.querySelector('[data-code-camera]').hidden, false);
   const [id, frame] = f.queue.entries().next().value; f.queue.delete(id); await frame(); await settle();
   assert.equal(f.reads(), 1); assert.equal(changed, 1);
-  assert.deepEqual(f.draft.ticketCode, DEMO_TICKET_CODE);
+  assert.deepEqual(f.draft.ticketCode, DEMO_RAIL_TICKET_CODE);
   assert.equal(f.stopped(), 1); assert.equal(f.form.querySelector('[data-code-camera]').hidden, true);
   assert.equal(f.queue.size, 0); dispose(); f.dom.window.close();
 });

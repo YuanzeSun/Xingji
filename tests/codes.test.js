@@ -15,6 +15,8 @@ const png = (width = 16, height = width) => 'data:image/png;base64,' + new Resvg
 test('ticket codes accept only bounded payload data and reject images, matrices and malformed parameters', () => {
   assert.equal(sample().ticketCode, ''); assert.deepEqual(normalizeTicketCode(code), code);
   for (const value of ['https://example.com/code.png', png(), {modules:'AA=='}, {...code, rawBytes:'bad'}, {...code, rawBytes:'A'.repeat(MAX_CODE_BYTES*2)}, {...code, parameters:{mask:9}}, {...code, eci:[{offset:-1,value:26}]}]) assert.throws(() => sample({ ticketCode:value }), /条码/);
+  const oldArchive = { ...archive([]), records: [{ ...sample(), ticketCode: png() }] };
+  assert.throws(() => readArchive(oldArchive), /条码/);
   assert.doesNotMatch(JSON.stringify(archive([sample({ticketCode:code})])), /data:image|modules|pixels|<svg/);
 });
 
@@ -92,7 +94,7 @@ test('a single verified QR from the rail photo is attached even when it contains
     }
   };
   const bind = changed => {
-    dom.window.document.body.innerHTML = `<form>${ticketCodeEditor(record, true)}</form>`;
+    dom.window.document.body.innerHTML = `<form>${ticketCodeEditor(record, { fromScan: true })}</form>`;
     const form = dom.window.document.querySelector('form');
     return { form, dispose: bindTicketCodeEditor(form, record, changed, options) };
   };

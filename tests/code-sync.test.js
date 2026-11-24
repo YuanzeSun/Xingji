@@ -1,24 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { upgradeCodeRecords, hasLegacyCodes } from '../src/code-upgrade.js';
 import { DEMO_TICKET_CODE } from '../src/demo-code.js';
 import { createRecord } from '../src/model.js';
 import { GitHubStore } from '../src/github.js';
 import { MemoryGitHub } from './helpers/cloud.js';
-
-test('old code images convert once to payload data and failed conversion preserves the originals', async () => {
-  const image = 'data:image/png;base64,' + btoa('old code image fixture');
-  const original = [{ id: 'a', ticketCode: image }, { id: 'b', ticketCode: image }];
-  let calls = 0;
-  const converted = await upgradeCodeRecords(original, async (blob, type) => {
-    calls++; assert.equal(type, 'rail'); assert.equal(blob.type, 'image/png');
-    return { codes: [{ data: DEMO_TICKET_CODE, verified: true }], issues: [] };
-  });
-  assert.equal(calls, 1); assert.equal(hasLegacyCodes(converted), false);
-  assert.deepEqual(converted[0].ticketCode, DEMO_TICKET_CODE); assert.equal(original[0].ticketCode, image);
-  await assert.rejects(upgradeCodeRecords(original, async () => ({ codes: [], issues: [] })), /保留原数据/);
-  assert.equal(original[0].ticketCode, image);
-});
 
 test('GitHub writes persist code payload and parameters without any image or matrix', async () => {
   const record = createRecord({ id: 'code-data', departureDate: '2026-11-15', ticketCode: DEMO_TICKET_CODE });

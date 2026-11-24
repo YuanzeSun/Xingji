@@ -1,7 +1,6 @@
 import * as db from './db.js';
 import { applyImport, clone, deduplicateRecords, mergeThreeWay, now, railDuplicateChanges, sameRecords } from './model.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings } from './shared-settings.js';
-import { upgradeCodeRecords, hasLegacyCodes } from './code-upgrade.js';
 
 const keys = ['records', 'base', 'settings', 'settingsBase', 'github', 'd1', 'syncMeta', 'lastSync', 'archiveResetProgress'];
 export { sameRecords };
@@ -24,19 +23,7 @@ function unpack(raw, session = false) {
   };
 }
 export async function readSyncState({ session = false } = {}) {
-  const fields = session ? sessionKeys : keys;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const raw = await db.atomic(fields), snapshot = unpack(raw, session);
-    if (!hasLegacyCodes(snapshot.records) && !hasLegacyCodes(snapshot.base)) return snapshot;
-    const records = await upgradeCodeRecords(snapshot.records), base = await upgradeCodeRecords(snapshot.base);
-    const migrated = await db.atomic(fields, current => {
-      if (JSON.stringify(current.records) !== JSON.stringify(raw.records) || JSON.stringify(current.base) !== JSON.stringify(raw.base)) return { result: null };
-      const latest = unpack(current, session), meta = { ...latest.meta, revision: latest.meta.revision + 1 };
-      return { write: { records, base, syncMeta: meta }, result: { ...latest, records, base, meta } };
-    });
-    if (migrated) return migrated;
-  }
-  throw new Error('条码转换期间其他标签页持续修改，请刷新重试');
+  return unpack(await db.atomic(session ? sessionKeys : keys), session);
 }
 
 export function sameArchiveBaseline(current, expected) {
