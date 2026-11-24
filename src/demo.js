@@ -1,4 +1,5 @@
 import {createRecord,FIELDS} from './model.js';
+import {journeyDate} from './journey-date.js';
 import {DEMO_TICKET_CODE} from './demo-code.js';
 import {DEMO_RAIL_DETAILS} from './data/demo-rail.js';
 import {createBoardingCode} from './bcbp.js';
@@ -16,10 +17,10 @@ function railExample(record){
   reference.query.date=shift(reference.railJourney.query.startDate).replaceAll('-','');
   reference.query.boardingDate=record.departureDate;
   reference.arrivalDate=shift(reference.arrivalDate);
-  reference.railJourney.query.startDate=shift(reference.railJourney.query.startDate);
-  reference.railJourney.query.boardingDate=record.departureDate;
-  for(const stop of reference.railJourney.stops){stop.arrivalDate=shift(stop.arrivalDate);stop.departureDate=shift(stop.departureDate);}
-  reference.railJourney.access=[{station:record.origin,date:record.departureDate,gates:[record.gate+'检票口'],platform:record.railPlatform}];
+  reference.railJourney.query.startDate=journeyDate(shift(reference.railJourney.query.startDate));
+  reference.railJourney.query.boardingDate=journeyDate(record.departureDate);
+  for(const stop of reference.railJourney.stops){stop.arrivalDate=journeyDate(shift(stop.arrivalDate));stop.departureDate=journeyDate(shift(stop.departureDate));}
+  reference.railJourney.access=[{station:record.origin,date:journeyDate(record.departureDate),gates:[record.gate+'检票口'],platform:record.railPlatform}];
   for(const stock of reference.railJourney.trainsets)Object.assign(stock,{
     customType:'运营配置示例',
     modelRemark:`示例车型备注：${stock.model} 型动车组的补充资料。`,

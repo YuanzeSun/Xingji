@@ -77,7 +77,7 @@ export function openRailCamera(container, onPhoto, { mediaDevices = navigator.me
     await video.play();
     if (closed) return;
     if (video.videoWidth) shutter.disabled = false;
-    status.textContent = '让车票四角落在取景框内，再点击拍照';
+    status.textContent = '';
   }).catch(error => {
     if (closed) return;
     stopCameraStream(stream);

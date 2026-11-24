@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord } from '../src/model.js';
+import { journeyDate } from '../src/journey-date.js';
 import { statisticsOptions, statisticsRange, todayDate, journeyStatistics, tripSeries } from '../src/statistics-model.js';
 import { mountStatistics } from '../src/statistics.js';
 
@@ -140,10 +141,11 @@ test('route direction mode separates reverse flights without changing any other 
 });
 
 test('rail model rankings use saved trainsets, respect manual models and count each coupled model once per journey', () => {
+  const date = journeyDate('2024-02-29');
   const snapshot = () => ({
-    query: { trainNum:'G103', startDate:'2024-02-29', boardingDate:'2024-02-29', origin:'北京南', destination:'上海虹桥' },
+    query: { trainNum:'G103', startDate:date, boardingDate:date, origin:'北京南', destination:'上海虹桥' },
     queriedAt:'2026-11-17T00:00:00Z',
-    stops: [{ station:'北京南', departureDate:'2024-02-29', departureTime:'08:00' }, { station:'上海虹桥', arrivalDate:'2024-02-29', arrivalTime:'13:00' }],
+    stops: [{ station:'北京南', departureDate:date, departureTime:'08:00' }, { station:'上海虹桥', arrivalDate:date, arrivalTime:'13:00' }],
     trainsets: [{ id:'CR400AF-2001', model:'cr400af' }, { id:'CR400AF-2002', model:'CR400AF' }], coupling:true,
     coaches: { model:'CRH2A', queriedAt:'2026-11-17T00:00:00Z' }
   });

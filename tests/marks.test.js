@@ -15,9 +15,9 @@ test('marks are opt-in, validated and only inferred from explicit printed notati
   assert.deepEqual(marksFromText('（网]'), []);
   assert.deepEqual(marksFromText('[学]'), []);
   assert.throws(() => normalizeMarks([{ text: '网', shape: 'box' }]), /仅支持圆圈或仅文字/);
-  assert.deepEqual(marksFromText('票面标识：网 学'), normalizeMarks('网 学'));
+  assert.deepEqual(marksFromText('票面标识：网 学'), normalizeMarks([{ text: '网' }, { text: '学' }]));
   assert.deepEqual(marksFromText('（网） （学） （网）'), normalizeMarks([{ text: '网', shape: 'circle' }, { text: '学', shape: 'circle' }]));
-  assert.deepEqual(parseScanText('C2021 北京南→天津 （网）')[0].ticketMarks, normalizeMarks('网'));
+  assert.deepEqual(parseScanText('C2021 北京南→天津 （网）')[0].ticketMarks, normalizeMarks([{ text: '网' }]));
   assert.deepEqual(parseScanText('登机牌 CA181 北京首都→东京羽田 （网）'), []);
   for (const bad of [[{ text: '<script>' }], [{ text: '网', shape: 'unknown' }], [{ text: '网', offsetX: 101 }], [{ text: '网', offsetY: Infinity }], Array(5).fill({ text: '网' })]) {
     assert.throws(() => sample({ ticketMarks: bad }), /标识/);
@@ -46,6 +46,9 @@ test('JSON roundtrips preserve mark shape and position', () => {
   const backup = JSON.parse(JSON.stringify(archive([record])));
   assert.equal(backup.schemaVersion, 2);
   assert.deepEqual(readArchive(backup), [record]);
+  for (const ticketMarks of ['网 学', JSON.stringify(marks)]) {
+    assert.throws(() => readArchive({ ...backup, records: [{ ...record, ticketMarks }] }), /须为数组/);
+  }
 });
 
 test('imports respect corrected marks including intentional removal and sync detects mark conflicts', () => {
@@ -53,7 +56,7 @@ test('imports respect corrected marks including intentional removal and sync det
   const marked = sample({ ticketMarks: marks });
   assert.deepEqual(applyImport([base], [marked]).records[0].ticketMarks, marks);
   assert.deepEqual(applyImport([{ ...base, lockedFields: ['ticketMarks'] }], [marked]).records[0].ticketMarks, []);
-  const otherMark = sample({ ticketMarks: '学' });
+  const otherMark = sample({ ticketMarks: [{ text: '学' }] });
   assert.deepEqual(applyImport([marked], [otherMark]).records[0].ticketMarks, marks);
   const result = mergeThreeWay([base], [marked], [{ ...base, issuer: '另一台设备的售票站' }]);
   assert.equal(result.conflicts.length, 0); assert.deepEqual(result.records[0].ticketMarks, marks);

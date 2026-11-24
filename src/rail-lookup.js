@@ -25,12 +25,11 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
     const input=form.querySelector('[data-rail-trainsets]');if(input && input.value!==(record.railTrainsets || ''))input.value=record.railTrainsets || '';
   };
   const refresh = () => {
-    let hint=''; try { railQuery(getRecord(),date.value || undefined); } catch(error) { hint=error.message; }
-    button.disabled=busy || !canQuery() || !!hint;
-    button.title=hint;
-    if (!busy && hint) status.textContent=hint;
-    else if (!busy && status.textContent===button.dataset.hint) status.textContent='';
-    button.dataset.hint=hint;
+    button.disabled = true;
+    if (busy || !canQuery()) return;
+    try { railQuery(getRecord(), date.value || undefined); }
+    catch { return; }
+    button.disabled = false;
   };
   async function query({ automatic = false } = {}) {
     if (busy || disposed || !canQuery()) return;

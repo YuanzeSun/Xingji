@@ -34,7 +34,8 @@ test('camera opens only on request, captures and rebuilds code data, then releas
   const f = fixture(); let changed = 0;
   const dispose = bindTicketCodeEditor(f.form, f.draft, () => changed++, f.options);
   assert.equal(f.queue.size, 0); assert.equal(f.reads(), 0);
-  assert.match(f.form.textContent, /二维码/); assert.doesNotMatch(f.form.textContent, /原票二维码|选填/);
+  assert.equal(f.form.querySelector('[data-code-start]').textContent, '相机扫描');
+  assert.doesNotMatch(f.form.textContent, /虚构车票二维码|将完整的码对准相机/);
   f.form.querySelector('[data-code-start]').click(); await settle();
   assert.equal(f.form.querySelector('[data-code-camera]').hidden, false);
   const [id, frame] = f.queue.entries().next().value; f.queue.delete(id); await frame(); await settle();
@@ -123,7 +124,8 @@ test('one browser-selected rear stream supports zoom and focus without a lens pi
   f.form.querySelector('[data-code-start]').click(); await settle();
   assert.equal(f.form.querySelector('[data-code-camera] select'), null);
   assert.deepEqual(applied[0].advanced, [{ focusMode: 'continuous' }]);
-  assert.match(f.form.querySelector('[data-code-camera-status]').textContent, /点按画面可对焦/);
+  assert.equal(f.form.querySelector('[data-code-camera-status]').textContent, '');
+  assert.equal(f.form.querySelector('[data-code-focus]').hidden, false);
   adjustZoom(f, 1.25); await settle();
   assert.deepEqual(applied.at(-1).zoom, { exact: 1.25 });
   assert.equal(f.form.querySelector('[data-code-zoom-value]').textContent, '1.25×');

@@ -9,7 +9,11 @@ const SEAT_CLASSES = [
   '鸳鸯软卧', '混编硬座', '混编硬卧', '包厢软座', '特等软座', '动卧', '二人软包', '一人软包', '一等卧', '二等卧',
   '混编软座', '混编软卧', '一等座', '', '二等座', '特等座', '多功能座', '一等包座', '二等包座', '', '', '', '无座',
 ];
-export const supportsGeneratedRailQR = template => !['rail-red-barcode', 'rail-refund-receipt', 'rail-supplement'].includes(template);
+const supportsGeneratedRailQR = record => record.type === 'rail' && !record.deleted &&
+  !['rail-red-barcode', 'rail-refund-receipt', 'rail-supplement'].includes(record.template);
+const requiredQRFields = new Set(['origin', 'destination', 'service', 'departureDate', 'departureTime', 'price', 'seatClass', 'saleCode']);
+export const railQRNeedsField = (record, key) => supportsGeneratedRailQR(record) &&
+  (requiredQRFields.has(key) || (!isAnonymousRedTemplate(record.template) && ['identity', 'passenger'].includes(key)));
 
 function station(values, side, code) {
   const place = resolvePlace({ type: 'rail', [side + 'Code']: code }, side);
@@ -103,7 +107,7 @@ function encodeSeat(record) {
 }
 
 export function createRailTicketQR(record) {
-  if (record.type !== 'rail' || record.deleted || record.ticketCode || !supportsGeneratedRailQR(record.template)) return '';
+  if (!supportsGeneratedRailQR(record) || record.ticketCode) return '';
   const sale = String(record.saleCode || '').trim().toUpperCase().match(/^(\d{10})(\d{2})(\d{2})([A-Z]\d{6})$/);
   const serial = String(record.ticketNumber || '').trim().toUpperCase();
   const service = String(record.service || '').trim().toUpperCase().match(/^([A-Z]{0,3})(\d{1,5})$/);

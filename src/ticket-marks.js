@@ -1,15 +1,9 @@
 import { escape as esc } from './html.js';
 export const MARK_SHAPES = Object.freeze({ circle: '圆圈', plain: '仅文字' });
 
-export function normalizeMarks(input) {
-  if (input === undefined || input === null || input === '') return [];
-  let value = input;
-  if (typeof value === 'string') {
-    if (value.trim().startsWith('[')) {
-      try { value = JSON.parse(value); } catch { throw new Error('票面标识的JSON格式不正确'); }
-    } else value = [...value.replace(/[\s,，、;；]/g, '')].map(text => ({ text, shape: 'circle' }));
-  }
-  if (!Array.isArray(value) || value.length > 4) throw new Error('每张票最多保存4个票面标识');
+export function normalizeMarks(value) {
+  if (!Array.isArray(value)) throw new Error('票面标识须为数组');
+  if (value.length > 4) throw new Error('每张票最多保存4个票面标识');
   return value.map(mark => {
     if (!mark || typeof mark !== 'object' || Array.isArray(mark)) throw new Error('票面标识格式不正确');
     const text = typeof mark.text === 'string' ? mark.text.trim() : '';
@@ -37,7 +31,8 @@ export function renderMarks(record, { x, y, radius = 16, gap = 46, family = 'Tic
 export function marksFromText(text) {
   const explicit = text.match(/(?:票面标识|票面标记|票种标识)\s*[:：]\s*([\u3400-\u9fffA-Za-z0-9 ,，、]{1,20})(?=\n|$)/m);
   if (explicit) {
-    try { return normalizeMarks(explicit[1]); } catch { return []; }
+    const marks = [...explicit[1].replace(/[ ,，、]/g, '')].map(text => ({ text }));
+    return marks.length <= 4 ? normalizeMarks(marks) : [];
   }
   // Extract only explicit printed delimiters. Ordinary words like 网上购票 are not proof of a stamp.
   const marks = [];

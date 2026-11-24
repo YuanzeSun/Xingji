@@ -7,7 +7,7 @@ export function codeCameraMarkup() {
       <label class="code-camera-zoom" data-code-zoom hidden><input type="range" min="1" max="3" step="0.05" value="1" data-code-zoom-slider aria-label="缩放倍率" list="code-camera-zoom-stops"><output data-code-zoom-value aria-live="off">1×</output><datalist id="code-camera-zoom-stops"><option value="0.5"></option><option value="1"></option><option value="2"></option><option value="3"></option></datalist></label>
       <button type="button" class="button secondary" data-code-focus aria-label="在画面中央对焦" hidden>对焦</button>
     </div>
-    <p data-code-camera-status role="status">将码对准相机，识别后自动录入</p>
+    <p data-code-camera-status role="status"></p>
     <div class="code-actions"><button type="button" class="button small secondary" data-code-shutter disabled>拍照识别</button><button type="button" class="text-button" data-code-stop>关闭相机</button></div>
   </div>`;
 }
@@ -18,8 +18,7 @@ export function bindCodeCamera(section, onCapture, {
   const panel = section.querySelector('[data-code-camera]'), video = panel.querySelector('video');
   const status = panel.querySelector('[data-code-camera-status]'), trigger = section.querySelector('[data-code-start]');
   const doc = section.ownerDocument, win = doc.defaultView;
-  const shutter = panel.querySelector('[data-code-shutter]'), focusButton = panel.querySelector('[data-code-focus]');
-  const focusHint = '将码对准相机，点按画面可对焦';
+  const shutter = panel.querySelector('[data-code-shutter]');
   const controls = bindCodeCameraControls(panel, video, mediaDevices);
   let stream, timer, generation = 0, disposed = false, reading = -1, frame = 0;
   function stop() {
@@ -43,7 +42,7 @@ export function bindCodeCamera(section, onCapture, {
         if (disposed || request !== generation) return;
         if (image && await onCapture(image, { cameraFrame: manual ? 0 : ++frame })) { if (request === generation) stop(); return; }
       }
-      if (request === generation) status.textContent = focusButton.hidden ? '将完整的码对准相机，保持清晰、稳定' : focusHint;
+      if (request === generation) status.textContent = '';
     } catch (error) { if (request === generation) status.textContent = error.message || '暂未读到码，请调整距离重试'; }
     finally {
       if (reading === request) reading = -1;
@@ -73,7 +72,7 @@ export function bindCodeCamera(section, onCapture, {
       if (request !== generation) return;
       controls.start(stream.getVideoTracks?.()[0]);
       shutter.disabled = false;
-      status.textContent = focusButton.hidden ? '将码对准相机，识别后自动录入' : focusHint;
+      status.textContent = '';
       timer = schedule(() => capture(request), asCanvas ? 80 : 350);
     } catch (error) {
       if (disposed || request !== generation) return;

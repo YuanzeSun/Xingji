@@ -1,6 +1,7 @@
 import {refreshTicketDateLocks} from './date-field.js';
 import {railBarcodeFieldLocked} from './field-sources.js';
 import {splitBerth} from './seat-field.js';
+import {refreshRailQRMarks} from './ticket-form.js';
 export const barcodeFieldLocked = (record, key) => railBarcodeFieldLocked(record,key) ||
   (key!=='departureDate' && record.type === 'flight' && !!record.boardingCode && record.boardingCodeSource === 'original' && (key === 'type' || record.fieldSources?.[key]==='barcode'));
 
@@ -27,6 +28,7 @@ export function refreshBarcodeFieldLocks(root, record) {
     else control.readOnly = locked;
   }
   if (record.type !== 'rail') return;
+  refreshRailQRMarks(root, record);
   const seatLocked = railBarcodeFieldLocked(record, 'seat');
   const seat = splitBerth(record.seat);
   for (const [selector, value] of [['[data-seat-number]', seat.number], ['[data-berth]', seat.berth]]) {

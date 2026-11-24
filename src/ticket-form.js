@@ -2,6 +2,24 @@ import {FLIGHT_TIME_LABELS} from './flight-times.js';
 import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import { requireCompleteIdentity } from './identity.js';
 import { isAnonymousRedTemplate } from './rail-template.js';
+import { railQRNeedsField } from './rail-ticket-qr.js';
+
+export const barcodeRequiredMark = '<b class="required-mark barcode-required-mark" aria-label="生成条码必填">*</b>';
+
+export function ticketRequiredMark(record, key, required) {
+  if (required) return '<b class="required-mark" aria-label="必填">*</b>';
+  if (railQRNeedsField(record, key)) {
+    return `<b class="required-mark barcode-required-mark" data-rail-qr-mark${record.ticketCode ? ' hidden' : ''} aria-label="生成二维码必填">*</b>`;
+  }
+  return record.type === 'flight' && key === 'pnr' ? barcodeRequiredMark : '';
+}
+
+export function refreshRailQRMarks(root, record) {
+  for (const mark of root.querySelectorAll('[data-rail-qr-mark]')) {
+    mark.hidden = Boolean(record.ticketCode);
+  }
+}
+
 const common = ['origin', 'destination', 'service', 'departureDate', 'departureTime', 'passenger', 'identity', 'seat', 'seatClass'];
 export function requiredTicketFields(type, template, flightStatus = 'normal', railStanding = false, fromRailInvoice = false) {
   if (type === 'flight') return ['open', 'invalid'].includes(flightStatus) ? ['origin', 'destination', 'passenger'] : common;

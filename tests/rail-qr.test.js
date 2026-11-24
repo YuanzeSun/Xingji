@@ -129,6 +129,7 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
   };
   const form = () => document.querySelector('#editor-form');
   const field = name => form().elements[name];
+  const fieldStars = name => [...field(name).closest('.field').querySelectorAll('.required-mark:not([hidden])')].map(mark => mark.getAttribute('aria-label'));
   const fill = (name, value) => {
     field(name).value = value;
     field(name).dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -152,6 +153,15 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(photoEntry().querySelector('[data-rail-photo]').textContent, '相机扫描');
     assert.equal(photoEntry().querySelector('[data-rail-photo-upload]').textContent, '上传图片');
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);
+    for (const name of ['origin', 'destination', 'service', 'departureDate', 'departureTime', 'seatClass', 'identity', 'passenger']) {
+      assert.deepEqual(fieldStars(name), ['必填'], name);
+      assert.equal(field(name).closest('.field').querySelector('.barcode-required-mark'), null, name);
+    }
+    for (const name of ['price', 'saleCode']) {
+      assert.deepEqual(fieldStars(name), ['生成二维码必填'], name);
+      assert.equal(field(name).required, false);
+    }
+    assert.deepEqual(fieldStars('ticketNumber'), []);
     fill('service', 'G999');
     fill('departureDate', '2026-01-01');
     form().querySelector('[data-rail-standing]').click();
@@ -164,6 +174,9 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, true);
     assert.equal(receipt().disabled, true);
     assert.ok(form().querySelector('[data-code-examples][hidden]'));
+    assert.deepEqual(fieldStars('price'), []);
+    assert.deepEqual(fieldStars('saleCode'), []);
+    assert.deepEqual(fieldStars('origin'), ['必填']);
     await waitFor(() => field('railModel').value === 'CR400BF-S');
     assert.deepEqual(railQueries, [[['trainNum', 'G103'], ['date', '20251124']]]);
     assert.equal(field('arrivalTime').value, '12:45');
@@ -212,6 +225,8 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);
     assert.equal(photoEntry().querySelector('[data-rail-photo-lock]').hidden, true);
     assert.equal(receipt().disabled, false);
+    assert.deepEqual(fieldStars('price'), ['生成二维码必填']);
+    assert.deepEqual(fieldStars('saleCode'), ['生成二维码必填']);
     const codePath = () => form().querySelector('#editor-preview [data-ticket-code] path');
     const beforeEdit = codePath().getAttribute('d');
     fill('service', 'G105');
@@ -229,6 +244,7 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     form().querySelector('[data-code-start]').click();
     await waitFor(() => form()?.querySelector('#code-status')?.textContent.includes('已收录一维条码'));
     assert.equal(field('template').value, 'rail-red-barcode');
+    assert.deepEqual(fieldStars('saleCode'), []);
     assert.equal(field('service').value, '');
     assert.equal(field('service').readOnly, false);
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);

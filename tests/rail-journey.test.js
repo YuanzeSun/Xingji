@@ -1,4 +1,4 @@
-import {calendarDate} from '../src/journey-date.js';
+import {calendarDate,journeyDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
@@ -187,7 +187,8 @@ test('snapshot normalization limits remote images and rejects a mismatched board
   snapshot.coaches.cars.push({name:'恶意图片',url:'https://example.com/track.png',number:'04'});
   snapshot.coaches.picture='javascript:alert(1)';
   const cleaned=normalizeRailJourney(snapshot);assert.equal(cleaned.coaches.cars.length,2);assert.equal(Object.hasOwn(cleaned.coaches,'picture'),false);assert.equal(Object.hasOwn(cleaned.coaches,'interiors'),false);
-  snapshot.query.boardingDate='2026-11-18';assert.throws(()=>normalizeRailJourney(snapshot),/乘车区间/);
+  snapshot.query.boardingDate='2026-11-17';assert.throws(()=>normalizeRailJourney(snapshot),/年份须为/);
+  snapshot.query.boardingDate=journeyDate('2026-11-18');assert.throws(()=>normalizeRailJourney(snapshot),/乘车区间/);
 });
 
 test('unwanted carriage facilities and trainset fields are dropped from saved data and detail display',async()=>{
@@ -203,7 +204,10 @@ test('unwanted carriage facilities and trainset fields are dropped from saved da
 });
 
 test('detail view highlights the ticket carriage, switches diagrams and links only confirmed same-trainset encounters',async()=>{
-  const record=await completed(),other=createRecord({...record,id:'another',departureDate:'2026-11-16',railJourney:{...record.railJourney,query:{...record.railJourney.query,boardingDate:'2026-11-16'},stops:record.railJourney.stops.map(stop=>({...stop,arrivalDate:stop.arrivalDate ? new Date(Date.parse(calendarDate(stop.arrivalDate)+'T00:00:00Z')-86400000).toISOString().slice(0,10) : '',departureDate:stop.departureDate ? new Date(Date.parse(calendarDate(stop.departureDate)+'T00:00:00Z')-86400000).toISOString().slice(0,10) : ''}))}});
+  const record=await completed();
+  const previousDay=date=>date ? journeyDate(new Date(Date.parse(calendarDate(date)+'T00:00:00Z')-86400000).toISOString().slice(0,10)) : '';
+  const stops=record.railJourney.stops.map(stop=>({...stop,arrivalDate:previousDay(stop.arrivalDate),departureDate:previousDay(stop.departureDate)}));
+  const other=createRecord({...record,id:'another',departureDate:'2026-11-16',railJourney:{...record.railJourney,query:{...record.railJourney.query,boardingDate:journeyDate('2026-11-16')},stops}});
   const unrelated=createRecord({...other,id:'unrelated',railTrainsets:'CR400BF-9999',railJourney:{...other.railJourney,trainsets:[{id:'CR400BF-9999'}]}});
   const dom=new JSDOM(railJourneyMarkup(record,[record,other,unrelated])),root=dom.window.document.body,cleanup=bindRailJourney(root,()=>record);
   assert.equal(root.querySelector('.ticket-carriage').getAttribute('aria-pressed'),'true');

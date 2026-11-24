@@ -70,7 +70,7 @@ test('the generator gets shared fields from the ticket and creates or updates th
       assert.equal(input.closest('.field').querySelector('.barcode-required-mark').getAttribute('aria-label'),'生成条码必填');
       assert.equal(input.required,false);
     }
-    assert.match(form.querySelector('.barcode-required-legend').textContent,/自动生成/);
+    assert.equal(form.querySelector('.barcode-required-legend'), null);
     set('sequence','25');submit();assert.equal(draft.boardingCode,'');
     set('electronic','E');set('passenger','desmarais/luc');set('status','1');
     await waitForPreview();

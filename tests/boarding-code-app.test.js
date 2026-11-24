@@ -52,8 +52,7 @@ test('the app saves generated code edits immediately, persists provenance, and k
     document.querySelector('#code-remove').click();assert.equal(document.querySelector('[name="type"]').disabled,true);assert.equal(document.querySelector('[name="service"]').readOnly,false);assert.equal(document.querySelector('[data-seat-preset]').disabled,false);
     const examples = document.querySelector('[data-code-examples]');
     assert.equal(examples.hidden, false);
-    assert.match(examples.textContent, /纸质登机牌 · PDF417/);
-    assert.match(examples.textContent, /电子登机牌 · 二维码/);
+    assert.deepEqual([...examples.querySelectorAll('.boarding-code-sample > span:last-child')].map(node => node.textContent), ['PDF417', '二维码']);
     assert.equal(examples.querySelectorAll('svg').length, 2);
     fill('seat','30C');submit();await wait(()=>!document.querySelector('dialog'));saved=server.records().find(record=>record.id==='original');assert.equal(saved.seat,'30C');assert.equal(saved.boardingCode,'');
   }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();}

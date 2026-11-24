@@ -3,7 +3,7 @@ import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {barcodeFieldLocked,refreshBarcodeFieldLocks} from './barcode-fields.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
-import {barcodeRequiredMark,boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
+import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
 import {fieldSourceBadge,hasFieldValue,markFieldSources,refreshFieldSources} from './field-sources.js';
 import {readBoardingCode} from './bcbp.js';
 import {flightPassengerName} from './flight-passenger.js';
@@ -35,7 +35,7 @@ import { MARK_SHAPES, describeMarks } from './ticket-marks.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from './code-editor.js';
 import {ticketViewOptions,ticketViewControls,ticketCollection, appendTicketCollection,bindTicketViewControls} from './ticket-view.js';
 import {mountTicketSpace} from './ticket-space.js';
-import { requiredTicketFields, ticketFieldLabel, validateTicketForm, ticketFormFeedback } from './ticket-form.js';
+import { requiredTicketFields, ticketRequiredMark, ticketFieldLabel, validateTicketForm, ticketFormFeedback } from './ticket-form.js';
 import { seatClassField, bindSeatClassFields } from './seat-class-field.js';
 import { seatField, bindSeatFields } from './seat-field.js';
 import { bindDatePickers,ticketDateField,bindTicketDates,readTicketDate,writeTicketDate,barcodeDateDay } from './date-field.js';
@@ -521,7 +521,6 @@ function railPhotoControls() {
         <input type="file" accept="image/*" data-rail-photo-file hidden />
       </div>
     </fieldset>
-    <p class="fine-print" data-rail-photo-lock-note hidden>移除已录入的二维码后可扫描票面。</p>
     <div data-rail-camera></div><p class="fine-print" role="status" data-rail-photo-status></p>
   </details>`;
 }
@@ -537,7 +536,6 @@ function refreshRailPhotoLock(form, draft) {
   const locked = hasRailQRCode(draft);
   entry.querySelector('[data-rail-photo-controls]').disabled = locked;
   entry.querySelector('[data-rail-photo-lock]').hidden = !locked;
-  entry.querySelector('[data-rail-photo-lock-note]').hidden = !locked;
   if (locked) entry.open = false;
 }
 
@@ -867,7 +865,7 @@ function field(key, r, options = {}) {
   const label = key === 'price' && isRefundReceipt(r) ? '退票费（元）'
     : key === 'issuer' && r.template === 'rail-supplement' ? '出票客运段'
     : ticketFieldLabel(key, r.type, labels[key]);
-  return `<label class="field ${options.full ? 'full-field' : ''}"><span>${e(label)}${required ? '<b class="required-mark" aria-label="必填">*</b>' : r.type==='flight' && key==='pnr' ? barcodeRequiredMark : ''}${fieldSourceBadge(key,r)}</span>${content}</label>`;
+  return `<label class="field ${options.full ? 'full-field' : ''}"><span>${e(label)}${ticketRequiredMark(r, key, required)}${fieldSourceBadge(key,r)}</span>${content}</label>`;
 }
 function bindPlaceFields(container) {
   for (const input of container.querySelectorAll('[name="origin"], [name="destination"]')) {
@@ -892,10 +890,10 @@ function bindPlaceFields(container) {
   }
 }
 function marksEditor(record) {
-  return `<section class="editor-extra"><h3>票面标识${fieldSourceBadge('ticketMarks',record)}</h3><p class="fine-print">选择标识的文字与外框。</p><div id="mark-rows">${markRows(record.ticketMarks)}</div><button class="button small secondary" type="button" data-mark-add>＋ 添加标识</button></section>`;
+  return `<section class="editor-extra"><h3>票面标识${fieldSourceBadge('ticketMarks',record)}</h3><div id="mark-rows">${markRows(record.ticketMarks)}</div><button class="button small secondary" type="button" data-mark-add>＋ 添加标识</button></section>`;
 }
 function markRows(marks) {
-  return marks.map((mark, i) => `<div class="ticket-mark-row" data-mark-index="${i}"><div class="mark-main"><label class="field"><span>标识文字</span><input name="markText-${i}" value="${e(mark.text)}" placeholder="如：网" maxlength="2" /></label><label class="field"><span>外框</span><select name="markShape-${i}">${Object.entries(MARK_SHAPES).map(([value, label]) => `<option value="${value}" ${mark.shape === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><button type="button" class="icon-button danger" data-mark-remove="${i}" aria-label="删除第${i + 1}个标识">${icon('trash')}</button></div><div class="mark-adjust"><p class="fine-print">此标识的位置微调</p><div class="form-grid"><label class="field"><span>横向偏移</span><input type="number" name="markX-${i}" value="${Number(mark.offsetX) || 0}" min="-100" max="100" step="1" /></label><label class="field"><span>纵向偏移</span><input type="number" name="markY-${i}" value="${Number(mark.offsetY) || 0}" min="-100" max="100" step="1" /></label></div></div></div>`).join('');
+  return marks.map((mark, i) => `<div class="ticket-mark-row" data-mark-index="${i}"><div class="mark-main"><label class="field"><span>标识文字</span><input name="markText-${i}" value="${e(mark.text)}" placeholder="如：网" maxlength="2" /></label><label class="field"><span>外框</span><select name="markShape-${i}">${Object.entries(MARK_SHAPES).map(([value, label]) => `<option value="${value}" ${mark.shape === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><button type="button" class="icon-button danger" data-mark-remove="${i}" aria-label="删除第${i + 1}个标识">${icon('trash')}</button></div><div class="mark-adjust"><div class="form-grid"><label class="field"><span>横向偏移</span><input type="number" name="markX-${i}" value="${Number(mark.offsetX) || 0}" min="-100" max="100" step="1" /></label><label class="field"><span>纵向偏移</span><input type="number" name="markY-${i}" value="${Number(mark.offsetY) || 0}" min="-100" max="100" step="1" /></label></div></div></div>`).join('');
 }
 function collectMarks(form) {
   return [...form.querySelectorAll('.ticket-mark-row')].map((row, i) => ({ text: form.elements[`markText-${i}`].value.trim(), shape: form.elements[`markShape-${i}`].value, offsetX: Number(form.elements[`markX-${i}`].value), offsetY: Number(form.elements[`markY-${i}`].value) }));
@@ -938,7 +936,7 @@ function editRecord(record = newPersonalRecord(), {
       : ticketCodeEditor(draft, { fromScan:!!localFileURL }) + railReceiptControls() + railPhotoControls() + railTicketOptions(draft));
   const invoiceRows = railInvoiceDetails(draft.railInvoice);
   const invoiceDetails = invoiceRows.length ? `<details class="editor-extra"><summary>电子报销凭证资料</summary><dl class="detail-grid">${invoiceRows.map(([label, value]) => `<div><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`).join('')}</dl></details>` : '';
-  openModal(modalHead(imported ? '核对这张票据' : state.records.some(r => r.id === draft.id) ? '编辑票据' : '添加一张票据', '红色<span class="required-mark">*</span> 为保存票据必填') + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${ticketEntry}${basics.filter(key => !(draft.railStanding && key === 'seat')).map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : invoiceDetails + marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ''}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div><p class="fine-print"></p>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div><div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="close-modal">取消</button><span class="save-note">${icon('database')}保存票据</span><div class="spacer"></div><button class="button primary" type="submit">${icon('check')}保存票据</button></div></form>`, true);
+  openModal(modalHead(imported ? '核对这张票据' : state.records.some(r => r.id === draft.id) ? '编辑票据' : '添加一张票据') + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${ticketEntry}${basics.filter(key => !(draft.railStanding && key === 'seat')).map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : invoiceDetails + marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ''}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div><div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="close-modal">取消</button><div class="spacer"></div><button class="button primary" type="submit">${icon('check')}保存票据</button></div></form>`, true);
   // openModal replaces the DOM, but keeps the editor state deliberately.
   const form = document.querySelector('#editor-form');
   bindRailReceipt(form, editor);

@@ -64,7 +64,7 @@ test('code editor rebuilds automatically, blocks pending saves and preserves exi
   assert.equal(form.querySelector('#code-cropper'), null); assert.equal(form.querySelector('[type="range"]:not([data-code-zoom-slider])'), null);
   const blocked = new dom.window.Event('submit', { bubbles: true, cancelable: true }); form.dispatchEvent(blocked); assert.equal(blocked.defaultPrevented, true);
   finish({ codes: [{ format: 'QRCode', data: code, verified: true }], issues: [] }); await new Promise(r => setTimeout(r, 0));
-  assert.deepEqual(record.ticketCode, code); assert.equal(changed, 1); assert.match(form.querySelector('#code-status').textContent, /重新编码后信息已核对/);
+  assert.deepEqual(record.ticketCode, code); assert.equal(changed, 1); assert.equal(form.querySelector('#code-status').textContent, '已读取并重建 QRCode');
   await choose(); finish({ codes: [], issues: ['未能确认原码格'] }); await new Promise(r => setTimeout(r, 0));
   assert.deepEqual(record.ticketCode, code); assert.match(form.querySelector('#code-error').textContent, /原码格/);
   await choose(); const late = finish; dispose(); late({ codes: [{ format: 'QRCode', data: code, verified: true }], issues: [] }); await new Promise(r => setTimeout(r, 0));

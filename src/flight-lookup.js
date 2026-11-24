@@ -9,7 +9,7 @@ async function lookupFlight(query, key) {
 }
 
 export function flightLookupMarkup() {
-  return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div><p class="fine-print">填写航班号和出发日期后查询，仅补全空白信息。查询使用你的飞常准账户额度。</p><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><div data-flight-candidates></div></section>`;
+  return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><div data-flight-candidates></div></section>`;
 }
 
 export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, apply, lookup = lookupFlight }) {
@@ -20,7 +20,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
   let disposed = false, busy = false, candidates = [], candidateStamp = '', cacheOwner = '', selectedKey = '';
   const stamp = () => { const record = getRecord(); return JSON.stringify(['type', 'service', 'departureDate', 'origin', 'originCode', 'destination', 'destinationCode'].map(field => record[field] || '')); };
   const validContext = original => !disposed && form.isConnected && canQuery() && desktop() && stamp() === original && getKey() === selectedKey;
-  if (!desktop()) { button.disabled = true; status.textContent = '飞常准查询目前需电脑浏览器和连接扩展，手机仍可手动填写或扫描导入。'; }
+  if (!desktop()) { button.disabled = true; status.textContent = '飞常准查询需电脑端连接扩展'; }
   function accept(index) {
     if (!validContext(candidateStamp) || !candidates[index]) { list.innerHTML = ''; status.textContent = '查询条件已改变，请重新查询'; return; }
     const previousRows = candidates, changes = flightCompletion(getRecord(), candidates[index]);

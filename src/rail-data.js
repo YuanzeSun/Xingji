@@ -4,7 +4,7 @@ import { railRouteMatches } from './rail-route-snapshot.js';
 import { loadRailLineNames } from './rail-line-names.js';
 import { railDetails } from './rail-lookup-model.js';
 import {resolvePlace} from './places.js';
-import { railText as clean, railService, railDate, railTime, railStation, isEmuModel, normalizeRailJourney, railJourneyRange, sameRailTimetable } from './rail-journey.js';
+import { railText as clean, railService, railTime, railStation, isEmuModel, normalizeRailJourney, railJourneyRange, sameRailTimetable } from './rail-journey.js';
 export const RAIL_DETAILS_SOURCE = 'https://api.railgo.dev/479755220e0';
 
 async function requestJSON(url, { fetcher, signal }) {
@@ -20,7 +20,7 @@ async function requestJSON(url, { fetcher, signal }) {
 export function matchingRailTrainsets(payload, query) {
   if (payload?.success !== true || !Array.isArray(payload.data) || payload.data.length > 10000) return null;
   const day = `${query.date.slice(0,4)}-${query.date.slice(4,6)}-${query.date.slice(6)}`;
-  const matches = payload.data.filter(row => row && calendarDate(railDate(row.runDate?.slice(0,10))) === day && railService(row.trainNum).split('/').includes(query.trainNum));
+  const matches = payload.data.filter(row => typeof row?.runDate === 'string' && row.runDate.slice(0, 10) === day && railService(row.trainNum).split('/').includes(query.trainNum));
   const candidates = new Map();
   for (const row of matches) {
     if (!Array.isArray(row.trainCode) || row.trainCode.length < 1 || row.trainCode.length > 2) continue;

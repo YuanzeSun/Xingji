@@ -1,11 +1,14 @@
-import {calendarDate,journeyDate,fullDate,sameDate} from './journey-date.js';
+import {calendarDate,storedJourneyDate,sameDate} from './journey-date.js';
 import { resolvePlace } from './places.js';
 
 export const railText = value => typeof value === 'string' && !/^(?:-+|null|undefined|未知|暂无|无|n\/?a)$/i.test(value.trim()) ? value.trim().slice(0, 1000) : '';
 export const railService = value => railText(value).normalize('NFKC').replace(/\s/g, '').toUpperCase();
 export const railStation = value => railText(value).replace(/\s|站$/g, '');
 export const isEmuModel = value => /^(?:CR(?:H|\d)|CJ\d|DJ\d)/i.test(railService(value));
-export const railDate = value => {try{return fullDate(value)?journeyDate(value):'';}catch{return '';}};
+const railDate = value => {
+  const date = storedJourneyDate(value);
+  return date?.year && date.dayOfYear ? date : '';
+};
 export const railTime = value => typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : '';
 const timestamp = value => typeof value === 'string' && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value)) ? value.slice(0, 40) : '';
 const object = value => value && typeof value === 'object' && !Array.isArray(value);

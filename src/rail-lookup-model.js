@@ -1,4 +1,4 @@
-import {calendarDate} from './journey-date.js';
+import {calendarDate,journeyDate} from './journey-date.js';
 import {isLookupValue} from './lookup-values.js';
 import { railRouteMatches, railRouteNeedsSave } from './rail-route-snapshot.js';
 import { validDate } from './model.js';
@@ -16,7 +16,7 @@ export function railQuery(record, startDate = record.departureDate) {
   startDate=calendarDate(startDate);
   if (record.type !== 'rail' || record.template === 'rail-refund-receipt') throw new Error('此查询用于火车行程');
   const number = service(record.service), trainNum = number.split('/')[0];
-  if (!/^(?:[GDCZTKYLS]\d{1,5}|\d{3,5})(?:\/(?:[GDCZTKYLS]?\d{1,5}))*$/.test(number)) throw new Error('请填写完整车次，例如 G1');
+  if (!/^(?:[GDCZTKYLS]\d{1,5}|\d{3,5})(?:\/(?:[GDCZTKYLS]?\d{1,5}))*$/.test(number)) throw new Error('车次无效');
   if (calendarDate(record.departureDate).length !== 10 || !validDate(calendarDate(record.departureDate))) throw new Error('请先选择完整的乘车日期');
   if (startDate?.length !== 10 || !validDate(startDate)) throw new Error('请选择完整的列车始发日期');
   const origin = endpoint(record, 'origin'), destination = endpoint(record, 'destination');
@@ -56,7 +56,11 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
       previous = instant;
     }
   }
-  const railJourney = normalizeRailJourney({ query:{ trainNum:query.trainNum, startDate, boardingDate:query.boardingDate, origin:query.origin, destination:query.destination }, queriedAt, stops });
+  const railJourney = normalizeRailJourney({
+    query: { trainNum: query.trainNum, startDate: journeyDate(startDate), boardingDate: journeyDate(query.boardingDate), origin: query.origin, destination: query.destination },
+    queriedAt,
+    stops: stops.map(stop => ({ ...stop, arrivalDate: journeyDate(stop.arrivalDate), departureDate: journeyDate(stop.departureDate) })),
+  });
   const model=parseRailGoModel(clean(row.car));
   return { query, railBureau:codeBureau || shortBureau, railModel:model.model, railPowerSupply:model.powerSupply, railRunner:clean(row.runner), railCarOwner:clean(row.carOwner), departureTime:stops[from].departureTime, arrivalDate:stops[to].arrivalDate, arrivalTime:stops[to].arrivalTime, railJourney };
 }
