@@ -8,11 +8,9 @@ export const hasRailQRCode = record => record.type === 'rail' && !!record.ticket
 
 export function renderTicketCode(record, x, y, width, height = width) {
   if (record.type !== 'rail') return '';
-  const generated = createRailTicketQR(record), code = record.ticketCode || generated;
+  const code = record.ticketCode || createRailTicketQR(record);
   if (!code) return '';
   const linear = isLinearTicketCode(code);
   if (linear !== (record.template === 'rail-red-barcode')) return '';
-  if (!generated) return renderCodeData(normalizeTicketCode(code), { x, y, width, height, stretch: linear, marker: 'ticket-code' });
-  const size = height - 18, center = x + width / 2, left = center - size / 2;
-  return `<g data-generated-rail-qr="" role="img" aria-label="自动生成的二维码"><rect x="${left}" y="${y}" width="${size}" height="${size}" fill="#fff" stroke="none"/>${renderCodeData(code, { x: left, y, width: size, height: size, marker: 'ticket-code' })}<text x="${center}" y="${y + height - 3}" text-anchor="middle" font-family="TicketSong,serif" font-size="15" fill="#182c26" stroke="none">自动生成</text></g>`;
+  return renderCodeData(normalizeTicketCode(code), { x, y, width, height, stretch: linear, marker: 'ticket-code' });
 }

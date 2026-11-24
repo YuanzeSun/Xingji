@@ -11,6 +11,7 @@ import { calendarDate } from '../src/journey-date.js';
 import { DEMO_RAIL_LINEAR_CODE, DEMO_RAIL_TICKET_CODE } from '../src/demo-code.js';
 import { createRailTicketQR, readRailTicketCode } from '../src/rail-ticket-qr.js';
 import { createRecord } from '../src/model.js';
+import { renderTicketCode } from '../src/ticket-code.js';
 import { ticketSVG } from '../src/tickets.js';
 import { prepareCloud } from './helpers/cloud.js';
 
@@ -40,7 +41,6 @@ test('a reconstructed railway QR round-trips the original fields through the pri
   assert.match(atob(generated.rawBytes), /^\d{144}$/);
   assert.deepEqual(readRailTicketCode(generated, 2025), { ...printed, identity: record.identity, passenger: record.passenger });
   assert.equal(record.ticketCode, '');
-  assert.doesNotMatch(ticketSVG({ ...record, ticketCode: DEMO_RAIL_TICKET_CODE }), /data-generated-rail-qr/);
   assert.doesNotMatch(ticketSVG({ ...record, saleCode: '' }), /data-ticket-code/);
   for (const changes of [{ identity: '1101011990****001X' }, { identity: 'E12345678' }, { ticketNumber: 'B000001' },
     { price: '553.25' }, { template: 'rail-red-barcode' }, { template: 'rail-refund-receipt' }]) {
@@ -53,8 +53,11 @@ test('a reconstructed railway QR round-trips the original fields through the pri
   const newYear = { ...record, departureDate: '2026-01-02', saleCode: '12345670001230A001234' };
   assert.equal(calendarDate(readRailTicketCode(createRailTicketQR(newYear), 2026).departureDate), '2026-01-02');
 
+  const renderedCode = renderTicketCode(record, 669, 335, 141);
+  assert.match(renderedCode, /data-ticket-code/);
+  assert.doesNotMatch(renderedCode, /<rect\b|自动生成/);
+  assert.equal(renderedCode, renderTicketCode({ ...record, ticketCode: generated }, 669, 335, 141));
   const svg = ticketSVG(record);
-  assert.match(svg, /data-generated-rail-qr/);
   await prepareCodeReader({ wasmBinary: await readFile('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm') });
   const image = new Resvg(svg, { fitTo: { mode: 'zoom', value: 2 }, font: { loadSystemFonts: false } }).render();
   const { codes, issues } = await rebuildCodeSymbols({ width: image.width, height: image.height, data: new Uint8ClampedArray(image.pixels) });
@@ -209,10 +212,10 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);
     assert.equal(photoEntry().querySelector('[data-rail-photo-lock]').hidden, true);
     assert.equal(receipt().disabled, false);
-    assert.ok(form().querySelector('#editor-preview [data-generated-rail-qr]'));
-    const beforeEdit = form().querySelector('#editor-preview [data-generated-rail-qr] path').getAttribute('d');
+    const codePath = () => form().querySelector('#editor-preview [data-ticket-code] path');
+    const beforeEdit = codePath().getAttribute('d');
     fill('service', 'G105');
-    assert.notEqual(form().querySelector('#editor-preview [data-generated-rail-qr] path').getAttribute('d'), beforeEdit);
+    assert.notEqual(codePath().getAttribute('d'), beforeEdit);
     submit();
     await waitFor(() => !form() && server.records()[0].service === 'G105');
     assert.equal(server.records()[0].ticketCode, '');

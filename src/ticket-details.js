@@ -40,7 +40,7 @@ export function ticketDetails(record) {
       ...populatedFields(record, ['railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'saleCode', 'issuer']),
       ...(record.template === 'rail-supplement' ? populatedFields(record, Object.keys(SUPPLEMENT_FIELDS)) : []),
       ['ticketMarks', describeMarks(record.ticketMarks)],
-      ['ticketCode', record.ticketCode ? '已收录原码数据' : createRailTicketQR(record) ? '自动生成的二维码' : '未收录'],
+      ['ticketCode', record.ticketCode ? '已收录原码数据' : createRailTicketQR(record) ? '票面有二维码' : '未收录'],
       ...railInvoiceDetails(record.railInvoice)
     );
   }
