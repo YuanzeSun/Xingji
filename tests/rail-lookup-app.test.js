@@ -25,7 +25,7 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
   const wait=async fn=>{for(let i=0;i<300;i++){if(await fn())return;await new Promise(done=>setTimeout(done,5));}assert.fail('Rail editor did not settle');};
   try{
     await import('../src/app.js');await wait(()=>document.querySelector('[data-action="view"][data-id="rail"]'));
-    document.querySelector('[data-action="view"][data-id="rail"]').click();await wait(()=>document.querySelector('.detail-grid'));
+    document.querySelector('[data-action="view"][data-id="rail"]').click();await wait(()=>document.querySelector('[data-ticket-detail=journey] .detail-grid'));
     await wait(()=>!document.querySelector('[data-action="edit"]').disabled);
     document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('.rail-lookup'));
     const preview=document.querySelector('#editor-preview').innerHTML;
@@ -55,10 +55,10 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     assert.equal(server.records()[0].railJourney.trainsets[0].id,'CR400BF-S-0001');
     assert.equal(server.records()[0].railTrainsets,'CR400BF-S-0001');
     assert.ok(server.records()[0].sources.some(source=>source.kind==='rail-lookup'));
-    document.querySelector('[data-action="view"][data-id="rail"]').click();await wait(()=>document.querySelector('.detail-grid'));
+    document.querySelector('[data-action="view"][data-id="rail"]').click();await wait(()=>document.querySelector('[data-ticket-detail=train] .detail-grid'));
     assert.equal(requests.length,2);
-    assert.match(document.querySelector('.detail-grid').textContent,/担当路局上海局.*车型CR400BF-S.*担当客运段上海客运段.*车辆归属单位上海动车段/);
-    assert.match(document.querySelector('.detail-grid').textContent,/车组编号CR400BF-S-0001/);
+    assert.match(document.querySelector('[data-ticket-detail=train] .detail-grid').textContent,/担当路局上海局.*车型CR400BF-S.*担当客运段上海客运段.*车辆归属单位上海动车段/);
+    assert.match(document.querySelector('[data-ticket-detail=train] .detail-grid').textContent,/车组编号CR400BF-S-0001/);
     document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('[name="railModel"]'));
     assert.equal(document.querySelector('[data-rail-trainsets]').value,'CR400BF-S-0001');
     currentModel='CR400AF';
@@ -71,7 +71,7 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     assert.equal(server.records()[0].railTrainsets,'CR400BF-S-0999');
     assert.equal(server.records()[0].fieldSources.railTrainsets,'manual');
     document.querySelector('[data-action="view"][data-id="rail"]').click();await wait(()=>document.querySelector('.detail-grid'));
-    assert.match(document.querySelector('.detail-grid').textContent,/车组编号CR400BF-S-0999/);
+    assert.match(document.querySelector('[data-ticket-detail=train] .detail-grid').textContent,/车组编号CR400BF-S-0999/);
     assert.equal(document.querySelector('.rail-stock-card'),null,'do not display the previous trainset metadata for a manually changed ID');
     document.querySelector('[data-action="close-modal"]').click();
     document.querySelector('[data-action="navigate"][data-page="statistics"]').click();await wait(()=>document.querySelector('[data-stat-ranking="rail-bureaus"]'));

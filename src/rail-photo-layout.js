@@ -2,7 +2,7 @@ import { ocrWords } from './ocr-layout.js';
 import { calendarDate } from './journey-date.js';
 import { readRailDateRow } from './scan-date.js';
 import { SEAT_CLASSES } from './seat-classes.js';
-import { printedRailNumber, railFareFromLine, railIssuerFromLine, railSeatFromLine, railStationFromRegion, trainCode } from './rail-ticket.js';
+import { printedRailNumber, railFareFromLine, railSeatFromLine, railStationFromRegion, trainCode } from './rail-ticket.js';
 
 function projection(line, anchor) {
   const x = line.centerX - anchor.centerX, y = line.centerY - anchor.centerY;
@@ -155,17 +155,6 @@ export function railSplitFieldsFromLayout(lines, printed) {
       }
     }
     if (labels.size === 1) fields.seatClass = labels.values().next().value;
-  }
-  if (!printed.issuer) {
-    const names = new Set();
-    for (const line of confident) {
-      if (!/^(?:[\p{Script=Han}\s]{1,14}[A-Z]{0,3}|[A-Z0-9\s]{17,25})$/u.test(line.text)) continue;
-      for (const row of joinedRailRows(confident, line)) {
-        const name = railIssuerFromLine(row);
-        if (name) names.add(name);
-      }
-    }
-    if (names.size === 1) fields.issuer = names.values().next().value;
   }
   const prices = new Set();
   for (const line of confident) {

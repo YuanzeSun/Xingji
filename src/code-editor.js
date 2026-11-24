@@ -183,7 +183,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     if (isLinearTicketCode(draft[field])) draft.template = 'rail-red-barcode';
     else if (draft.template === 'rail-red-barcode') draft.template = 'rail-red-qr';
     if (draft.template !== previousRecord.template) markFieldSources(draft, ['template'], 'barcode');
-    const values=code.railFields;
+    const values=code.railFields || (code.issuer ? { issuer: code.issuer } : null);
     const previousLocks=draft.lockedFields.filter(key=>railBarcodeFieldLocked(previousRecord,key));
     draft.lockedFields=draft.lockedFields.filter(key=>!previousLocks.includes(key));
     if(values){
@@ -221,8 +221,8 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     if (explicit) { status.textContent = '正在识别条码…'; error.textContent = ''; }
     try {
       const rebuild = await loadRebuilder(), result = await rebuild(file, draft.type, options);
-      const readRailTicketCode = !flight && source !== 'photo' && result.codes.some(code => !isLinearTicketCode(code.data))
-        ? (await import('./rail-ticket-qr.js')).readRailTicketCode : null;
+      const readRailTicketScan = !flight && result.codes.some(code => !isLinearTicketCode(code.data))
+        ? (await import('./rail-ticket-scan.js')).readRailTicketScan : null;
       if (disposed || request !== generation || !section.isConnected || !isCurrent()) return;
       loading = false;
       if (!result.codes.length) {
@@ -234,10 +234,11 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
         const read=flight&&readBoardingCode(code.data);
         return read?.legCount>1 ? read.legs.map((leg,index)=>({...code,legIndex:index,label:`第 ${index+1} 段 · ${leg.service} ${leg.origin} → ${leg.destination}`})) : [code];
       });
-      if(readRailTicketCode){
+      if(readRailTicketScan){
         const tickets=available.flatMap(code=>{
           if (isLinearTicketCode(code.data)) return [code];
-          const railFields=readRailTicketCode(code.data,journeyDate(draft.departureDate)?.year ?? undefined);
+          const railFields=readRailTicketScan(code.data,journeyDate(draft.departureDate)?.year ?? undefined);
+          if (source === 'photo') return [{ ...code, issuer: draft.template !== 'rail-supplement' && railFields?.issuer }];
           return railFields ? [{...code,railFields,label:railFields.service+' · '+railFields.ticketNumber}] : [];
         });
         if(tickets.length)available=tickets;

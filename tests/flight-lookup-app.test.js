@@ -54,7 +54,7 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.equal(saved.fieldSources.boardingTime,'variflight');
     assert.ok(saved.sources.some(source => source.kind === 'flight-lookup')); assert.ok(saved.sources.some(source => source.kind === 'manual'));
     assert.equal(JSON.stringify(saved).includes('fixture-key-only'), false);
-    document.querySelector('[data-action=\"navigate\"][data-page=\"archive\"]').click();await wait(()=>document.querySelector('[data-action=\"view\"]'));document.querySelector('[data-action=\"view\"]').click();await wait(()=>document.querySelector('.detail-grid'));
-    assert.match(document.querySelector('.detail-grid').textContent,/计划起飞时间08:45/);assert.match(document.querySelector('.detail-grid').textContent,/实际起飞时间09:15/);assert.doesNotMatch(document.querySelector('.detail-preview').textContent,/09:15|13:15/);
+    document.querySelector('[data-action=\"navigate\"][data-page=\"archive\"]').click();await wait(()=>document.querySelector('[data-action=\"view\"]'));document.querySelector('[data-action=\"view\"]').click();await wait(()=>document.querySelector('[data-ticket-detail=journey] .detail-grid'));
+    assert.match(document.querySelector('[data-ticket-detail=journey] .detail-grid').textContent,/计划起飞时间08:45/);assert.match(document.querySelector('[data-ticket-detail=actual-times] .detail-grid').textContent,/实际起飞时间09:15/);assert.doesNotMatch(document.querySelector('.detail-preview').textContent,/09:15|13:15/);
   } finally { window.dispatchEvent(new window.Event('offline')); dom.window.close(); }
 });

@@ -7,7 +7,7 @@ import { lookupRailDetails, matchingRailTrainsets } from '../src/rail-data.js';
 import { railQuery, railDetails, railCompletion } from '../src/rail-lookup-model.js';
 import { normalizeRailJourney } from '../src/rail-journey.js';
 import {markManualFields,applyLookupValues} from '../src/lookup-values.js';
-import { railJourneyMarkup, bindRailJourney } from '../src/rail-journey-ui.js';
+import { railJourneyMarkup } from '../src/rail-journey-ui.js';
 import { railLookupMarkup, bindRailLookup } from '../src/rail-lookup.js';
 import { ticketSVG } from '../src/tickets.js';
 
@@ -186,7 +186,10 @@ test('snapshot normalization limits remote images and rejects a mismatched board
   const record=await completed(),snapshot=structuredClone(record.railJourney);
   snapshot.coaches.cars.push({name:'恶意图片',url:'https://example.com/track.png',number:'04'});
   snapshot.coaches.picture='javascript:alert(1)';
-  const cleaned=normalizeRailJourney(snapshot);assert.equal(cleaned.coaches.cars.length,2);assert.equal(Object.hasOwn(cleaned.coaches,'picture'),false);assert.equal(Object.hasOwn(cleaned.coaches,'interiors'),false);
+  const cleaned=normalizeRailJourney(snapshot);
+  assert.equal(cleaned.coaches.cars.length,3);
+  assert.equal(cleaned.coaches.cars[2].url,'');
+  assert.equal(Object.hasOwn(cleaned.coaches,'picture'),false);assert.equal(Object.hasOwn(cleaned.coaches,'interiors'),false);
   snapshot.query.boardingDate='2026-11-17';assert.throws(()=>normalizeRailJourney(snapshot),/年份须为/);
   snapshot.query.boardingDate=journeyDate('2026-11-18');assert.throws(()=>normalizeRailJourney(snapshot),/乘车区间/);
 });
@@ -203,19 +206,30 @@ test('unwanted carriage facilities and trainset fields are dropped from saved da
   assert.match(railJourneyMarkup(saved),/餐车/);
 });
 
-test('detail view highlights the ticket carriage, switches diagrams and links only confirmed same-trainset encounters',async()=>{
+test('detail view lists the formation but loads only the booked carriage diagram and confirmed trainset encounters',async()=>{
   const record=await completed();
   const previousDay=date=>date ? journeyDate(new Date(Date.parse(calendarDate(date)+'T00:00:00Z')-86400000).toISOString().slice(0,10)) : '';
   const stops=record.railJourney.stops.map(stop=>({...stop,arrivalDate:previousDay(stop.arrivalDate),departureDate:previousDay(stop.departureDate)}));
   const other=createRecord({...record,id:'another',departureDate:'2026-11-16',railJourney:{...record.railJourney,query:{...record.railJourney.query,boardingDate:journeyDate('2026-11-16')},stops}});
   const unrelated=createRecord({...other,id:'unrelated',railTrainsets:'CR400BF-9999',railJourney:{...other.railJourney,trainsets:[{id:'CR400BF-9999'}]}});
-  const dom=new JSDOM(railJourneyMarkup(record,[record,other,unrelated])),root=dom.window.document.body,cleanup=bindRailJourney(root,()=>record);
-  assert.equal(root.querySelector('.ticket-carriage').getAttribute('aria-pressed'),'true');
-  assert.match(root.querySelector('[data-rail-coach-image]').alt,/03车/);
+  const dom=new JSDOM(railJourneyMarkup(record,[record,other,unrelated])),root=dom.window.document.body;
+  assert.equal(root.querySelectorAll('.rail-coach').length,2);
+  assert.match(root.querySelector('.ticket-carriage').textContent,/03车/);
+  assert.equal(root.querySelector('.rail-coaches button'),null);
+  assert.deepEqual([...root.querySelectorAll('[data-rail-coach-image]')].map(image=>image.src),[picture+'?three']);
+  const unassigned=new JSDOM(railJourneyMarkup({...record,carriage:''}));
+  assert.equal(unassigned.window.document.querySelectorAll('.rail-coach').length,2);
+  assert.equal(unassigned.window.document.querySelector('[data-rail-coach-image]'),null);
+  unassigned.window.close();
+  const withoutDiagram=structuredClone(record);
+  withoutDiagram.railJourney.coaches.cars[1].url='';
+  const missingPicture=new JSDOM(railJourneyMarkup(withoutDiagram));
+  assert.match(missingPicture.window.document.querySelector('.ticket-carriage').textContent,/03车/);
+  assert.equal(missingPicture.window.document.querySelector('[data-rail-coach-image]'),null);
+  missingPicture.window.close();
   assert.doesNotMatch(root.textContent,/查看列车编组原图|车厢与设施照片/);
-  root.querySelector('[data-rail-coach="0"]').click();assert.match(root.querySelector('[data-rail-coach-image]').alt,/02车/);
   assert.ok(root.querySelector('[data-action="view"][data-id="another"]'));assert.equal(root.querySelector('[data-id="unrelated"]'),null);
-  assert.doesNotMatch(root.textContent,/NKH|AOH|查看图表数据/);cleanup();dom.window.close();
+  assert.doesNotMatch(root.textContent,/NKH|AOH|查看图表数据/);dom.window.close();
 });
 
 test('lookup becomes available after the four necessary fields are complete without sending requests on input',()=>{

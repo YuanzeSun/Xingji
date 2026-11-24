@@ -53,8 +53,8 @@ test('the editor saves refund fees with matching validation and restricts transp
     document.querySelector('[data-action="navigate"][data-page="archive"]').click();
     await wait(()=>document.querySelector(`[data-action="view"][data-id="${refund.id}"]`));
     document.querySelector(`[data-action="view"][data-id="${refund.id}"]`).click();
-    await wait(()=>document.querySelector('.detail-grid'));
-    assert.match(document.querySelector('.detail-grid').textContent,/退票费（元）/);
+    await wait(()=>document.querySelector('[data-ticket-detail=booking] .detail-grid'));
+    assert.match(document.querySelector('[data-ticket-detail=booking] .detail-grid').textContent,/退票费（元）/);
     document.querySelector(`[data-action="edit"][data-id="${refund.id}"]`).click();
     await wait(()=>document.querySelector('#editor-form'));
     assert.equal(document.querySelector('[name="type"]').disabled,true);

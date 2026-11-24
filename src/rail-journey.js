@@ -56,8 +56,10 @@ export function normalizeRailJourney(value) {
   }));
   let coaches = '';
   if (object(value.coaches) && timestamp(value.coaches.queriedAt)) {
-    const images = list => (Array.isArray(list) ? list : []).slice(0, 32).filter(item => object(item) && picture(item.url)).map(item => ({ name:railText(item.name), url:picture(item.url), number:/^\d{1,2}$/.test(item.number) ? item.number : '' }));
-    coaches = { ...texts(value.coaches, ['model','code','type']), queriedAt:timestamp(value.coaches.queriedAt), cars:images(value.coaches.cars), info:(Array.isArray(value.coaches.info) ? value.coaches.info : []).slice(0, 20).filter(item => object(item) && railText(item.name) && !/婴儿|护理台|办公席|无障碍|卫生间|商务座/.test(railText(item.name)) && railText(item.value)).map(item => ({ name:railText(item.name), value:railText(item.value) })) };
+    const cars = (Array.isArray(value.coaches.cars) ? value.coaches.cars : []).slice(0, 32)
+      .filter(object).map(item => ({ name:railText(item.name), url:picture(item.url), number:/^\d{1,2}$/.test(item.number) ? item.number : '' }))
+      .filter(car => car.name || car.number);
+    coaches = { ...texts(value.coaches, ['model','code','type']), queriedAt:timestamp(value.coaches.queriedAt), cars, info:(Array.isArray(value.coaches.info) ? value.coaches.info : []).slice(0, 20).filter(item => object(item) && railText(item.name) && !/婴儿|护理台|办公席|无障碍|卫生间|商务座/.test(railText(item.name)) && railText(item.value)).map(item => ({ name:railText(item.name), value:railText(item.value) })) };
   }
   const access=(Array.isArray(value.access)?value.access:[]).slice(0,1).filter(item=>object(item)&&railStation(item.station)===query.origin).map(item=>({station:railStation(item.station),date:railDate(item.date),platform:railText(item.platform),gates:(Array.isArray(item.gates)?item.gates:[]).slice(0,20).map(railText).filter(Boolean)}));
   return { query, queriedAt:timestamp(value.queriedAt), stops, distanceQueriedAt:timestamp(value.distanceQueriedAt), trainsets, coupling:value.coupling === true, coaches,access };

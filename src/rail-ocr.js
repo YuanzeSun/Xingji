@@ -1,6 +1,6 @@
 import {calendarDate} from './journey-date.js';
-import { railTrainRectangle, railFareRectangle, parsePrintedRailTicket, railStationFromRegion, printedRailNumber, railSeatFromLine, railIssuerFromLine, railFareFromLine } from './rail-ticket.js';
-import { isOldRedTemplate, printedRailTemplate } from './rail-template.js';
+import { railTrainRectangle, railFareRectangle, parsePrintedRailTicket, railStationFromRegion, printedRailNumber, railSeatFromLine, railFareFromLine } from './rail-ticket.js';
+import { printedRailTemplate } from './rail-template.js';
 import { marksFromRailRegion } from './ticket-marks.js';
 
 export async function refineRailFields(worker, image, data, paperColor) {
@@ -28,12 +28,6 @@ export async function refineRailFields(worker, image, data, paperColor) {
       if (confidence >= 58 && rows.length === 1 && (!record.carriage || record.carriage === rows[0].carriage)) {
         Object.assign(fields, rows[0]);
       }
-    }
-    if (record && !record.issuer) {
-      const { text, confidence } = isOldRedTemplate(record.template)
-        ? await read(.57, .01, .41, .16) : await read(.41, .84, .55, .15);
-      const names = new Set(text.split('\n').map(railIssuerFromLine).filter(Boolean));
-      if (confidence >= 58 && names.size === 1) fields.issuer = names.values().next().value;
     }
     if (!record?.ticketMarks?.length) {
       const { text } = await read(.37, .355, .26, .23);

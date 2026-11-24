@@ -2,7 +2,7 @@ import {calendarDate} from './journey-date.js';
 import { escape as e } from './html.js';
 import { railQuery, railCompletion } from './rail-lookup-model.js';
 import { lookupRailDetails, RAIL_DETAILS_SOURCE } from './rail-data.js';
-import { railJourneyMarkup, railReferenceNotice, bindRailJourney } from './rail-journey-ui.js';
+import { railJourneyMarkup, railReferenceNotice } from './rail-journey-ui.js';
 import { railJourneyMatches } from './rail-journey.js';
 import {fieldSourceBadge,RAILGO_REFERENCE_SOURCE} from './field-sources.js';
 
@@ -85,7 +85,6 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
     }
     refresh();renderResult();
   };
-  const cleanupPreview=bindRailJourney(preview,getRecord);
   button.addEventListener('click',query); form.addEventListener('input',input); form.addEventListener('change',input); refresh();renderResult();
   const sameTime = automaticRecord?.departureTime ? automaticRecord.departureTime === getRecord().departureTime : !!(scannedRailQR || railPointsTrip);
   if (!button.disabled && sameTime) {
@@ -99,5 +98,5 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
       onAutomaticPending?.(pending);
     }
   }
-  return ()=>{disposed=true;request?.abort();cleanupPreview();button.removeEventListener('click',query);form.removeEventListener('input',input);form.removeEventListener('change',input);};
+  return ()=>{disposed=true;request?.abort();button.removeEventListener('click',query);form.removeEventListener('input',input);form.removeEventListener('change',input);};
 }

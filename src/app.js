@@ -4,7 +4,7 @@ import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
-import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railImportFieldLocked,refreshFieldSources,RAILGO_REFERENCE_SOURCE} from './field-sources.js';
+import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railImportFieldLocked,refreshFieldSources} from './field-sources.js';
 import { bindIdentityInput, maskIdentity, printedIdentityHint } from './identity.js';
 import {markManualFields,applyLookupValues,lookupContext,clearLookupValues} from './lookup-values.js';
 import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } from './arithmetic-confirm.js';
@@ -27,7 +27,7 @@ import { bindArchivePair, backUpToGitHub, assertLinkTargets, hasCloudLink, paire
 import { mapFlightResult, readRailInvoicePDF } from './importers.js';
 import { railInvoiceDetails } from './rail-invoice.js';
 import { ticketSVG, exportSVG, exportPNG } from './tickets.js';
-import { ticketDetails } from './ticket-details.js';
+import { ticketDetailsMarkup } from './ticket-details.js';
 import { escape as e, selectOptions } from './html.js';
 import { demoRecords } from './demo.js';
 import { MARK_SHAPES, describeMarks } from './ticket-marks.js';
@@ -41,7 +41,7 @@ import { bindDatePickers,dateControl,ticketDateField,bindTicketDates,readTicketD
 import { flightLookupMarkup, bindFlightLookup } from './flight-lookup.js';
 import { railLookupMarkup, bindRailLookup, railTrainsetField } from './rail-lookup.js';
 import { RAIL_POINTS_PAGE, railPointsRange, readRailPoints, railPointsRecords } from './rail-points.js';
-import { railJourneyMarkup, railReferenceNotice, bindRailJourney } from './rail-journey-ui.js';
+import { railJourneyMarkup, railReferenceNotice } from './rail-journey-ui.js';
 import { railJourneyMatches } from './rail-journey.js';
 import { openRailCamera } from './rail-camera.js';
 import { parseScanText, railPhotoChanges } from './scan-engine.js';
@@ -99,7 +99,7 @@ let mapCleanup = null, mapEpoch = 0;
 let statisticsCleanup = null;
 let flightLookupCleanup = null, railLookupCleanup = null;
 const statisticsView = {};
-let railRouteCleanup = null, railJourneyCleanup = null, flightTrackCleanup = null;
+let railRouteCleanup = null, flightTrackCleanup = null;
 let codeCleanup = null, railCameraCleanup = null, exportCleanup = null, searchTimer, renderedRecords = '', renderedSettings = '', composing = false, deferredRender = false;
 let editor = null, syncTimer, syncPromise, syncAbort, authEpoch = 0, syncFailures = 0, localFileURL = null, installPrompt, modalFocus;
 const root = document.querySelector('#app');
@@ -830,7 +830,6 @@ function disposeModalBindings() {
   flightLookupCleanup?.(); flightLookupCleanup = null;
   railLookupCleanup?.(); railLookupCleanup = null;
   railRouteCleanup?.(); railRouteCleanup = null;
-  railJourneyCleanup?.(); railJourneyCleanup = null;
   flightTrackCleanup?.(); flightTrackCleanup = null;
   exportCleanup?.(); exportCleanup = null;
   stopRailCamera();
@@ -936,18 +935,44 @@ function bindFlightTrackDetail(container, record) {
   });
 }
 function viewRecord(id) {
-  const r = findRecord(id); if (!r) return;
+  const records = live();
+  const record = records.find(item => item.id === id);
+  if (!record) return;
   const demo = id.startsWith('demo-');
-  const details = ticketDetails(r);
-  const reference = railReferenceNotice(r);
-  openModal(modalHead(`<span class="heading-service">${e(r.service || (r.flightStatus === 'open' ? 'OPEN' : '班次待补充'))}</span><span class="heading-route">${e(r.origin || '出发地')} <span class="muted">→</span> ${e(r.destination || '到达地')}</span>`, demo ? '虚构示例' : '') + `<div class="detail-preview">${ticketSVG(r)}</div><div class="detail-body">${reference ? `<div class="code-consistency" data-rail-reference>${reference}</div>` : ''}<dl class="detail-grid">${details.map(([key, value]) => `<div><dt>${e(key === 'price' && isRefundReceipt(r) ? '退票费（元）' : key === 'seat' && r.type === 'flight' ? '座位 / 舱位' : key === 'gate' && r.type === 'flight' ? '登机口' : ticketFieldLabel(key,r.type,labels[key]))}${r.fieldSources?.[key]===RAILGO_REFERENCE_SOURCE ? fieldSourceBadge(key,r) : ''}</dt><dd>${e(value || '未收录')}</dd></div>`).join('')}</dl>${boardingJourneyMarkup(r,live())}${railJourneyMarkup(r,live())}${r.type === 'rail' ? '<section class="rail-route" data-rail-route hidden aria-label="铁路线路"></section>' : r.flightTrack ? '<section class="rail-route flight-track" data-flight-track aria-label="飞行航迹"></section>' : ''}<details class="source-details"><summary>数据来源 · ${r.sources.length} 条</summary>${r.sources.map(s => `<p>${e(s.label)}<span>${e(s.at.slice(0, 10))}</span></p>`).join('') || '<p>录入</p>'}</details></div><div class="modal-footer"><button class="button secondary" data-action="export-png" data-id="${e(id)}">${icon('download')}导出图片</button><button class="button secondary" data-action="export-svg" data-id="${e(id)}">SVG</button><div class="spacer"></div>${!demo ? `<button class="icon-button danger" data-action="delete" data-id="${e(id)}" aria-label="删除票据">${icon('trash')}</button><button class="button primary" data-action="edit" data-id="${e(id)}">${icon('edit')}编辑票据</button>` : ''}</div>`);
-  modalRoot.querySelector('dialog').classList.add('ticket-detail-modal');
-  const journeyContainer=modalRoot.querySelector('.rail-journey');
-  if(journeyContainer)railJourneyCleanup=bindRailJourney(journeyContainer,()=>r);
-  const routeContainer = modalRoot.querySelector('[data-rail-route]');
-  if (routeContainer && isJourneyRecord(r)) import('./rail-route-map.js').then(({ mountRailRoute }) => { if (routeContainer.isConnected) railRouteCleanup = mountRailRoute(routeContainer, r); }).catch(() => {});
-  const flightTrackContainer = modalRoot.querySelector('[data-flight-track]');
-  if (flightTrackContainer) bindFlightTrackDetail(flightTrackContainer, r);
+  const reference = railReferenceNotice(record);
+  const preview = ticketSVG(record);
+  const services = record.type === 'rail'
+    ? railJourneyMarkup(record, records) + (isJourneyRecord(record) ? '<section class="rail-route" data-rail-route hidden aria-label="铁路线路"></section>' : '')
+    : boardingJourneyMarkup(record, records) + (record.flightTrack ? '<section class="rail-route flight-track" data-flight-track aria-label="飞行航迹"></section>' : '');
+  const sources = record.sources.length ? `<details class="source-details">
+    <summary>数据来源 · ${record.sources.length} 条</summary>
+    ${record.sources.map(source => `<p>${e(source.label)}<span>${e(source.at.slice(0, 10))}</span></p>`).join('')}
+  </details>` : '';
+  const service = record.service || (record.flightStatus === 'open' ? 'OPEN' : '班次待补充');
+  const heading = `<span class="heading-service">${e(service)}</span><span class="heading-route">${e(record.origin || '出发地')} <span class="muted">→</span> ${e(record.destination || '到达地')}</span>`;
+  openModal(modalHead(heading, demo ? '虚构示例' : '') + `
+    <div class="detail-preview">${preview}</div>
+    <div class="detail-body">
+      ${reference ? `<div class="code-consistency" data-rail-reference>${reference}</div>` : ''}
+      ${ticketDetailsMarkup(record, labels, preview.includes('data-ticket-code='))}
+      ${services}
+      ${sources}
+    </div>
+    <div class="modal-footer">
+      <button class="button secondary" data-action="export-png" data-id="${e(id)}">${icon('download')}导出图片</button>
+      <button class="button secondary" data-action="export-svg" data-id="${e(id)}">SVG</button>
+      <div class="spacer"></div>
+      ${demo ? '' : `<button class="icon-button danger" data-action="delete" data-id="${e(id)}" aria-label="删除票据">${icon('trash')}</button>
+        <button class="button primary" data-action="edit" data-id="${e(id)}">${icon('edit')}编辑票据</button>`}
+    </div>`);
+  const dialog = modalRoot.querySelector('dialog');
+  dialog.classList.add('ticket-detail-modal');
+  const route = dialog.querySelector('[data-rail-route]');
+  if (route) import('./rail-route-map.js').then(({ mountRailRoute }) => {
+    if (route.isConnected) railRouteCleanup = mountRailRoute(route, record);
+  }).catch(() => {});
+  const track = dialog.querySelector('[data-flight-track]');
+  if (track) bindFlightTrackDetail(track, record);
 }
 function field(key, r, options = {}) {
   if (key === 'seatClass') return seatClassField(r);

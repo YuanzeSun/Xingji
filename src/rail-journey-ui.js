@@ -5,7 +5,7 @@ import { isJourneyRecord } from './record-kind.js';
 
 const source = (url, text, date) => `<p class="rail-journey-source"><a href="${url}" target="_blank" rel="noopener noreferrer">${text}：RailGo</a>${date ? ` · 查询于 ${e(new Date(date).toLocaleDateString('zh-CN'))}` : ''}</p>`;
 const facts = entries => `<dl class="rail-facts">${entries.filter(([,value])=>value).map(([name,value])=>`<div${String(value).length>35 ? ' class="rail-fact-wide"' : ''}><dt>${e(name)}</dt><dd>${e(value)}</dd></div>`).join('')}</dl>`;
-const carriageNumber = value => String(Number(String(value || '').match(/\d+/)?.[0] || 0));
+const carriageNumber = value => Number(/^\s*(\d+)(?:车厢?)?\s*$/.exec(value || '')?.[1]) || 0;
 const localToday = () => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`; };
 
 export function railReferenceNotice(record) {
@@ -33,27 +33,28 @@ function stopsMarkup(record,journey) {
 
 function coachesMarkup(record, coaches) {
   if (!coaches || (!coaches.cars.length && !coaches.info.length)) return '';
-  const selected = coaches.cars.find(car=>car.number && carriageNumber(car.number)===carriageNumber(record.carriage)) || coaches.cars[0];
-  return `<section class="rail-journey-section"><div class="rail-section-heading"><h3>编组与车厢</h3><span>当前编组参考${coaches.model ? ' · '+e(coaches.model) : ''}</span></div>${coaches.cars.length ? `<div class="rail-coaches" tabindex="0" role="group" aria-label="当前列车车厢">${coaches.cars.map((car,index)=>`<button type="button" data-rail-coach="${index}" aria-pressed="${car===selected}" class="rail-coach${car.number && carriageNumber(car.number)===carriageNumber(record.carriage) ? ' ticket-carriage' : ''}"><strong>${e(car.number ? car.number+'车' : car.name)}</strong><span>${e(car.number ? car.name.replace(/^\d{1,2}车\s*/,'') : '')}</span>${car.number && carriageNumber(car.number)===carriageNumber(record.carriage) ? '<small>你的车厢</small>' : ''}</button>`).join('')}</div><figure class="rail-coach-picture"><img data-rail-coach-image src="${e(selected.url)}" alt="${e(selected.name)}" loading="lazy" referrerpolicy="no-referrer"/><figcaption data-rail-coach-caption>${e(selected.name)}</figcaption></figure>` : ''}${facts(coaches.info.map(item=>[item.name,item.value]))}${source('https://api.railgo.dev/479766603e0','当前车厢资料',coaches.queriedAt)}</section>`;
+  const number = carriageNumber(record.carriage);
+  const matches = number ? coaches.cars.filter(car => carriageNumber(car.number) === number) : [];
+  const selected = matches.length === 1 ? matches[0] : null;
+  const formation = coaches.cars.length ? `<div class="rail-coaches" tabindex="0" role="list" aria-label="当前列车车厢">${coaches.cars.map(car => `
+    <div role="listitem" class="rail-coach${car === selected ? ' ticket-carriage' : ''}">
+      <strong>${e(car.number ? car.number + '车' : car.name)}</strong>
+      ${car.number ? `<span>${e(car.name.replace(/^\d{1,2}车\s*/, ''))}</span>` : ''}
+      ${car === selected ? '<small>你的车厢</small>' : ''}
+    </div>`).join('')}</div>` : '';
+  const picture = selected?.url ? `<figure class="rail-coach-picture">
+    <img data-rail-coach-image src="${e(selected.url)}" alt="${e(selected.name)}" loading="lazy" referrerpolicy="no-referrer" />
+    <figcaption>${e(selected.name)}</figcaption>
+  </figure>` : '';
+  return `<section class="rail-journey-section">
+    <div class="rail-section-heading"><h3>编组与车厢</h3><span>当前编组参考${coaches.model ? ' · ' + e(coaches.model) : ''}</span></div>
+    ${formation}${picture}${facts(coaches.info.map(item => [item.name, item.value]))}
+    ${source('https://api.railgo.dev/479766603e0', '当前车厢资料', coaches.queriedAt)}
+  </section>`;
 }
 
 export function railJourneyMarkup(record, records = []) {
   if (!railJourneyMatches(record)) return '';
   const journey = record.railJourney;
   return `<div class="rail-journey">${stopsMarkup(record,journey)}${stockMarkup(record,journey,records)}${coachesMarkup(record,journey.coaches)}</div>`;
-}
-
-export function bindRailJourney(container, getRecord) {
-  const click = event => {
-    const button = event.target.closest('[data-rail-coach]');
-    if (!button || !container.contains(button)) return;
-    const record = getRecord(), car = railJourneyMatches(record) && record.railJourney.coaches?.cars[Number(button.dataset.railCoach)];
-    if (!car) return;
-    const section = button.closest('.rail-journey-section');
-    section.querySelectorAll('[data-rail-coach]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
-    const image = section.querySelector('[data-rail-coach-image]'); image.src=car.url; image.alt=car.name;
-    section.querySelector('[data-rail-coach-caption]').textContent=car.name;
-  };
-  container.addEventListener('click',click);
-  return ()=>container.removeEventListener('click',click);
 }

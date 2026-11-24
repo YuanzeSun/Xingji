@@ -115,7 +115,7 @@ test('printed rail tickets remain one rail record when serial numbers resemble f
   assert.equal(records[0].ticketMarks[0].text,'网');
 });
 
-test('freestanding seat rows and the printed sales station are independent of the departure row', () => {
+test('freestanding seat rows are read without using the printed sales station', () => {
   const cases = [
     ['08车 07B号', '08', '07B'],
     ['03+08A', '03', '08A'],
@@ -126,14 +126,14 @@ test('freestanding seat rows and the printed sales station are independent of th
   for (const [row, carriage, seat] of cases) {
     const raw = picture().replace('03车15F号', '') + '\n' + row + '\n10010300351001S042775 北京南站售';
     const [ticket] = parseScanText(raw);
-    assert.deepEqual([ticket.carriage, ticket.seat, ticket.issuer], [carriage, seat, '北京南'], row);
+    assert.deepEqual([ticket.carriage, ticket.seat, ticket.issuer], [carriage, seat, ''], row);
   }
   const bare = picture().replace('03车15F号', '');
   const [ambiguous] = parseScanText(bare + '\n07417D号\n10010300351001S042775 JM\n退票改签时须交回车站');
   assert.deepEqual([ambiguous.carriage, ambiguous.seat, ambiguous.issuer], ['', '', '']);
   assert.deepEqual(railSeatFromLine('07417D号', { fadedCarriage: true }), { carriage: '07', seat: '17D' });
   assert.equal(railSeatFromLine('074177号', { fadedCarriage: true }), null);
-  assert.equal(parseScanText(bare + '\n海口东售')[0].issuer, '海口东');
+  assert.equal(parseScanText(bare + '\n海口东售')[0].issuer, '');
 });
 
 test('retaking a photo replaces an OCR standing seat while preserving a manually chosen carriage', () => {

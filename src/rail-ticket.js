@@ -108,14 +108,6 @@ export function railFareFromLine(text, { regional = false } = {}) {
   return yuan.replace(/O/gi, '0') + (fraction ? '.' + fraction.replace(/O/gi, '0') : '');
 }
 
-export function railIssuerFromLine(text) {
-  const line = text.normalize('NFKC').replace(/\s/g, '');
-  const match = line.match(/^(?:售票站:|[A-Z0-9]{17,25})?(\p{Script=Han}{1,14}[A-Z]{0,3}?)站?(?:售|\(售\))$/u);
-  if (!match) return '';
-  const name = match[1].replace(/站$/, '');
-  return stationNames.has(name) || /^\p{Script=Han}{1,2}[A-Z]{1,3}$/u.test(name) ? name : '';
-}
-
 function uniqueField(values) {
   const unique = new Set(values.filter(Boolean));
   return unique.size === 1 ? unique.values().next().value : '';
@@ -216,7 +208,6 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
     .map(seat => [[seat.carriage, seat.seat, seat.railStanding].join('/'), seat]));
   const seat = railSeatFromLine(seatRow.replace(/^\s*[开開]\s*/, '')) ||
     (seatRows.size === 1 ? seatRows.values().next().value : {});
-  const issuer = uniqueField(lines.map(railIssuerFromLine));
   const price = uniqueField(lines.map(line => railFareFromLine(line)));
   const ticketNumber = printedRailNumber(raw.split('\n').slice(0, 3).join('\n'));
   if (!pair.length && !service && !(printed && (exactDate || date) && (price || seat.carriage || ticketNumber))) return false;
@@ -261,7 +252,7 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
     carriage: seat.carriage, seat: seat.seat, seatClass, railStanding: seat.railStanding || /无\s*座|站票/.test(seatRow) || /(?:席别|座位)[：:\s]*无\s*座|(?:商务座|一等座|二等座|硬座|软座)[：:\s]*无\s*座|^\s*无\s*座\s*$/m.test(compact), price, passenger,
     ticketNumber,
     saleCode: printedRailNumber(raw.split('\n').filter(line => line.trim()).slice(-3).join('\n'), true),
-    issuer, ...supplementValues,
+    ...supplementValues,
     gate: raw.match(/检票(?:口)?\s*[:：]?\s*([A-Z]?\d+[A-Z]?)/)?.[1] || '', ticketMarks: marksFromText(raw),
     sources: [{ kind: 'scan', label }], provenance: 'reconstruction' });
   return record;

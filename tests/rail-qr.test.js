@@ -7,9 +7,11 @@ import { indexedDB } from 'fake-indexeddb';
 import { prepareZXingModule, writeBarcode } from 'zxing-wasm';
 import { prepareCodeReader, rebuildCodeSymbols } from '../src/code-reader.js';
 import { symbolImage } from '../src/barcode-symbols.js';
+import { bindTicketCodeEditor, ticketCodeEditor } from '../src/code-editor.js';
 import { calendarDate } from '../src/journey-date.js';
 import { DEMO_RAIL_LINEAR_CODE, DEMO_RAIL_TICKET_CODE } from '../src/demo-code.js';
 import { createRailTicketQR, readRailTicketCode } from '../src/rail-ticket-qr.js';
+import { readRailTicketScan } from '../src/rail-ticket-scan.js';
 import { createRecord } from '../src/model.js';
 import { renderTicketCode } from '../src/ticket-code.js';
 import { ticketSVG } from '../src/tickets.js';
@@ -19,6 +21,10 @@ import { prepareCloud } from './helpers/cloud.js';
 const seated = atob(DEMO_RAIL_TICKET_CODE.rawBytes);
 const standing = '030012341064623109317508991203631625372805544524257810305361407165728357739203412400109157259042921432129118396822614114445042278628926037766000';
 const qr = payload => ({ format: 'QRCode', rawBytes: btoa(payload) });
+const withOffice = office => {
+  const record = readRailTicketCode(qr(seated), 2025);
+  return createRailTicketQR(createRecord({ ...record, saleCode: office + record.saleCode.slice(5) }));
+};
 
 test('rail QR decoding recovers both 144-digit variants and rejects unrelated payloads', () => {
   const seat = readRailTicketCode(qr(seated), 2026);
@@ -66,10 +72,36 @@ test('a reconstructed railway QR round-trips the original fields through the pri
   assert.equal(codes[0].data.rawBytes, generated.rawBytes);
 });
 
+test('the rail scanner resolves a known issuing office without guessing from the departure station', () => {
+  const fields = readRailTicketScan(withOffice('23693'), 2025);
+  assert.deepEqual([fields.issuer, fields.origin], ['广州', '北京南']);
+  assert.equal(readRailTicketScan(withOffice('00000'), 2025).issuer, undefined);
+});
+
+test('a scanned rail photo fills the issuer from its QR without replacing the OCR itinerary', { timeout: 3000 }, async t => {
+  const record = createRecord({ service: 'C2021', origin: '北京南', destination: '天津', departureDate: '2025-11-24' });
+  const dom = new JSDOM(`<form>${ticketCodeEditor(record, { fromScan: true })}<input name="issuer"></form>`);
+  t.after(() => dom.window.close());
+  const form = dom.window.document.querySelector('form');
+  const added = await new Promise(resolve => {
+    const dispose = bindTicketCodeEditor(form, record, resolve, {
+      referenceURL: 'data:image/png;base64,AA==', autoRead: true,
+      loadRebuilder: async () => async () => ({ codes: [{ format: 'QRCode', data: withOffice('23693') }], issues: [] })
+    });
+    t.after(dispose);
+  });
+  assert.equal(added.railFields, undefined);
+  assert.equal(record.service, 'C2021');
+  assert.equal(record.destination, '天津');
+  assert.equal(form.elements.issuer.value, '广州');
+  assert.equal(record.fieldSources.issuer, 'barcode');
+});
+
 test('rail entry locks QR fields and keeps Code128 archival capture separate from field recognition', async () => {
   await prepareCodeReader({ wasmBinary: await readFile('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm') });
   await prepareZXingModule({ overrides: { wasmBinary: await readFile('node_modules/zxing-wasm/dist/full/zxing_full.wasm') }, fireImmediately: true });
-  const fixture = await writeBarcode(seated, { format: 'QRCode', addQuietZones: true });
+  const originalCode = withOffice('23693');
+  const fixture = await writeBarcode(atob(originalCode.rawBytes), { format: 'QRCode', addQuietZones: true });
   let pixels = symbolImage(fixture.symbol);
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>',
     { url: 'http://localhost:4173/#archive' });
@@ -180,7 +212,7 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     await waitFor(() => field('railModel').value === 'CR400BF-S');
     assert.deepEqual(railQueries, [[['trainNum', 'G103'], ['date', '20251124']]]);
     assert.equal(field('arrivalTime').value, '12:45');
-    for (const [name, value] of Object.entries({ service: 'G103', origin: '北京南', destination: '上海虹桥', departureTime: '08:15', passenger: '李', identity: '100000000000000001', carriage: '03', price: '553.5', ticketNumber: 'A001234' })) {
+    for (const [name, value] of Object.entries({ service: 'G103', origin: '北京南', destination: '上海虹桥', departureTime: '08:15', passenger: '李', identity: '100000000000000001', carriage: '03', price: '553.5', ticketNumber: 'A001234', issuer: '广州' })) {
       assert.equal(field(name).value, value, name);
       assert.equal(field(name).readOnly, true, name);
     }
@@ -205,7 +237,8 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(calendarDate(record.departureDate), '2018-11-24');
     assert.equal(record.fieldSources.departureDate, 'barcode');
     assert.equal(record.fieldSources.departureDateYear, 'manual');
-    assert.equal(record.ticketCode.rawBytes, btoa(seated));
+    assert.equal(record.ticketCode.rawBytes, originalCode.rawBytes);
+    assert.equal(record.fieldSources.issuer, 'barcode');
     assert.ok(record.lockedFields.includes('seat'));
     assert.equal(record.fieldSources.identity, 'barcode');
 

@@ -90,7 +90,7 @@ test('rail OCR only supplements a matching ticket and prefers the complete read'
   assert.strictEqual(chooseRailReading(primary, differentTrain), differentTrain);
 });
 
-test('photo layout joins a divided seat row and the sales suffix on their own baselines', () => {
+test('photo layout joins a divided seat row without using the printed sales station', () => {
   const item = (text, x, y, width) => ({
     text, score: .98, poly: [[x, y], [x + width, y], [x + width, y + 18], [x, y + 18]]
   });
@@ -103,7 +103,7 @@ test('photo layout joins a divided seat row and the sales suffix on their own ba
     item('站售', 421, 365, 40), item('天津西', 360, 365, 60), item('10010300351001S042775', 68, 365, 278)
   ];
   const [standing] = recognizedRailRecords(paddleRailReading({ image, items }, 'blue'));
-  assert.deepEqual([standing.carriage, standing.seat, standing.railStanding, standing.issuer], ['01', '', true, '天津西']);
+  assert.deepEqual([standing.carriage, standing.seat, standing.railStanding, standing.issuer], ['01', '', true, '']);
   assert.equal(standing.price, '12.50');
 
   items.splice(4, 2, item('07B号', 492, 130, 56), item('08', 440, 130, 19), item('车', 462, 130, 22));

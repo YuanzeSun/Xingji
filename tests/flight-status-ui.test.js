@@ -18,8 +18,8 @@ test('an OPEN ticket can be saved without a flight or date, edited to invalid an
  const submit=()=>document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
  try{
   await import('../src/app.js');await wait(()=>document.querySelector('.ticket-card')&&document.querySelector('.sync-button').textContent.includes('已同步'));
-  document.querySelector('.ticket-preview[data-id="normal-flight"]').click();await wait(()=>document.querySelector('.detail-grid'));
-  assert.doesNotMatch(document.querySelector('.detail-grid').textContent,/铺位|05车/);assert.match(document.querySelector('.detail-grid').textContent,/机票状态正常/);
+  document.querySelector('.ticket-preview[data-id="normal-flight"]').click();await wait(()=>document.querySelector('.ticket-detail-groups'));
+  assert.doesNotMatch(document.querySelector('.ticket-detail-groups').textContent,/铺位|05车/);assert.match(document.querySelector('.ticket-detail-groups').textContent,/机票状态正常/);
   document.querySelector('[data-action="close-modal"]').click();
   document.querySelector('[data-action="new"]').click();await wait(()=>document.querySelector('#editor-form'));fill('type','flight');
   const originInput=document.querySelector('#editor-form [name="origin"]');fill('origin','PEK');
@@ -35,7 +35,7 @@ test('an OPEN ticket can be saved without a flight or date, edited to invalid an
   submit();await wait(async()=>server.records().length===2&&!document.querySelector('#editor-form')&&!(await db.get('syncMeta')).pending);
   let special=server.records().find(r=>r.id!==normal.id);assert.equal(special.flightStatus,'open');assert.equal(calendarDate(special.departureDate),'');assert.equal(special.service,'');
   const stats=document.querySelector('.stats').textContent;assert.match(stats,/机票1程/);assert.match(stats,/涉及城市2城/);assert.deepEqual([...document.querySelectorAll('.transport-tag.flight')].map(tag=>tag.textContent),['机票','机票']);
-  document.querySelector(`.ticket-preview[data-id="${special.id}"]`).click();await wait(()=>document.querySelector('[data-action="edit"]'));assert.doesNotMatch(document.querySelector('.detail-grid').textContent,/铺位/);assert.match(document.querySelector('.detail-grid').textContent,/机票状态OPEN/);document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));fill('flightStatus','invalid');submit();
+  document.querySelector(`.ticket-preview[data-id="${special.id}"]`).click();await wait(()=>document.querySelector('[data-action="edit"]'));assert.doesNotMatch(document.querySelector('.ticket-detail-groups').textContent,/铺位/);assert.match(document.querySelector('[data-ticket-detail=booking] .detail-grid').textContent,/机票状态OPEN/);document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));fill('flightStatus','invalid');submit();
   await wait(()=>server.records().find(r=>r.id===special.id).flightStatus==='invalid'&&!document.querySelector('#editor-form'));
   assert.deepEqual([...document.querySelectorAll('.transport-tag.flight')].map(tag=>tag.textContent),['机票','机票']);
   document.querySelector(`.ticket-preview[data-id="${special.id}"]`).click();await wait(()=>document.querySelector('[data-action="edit"]'));document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));fill('flightStatus','normal');
