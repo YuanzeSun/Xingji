@@ -39,14 +39,14 @@ test('rail mileage and flown distance share the date filter and show independent
   const dom = new JSDOM('<div id="root"></div>');
   const root = dom.window.document.querySelector('#root');
   const unmount = mountStatistics(root, rows, { options: { ...range } });
-  const [railMetric, flightMetric] = root.querySelectorAll('.statistics-mileage > div');
+  const [railMetric, , flightMetric] = root.querySelectorAll('.statistics-journey-metrics > div');
   assert.match(railMetric.textContent, /铁路里程.*1,318 km.*1 \/ 1/);
   assert.match(flightMetric.textContent, /实际飞行航程.*333\.6 km.*1 \/ 2/);
   unmount();
   dom.window.close();
 });
 
-test('cumulative travel time adds complete trips across dates, airport time zones and clock changes', () => {
+test('rail and flight travel times are totaled independently across dates, time zones and clock changes', () => {
   const overnight = rail({ departureTime: '23:30', arrivalDate: '2024-03-01', arrivalTime: '01:10' });
   const actual = flight({ origin: 'JFK', destination: 'LHR', departureTime: '20:00', arrivalDate: '2024-03-02', arrivalTime: '09:00',
     actualDepartureDate: '2024-03-01', actualDepartureTime: '19:00', actualArrivalDate: '2024-03-02', actualArrivalTime: '07:15' });
@@ -63,17 +63,21 @@ test('cumulative travel time adds complete trips across dates, airport time zone
     createRecord({ ...actual, flightStatus: 'invalid' }),
     createRecord({ ...planned, deleted: true })];
   const all = journeyStatistics(rows, range);
-  assert.equal(all.travelMinutes, 1375);
-  assert.equal(all.travelTimeTrips, 5);
+  assert.deepEqual(all.travelTime, { rail: { minutes: 100, trips: 1 }, flight: { minutes: 1275, trips: 4 } });
   assert.equal(all.records.length, 9);
   const before = journeyStatistics(rows, { ...range, dateTo: '2024-03-01' });
-  assert.equal(before.travelMinutes, 535);
-  assert.equal(before.travelTimeTrips, 2);
+  assert.deepEqual(before.travelTime, { rail: { minutes: 100, trips: 1 }, flight: { minutes: 435, trips: 1 } });
 
   const dom = new JSDOM('<div id="root"></div>');
   const root = dom.window.document.querySelector('#root');
   const unmount = mountStatistics(root, rows, { options: { ...range } });
-  assert.match(root.querySelector('.statistics-duration').textContent, /累计在途时间.*22 小时 55 分.*5 \/ 9 程可计算/);
+  const metrics = () => root.querySelectorAll('.statistics-journey-metrics > div');
+  assert.match(metrics()[1].textContent, /火车总在途时间.*1 小时 40 分.*1 \/ 3 程可计算/);
+  assert.match(metrics()[3].textContent, /飞机总在途时间.*21 小时 15 分.*4 \/ 6 程可计算/);
+  bindTestDialogs(dom.window);
+  applyStatisticsDate(root, '[data-stat-to]', '2024-02-29');
+  assert.match(metrics()[1].textContent, /1 小时 40 分.*1 \/ 3 程可计算/);
+  assert.match(metrics()[3].textContent, /—.*0 \/ 0 程可计算/);
   unmount();
   dom.window.close();
 });

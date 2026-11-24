@@ -4,10 +4,11 @@ import { journeyStatistics, statisticsOptions, todayDate, tripSeries, countryNam
 import { rankingViews, rankingChartMarkup } from './statistics-ranking.js';
 
 const empty = text => `<p class="statistics-empty">${text}</p>`;
+const distanceMarkup = (km, maximumFractionDigits) => `${km.toLocaleString('zh-CN', { maximumFractionDigits })} <small>km</small>`;
 function durationMarkup(minutes) {
   const days = Math.floor(minutes / 1440), hours = Math.floor(minutes % 1440 / 60), remainder = minutes % 60;
   return [[days, '天'], [hours, '小时'], [remainder, '分']].filter(([value]) => value)
-    .map(([value, unit]) => `${value.toLocaleString('zh-CN')} <small>${unit}</small>`).join(' ');
+    .map(([value, unit]) => `<span>${value.toLocaleString('zh-CN')} <small>${unit}</small></span>`).join(' ');
 }
 function placesPanel(title, places, type) {
   return `<section class="statistics-panel"><header><h2>${title}</h2><span>${places.length} 个</span></header>${places.length ? `<ul class="statistics-place-list statistics-${type}-list" tabindex="0" aria-label="${title}列表">${places.map(place => type === 'station' ? `<li>${e(place.name)}</li>` : `<li><span>${e(place.name)}<small>${e(countryName(place.country))}</small></span><code>${e(place.code)}</code></li>`).join('')}</ul>` : empty('暂无已识别的' + title.replace('去过的', ''))}</section>`;
@@ -48,14 +49,17 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       const value = options[key] || (key === 'dateTo' ? renderedDay : '不限');
       return `<div class="statistics-range-field"><span>${label}</span><button type="button" class="statistics-date-button" ${attr} data-stat-date="${key}" aria-label="${label}，${e(value)}" aria-haspopup="dialog">${e(value)}</button></div>`;
     };
-    const mileage = [
-      ['铁路里程', data.railMileage, data.railMileageTrips, data.rail, '程已收录里程', 3],
-      ['实际飞行航程', data.actualFlightDistance, data.actualFlightDistanceTrips, data.flight, '程已收录航迹', 1]
+    const { rail, flight } = data.travelTime;
+    const metrics = [
+      ['铁路里程', distanceMarkup(data.railMileage, 3), data.railMileageTrips, data.rail, '程已收录里程'],
+      ['火车总在途时间', durationMarkup(rail.minutes), rail.trips, data.rail, '程可计算'],
+      ['实际飞行航程', distanceMarkup(data.actualFlightDistance, 1), data.actualFlightDistanceTrips, data.flight, '程已收录航迹'],
+      ['飞机总在途时间', durationMarkup(flight.minutes), flight.trips, data.flight, '程可计算']
     ];
     container.innerHTML = `<section class="statistics-range" aria-label="统计日期范围"><div>${rangeButton('dateFrom', '起始日期', 'data-stat-from')}<span class="statistics-range-dash">—</span>${rangeButton('dateTo', '截止日期', 'data-stat-to')}<button type="button" class="text-button" data-stat-reset aria-label="恢复默认日期" title="恢复默认日期"><span class="statistics-reset-symbol" aria-hidden="true">↺</span><span class="statistics-reset-label">恢复默认</span></button></div><p class="form-error" role="alert" ${data.error ? '' : 'hidden'}>${e(data.error)}</p></section>${data.error ? '' : `
       <section class="statistics-summary" aria-label="所选日期范围的乘坐记录">${[['火车', data.rail, '次'], ['飞机', data.flight, '次'], ['机场', data.airports.length, '个'], ['火车站', data.stations.length, '个']].map(([label, count, unit]) => `<div><span>${label}</span><strong>${count}<small>${unit}</small></strong></div>`).join('')}</section>
-      <section class="statistics-mileage" aria-label="里程与时长统计">${mileage.map(([label, distance, count, total, coverage, maximumFractionDigits]) =>
-        `<div><span>${label}</span><strong>${count ? `${distance.toLocaleString('zh-CN', { maximumFractionDigits })} <small>km</small>` : '—'}</strong><span>${count} / ${total} ${coverage}</span></div>`).join('')}<div class="statistics-duration"><span>累计在途时间</span><strong>${data.travelTimeTrips ? durationMarkup(data.travelMinutes) : '—'}</strong><span>${data.travelTimeTrips} / ${data.records.length} 程可计算</span></div></section>
+      <section class="statistics-journey-metrics" aria-label="里程与时长统计">${metrics.map(([label, value, count, total, coverage]) =>
+        `<div><span>${label}</span><strong>${count ? value : '—'}</strong><span>${count} / ${total} ${coverage}</span></div>`).join('')}</section>
       <section class="statistics-panel statistics-trend"><header><h2>乘坐次数</h2><div class="statistics-period-controls"><div role="group" aria-label="统计图时间粒度">${[['year', '按年'], ['month', '按月']].map(([value, label]) => `<button data-stat-scale="${value}" aria-pressed="${options.period === value}">${label}</button>`).join('')}</div><label ${options.period === 'month' ? '' : 'hidden'}><span class="visually-hidden">月度图年份</span><select data-stat-year aria-label="月度图年份">${[...yearChoices].reverse().map(year => `<option ${options.year === year ? 'selected' : ''}>${e(year)}</option>`).join('')}</select></label></div></header>${tripChartMarkup(series,{zoom:options.chartZoom,viewportWidth:container.clientWidth || 720})}</section>
       <div class="statistics-columns">${rankingPanel('rail-models')}${rankingPanel('rail-bureaus')}</div>
       <div class="statistics-columns">${rankingPanel('airlines')}${rankingPanel('aircraft')}</div>

@@ -78,10 +78,13 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   const railModels = new Map(), railBureaus = new Map(), airlines = new Map();
   let unknownAircraft = 0, unknownAirlines = 0, unknownPlaces = 0, unknownRoutes = 0;
   let actualFlightDistance = 0, actualFlightDistanceTrips = 0;
-  let travelMinutes = 0, travelTimeTrips = 0;
+  const travelTime = { rail: { minutes: 0, trips: 0 }, flight: { minutes: 0, trips: 0 } };
   for (const record of rows) {
     const minutes = journeyMinutes(record);
-    if (minutes) { travelMinutes += minutes; travelTimeTrips++; }
+    if (minutes) {
+      travelTime[record.type].minutes += minutes;
+      travelTime[record.type].trips++;
+    }
     if (record.type === 'rail') {
       for (const model of railModelsForRecord(record,options)) railModels.set(model, (railModels.get(model) || 0) + 1);
       let bureau = normalizeRailBureau(record.railBureau);
@@ -127,7 +130,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     continents: [...continents].sort().map(code => ({ code, name: CONTINENTS[code] })),
     aircraft: ranked(aircraft), airlines: ranked(airlines),
     railMileage:Math.round(mileageTrips.reduce((sum,row)=>sum+Number(row.railMileage),0)*1000)/1000,
-    railMileageTrips: mileageTrips.length, actualFlightDistance, actualFlightDistanceTrips, travelMinutes, travelTimeTrips,
+    railMileageTrips: mileageTrips.length, actualFlightDistance, actualFlightDistanceTrips, travelTime,
     railModels: ranked(railModels), railBureaus: ranked(railBureaus),
     routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)), unknownAircraft, unknownAirlines, unknownPlaces, unknownRoutes };
 }
