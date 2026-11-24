@@ -622,3 +622,5 @@ select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-w
 .rail-camera-guide{position:absolute;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(90%,calc((var(--capture-height) - 24px)*1.58));aspect-ratio:1.58;border:2px solid #fff;border-radius:8px;box-shadow:0 0 0 100vmax #10181865;pointer-events:none}
 .rail-camera p,[data-rail-photo-status]:not(:empty){margin:8px 0;color:#5b6a5f}
 [data-rail-camera], [data-rail-photo-status]{grid-column:1/-1}
+
+.rail-entry-actions{flex-wrap:wrap;gap:8px}.rail-entry-actions>.button{min-height:44px}

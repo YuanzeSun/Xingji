@@ -1,5 +1,8 @@
 import {refreshTicketDateLocks} from './date-field.js';
-export const barcodeFieldLocked = (record, key) => key==='departureDate' ? false : record.type === 'flight' && !!record.boardingCode && record.boardingCodeSource === 'original' && (key === 'type' || record.fieldSources?.[key]==='barcode');
+import {railBarcodeFieldLocked} from './field-sources.js';
+import {splitBerth} from './seat-field.js';
+export const barcodeFieldLocked = (record, key) => railBarcodeFieldLocked(record,key) ||
+  (key!=='departureDate' && record.type === 'flight' && !!record.boardingCode && record.boardingCodeSource === 'original' && (key === 'type' || record.fieldSources?.[key]==='barcode'));
 
 export function refreshBarcodeFieldLocks(root, record) {
   refreshTicketDateLocks(root,record);
@@ -22,5 +25,23 @@ export function refreshBarcodeFieldLocks(root, record) {
     }
     if (control.tagName === 'SELECT') control.disabled = locked || control.hasAttribute('data-transport-fixed');
     else control.readOnly = locked;
+  }
+  if (record.type !== 'rail') return;
+  const seatLocked = railBarcodeFieldLocked(record, 'seat');
+  const seat = splitBerth(record.seat);
+  for (const [selector, value] of [['[data-seat-number]', seat.number], ['[data-berth]', seat.berth]]) {
+    const control = root.querySelector(selector);
+    if (!control || (!seatLocked && !control.hasAttribute('data-barcode-lock'))) continue;
+    control.toggleAttribute('data-barcode-lock', seatLocked);
+    control.value = value;
+    if (control.tagName === 'SELECT') control.disabled = seatLocked;
+    else control.readOnly = seatLocked;
+  }
+  const standing = root.querySelector('[data-rail-standing]');
+  if (standing) {
+    const locked = seatLocked || railBarcodeFieldLocked(record, 'railStanding');
+    standing.disabled = locked;
+    if (locked) standing.checked = record.railStanding === true;
+    standing.parentElement.querySelector('[data-field-source]')?.toggleAttribute('data-source-locked', locked);
   }
 }

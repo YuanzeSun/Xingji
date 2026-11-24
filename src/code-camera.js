@@ -4,7 +4,7 @@ export function codeCameraMarkup() {
 }
 
 export function bindCodeCamera(section, onCapture, {
-  mediaDevices = navigator.mediaDevices, schedule = (fn, ms) => setTimeout(fn, ms), unschedule = clearTimeout, onCancel = () => {}, asCanvas = false
+  mediaDevices = navigator.mediaDevices, schedule = (fn, ms) => setTimeout(fn, ms), unschedule = clearTimeout, onStart = () => {}, onCancel = () => {}, asCanvas = false
 } = {}) {
   const panel = section.querySelector('[data-code-camera]'), video = panel.querySelector('video');
   const status = panel.querySelector('[data-code-camera-status]'), trigger = section.querySelector('[data-code-start]');
@@ -36,6 +36,7 @@ export function bindCodeCamera(section, onCapture, {
   }
   async function start() {
     stop(); if (disposed) return;
+    onStart();
     const request = generation;
     panel.hidden = false; trigger.disabled = true; status.textContent = '正在开启相机…';
     try {

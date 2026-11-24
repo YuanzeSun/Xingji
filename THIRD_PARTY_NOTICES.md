@@ -47,6 +47,8 @@ The demo code records in `src/demo-code.js` and `src/demo-boarding-code.js` cont
   - https://github.com/Sec-ant/zxing-wasm
   - https://github.com/zxing-cpp/zxing-cpp
 
+- **Arnie97/webview-inject / moerail** — The legacy rail QR reader reconstructs the decoding behavior and lookup tables from [webview-inject](https://github.com/Arnie97/webview-inject/tree/eaa432dac260a209ed9b62949c60b11dad8dd36f). Ticket field positions were checked against [moerail](https://github.com/Arnie97/moerail/tree/42fc2837e480c555dfef9359a036e432148c86a3/ticket). Both repositories publish MIT notices, retained in [licenses/Arnie97-rail-qr-MIT.txt](licenses/Arnie97-rail-qr-MIT.txt).
+
 - **bwip-js / BWIPP** — MIT. Barcode encoding runs locally to render vectors from saved payloads and encoding parameters. Its license is bundled in `vendor/BWIP-JS-LICENSE.txt`.
   - https://github.com/metafloor/bwip-js
   - https://github.com/bwipp/postscriptbarcode

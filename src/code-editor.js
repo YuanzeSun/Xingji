@@ -6,7 +6,7 @@ import {BOARDING_METADATA_FIELDS,boardingMetadataValues} from './boarding-metada
 import {flightPassengerName} from './flight-passenger.js';
 import {normalizePlaces} from './places.js';
 import {markManualFields} from './lookup-values.js';
-import {fieldSourceBadge,markFieldSources,refreshFieldSources} from './field-sources.js';
+import {fieldSourceBadge,markFieldSources,railBarcodeFieldLocked,refreshFieldSources} from './field-sources.js';
 import {barcodeFieldLocked,refreshBarcodeFieldLocks} from './barcode-fields.js';
 import { codeCameraMarkup, bindCodeCamera } from './code-camera.js';
 import { renderCodeData } from './barcode-data.js';
@@ -25,21 +25,23 @@ function boardingExamplesMarkup(hidden) {
     <div class="boarding-code-sample"><span class="boarding-code-sample-image" aria-hidden="true">${renderCodeData(DEMO_TICKET_CODE)}</span><span>电子登机牌 · 二维码</span></div>`;
   return `<figure class="boarding-code-examples" data-code-examples ${hidden ? 'hidden' : ''}><figcaption>扫码示例</figcaption>${boardingExamples}</figure>`;
 }
-export function ticketCodeEditor(record, fromScan = false, prefix = '', {generator=true} = {}) {
+export function ticketCodeEditor(record, fromScan = false, prefix = '', {generator=true, railPhoto=''} = {}) {
   const { field, title, normalize } = configuration(record);
   const flight = record.type === 'flight';
   const referenceButton = fromScan ? `<button type="button" class="button small secondary" id="code-use-scan" ${record[field] ? 'hidden' : ''}>读取本次图片中的码</button>` : '';
-  const controls = `<div class="saved-code" id="saved-code">${thumbnail(normalize(record[field]), title)}</div><div class="code-actions">${referenceButton}<button type="button" class="button small secondary" data-code-start>相机扫描</button><label class="button small secondary">上传图片<input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden /></label><button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>`;
+  const start = `<button type="button" class="button ${railPhoto ? '' : 'small '}secondary" data-code-start>${railPhoto ? '扫码录入' : '相机扫描'}</button>`;
+  const controls = `<div class="saved-code" id="saved-code">${thumbnail(normalize(record[field]), title)}</div><div class="code-actions">${referenceButton}${railPhoto ? '' : start}<label class="button small secondary">${railPhoto ? '选择二维码图片' : '上传图片'}<input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden /></label><button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>`;
   const scan = flight
     ? `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}<p class="fine-print" data-code-guidance ${record[field] ? 'hidden' : ''}>请扫描自己登机牌上的完整码。</p></div>${boardingExamplesMarkup(record[field])}</div>`
     : controls;
-  const markup = `<section data-code-editor data-code-prefix="${prefix}" class="editor-extra" id="code-editor"><h3>${title}${fieldSourceBadge(field,record)}</h3>${scan}${codeCameraMarkup()}${generator ? boardingGeneratorMarkup(record) : ''}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
+  const markup = `<section data-code-editor data-code-prefix="${prefix}" class="editor-extra${railPhoto ? ' full-field' : ''}" id="code-editor">${railPhoto ? railPhoto(start) + codeCameraMarkup() : ''}<h3>${title}${fieldSourceBadge(field,record)}</h3>${scan}${railPhoto ? '' : codeCameraMarkup()}${generator ? boardingGeneratorMarkup(record) : ''}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
   return markup.replace(/id="([^"]+)"/g, (_, id) => `id="${prefix}${id}"`);
 }
-export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', autoRead = false, profile, preserveGenerator = false, onMultiple, isCurrent = () => true, loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {} } = {}) {
+export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', autoRead = false, profile, preserveGenerator = false, onMultiple, onCameraStart, isCurrent = () => true, loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {} } = {}) {
   const section = form.querySelector('[data-code-editor]'); if (!section) return () => {};
   const find = id => section.querySelector('#' + section.dataset.codePrefix + id);
   const { field, title, normalize } = configuration(draft), photo = find('code-photo'), status = find('code-status'), error = find('code-error'), choices = find('code-choices'), cancel = find('code-cancel');
+  const railEntry = draft.type === 'rail' && !!section.querySelector('[data-rail-photo]');
   let generation = 0, disposed = false, loading = false, pending = false, updateTimer;
   const consistency=find('code-consistency');
   function reset() { generation++; loading = false; pending = false; choices.replaceChildren(); choices.hidden = true; cancel.hidden = true; photo.value = ''; }
@@ -94,6 +96,30 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     const filled=[];
     markManualFields(draft,[field]);
     markFieldSources(draft,[field],'barcode');
+    if(draft.type==='rail'){
+      const values=code.railFields;
+      const previousLocks=draft.lockedFields.filter(key=>railBarcodeFieldLocked(previousRecord,key));
+      draft.lockedFields=draft.lockedFields.filter(key=>!previousLocks.includes(key));
+      if(values){
+        for(const key of previousLocks)if(!Object.hasOwn(values,key)){
+          draft[key]=key==='railStanding' ? false : '';
+          delete draft.fieldSources[key];
+          filled.push(key);
+        }
+        Object.assign(draft,values);
+        markFieldSources(draft,Object.keys(values),'barcode');
+        for(const key of Object.keys(values)){
+          if(draft[key] && !draft.lockedFields.includes(key))draft.lockedFields.push(key);
+          if(draft.lookupValues)delete draft.lookupValues[key];
+          if(JOURNEY_DATE_FIELDS.includes(key))writeTicketDate(form,key,draft[key]);
+          else if(form.elements[key])form.elements[key].value=draft[key];
+          filled.push(key);
+        }
+        if(values.departureDate && !previousRecord.departureDate?.year)markFieldSources(draft,['departureDateYear'],'default');
+        if(previousRecord.departureDate && !draft.departureDate)delete draft.fieldSources.departureDateYear;
+        draft.lockedFields.sort();
+      }
+    }
     if(draft.type==='flight'){
       draft.boardingCodeSource='original';
       draft.boardingLegIndex=String(code.legIndex ?? 0);
@@ -120,13 +146,17 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     }
     refreshFieldSources(form,draft);
     refreshBarcodeFieldLocks(form,draft);
-    reset();showSaved();showDifferences();status.textContent='已读取并重建 '+code.format+'，重新编码后信息已核对';error.textContent='';changed({filled,previousRecord});
+    reset();showSaved();showDifferences();
+    status.textContent=code.railFields ? '已扫码录入，二维码字段已锁定' : '已读取并重建 '+code.format+'，重新编码后信息已核对';
+    error.textContent='';changed({filled,previousRecord,codeStatus:status.textContent});
   }
   async function read(file, source = 'manual', options) {
     if (!isCurrent()) return;
     reset(); const request = generation; loading = true; status.textContent = '正在读取并重建条码…'; error.textContent = '';
     try {
       const rebuild = await loadRebuilder(), result = await rebuild(file, draft.type, options);
+      const readRailTicketCode = railEntry && source !== 'photo' && result.codes.length
+        ? (await import('./rail-ticket-qr.js')).readRailTicketCode : null;
       if (disposed || request !== generation || !section.isConnected || !isCurrent()) return;
       loading = false;
       if (!result.codes.length) { status.textContent = ''; if (source === 'manual' || result.issues.length) {  error.textContent = result.issues[0] || '未识别到可重建的码，请选择显示完整二维码或条码的图片'; } return; }
@@ -136,10 +166,22 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
         if (!disposed && request === generation && section.isConnected && isCurrent()) onMultiple(result.codes[0].data, currentRecord(), image);
         return true;
       }
-      const available=result.codes.flatMap(code=>{
+      let available=result.codes.flatMap(code=>{
         const read=draft.type==='flight'&&readBoardingCode(code.data);
         return read?.legCount>1 ? read.legs.map((leg,index)=>({...code,legIndex:index,label:`第 ${index+1} 段 · ${leg.service} ${leg.origin} → ${leg.destination}`})) : [code];
       });
+      if(readRailTicketCode){
+        const tickets=available.flatMap(code=>{
+          const railFields=readRailTicketCode(code.data,journeyDate(draft.departureDate)?.year ?? undefined);
+          return railFields ? [{...code,railFields,label:railFields.service+' · '+railFields.ticketNumber}] : [];
+        });
+        if(tickets.length)available=tickets;
+        else if(source==='camera'){
+          status.textContent='';
+          error.textContent='未读到支持的火车票二维码，请对准票面上的码';
+          return;
+        }
+      }
       if (available.length === 1 && (source !== 'camera' || !available[0].isLink)) { use(available[0]); return true; }
       pending = true; status.textContent = '请选择本张票据对应的码'; choices.hidden = false; cancel.hidden = false;
       for (const code of available) {
@@ -156,12 +198,15 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     catch (failure) { if (!disposed && request === generation) { loading = false; status.textContent = ''; error.textContent = failure.message;  } }
   }
   const flightCamera = draft.type === 'flight';
-  const camera = bindCodeCamera(section, (image, options) => read(image, 'camera', options), { asCanvas: flightCamera, ...cameraOptions, onCancel: () => { reset(); status.textContent = ''; } });
-  photo.addEventListener('change', () => { const file = photo.files?.[0]; if (file) { camera.stop(); read(file); } });
+  const camera = bindCodeCamera(section, (image, options) => read(image, 'camera', options), { asCanvas: flightCamera, ...cameraOptions, onStart:onCameraStart, onCancel: () => { reset(); status.textContent = ''; error.textContent = ''; } });
+  section.querySelector('[data-rail-photo]')?.addEventListener('click',camera.stop,true);
+  section.querySelector('[data-rail-photo-file]')?.addEventListener('change',camera.stop,true);
+  photo.addEventListener('change', () => { const file = photo.files?.[0]; if (file) { onCameraStart?.(); camera.stop(); read(file); } });
   find('code-use-scan')?.addEventListener('click', () => readReference());
   find('code-remove').addEventListener('click', () => {
     if(!removable(draft,field))return;
     reset();
+    if(draft.type==='rail')draft.lockedFields=draft.lockedFields.filter(key=>!railBarcodeFieldLocked(draft,key));
     draft[field]='';
     if(draft.type==='flight'){
       for(const key of BOARDING_FIELDS)draft[key]='';
