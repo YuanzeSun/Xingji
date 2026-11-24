@@ -159,6 +159,12 @@ p:empty{display:none}
 .modal-heading h2{font-size:25px;font-weight:650}.modal-heading p{font-size:15px;line-height:1.6}
 .modal-footer .button{font-size:16px;min-height:46px}
 .detail-grid dt{font-size:14px}.detail-grid dd{font-size:18px;font-weight:550}
+.duplicate-review{display:grid;gap:16px;overflow-wrap:anywhere}
+.duplicate-review h3{font-size:15px;margin:0 0 5px}
+.duplicate-match{border-block-start:1px solid var(--line);padding-block-start:14px}
+.duplicate-match p+ul{margin:5px 0 12px;padding-inline-start:22px}
+.duplicate-reason{margin:7px 0;color:var(--green)}
+.duplicate-dialog .button{min-height:44px}
 .source-details summary{font-size:14px}
 .editor-extra>summary{font-size:16px}.editor-fields .field>span{font-size:14px}
 

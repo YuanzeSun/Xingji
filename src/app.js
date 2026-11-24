@@ -7,7 +7,7 @@ import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} 
 import {fieldSourceBadge,hasFieldValue,markFieldSources,railInvoiceFieldLocked,refreshFieldSources,RAILGO_REFERENCE_SOURCE} from './field-sources.js';
 import {readBoardingCode} from './bcbp.js';
 import {flightPassengerName} from './flight-passenger.js';
-import { bindIdentityInput } from './identity.js';
+import { bindIdentityInput, maskIdentity } from './identity.js';
 import {markManualFields,applyLookupValues,lookupContext,clearLookupValues} from './lookup-values.js';
 import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } from './arithmetic-confirm.js';
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
@@ -16,7 +16,8 @@ import { createRecord, validateRecord, mergeThreeWay, DEFAULT_RAIL_TEMPLATE, FIE
 import { SUPPLEMENT_FIELDS, ticketTemplateChoices } from './rail-template.js';
 import { hasRailQRCode } from './ticket-code.js';
 import * as db from './db.js';
-import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageImport, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, replaceWithRemote } from './sync-state.js';
+import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageImport, stageTicket, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, replaceWithRemote } from './sync-state.js';
+import { TicketImportReview } from './ticket-import-review.js';
 import { sharedSettings, sameSettings, maskedKey, wasUnlinked } from './shared-settings.js';
 import { watchAppUpdates } from './app-update.js';
 import { isBrowserConnectorInstalled } from './browser-connector.js';
@@ -181,7 +182,7 @@ async function verifyBeforeWrite(message) {
   if (state.syncMeta.rejection && canWrite()) return;
   if (!await doSync() || !canWrite()) throw new Error(message);
 }
-async function persist(records, { merge = false, settings } = {}) {
+async function persist(records, { merge = false, settings, ticket, decision } = {}) {
   if (!canWrite() || state.saving) throw new Error('当前不能修改票据，请先完成云端核对');
   const expected = { records: clone(state.records), settings: clone(state.settings) };
   const { config, d1 } = state;
@@ -190,9 +191,11 @@ async function persist(records, { merge = false, settings } = {}) {
   try {
     await verifyBeforeWrite('云端尚未核对成功，修改未提交，请保留当前输入');
     if (!isArchiveContext(context)) throw new Error('票库已变化，请重新打开后核对。');
-    const staged = await withCloudLock(() => merge
-      ? stageImport(records, config, d1, expected.settings, settings)
-      : stageRecords(expected.records, records, config, d1));
+    const staged = await withCloudLock(() => {
+      if (ticket) return stageTicket(ticket, config, d1, decision);
+      if (merge) return stageImport(records, config, d1, expected.settings, settings);
+      return stageRecords(expected.records, records, config, d1);
+    });
     useSnapshot(staged);
     announce();
     await doSync();
@@ -854,6 +857,65 @@ function setImportReference(image) {
   localFileURL = image ? URL.createObjectURL(image) : null;
 }
 const modalHead = (title, subtitle = '') => `<div class="modal-heading"><div><h2>${title}</h2>${subtitle ? `<p>${subtitle}</p>` : ''}</div><button class="icon-button" data-action="close-modal" aria-label="关闭对话框">${icon('close')}</button></div>`;
+function reviewDuplicateTicket(incoming, review) {
+  const ticketLine = record => [record.service, formatDate(record.departureDate), record.departureTime,
+    `${record.origin || '出发地'} → ${record.destination || '到达地'}`, record.passenger].filter(Boolean).join(' · ');
+  const fieldName = field => ({ railInvoice: '电子客票号', railStanding: '无座' })[field] || labels[field] || '行程资料';
+  const fieldValue = (field, record) => {
+    const value = record[field];
+    if (field === 'identity') return maskIdentity(value);
+    if (field === 'seat' && record.railStanding) return '无座';
+    if (field === 'railInvoice') return record.railInvoice?.electronicTicketNumber || '';
+    if (JOURNEY_DATE_FIELDS.includes(field)) return formatDate(value);
+    if (value && typeof value === 'object' && !Array.isArray(value)) return '有资料';
+    return value === true ? '是' : value || '未填写';
+  };
+  const dialog = document.createElement('dialog');
+  dialog.className = 'modal duplicate-dialog';
+  dialog.setAttribute('aria-labelledby', 'duplicate-title');
+  dialog.innerHTML = `<div class="modal-heading"><h2 id="duplicate-title">核对重复票据</h2></div>
+    <div class="detail-body duplicate-review">
+      <section><h3>本次录入</h3><p>${e(ticketLine(incoming))}</p></section>
+      ${review.matches.map(({ record, reason, conflicts, fields, result }) => `<section class="duplicate-match"><h3>票夹中的票据</h3><p>${e(ticketLine(record))}</p><p class="duplicate-reason">${e(reason)}</p>
+        ${conflicts.length ? `<p>以下字段需要核对</p><ul>${conflicts.map(field => `<li>${e(fieldName(field))}：${e(fieldValue(field, record))} → ${e(fieldValue(field, incoming))}</li>`).join('')}</ul>`
+          : fields.length ? `<p>确认后会补充以下资料</p><ul>${fields.map(field => `<li>${e(fieldName(field))}：${e(fieldValue(field, result))}</li>`).join('')}</ul><button class="button primary" type="button" data-duplicate-value="${e(record.id)}">补充这张票</button>`
+            : `<p>已有票据包含这些资料。</p><button class="button secondary" type="button" data-duplicate-value="${e(record.id)}">使用已有票据</button>`}</section>`).join('')}
+    </div><div class="modal-footer"><button class="button secondary" type="button" data-duplicate-cancel autofocus>取消录入</button><div class="spacer"></div>
+    ${review.canSaveSeparately ? '<button class="button secondary" type="button" data-duplicate-value="">单独保存</button>' : ''}</div>`;
+  return new Promise(resolve => {
+    const finish = value => {
+      modalCancel = null;
+      dialog.close();
+      dialog.remove();
+      resolve(value);
+    };
+    modalCancel = () => finish(null);
+    dialog.addEventListener('cancel', event => { event.preventDefault(); finish(null); });
+    dialog.addEventListener('click', event => {
+      const button = event.target.closest('button');
+      if (button?.hasAttribute('data-duplicate-cancel')) finish(null);
+      else if (button?.hasAttribute('data-duplicate-value')) finish({ id: button.dataset.duplicateValue, matches: review.matches });
+    });
+    modalRoot.append(dialog);
+    dialog.showModal();
+  });
+}
+async function saveReviewedTicket(ticket, form, context) {
+  let decision;
+  while (form.isConnected && isArchiveContext(context)) {
+    try { return await persist([], { ticket, decision }); }
+    catch (error) {
+      if (!(error instanceof TicketImportReview)) throw error;
+      if (!form.isConnected || !isArchiveContext(context)) return null;
+      decision = await reviewDuplicateTicket(ticket, error);
+      if (!decision) {
+        if (form.isConnected && isArchiveContext(context)) closeModal(true);
+        return null;
+      }
+    }
+  }
+  return null;
+}
 function findRecord(id) { return live().find(r => r.id === id); }
 function bindFlightTrackDetail(container, record) {
   const context = archiveContext();
@@ -1130,14 +1192,15 @@ function editRecord(record = newPersonalRecord(), {
         records[index] = merged.records[0];
         await persist(records);
       } else {
-        result = await persist([checked], { merge: true });
+        result = await saveReviewedTicket(checked, form, context);
+        if (!result) return;
       }
       if (!isArchiveContext(context) || !form.isConnected) return;
       editor.dirty = false;
       closeModal(true);
-      if (imported) {
-        navigate('archive');
-        toast(savedMessage(`已新增 ${result.added} 张，补充 ${result.enriched} 张票据`));
+      if (result) {
+        if (imported) navigate('archive');
+        toast(savedMessage(result.added || result.enriched ? `已新增 ${result.added} 张，补充 ${result.enriched} 张票据` : '票夹已有这张票据'));
       } else {
         render();
         toast(savedMessage());
@@ -1654,7 +1717,7 @@ async function doSync(resolutions = {}, { retryRejected = false } = {}) {
       return !accepted.retry;
     } catch (error) {
       if (epoch !== authEpoch) return false;
-      if (captured?.meta.pending && (error.writeRejected || error.code === 'DUPLICATE_RAIL_TICKET')) {
+      if (captured?.meta.pending && error.writeRejected) {
         try {
           const rejected = await rejectPendingChange(captured, error.message);
           if (epoch !== authEpoch) return false;

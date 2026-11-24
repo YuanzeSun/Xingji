@@ -1,4 +1,4 @@
-import { archive, assertRailDuplicateChanges, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
+import { alignMergedIds, archive, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings, unlinkedSettings } from './shared-settings.js';
 
 export class GitHubError extends Error { constructor(message, status, retryAt = 0) { super(message); this.status = status; this.retryAt = retryAt; } }
@@ -151,11 +151,8 @@ export async function synchronize(store, base, local, resolutions = {}, { baseHe
   if (baseHead && snapshot.initialized === false) throw new ArchiveResetError(snapshot);
   if (baseHead && (snapshot.generation || '') !== baseGeneration) throw new ArchiveResetError(snapshot, true);
   if (baseHead && store.assertDescendant) await store.assertDescendant(baseHead, snapshot.head);
-  if (!baseHead || snapshot.head !== baseHead) assertRailDuplicateChanges(base, local, snapshot.records);
-  const grouped = deduplicateRecords([...base, ...local, ...snapshot.records]), aliases = new Map();
-  for (const record of grouped) for (const id of [record.id, ...(record.mergedIds || [])]) aliases.set(id, { id: record.id, ids: [record.id, ...(record.mergedIds || [])] });
-  const align = rows => deduplicateRecords(rows).map(record => { const group = aliases.get(record.id); return { ...record, id: group.id, mergedIds: group.ids.filter(id => id !== group.id).sort() }; });
-  const merge = mergeThreeWay(align(base), align(local), align(snapshot.records));
+  const collapse = rows => deduplicateRecords(rows, { knownIdsOnly: true });
+  const merge = mergeThreeWay(...alignMergedIds(base, local, snapshot.records).map(collapse));
   const settingMerge = mergeSettings(baseSettings, localSettings, snapshot.settings);
   const unresolved = [];
   for (const conflict of [...merge.conflicts, ...settingMerge.conflicts]) {
@@ -165,7 +162,7 @@ export async function synchronize(store, base, local, resolutions = {}, { baseHe
     else resolveRecordConflict(merge.records.find(r=>r.id===conflict.id),conflict,resolution.choice);
   }
   if (unresolved.length) return { ...merge, settings: settingMerge.settings, conflicts: unresolved, snapshot };
-  merge.records = deduplicateRecords(merge.records);
+  merge.records = collapse(merge.records);
   let head = snapshot.head;
   if (snapshot.initialized === false || !sameRecords(merge.records, snapshot.records) || !sameSettings(settingMerge.settings, snapshot.settings)) head = await store.write(merge.records, snapshot, settingMerge.settings) || head;
   return { records: merge.records, settings: settingMerge.settings, conflicts: [], head, generation: snapshot.generation || '' };

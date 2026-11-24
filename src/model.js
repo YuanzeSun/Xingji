@@ -181,8 +181,6 @@ const railConflictLabels = {
   railBureau: '担当路局', railModel: '车型', railTrainsets: '车组编号', railPowerSupply: '供电制式',
   railMileage: '铁路里程', railRunner: '担当客运段', railCarOwner: '车辆归属单位'
 };
-const railDuplicateFields = ['service', 'departureDate', 'origin', 'originCode', 'destination', 'destinationCode',
-  'passenger', 'template', 'railStanding', ...Object.keys(railConflictLabels)];
 function railFieldConflicts(key, left, right) {
   if (!left || !right) return false;
   if (key === 'arrivalDate') {
@@ -229,20 +227,6 @@ export function duplicateOf(records, candidate, rejectConflict = null) {
   }
   return matches.length === 1 ? matches[0] : undefined;
 }
-export function railDuplicateChanges(before, records) {
-  const known = new Map(before.flatMap(record => recordIds(record).map(id => [id, record])));
-  return records.filter(record => {
-    if (record.type !== 'rail' || record.deleted) return false;
-    const previous = recordIds(record).map(id => known.get(id)).find(Boolean);
-    return !previous || railDuplicateFields.some(field => !equal(previous[field], record[field]));
-  });
-}
-export function assertRailDuplicateChanges(baseline, local, remote) {
-  for (const record of railDuplicateChanges(baseline, local)) {
-    const ids = new Set(recordIds(record));
-    duplicateOf(remote.filter(row => !recordIds(row).some(id => ids.has(id))), record, () => true);
-  }
-}
 function joinRecords(existing, incoming) {
   const empty = value => !value || (Array.isArray(value) && !value.length);
   for (const field of FIELDS) {
@@ -261,15 +245,15 @@ function joinRecords(existing, incoming) {
   existing.updatedAt = [existing.updatedAt, incoming.updatedAt].sort().at(-1);
   return existing;
 }
-export function deduplicateRecords(records, { rejectFrom = Infinity, recheckIds } = {}) {
+export function deduplicateRecords(records, { rejectFrom = Infinity, knownIdsOnly = false } = {}) {
   const result = [], buckets = new Map(), ids = new Map(), positions = new Map();
-  const strict = Number.isFinite(rejectFrom) || recheckIds?.size, checked = new Set();
+  const strict = Number.isFinite(rejectFrom), checked = new Set();
   // Known passengers are grouped first so an unnamed scan cannot join two different people.
   const ordered = records.map((record, index) => ({ record: validateRecord(record), index })).sort((a, b) => Number(!!b.record.passenger) - Number(!!a.record.passenger) || a.index - b.index);
   for (const { record, index } of ordered) {
-    const bucket = bucketKey(record);
+    const bucket = knownIdsOnly ? '' : bucketKey(record);
     const exact = recordIds(record).map(id => ids.get(id)).find(Boolean);
-    const check = index >= rejectFrom || recheckIds?.has(record.id);
+    const check = index >= rejectFrom;
     const rejectConflict = strict ? match => check || checked.has(match) : null;
     const existing = exact || (bucket ? duplicateOf(buckets.get(bucket) || [], record, rejectConflict) : undefined);
     const target = existing ? joinRecords(existing, record) : record;
@@ -277,7 +261,7 @@ export function deduplicateRecords(records, { rejectFrom = Infinity, recheckIds 
     if (!existing) { result.push(target); positions.set(target, index); }
     else positions.set(target, Math.min(positions.get(target), index));
     for (const id of recordIds(target)) ids.set(id, target);
-    const targetBucket = bucketKey(target);
+    const targetBucket = knownIdsOnly ? '' : bucketKey(target);
     if (targetBucket) {
       if (!buckets.has(targetBucket)) buckets.set(targetBucket, []);
       if (!buckets.get(targetBucket).includes(target)) buckets.get(targetBucket).push(target);
@@ -285,10 +269,10 @@ export function deduplicateRecords(records, { rejectFrom = Infinity, recheckIds 
   }
   return result.sort((a, b) => positions.get(a) - positions.get(b)).map(validateRecord);
 }
-export function applyImport(records, candidates) {
+export function applyImport(records, candidates, { knownIdsOnly = false } = {}) {
   for (const candidate of candidates) requireCompleteIdentity(candidate.identity);
   const before = new Map(records.flatMap(r => recordIds(r).map(id => [id, r])));
-  const result = deduplicateRecords([...records, ...candidates], { rejectFrom: records.length });
+  const result = deduplicateRecords([...records, ...candidates], { rejectFrom: records.length, knownIdsOnly });
   let added = 0, enriched = 0;
   for (const record of result) {
     const previous = recordIds(record).map(id => before.get(id)).find(Boolean);
@@ -299,7 +283,7 @@ export function applyImport(records, candidates) {
 }
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function union(a = [], b = []) { return [...new Map([...a, ...b].map(x => [JSON.stringify(x), x])).values()].sort((x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y))); }
-function alignMergedIds(...collections) {
+export function alignMergedIds(...collections) {
   const parents = new Map();
   const find = id => { if (!parents.has(id)) parents.set(id, id); if (parents.get(id) !== id) parents.set(id, find(parents.get(id))); return parents.get(id); };
   for (const record of collections.flat()) for (const id of recordIds(record)) {

@@ -13,23 +13,22 @@ const ticket = (extra = {}) => createRecord({ id: 'ticket', service: 'G103', dep
 const store = server => new GitHubStore(config(), 'test-key', server.fetch);
 async function seed(records, head = 'h0') { await db.setMany([['records', structuredClone(records)], ['base', structuredClone(records)], ['github', config()], ['syncMeta', { head, revision: 1, verified: true, pending: false }], ['lastSync', null]]); }
 
-test('editing a rail ticket into a duplicate rejects different ticket numbers and merges compatible data', async () => {
+test('editing a saved rail ticket keeps separately stored entries intact', async () => {
   const first = ticket({ id: 'a', ticketNumber: 'X000001' });
   const second = ticket({ id: 'b', service: 'G104', ticketNumber: 'X000002', gate: '13A' });
   const proposed = { ...second, service: first.service };
   await seed([first, second]);
-  await assert.rejects(stageRecords([first, second], [first, proposed], config()), /票号.*冲突/);
-  assert.deepEqual((await readSyncState()).records, [first, second]);
+  const staged = await stageRecords([first, second], [first, proposed], config());
+  assert.equal(staged.records.length, 2);
+  assert.equal(staged.records.find(row => row.id === 'a').ticketNumber, 'X000001');
+  assert.equal(staged.records.find(row => row.id === 'b').ticketNumber, 'X000002');
 
   const server = new MemoryGitHub([second]), baseHead = server.head;
   server.push([second, first]);
-  await assert.rejects(synchronize(store(server), [second], [proposed], {}, { baseHead }), /票号.*冲突/);
-  assert.equal(server.calls.some(call => call.method === 'POST' || call.method === 'PATCH'), false);
-  const staged = await stageRecords([first, second], [first, { ...proposed, ticketNumber: '' }], config());
-  assert.equal(staged.records.length, 1);
-  assert.equal(staged.records[0].ticketNumber, first.ticketNumber);
-  assert.equal(staged.records[0].gate, '13A');
-  assert.deepEqual(staged.records[0].mergedIds, ['b']);
+  const synced = await synchronize(store(server), [second], [proposed], {}, { baseHead });
+  assert.equal(synced.records.length, 2);
+  assert.equal(synced.records.find(row => row.id === 'b').service, first.service);
+  assert.equal(synced.records.find(row => row.id === 'b').gate, '13A');
 });
 
 test('GitHub round-trip keeps ordinal-only and year-only tickets in the shared partitions', async () => {
@@ -95,11 +94,11 @@ test('incomplete, altered or rolled-back cloud snapshots never trigger a write',
   server.id = 88; await assert.rejects(store(server).verify(), /身份/);
 });
 
-test('independent IDs with conflicting data are rejected before a cloud write', async () => {
+test('sync preserves separately recorded tickets with different seats on the same service', async () => {
   const a = ticket({ id: 'a', lockedFields: ['seat'] }), b = ticket({ id: 'b', seat: '02A', lockedFields: ['seat'] }), server = new MemoryGitHub([a]);
-  await assert.rejects(synchronize(store(server), [], [b]), /座位.*冲突/);
-  assert.deepEqual(server.records().map(record => record.id), ['a']);
-  assert.equal(server.calls.some(c => c.method === 'POST'), false);
+  const result = await synchronize(store(server), [a], [a, b]);
+  assert.equal(result.conflicts.length, 0);
+  assert.deepEqual(server.records().map(record => [record.id, record.seat]), [['a', '01A'], ['b', '02A']]);
 });
 
 test('local transactions preserve edits from two tabs and reject competing changes to the same field', async () => {

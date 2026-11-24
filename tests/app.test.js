@@ -125,14 +125,23 @@ test('app creates, reloads, edits, imports and filters personal records without 
   await waitFor(() => !document.querySelector('dialog'));
   records = await get('records', []); assert.equal(records[0].type, 'rail'); assert.equal(records[0].template, 'rail-receipt');
   assert.deepEqual(records[0].ticketMarks, []);
-  click('[data-action="new"]'); await waitFor(() => document.querySelector('#editor-form'));
-  fill('origin','广州南');fill('destination','深圳北');fill('service','G6203');fill('departureDate','2026-11-15');
-  fill('seat','06A');fill('price','74.50');fill('departureTime','08:00');fill('passenger','示例旅客');fill('identity','P000001');fill('carriage','05');fill('seatClass','二等座');
+  const startDuplicateEntry = async seat => {
+    click('[data-action="new"]'); await waitFor(() => document.querySelector('#editor-form'));
+    fill('origin','广州南');fill('destination','深圳北');fill('service','G6203');fill('departureDate','2026-11-15');
+    fill('seat',seat);fill('price','74.50');fill('departureTime','08:00');fill('passenger','示例旅客');fill('identity','P000001');fill('carriage','05');fill('seatClass','二等座');
+  };
+  await startDuplicateEntry('06A');
   document.querySelector('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-  await waitFor(() => document.querySelector('#editor-error')?.textContent.includes('与已有票据冲突'));
+  await waitFor(() => document.querySelector('.duplicate-dialog')?.textContent.includes('以下字段需要核对'));
+  assert.match(document.querySelector('.duplicate-dialog').textContent, /09A\s*→\s*06A/);
+  assert.equal(document.querySelector('.duplicate-dialog [data-duplicate-value]:not([data-duplicate-value=""])'), null);
   assert.equal((await get('records', []))[0].seat, '09A');
-  fill('seat', '09A');
+  click('[data-duplicate-cancel]');
+  await waitFor(() => !document.querySelector('dialog'));
+  await startDuplicateEntry('09A');
   document.querySelector('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await waitFor(() => document.querySelector('.duplicate-dialog [data-duplicate-value]:not([data-duplicate-value=""])'));
+  click('.duplicate-dialog [data-duplicate-value]:not([data-duplicate-value=""])');
   await waitFor(() => !document.querySelector('dialog'));
   records = await get('records', []); assert.equal(records.length, 1); assert.equal(records[0].seat, '09A'); assert.equal(records[0].price, '74.50');
   assert.deepEqual(records[0].ticketCode, rebuiltCode);

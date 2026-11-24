@@ -1,5 +1,6 @@
 import * as db from './db.js';
-import { applyImport, clone, deduplicateRecords, mergeThreeWay, now, railDuplicateChanges, sameRecords } from './model.js';
+import { applyImport, clone, deduplicateRecords, mergeThreeWay, now, sameRecords } from './model.js';
+import { applyReviewedTicket } from './ticket-import-review.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings } from './shared-settings.js';
 
 const keys = ['records', 'base', 'settings', 'settingsBase', 'github', 'd1', 'syncMeta', 'lastSync', 'archiveResetProgress'];
@@ -125,8 +126,7 @@ function stageChange(config, d1, change) {
 function mergedRecords(expected, proposed, current) {
   const { records, conflicts } = mergeThreeWay(expected, proposed, current);
   if (conflicts.length) throw new Error('另一标签页已修改同一处，请保留当前输入并重新打开票据核对');
-  const recheckIds = new Set(railDuplicateChanges(current, records).map(record => record.id));
-  return deduplicateRecords(records, { recheckIds });
+  return deduplicateRecords(records, { knownIdsOnly: true });
 }
 function mergedSettings(expected, proposed, current) {
   const { settings, conflicts } = mergeSettings(expected, proposed, current);
@@ -141,9 +141,12 @@ export function stageSettings(expected, proposed, config, d1 = null) {
 }
 export function stageImport(candidates, config, d1, expectedSettings, settings) {
   return stageChange(config, d1, current => ({
-    ...applyImport(current.records, candidates),
+    ...applyImport(current.records, candidates, { knownIdsOnly: true }),
     settings: settings ? mergedSettings(expectedSettings, { ...settings, connections: expectedSettings.connections }, current.settings) : current.settings
   }));
+}
+export function stageTicket(candidate, config, d1, decision) {
+  return stageChange(config, d1, current => applyReviewedTicket(current.records, candidate, decision));
 }
 export function rejectPendingChange(captured, message) {
   return db.atomic(keys, raw => {
@@ -173,7 +176,7 @@ export async function acknowledgeSync(captured, remote) {
     const merged = mergeThreeWay(captured.records, current.records, remote.records);
     const mergedSettings = mergeSettings(captured.settings, current.settings, remote.settings);
     if (merged.conflicts.length || mergedSettings.conflicts.length) return { result: { ...current, retry: true } };
-    const records = deduplicateRecords(merged.records), base = clone(remote.records), lastSync = now();
+    const records = deduplicateRecords(merged.records, { knownIdsOnly: true }), base = clone(remote.records), lastSync = now();
     const settings = mergedSettings.settings, settingsBase = sharedSettings(remote.settings);
     const pending = !sameRecords(records, base) || !sameSettings(settings, settingsBase);
     const changed = !sameRecords(records, current.records) || !sameRecords(base, current.base) || !sameSettings(settings, current.settings) || !sameSettings(settingsBase, current.settingsBase) || current.meta.head !== remote.head || !current.meta.verified || current.meta.pending !== pending;

@@ -52,9 +52,20 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.match(document.querySelector('#editor-preview').textContent,/0000002000\*{4}1234/);
   submit();await wait(()=>!document.querySelector('dialog'));
   let records=await db.get('records',[]);assert.equal(records.length,1);assert.equal(records[0].gate,'5B');assert.equal(records[0].orderNumber,'E000000001');
-  click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
-  fill('origin','清河');fill('destination','天津');fill('service','G103');fill('departureDate','2026-11-15');fill('departureTime','08:00');fill('passenger','示例旅客');fill('carriage','05');fill('seatClass','二等座');fill('identity','000000200001011234');fill('seat','08F');fill('price','100');
-  submit();await wait(()=>!document.querySelector('dialog'));
+  const startSupplement = async () => {
+    click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
+    fill('origin','清河');fill('destination','天津');fill('service','G103');fill('departureDate','2026-11-15');fill('departureTime','08:00');fill('passenger','示例旅客');fill('carriage','05');fill('seatClass','二等座');fill('identity','000000200001011234');fill('seat','08F');fill('price','100');
+  };
+  await startSupplement();
+  submit();await wait(()=>document.querySelector('.duplicate-dialog'));
+  assert.match(document.querySelector('.duplicate-dialog').textContent,/票价.*100/);
+  assert.equal((await db.get('records',[]))[0].price,'');
+  document.querySelector('.duplicate-dialog').dispatchEvent(new window.Event('cancel',{cancelable:true}));
+  await wait(()=>!document.querySelector('dialog'));
+  assert.equal((await db.get('records',[]))[0].price,'');
+  await startSupplement();
+  submit();await wait(()=>document.querySelector('.duplicate-dialog'));
+  click('.duplicate-dialog [data-duplicate-value]:not([data-duplicate-value=""])');await wait(()=>!document.querySelector('dialog'));
   records=await db.get('records',[]);assert.equal(records.length,1);assert.equal(records[0].price,'100');assert.equal(records[0].seat,'08F');
   click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
   fill('type','flight');fill('passenger','示例旅客');fill('identity','P000001');fill('seat','24K');fill('seatClass','Y');fill('departureTime','12:00');assert.match(document.querySelector('[name="seat"]').closest('.field').textContent.trim(),/^座位号\*/);assert.equal(document.querySelector('[data-field-source="seat"]').textContent,'手动输入');
