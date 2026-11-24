@@ -369,8 +369,17 @@ dialog:is(.ticket-editor-modal,.ticket-detail-modal)::backdrop{backdrop-filter:n
 .map-totals{margin:0;padding:20px 16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;background:#10263a;color:#99b2c5;border-top:1px solid #2a4459;text-align:center}
 .map-totals>span{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:12px;line-height:1.3}.map-totals>span+span{border-left:1px solid #2a4459}.map-totals strong{color:#f0f8fc;font-size:30px;line-height:1.1;margin:0;font-weight:600}
 .map-empty{color:#b6cad8}.map-empty strong{background:#112a3deb}
+.map-year-actions{display:flex;align-items:center;gap:8px}
+.map-playback-button{min-height:44px;padding:0 11px;border:1px solid #42637b;border-radius:8px;background:#23465e;color:#f0f8fc;font:inherit;font-size:13px;white-space:nowrap}
+.map-playback-button:hover:not(:disabled){background:#305a73}.map-playback-button:disabled{opacity:.55}
+.map-playback-status{position:absolute;top:16px;left:16px;max-width:calc(100% - 86px);margin:0;padding:7px 11px;border:1px solid #42637b;border-radius:7px;background:#112a3df2;color:#f0f8fc;font-size:13px;line-height:1.45;font-variant-numeric:tabular-nums;pointer-events:none}
+.map-playback{pointer-events:none;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:calc(2.1 * var(--map-playback-unit,1px));stroke:#6cdaef}
+.map-playback-trip.rail{stroke:#ffc077}.map-playback-trip.is-current{stroke:#c6faff;stroke-width:calc(3.6 * var(--map-playback-unit,1px))}.map-playback-trip.is-current.rail{stroke:#fff0bf}
+.journey-map-canvas[data-map-playing] .map-real-tracks,.journey-map-canvas[data-map-playing] ~ .map-empty{display:none}
+.journey-map-canvas[data-map-playing] .map-node{pointer-events:none}
 
 @media(max-width:680px){.journey-map-toolbar{padding:11px 12px;gap:8px}.map-type-tabs button{padding:8px 10px}.map-year select{font-size:12px;max-width:108px;padding:8px}.map-totals{padding:17px 12px}.map-totals strong{font-size:28px}}
+@media(max-width:680px){.journey-map-toolbar:has([data-map-playback-button]){flex-wrap:wrap}.map-playback-status{top:12px;left:12px;max-width:calc(100% - 73px)}}
 @media(max-width:360px){.map-type-tabs button{padding:8px 7px;font-size:12px}.map-year select{max-width:98px}}
 
 .code-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:12px 0}.code-choices[hidden]{display:none}.code-choice{display:grid;gap:8px;padding:12px;border:1px solid #dfe5d6;border-radius:8px;background:#fffefa;color:#3d5637;text-align:center;cursor:pointer}.code-choice svg{width:100%;height:100px;object-fit:contain;image-rendering:pixelated}.code-choice span{font-size:13px}

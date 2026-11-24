@@ -1,6 +1,7 @@
 import {calendarDate} from './journey-date.js';
 import { escape as e } from './html.js';
 import { journeyNetwork, networkGeometry } from './journey-map-model.js';
+import { annualMapTrips, bindAnnualMapPlayback } from './journey-map-playback.js';
 import { LAND_PATH, PROVINCE_PATH, COUNTRY_PATH } from './data/map-reference.js';
 import { createMapBasemap } from './map-basemap.js';
 import { loadRailwayNetwork, railwayGeometry } from './railway-network.js';
@@ -49,7 +50,16 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
     if (options.layers.includes('flight') || options.layers.includes('airway')) networks.push(journeyNetwork(records, { type: 'flight', year: options.year, deduplicate: options.layers.includes('airway') }));
     const network = { nodes: networks.flatMap(part => part.nodes), routes: networks.flatMap(part => part.routes), mapped: networks.reduce((count, part) => count + part.mapped, 0) };
     const railMapped = railway ? railState.data?.routes.reduce((count, row) => count + row.records.length, 0) || 0 : 0;
-    const geometry = networkGeometry(network, railway ? railState.geometry : null);
+    const railGeometry = railway ? railState.geometry : null;
+    const geometry = networkGeometry(network, railGeometry);
+    const hasYear = years.includes(options.year);
+    const railwayData = hasYear && railway ? railState.data : null;
+    const fallback = railwayData && journeyNetwork([...railwayData.unmatched, ...railwayData.failed], { type: 'rail' });
+    const playbackGeometry = fallback?.routes.length ? networkGeometry({
+      nodes: [...network.nodes, ...fallback.nodes], routes: [...network.routes, ...fallback.routes]
+    }, railGeometry) : geometry;
+    const trips = hasYear && (!railway || railState.status === 'ready')
+      ? annualMapTrips(playbackGeometry.routes, railwayData?.routes || []) : [];
     network.nodes = geometry.nodes;
     network.mapped += railMapped;
     const routeCount = network.routes.length + (railway ? railState.data?.routes.length || 0 : 0);
@@ -60,7 +70,7 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
     const bitmap=typeof window.Path2D==='function';
     const background=()=>`<defs><path id="journey-map-land" d="${LAND_PATH}" vector-effect="non-scaling-stroke" fill-rule="evenodd" /><path id="journey-map-countries" d="${COUNTRY_PATH}" vector-effect="non-scaling-stroke" /><path id="journey-map-provinces" d="${PROVINCE_PATH}" vector-effect="non-scaling-stroke" /></defs><g class="map-land">${[-2000, -1000, 0, 1000, 2000].map(x => `<use href="#journey-map-land" transform="translate(${x},0)"/>`).join('')}</g><g class="map-countries">${[-1000, 0, 1000].map(x => `<use href="#journey-map-countries" transform="translate(${x},0)"/>`).join('')}</g><g class="map-provinces">${[-1000, 0, 1000].map(x => `<use href="#journey-map-provinces" transform="translate(${x},0)"/>`).join('')}</g>`;
     const grid=Array.from({length:73},(_,i)=>`<path d="M${i*1000/12-2000},0v500"/>`).join('')+Array.from({length:5},(_,i)=>`<path d="M-2000,${(i+1)*1000/12}h5000"/>`).join('');
-    container.innerHTML = `<div class="journey-map-layout"><section class="map-card" aria-label="行程地图"><div class="journey-map-toolbar"><div class="map-type-tabs" role="group" aria-label="地图图层">${layers.map(([value, label]) => `<button type="button" data-map-layer="${value}" aria-pressed="${options.layers.includes(value)}" class="${options.layers.includes(value) ? 'active' : ''}"><span class="map-layer-check" aria-hidden="true">${options.layers.includes(value) ? '✓' : ''}</span>${label}</button>`).join('')}</div><label class="map-year"><span class="visually-hidden">地图年份</span><select data-map-year aria-label="地图年份"><option value="all">全部年份</option>${years.map(year => `<option ${options.year === year ? 'selected' : ''}>${year}</option>`).join('')}${records.some(r => !r.deleted && !calendarDate(r.departureDate)) ? `<option value="unknown" ${options.year === 'unknown' ? 'selected' : ''}>日期未知</option>` : ''}</select></label></div><div class="map-frame">${bitmap ? '<canvas class="map-base-canvas" aria-hidden="true"></canvas>' : ''}<svg class="journey-map-canvas" tabindex="0" role="group" aria-label="行程地图，可拖动或使用方向键移动，用加减键缩放">${bitmap ? '' : background()}<g class="map-graticule">${grid}</g><g class="map-real-tracks" aria-hidden="true"></g><g class="map-routes"></g><g class="map-nodes"></g><g class="map-labels" aria-hidden="true"></g><g class="map-rail-line-names" aria-hidden="true"></g></svg><div class="map-controls"><button data-map-zoom="in" aria-label="放大地图" title="放大">＋</button><button data-map-zoom="out" aria-label="缩小地图" title="缩小">−</button><button data-map-fit aria-label="显示全部路线" title="显示全部路线">${icon('map')}</button></div>${!hasRoutes ? '<div class="map-empty"><strong>' + (!options.layers.length ? '请选择要显示的图层' : railway && railState.status === 'loading' ? '正在匹配铁路线路…' : '暂无可绘制的行程') + '</strong></div>' : ''}<div class="map-legend">${layers.filter(([value]) => options.layers.includes(value)).map(([value, label]) => `<span class="${value === 'airway' ? 'flight' : value}">${label}</span>`).join('')}</div></div><div class="map-totals"><span><strong>${network.mapped}</strong>行程</span><span><strong>${routeCount}</strong>路线</span><span><strong>${network.nodes.length}</strong>地点</span></div></section></div>`;
+    container.innerHTML = `<div class="journey-map-layout"><section class="map-card" aria-label="行程地图"><div class="journey-map-toolbar"><div class="map-type-tabs" role="group" aria-label="地图图层">${layers.map(([value, label]) => `<button type="button" data-map-layer="${value}" aria-pressed="${options.layers.includes(value)}" class="${options.layers.includes(value) ? 'active' : ''}"><span class="map-layer-check" aria-hidden="true">${options.layers.includes(value) ? '✓' : ''}</span>${label}</button>`).join('')}</div><div class="map-year-actions"><label class="map-year"><span class="visually-hidden">地图年份</span><select data-map-year aria-label="地图年份"><option value="all">全部年份</option>${years.map(year => `<option ${options.year === year ? 'selected' : ''}>${year}</option>`).join('')}${records.some(r => !r.deleted && !calendarDate(r.departureDate)) ? `<option value="unknown" ${options.year === 'unknown' ? 'selected' : ''}>日期未知</option>` : ''}</select></label>${hasYear ? `<button type="button" class="map-playback-button" data-map-playback-button ${trips.length ? '' : 'disabled'}>播放年度行程</button>` : ''}</div></div><div class="map-frame">${bitmap ? '<canvas class="map-base-canvas" aria-hidden="true"></canvas>' : ''}<svg class="journey-map-canvas" tabindex="0" role="group" aria-label="行程地图，可拖动或使用方向键移动，用加减键缩放">${bitmap ? '' : background()}<g class="map-graticule">${grid}</g><g class="map-real-tracks" aria-hidden="true"></g><g class="map-routes"></g><g class="map-playback" aria-hidden="true"></g><g class="map-nodes"></g><g class="map-labels" aria-hidden="true"></g><g class="map-rail-line-names" aria-hidden="true"></g></svg>${hasYear ? '<p class="map-playback-status" data-map-playback-status role="status" hidden></p>' : ''}<div class="map-controls"><button data-map-zoom="in" aria-label="放大地图" title="放大">＋</button><button data-map-zoom="out" aria-label="缩小地图" title="缩小">−</button><button data-map-fit aria-label="显示全部路线" title="显示全部路线">${icon('map')}</button></div>${!hasRoutes ? '<div class="map-empty"><strong>' + (!options.layers.length ? '请选择要显示的图层' : railway && railState.status === 'loading' ? '正在匹配铁路线路…' : '暂无可绘制的行程') + '</strong></div>' : ''}<div class="map-legend">${layers.filter(([value]) => options.layers.includes(value)).map(([value, label]) => `<span class="${value === 'airway' ? 'flight' : value}">${label}</span>`).join('')}</div></div><div class="map-totals"><span><strong>${network.mapped}</strong>行程</span><span><strong>${routeCount}</strong>路线</span><span><strong>${network.nodes.length}</strong>地点</span></div></section></div>`;
     if (railway) {
       container.querySelector('.map-totals').insertAdjacentHTML('afterend', '<div class="map-railway-status"><span>铁路 <strong>' + railMapped + ' / ' + railState.total + '</strong> 已匹配</span><span><strong>' + (railState.data?.unmatched.length || 0) + '</strong>未匹配</span><span><strong>' + (railState.data?.failed.length || 0) + '</strong>加载失败</span></div>');
       container.querySelector('.map-card').classList.add('is-railway');
@@ -72,21 +82,39 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
     const basemap=createMapBasemap(container.querySelector('.map-base-canvas'));
     if(bitmap&&!basemap)svg.insertAdjacentHTML('afterbegin',background());
     const routes=geometry.routes.flatMap(route=>[-1000,0,1000].map(offset=>{const xs=route.points.map(point=>point[0]+offset),ys=route.points.map(point=>point[1]);return {...route,offset,bounds:[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]};}));
-    const nodes=geometry.nodes.flatMap(node=>[-1000,0,1000].map(offset=>({...node,point:[node.point[0]+offset,node.point[1]]})));
+    const wrapNodes = nodes => nodes.flatMap(node => [-1000, 0, 1000].map(offset => ({ ...node, point: [node.point[0] + offset, node.point[1]] })));
+    const nodes = wrapNodes(geometry.nodes);
+    const playbackNodes = playbackGeometry === geometry ? nodes : wrapNodes(playbackGeometry.nodes);
     let viewport = options.viewport ? { ...options.viewport } : null, aspect = 1.6, width = 1000, height = 620, dragged = false, gesture = null;
     let frameBounds,animation=0,wheelTimer=0,needsDetails=false,alive=true;
-    const requestFrame=window.requestAnimationFrame?.bind(window)|| (callback=>window.setTimeout(callback,16));
+    const requestFrame=window.requestAnimationFrame?.bind(window)|| (callback=>window.setTimeout(()=>callback(window.performance.now()),16));
     const cancelFrame=window.cancelAnimationFrame?.bind(window)||window.clearTimeout.bind(window);
+    const playbackButton = container.querySelector('[data-map-playback-button]');
+    let beforePlayback;
+    const playback = trips.length ? bindAnnualMapPlayback(svg, playbackButton, container.querySelector('[data-map-playback-status]'), trips, {
+      requestFrame, cancelFrame,
+      redraw() {
+        if (playback.running && !beforePlayback) {
+          beforePlayback = { viewport, userMoved: options.userMoved };
+          fit();
+        } else if (!playback.running && beforePlayback) {
+          ({ viewport, userMoved: options.userMoved } = beforePlayback);
+          beforePlayback = null;
+        }
+        draw();
+      }
+    }) : null;
 
     const pointers = new Map();
     const measure = () => { const rect = frameBounds = frame.getBoundingClientRect(); width = rect.width || 1000; height = rect.height || 620; aspect = width / height; };
+    const mapBounds = () => playback?.running ? playbackGeometry.bounds : geometry.bounds;
     function fitZoom() {
-      const [x1, y1, x2, y2] = geometry.bounds, padding = Math.min(.24, 48 / Math.min(width, height));
+      const [x1, y1, x2, y2] = mapBounds(), padding = Math.min(.24, 48 / Math.min(width, height));
       return clamp(Math.min(1000 * (1 - padding * 2) / Math.max(railway ? .15 : 18, x2 - x1), 1000 / aspect * (1 - padding * 2) / Math.max(railway ? .1 : 14, y2 - y1)), .8, railway ? 6000 : 28);
     }
     const fit = () => {
       options.userMoved = false;
-      const [x1, y1, x2, y2] = geometry.bounds;
+      const [x1, y1, x2, y2] = mapBounds();
       viewport = { x: (x1 + x2) / 2, y: (y1 + y2) / 2, zoom: fitZoom() };
     };
     function storeViewport() {
@@ -103,20 +131,23 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
       storeViewport();
       const viewWidth=1000/viewport.zoom,viewHeight=viewWidth/aspect,unit=viewWidth/width;
       svg.setAttribute('viewBox',`${viewport.x-viewWidth/2} ${viewport.y-viewHeight/2} ${viewWidth} ${viewHeight}`);
+      if (playback?.running) svg.style.setProperty('--map-playback-unit', `${unit}px`);
       basemap?.draw(viewport,width,height,!detailed);
       if(!detailed)return;
       const active = route => selected ? route.id === selected.id : node ? node.routes.has(route.id) : true;
       const left = viewport.x - viewWidth / 2, right = viewport.x + viewWidth / 2, top = viewport.y - viewHeight / 2, bottom = viewport.y + viewHeight / 2;
-      const visibleRoutes=routes.filter(route=>route.bounds[2]>=left&&route.bounds[0]<=right&&route.bounds[3]>=top&&route.bounds[1]<=bottom);
-      const visibleNodes=nodes.filter(node=>node.point[0]>=left-15*unit&&node.point[0]<=right+15*unit&&node.point[1]>=top-15*unit&&node.point[1]<=bottom+15*unit);
+      const visibleRoutes = playback?.running ? [] : routes.filter(route=>route.bounds[2]>=left&&route.bounds[0]<=right&&route.bounds[3]>=top&&route.bounds[1]<=bottom);
+      const candidates = playback?.running ? playbackNodes.filter(node => playback.reached.has(node.id)) : nodes;
+      const visibleNodes=candidates.filter(node=>node.point[0]>=left-15*unit&&node.point[0]<=right+15*unit&&node.point[1]>=top-15*unit&&node.point[1]<=bottom+15*unit);
       svg.querySelector('.map-routes').innerHTML = [...visibleRoutes].sort((a, b) => Number(active(a)) - Number(active(b))).map(route => {
         const description = route.from.name + (route.aggregated ? ' ↔ ' : ' → ') + route.to.name + ' · ' + (route.aggregated ? route.records.length + ' 程' : [route.records[0].service, route.records[0].departureDate].filter(Boolean).join(' '));
         return `<path class="map-route ${route.type} ${active(route) ? 'emphasized' : 'dimmed'} ${route.id === selected?.id ? 'selected' : ''}" d="${route.path}" transform="translate(${route.offset},0)" data-map-route="${e(route.id)}" tabindex="0" role="button" aria-label="${e(description)}" style="--route-width:${route.aggregated ? Math.min(4, 1.5 + Math.log2(route.records.length + 1) * .45) : 1.7}"><title>${e(description)}</title></path>`;
       }).join('');
-      svg.querySelector('.map-nodes').innerHTML = visibleNodes.map(point => `<g class="map-node ${point.id === options.node ? 'selected' : ''}" data-map-node="${e(point.id)}" tabindex="0" role="button" aria-label="${e(point.name + '，' + point.trips.size + '程')}"><circle class="node-hit" cx="${point.point[0]}" cy="${point.point[1]}" r="${13 * unit}"/><circle cx="${point.point[0]}" cy="${point.point[1]}" r="${(point.id === options.node ? 5.5 : 3.5) * unit}"/><title>${e(point.name)}${point.code ? ' · ' + point.code : ''}</title></g>`).join('');
+      svg.querySelector('.map-nodes').innerHTML = visibleNodes.map(point => `<g class="map-node ${point.id === options.node ? 'selected' : ''}" ${playback?.running ? '' : `data-map-node="${e(point.id)}" tabindex="0" role="button" aria-label="${e(point.name + '，' + point.trips.size + '程')}"`}><circle class="node-hit" cx="${point.point[0]}" cy="${point.point[1]}" r="${13 * unit}"/><circle cx="${point.point[0]}" cy="${point.point[1]}" r="${(point.id === options.node ? 5.5 : 3.5) * unit}"/><title>${e(point.name)}${point.code ? ' · ' + point.code : ''}</title></g>`).join('');
       const occupied = [], labels = [], labelledNodes = new Set();
       const labelLimit = clamp(Math.round(width * height * clamp(viewport.zoom / fitZoom(), .5, 5) / 28000), 4, 60);
-      const lineAllowance = geometry.lineLabels.length ? Math.ceil(labelLimit / 3) : 0;
+      const railLabels = playback?.running ? [...playback.labels] : geometry.lineLabels;
+      const lineAllowance = railLabels.length ? Math.ceil(labelLimit / 3) : 0;
       for (const point of [...visibleNodes].sort((a, b) =>
         Number(b.id === options.node) - Number(a.id === options.node) || b.trips.size - a.trips.size)) {
         if (labels.length >= labelLimit - lineAllowance) break;
@@ -134,7 +165,7 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
         }
       }
       svg.querySelector('.map-labels').innerHTML = labels.join('');
-      if(railway)svg.querySelector('.map-rail-line-names').innerHTML=railLineAnnotations(geometry.lineLabels||[],viewport,width,height,occupied,Math.min(20,labelLimit-labels.length)).map(row=>`<g class="rail-line-name" data-rail-line-name="${e(row.name)}" transform="translate(${row.point})"><text x="${row.label.dx*unit}" y="${row.label.dy*unit}" font-size="${row.label.fontSize*unit}" stroke-width="${3*unit}">${e(row.name)}</text></g>`).join('');
+      if(railway)svg.querySelector('.map-rail-line-names').innerHTML=railLineAnnotations(railLabels,viewport,width,height,occupied,Math.min(20,labelLimit-labels.length)).map(row=>`<g class="rail-line-name" data-rail-line-name="${e(row.name)}" transform="translate(${row.point})"><text x="${row.label.dx*unit}" y="${row.label.dy*unit}" font-size="${row.label.fontSize*unit}" stroke-width="${3*unit}">${e(row.name)}</text></g>`).join('');
     }
     function zoom(factor, anchor = [width / 2, height / 2], base = viewport, currentAnchor = anchor, interactive = false) {
       options.userMoved = true;
@@ -178,7 +209,7 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
     };
     const keydown = event => {
       if (['Enter', ' '].includes(event.key) && event.target.closest('[data-map-route],[data-map-node]')) { event.preventDefault(); click(event); return; }
-      if (event.key === 'Escape') { event.preventDefault(); options.selected = ''; options.node = ''; render(); return; }
+      if (event.key === 'Escape') { event.preventDefault(); if (playback?.running) playback.stop(); else { options.selected = ''; options.node = ''; render(); } return; }
       if (event.target !== svg) return;
       if (['+', '=', '-', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(event.key)) event.preventDefault();
       if (['+', '='].includes(event.key)) zoom(1.5); else if (event.key === '-') zoom(1 / 1.5); else if (event.key === 'Home') { fit(); draw(); }
@@ -189,7 +220,7 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
     const resize = () => { if (disposed) return; const oldWidth = width; measure(); if (oldWidth !== width && !options.userMoved) fit(); draw(); };
     if (window.ResizeObserver) { observer = new window.ResizeObserver(resize); observer.observe(frame); }
     else window.addEventListener('resize', resize);
-    cleanupCanvas = () => { alive=false;cancelFrame(animation);window.clearTimeout(wheelTimer);observer?.disconnect(); container.removeEventListener('click', click); window.removeEventListener('resize', resize); };
+    cleanupCanvas = () => { alive=false;playback?.dispose();cancelFrame(animation);window.clearTimeout(wheelTimer);observer?.disconnect(); container.removeEventListener('click', click); window.removeEventListener('resize', resize); };
   }
   function resetView() { options.viewport = null; options.userMoved = false; options.selected = ''; options.node = ''; render(); }
   const change = event => { if (event.target.matches('[data-map-year]')) { options.year = event.target.value; resetView(); } };
