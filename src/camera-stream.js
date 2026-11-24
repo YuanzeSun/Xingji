@@ -1,8 +1,8 @@
-export function openCameraStream(mediaDevices, { deviceId, zoom = false } = {}) {
+export function openCameraStream(mediaDevices, { zoom = false } = {}) {
   return mediaDevices.getUserMedia({
     audio: false,
     video: {
-      ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: 'environment' } }),
+      facingMode: { ideal: 'environment' },
       width: { ideal: 1920 }, height: { ideal: 1080 }, ...(zoom ? { zoom: true } : {})
     }
   });
