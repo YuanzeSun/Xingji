@@ -18,8 +18,12 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
+    name: ${{ inputs.version == 'web' && format('Web {0}/{1}', matrix.shard, strategy.job-total) || 'Build Flutter' }}
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: ${{ fromJSON(inputs.version == 'web' && '[1, 2, 3]' || '[1]') }}
     permissions:
       contents: read
       pages: read
@@ -29,6 +33,7 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.version == 'flutter' && 'refs/heads/app' || github.sha }}
       - uses: actions/configure-pages@v5
+        if: inputs.version == 'flutter'
         id: pages
 
       - uses: pnpm/action-setup@v4
@@ -40,12 +45,17 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - name: Build original website
+      - name: Install Web dependencies
         if: inputs.version == 'web'
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm test
-          pnpm build
+        run: pnpm install --frozen-lockfile
+      - name: Test Web
+        if: inputs.version == 'web'
+        env:
+          NODE_OPTIONS: --test-shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        run: pnpm test
+      - name: Build Web site
+        if: inputs.version == 'web' && matrix.shard == 1
+        run: pnpm build
 
       - uses: subosito/flutter-action@v2
         if: inputs.version == 'flutter'
@@ -63,6 +73,7 @@ jobs:
           flutter build web --release --base-href "${PAGES_BASE_PATH%/}/"
 
       - uses: actions/upload-pages-artifact@v3
+        if: matrix.shard == 1
         with:
           path: ${{ inputs.version == 'flutter' && 'apps/flutter/build/web' || 'dist' }}
 
