@@ -295,15 +295,10 @@ function flight(r) {
     return `${match[2] || ''}${['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][Number(match[1]) - 1]}`;
   };
   const departureAirport = presentation.airport;
-  const logo = airlineLogo(r.airline), hasWordmark = !!logo?.wordmark;
-  const headerMark = logo?.wordmark || logo?.icon;
-  const markHeight = 40, markWidth = Math.min(400, Math.round(markHeight * (headerMark?.aspect || 1)));
-  const headingX = headerMark ? 60 + markWidth : 34;
-  const mainHeading = airportHeading(departureAirport, headingX, Math.min(460, 727 - headingX), 25, 2);
-  const brandSources = logo ? [...new Set([logo.wordmark, logo.icon].filter(Boolean).map(asset => asset.source || 'Soaring Symbols 0.4.1 (https://github.com/soaring-symbols/soaring-symbols)'))].join(' | ') : '';
-  const headerLogo = headerMark ? `<metadata>Airline marks from ${esc(brandSources)}. Marks belong to their respective airlines.</metadata><g data-airline-logo="${logo.code}" data-airline-logo-kind="${hasWordmark ? 'wordmark' : 'icon'}" role="img" aria-label="${esc(logo.name)} 标志"><title>${esc(logo.name)}</title><rect x="30" y="8" width="${markWidth + 8}" height="48" rx="3" fill="#fff"/><image x="34" y="12" width="${markWidth}" height="${markHeight}" preserveAspectRatio="xMidYMid meet" href="${headerMark.image}"/></g>` : '';
-  const headerAirport = hasWordmark && !mainHeading.multiline ? `<g transform="translate(0 10)">${mainHeading.markup}</g>` : mainHeading.markup;
-  const headerAirline = hasWordmark ? '' : printed(headingX, mainHeading.multiline ? 61 : 52, presentation.airline, mainHeading.multiline ? 9 : 12, 460, 'TicketHei,TicketLatin');
+  const logo = airlineLogo(r.airline), mark = logo?.icon;
+  const headingX = mark ? 92 : 34;
+  const mainHeading = airportHeading(departureAirport, headingX, 460, 25, 2);
+  const headerAirline = printed(headingX, mainHeading.multiline ? 61 : 52, presentation.airline, mainHeading.multiline ? 9 : 12, 460, 'TicketHei,TicketLatin', 'fill="#415e6f"');
   const stubHeading = airportHeading(departureAirport, 1065, 275, 19, 3);
   const routeName = (value, x) => {
     const name = value || '—', units = textUnits(name);
@@ -330,11 +325,13 @@ function flight(r) {
     ? `<g data-boarding-code-position="horizontal" transform="translate(35 432) rotate(-90)">${renderBoardingCode(r, 0, 0, 82, 394)}</g>`
     : `<g data-boarding-code-position="horizontal">${renderBoardingCode(r, 35, 350, 394, 82)}</g>`;
   return `<g data-boarding-language="${presentation.language}" lang="${presentation.language === 'zh' ? 'zh-CN' : 'en'}"><rect width="1230" height="500" rx="3" fill="#fffdf6"/>
-  <path d="M3 0h1224q3 0 3 3v61H0V3q0-3 3-3" fill="#304b58"/>
-  ${logo?.icon ? `<svg data-airline-watermark="${logo.code}" x="0" y="64" width="1230" height="436" overflow="hidden" aria-hidden="true"><image x="475" y="-150" width="748" height="730" preserveAspectRatio="xMidYMid meet" opacity=".12" href="${logo.icon.image}"/></svg>` : ''}
+  <path data-boarding-header-paper="true" d="M3 0h1224q3 0 3 3v61H0V3q0-3 3-3" fill="#e4f0f7"/>
+  <path d="M0 64h1230" stroke="#cbdde6"/>
+  ${mark ? `<metadata>Airline mark: ${esc(mark.source || 'Soaring Symbols 0.4.1 (https://github.com/soaring-symbols/soaring-symbols)')}. Marks belong to their respective airlines.</metadata><svg data-airline-watermark="${logo.code}" x="0" y="65" width="1230" height="435" overflow="hidden" aria-hidden="true"><image x="475" y="-150" width="748" height="730" preserveAspectRatio="xMidYMid meet" opacity=".12" href="${mark.image}"/></svg>` : ''}
   <path d="M900 66v426" stroke="#a2a49b" stroke-dasharray="3 5" stroke-width="1"/>
-  ${headerLogo}
-  <g fill="#fffdf6" data-boarding-header="true">${headerAirport}${headerAirline}${text(869, 42, words.title, 20, 'TicketHei', 'text-anchor="end"')}${stubHeading.markup}${text(1065, stubHeading.multiline ? 61 : 49, words.title, stubHeading.multiline ? 9 : 12, 'TicketHei', 'text-anchor="middle"')}</g>
+  <g fill="#203b49" data-boarding-header="true">
+    ${mark ? `<g data-airline-logo="${logo.code}" role="img" aria-label="${esc(logo.name)} 标志"><title>${esc(logo.name)}</title><image x="32" y="11" width="42" height="42" preserveAspectRatio="xMidYMid meet" href="${mark.image}"/></g>` : ''}
+    ${mainHeading.markup}${headerAirline}${text(869, 42, words.title, 20, 'TicketHei', 'text-anchor="end"')}${stubHeading.markup}${text(1065, stubHeading.multiline ? 61 : 49, words.title, stubHeading.multiline ? 9 : 12, 'TicketHei', 'text-anchor="middle"')}</g>
   <g fill="#1a2022" transform="translate(${Number(r.offsetX) || 0} ${Number(r.offsetY) || 0})">
     <g data-boarding-section="main">
       ${label(35, 100, words.name)}${printed(35, 135, presentation.passenger, 28, 410)}

@@ -84,21 +84,22 @@ test('the unified local SVG library matches explicit airline names and codes, wi
   assert.equal(JSON.stringify(record), before);
 });
 
-test('full airline wordmarks fit the header at equal height and only a standalone icon can watermark the ticket', () => {
-  for (const code of ['NH', 'UA', 'QF', 'B6']) {
+test('the light boarding header places standalone icons directly on the paper and omits wordmarks', () => {
+  for (const code of ['NH', 'UA', 'QF', 'VY']) {
     const logo = airlineLogo(code);
     const record = createRecord({ type:'flight', template:'air-boarding-pass', airline:logo.name, origin:'PEK', destination:'HND', service:code+'181' });
     const doc = new JSDOM(ticketSVG(record), { contentType:'image/svg+xml' }).window.document;
-    const header = doc.querySelector('[data-airline-logo-kind="wordmark"] image');
-    assert.equal(header.getAttribute('height'), '40', code);
-    assert.equal(header.getAttribute('width'), String(Math.round(40 * logo.wordmark.aspect)), code);
-    assert.ok(Number(header.getAttribute('width')) > 40, code);
-    assert.equal(header.getAttribute('href'), logo.wordmark.image, code);
+    assert.equal(doc.querySelector('[data-boarding-header-paper]').getAttribute('fill'), '#e4f0f7');
+    assert.equal(doc.querySelector('[data-boarding-header]').getAttribute('fill'), '#203b49');
+    const header = doc.querySelector('[data-airline-logo] image');
+    assert.equal(header?.getAttribute('href'), logo.icon?.image, code);
+    assert.equal(doc.querySelector('[data-airline-logo] rect'), null, code);
     const watermark = doc.querySelector('[data-airline-watermark] image');
     assert.equal(watermark?.getAttribute('href'), logo.icon?.image, code);
-    assert.notEqual(watermark?.getAttribute('href'), header.getAttribute('href'), code);
+    assert.ok(logo.wordmark);
+    assert.ok(!doc.documentElement.outerHTML.includes(logo.wordmark.image), code);
   }
-  assert.equal(airlineLogo('B6').icon, undefined);
+  assert.equal(airlineLogo('VY').icon, undefined);
 });
 
 test('common Chinese airlines and the new regional marks resolve to standalone watermark icons', () => {
@@ -110,6 +111,15 @@ test('common Chinese airlines and the new regional marks resolve to standalone w
     assert.equal(logo?.code, code, name);
     assert.ok(logo.icon?.image, name);
   }
+});
+
+test('major overseas carriers use their own standalone marks', () => {
+  for (const [airline, code] of [['济州航空','7C'], ['釜山航空','BX'], ['俄罗斯航空','SU'], ['乌兹别克斯坦航空','HY'],
+    ['海湾航空','GF'], ['印度航空快运','IX'], ['Alaska Airlines','AS'], ['Hawaiian Airlines','HA'], ['TUI Airways','BY']]) {
+    assert.equal(airlineLogo(airline)?.code, code, airline);
+    assert.ok(airlineLogo(code)?.icon?.image, code);
+  }
+  assert.notEqual(airlineLogo('AS').icon.image, airlineLogo('HA').icon.image);
 });
 
 test('embedded standalone logos use a square SVG while wordmarks retain their aspect and transparent space', () => {

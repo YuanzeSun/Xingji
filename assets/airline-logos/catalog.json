@@ -243,7 +243,11 @@
       "icao": "ASA",
       "aliases": [],
       "type": "logo",
-      "file": "alaska-airlines.svg"
+      "file": "alaska-airlines.svg",
+      "icon": {
+        "file": "alaska-airlines-icon.svg",
+        "source": "https://news.alaskaair.com/wp-content/uploads/2024/08/ALK-Investor-Presentation-1Q-2019-vFinalExternal.pdf"
+      }
     },
     {
       "name": "All Nippon Airways",
@@ -648,8 +652,8 @@
     {
       "name": "Hawaiian Airlines",
       "slug": "hawaiian-airlines",
-      "iata": "AS",
-      "icao": "ASA",
+      "iata": "HA",
+      "icao": "HAL",
       "aliases": [],
       "type": "icon",
       "file": "hawaiian-airlines.svg"
@@ -737,7 +741,11 @@
       "icao": "JBU",
       "aliases": [],
       "type": "logo",
-      "file": "jetblue-airways.svg"
+      "file": "jetblue-airways.svg",
+      "icon": {
+        "file": "jetblue-airways-icon.svg",
+        "source": "https://www.jetblue.com/favicon.ico?favicon.2k4h8gfg1omer.ico"
+      }
     },
     {
       "name": "Jetstar",
@@ -1070,7 +1078,11 @@
       "icao": "RBA",
       "aliases": [],
       "type": "logo",
-      "file": "royal-brunei-airlines.svg"
+      "file": "royal-brunei-airlines.svg",
+      "icon": {
+        "file": "royal-brunei-airlines-icon.svg",
+        "source": "https://www.flyroyalbrunei.com/wp-content/uploads/2025/12/1.0-Visual-System.pdf"
+      }
     },
     {
       "name": "Ryanair",
@@ -1088,7 +1100,11 @@
       "icao": "SZS",
       "aliases": [],
       "type": "logo",
-      "file": "sas-connect.svg"
+      "file": "sas-connect.svg",
+      "icon": {
+        "file": "scandinavian-airlines.svg",
+        "source": "https://soaringsymbols.org/airlines/scandinavian-airlines"
+      }
     },
     {
       "name": "Saudia",
@@ -1106,7 +1122,11 @@
       "icao": "SAS",
       "aliases": [],
       "type": "logo",
-      "file": "scandinavian-airlines.svg"
+      "file": "scandinavian-airlines.svg",
+      "icon": {
+        "file": "scandinavian-airlines.svg",
+        "source": "https://soaringsymbols.org/airlines/scandinavian-airlines"
+      }
     },
     {
       "name": "Scoot",
@@ -1926,6 +1946,302 @@
       "type": "icon",
       "file": "air-macau.svg",
       "source": "https://www.airmacau.com.mo/static/js/app.c7d05061f9ad6bed9e88.js"
+    },
+    {
+      "name": "Aeroflot",
+      "slug": "aeroflot",
+      "iata": "SU",
+      "icao": "AFL",
+      "aliases": [
+        "俄罗斯航空",
+        "俄航"
+      ],
+      "type": "icon",
+      "file": "aeroflot.svg",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2026/10/20261022154249792.jpg?OGQwZDVjZGIwYTJlYTgxMzI0MWY1YThlMzhiY2U5NWQuanBn"
+    },
+    {
+      "name": "S7 Airlines",
+      "slug": "s7-airlines",
+      "iata": "S7",
+      "icao": "SBI",
+      "aliases": [
+        "西伯利亚航空",
+        "S7航空"
+      ],
+      "type": "icon",
+      "file": "s7-airlines.svg",
+      "source": "https://www.s7.ru/favicon.ico"
+    },
+    {
+      "name": "Air Busan",
+      "slug": "air-busan",
+      "iata": "BX",
+      "icao": "ABL",
+      "aliases": [
+        "釜山航空"
+      ],
+      "type": "icon",
+      "file": "air-busan.svg",
+      "source": "https://airport.kr/sites/ap_ko/atchmnfl/aamAac/20191106164335121_0.png"
+    },
+    {
+      "name": "Eastar Jet",
+      "slug": "eastar-jet",
+      "iata": "ZE",
+      "icao": "ESR",
+      "aliases": [
+        "易斯达航空",
+        "伊斯达航空"
+      ],
+      "type": "icon",
+      "file": "eastar-jet.svg",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2024/04/20240408110707081.png?6Z+p5Zu95piT5pav6L6+TE9HTy5wbmc="
+    },
+    {
+      "name": "MIAT Mongolian Airlines",
+      "slug": "miat-mongolian-airlines",
+      "iata": "OM",
+      "icao": "MGL",
+      "aliases": [
+        "蒙古航空",
+        "蒙古民用航空"
+      ],
+      "type": "icon",
+      "file": "miat-mongolian-airlines.svg",
+      "source": "https://airport.kr/sites/ap_ko/atchmnfl/aamAac/MGL_logo.png"
+    },
+    {
+      "name": "Myanmar Airways International",
+      "slug": "myanmar-airways-international",
+      "iata": "8M",
+      "icao": "MMA",
+      "aliases": [
+        "缅甸国际航空"
+      ],
+      "type": "icon",
+      "file": "myanmar-airways-international.svg",
+      "source": "https://airport.kr/sites/ap_ko/atchmnfl/aamAac/20191202174007161_0.jpg"
+    },
+    {
+      "name": "SriLankan Airlines",
+      "slug": "srilankan-airlines",
+      "iata": "UL",
+      "icao": "ALK",
+      "aliases": [
+        "斯里兰卡航空"
+      ],
+      "type": "icon",
+      "file": "srilankan-airlines.svg",
+      "source": "https://www.srilankan.com/assets/img/logo-ul.png"
+    },
+    {
+      "name": "SCAT Airlines",
+      "slug": "scat-airlines",
+      "iata": "DV",
+      "icao": "VSV",
+      "aliases": [
+        "斯卡特航空",
+        "SCAT航空"
+      ],
+      "type": "icon",
+      "file": "scat-airlines.svg",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2025/07/th_20250707145154976.jpg?YjkxY2Q3YTAyNWM3YzI2YWJkNTExZGQ4YjU0ZDQ4NS5qcGc="
+    },
+    {
+      "name": "Uzbekistan Airways",
+      "slug": "uzbekistan-airways",
+      "iata": "HY",
+      "icao": "UZB",
+      "aliases": [
+        "乌兹别克斯坦航空",
+        "乌兹别克航空"
+      ],
+      "type": "icon",
+      "file": "uzbekistan-airways.svg",
+      "source": "https://www.uzairways.com/themes/uzairways/images/favicons/apple-icon-180x180.png"
+    },
+    {
+      "name": "Gulf Air",
+      "slug": "gulf-air",
+      "iata": "GF",
+      "icao": "GFA",
+      "aliases": [
+        "海湾航空",
+        "巴林海湾航空"
+      ],
+      "type": "icon",
+      "file": "gulf-air.svg",
+      "source": "https://www.gulfair.com/favicon.ico"
+    },
+    {
+      "name": "Mahan Air",
+      "slug": "mahan-air",
+      "iata": "W5",
+      "icao": "IRM",
+      "aliases": [
+        "马汉航空",
+        "伊朗马汉航空"
+      ],
+      "type": "icon",
+      "file": "mahan-air.svg",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2022/10/20221014183400786.png?VzUg5LyK5pyX6ams5rGJ6Iiq56m65YWs5Y+4LnBuZw=="
+    },
+    {
+      "name": "Batik Air",
+      "slug": "batik-air",
+      "iata": "ID",
+      "icao": "BTK",
+      "aliases": [
+        "印尼巴迪航空",
+        "巴迪航空"
+      ],
+      "type": "icon",
+      "file": "batik-air.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/945dd745e91f414bb7a2cb60a0314992/images/77949de24c564d40bbc657357a43054e.png"
+    },
+    {
+      "name": "Jeju Air",
+      "slug": "jeju-air",
+      "iata": "7C",
+      "icao": "JJA",
+      "aliases": [
+        "济州航空",
+        "濟州航空"
+      ],
+      "type": "icon",
+      "file": "jeju-air.svg",
+      "source": "https://static.jejuair.net/cms/images/ance_atcl/20250318172017769.pdf"
+    },
+    {
+      "name": "Skymark Airlines",
+      "slug": "skymark-airlines",
+      "iata": "BC",
+      "icao": "SKY",
+      "aliases": [
+        "天马航空",
+        "天空航空"
+      ],
+      "type": "icon",
+      "file": "skymark-airlines.svg",
+      "source": "https://www.skymark.co.jp/en/common/images/logo_header_01.png"
+    },
+    {
+      "name": "South African Airways",
+      "slug": "south-african-airways",
+      "iata": "SA",
+      "icao": "SAA",
+      "aliases": [
+        "南非航空"
+      ],
+      "type": "icon",
+      "file": "south-african-airways.svg",
+      "source": "https://www.flysaa.com/o/saa-airways-theme/airways/assets/images/new_favicons/apple-touch-icon.png"
+    },
+    {
+      "name": "Air India Express",
+      "slug": "air-india-express",
+      "iata": "IX",
+      "icao": "AXB",
+      "aliases": [
+        "印度航空快运",
+        "印度快运航空"
+      ],
+      "type": "icon",
+      "file": "air-india-express.svg",
+      "source": "https://www.airindiaexpress.com/etc.clientlibs/air-asia/clientlibs/clientlib-react/resources/favicon.ico"
+    },
+    {
+      "name": "TUI Airways",
+      "slug": "tui-airways",
+      "iata": "BY",
+      "icao": "TOM",
+      "aliases": [
+        "途易航空",
+        "汤姆森航空"
+      ],
+      "type": "icon",
+      "file": "tui-smile.svg",
+      "source": "https://www.tuigroup.com/favicons/tui-favicon.svg"
+    },
+    {
+      "name": "TUI fly Deutschland",
+      "slug": "tui-fly-deutschland",
+      "iata": "X3",
+      "icao": "TUI",
+      "aliases": [
+        "德国途易航空",
+        "TUIfly"
+      ],
+      "type": "icon",
+      "file": "tui-smile.svg",
+      "source": "https://www.tuigroup.com/favicons/tui-favicon.svg"
+    },
+    {
+      "name": "TUI fly Belgium",
+      "slug": "tui-fly-belgium",
+      "iata": "TB",
+      "icao": "JAF",
+      "aliases": [
+        "比利时途易航空"
+      ],
+      "type": "icon",
+      "file": "tui-smile.svg",
+      "source": "https://www.tuigroup.com/favicons/tui-favicon.svg"
+    },
+    {
+      "name": "TUI fly Netherlands",
+      "slug": "tui-fly-netherlands",
+      "iata": "OR",
+      "icao": "TFL",
+      "aliases": [
+        "荷兰途易航空"
+      ],
+      "type": "icon",
+      "file": "tui-smile.svg",
+      "source": "https://www.tuigroup.com/favicons/tui-favicon.svg"
+    },
+    {
+      "name": "Batik Air Malaysia",
+      "slug": "batik-air-malaysia",
+      "iata": "OD",
+      "icao": "MXD",
+      "aliases": [
+        "马印航空",
+        "马来西亚峇迪航空",
+        "Batik Air (Malaysia)",
+        "Malindo Air"
+      ],
+      "type": "icon",
+      "file": "batik-air.svg",
+      "source": "https://airport.kr/sites/ap_ko/atchmnfl/aamAac/20230703101655682_0.png"
+    },
+    {
+      "name": "Royal Jordanian",
+      "slug": "royal-jordanian",
+      "iata": "RJ",
+      "icao": "RJA",
+      "aliases": [
+        "皇家约旦航空",
+        "约旦皇家航空"
+      ],
+      "type": "icon",
+      "file": "royal-jordanian.svg",
+      "source": "https://www.rj.com/-/media/Finance/Annual-Report/Annual-Report-2022-English.pdf?hash=5E3386538C5CDFB671173DBD66DB455B&rev=b0bb5990fcb740f18d7b3c5aff32edda"
+    },
+    {
+      "name": "Rossiya Airlines",
+      "slug": "rossiya-airlines",
+      "iata": "FV",
+      "icao": "SDM",
+      "aliases": [
+        "罗西亚航空",
+        "俄罗斯罗西亚航空",
+        "Rossiya"
+      ],
+      "type": "icon",
+      "file": "rossiya-airlines.svg",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2024/05/20240523143337317.png?NDhkMTIxZTY2ZWZjNDYwNDkyMjRkODE2YTNmYzg5MS5wbmc="
     }
   ]
 }

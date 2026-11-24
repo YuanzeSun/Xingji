@@ -247,6 +247,16 @@
       "sha256": "83f23713f6045449d4224b889363136946a254b2a8f2c7f220404117acb27c0c"
     },
     {
+      "slug": "alaska-airlines",
+      "iata": "AS",
+      "icao": "ASA",
+      "asset": "alaska-airlines-icon.svg",
+      "type": "icon",
+      "source": "https://news.alaskaair.com/wp-content/uploads/2024/08/ALK-Investor-Presentation-1Q-2019-vFinalExternal.pdf",
+      "bytes": 7493,
+      "sha256": "0535e6ccf3239c06de0db34a6d2f4e379663f9ebf768217960bc90c2173e43b1"
+    },
+    {
       "slug": "all-nippon-airways",
       "iata": "NH",
       "icao": "ANA",
@@ -678,8 +688,8 @@
     },
     {
       "slug": "hawaiian-airlines",
-      "iata": "AS",
-      "icao": "ASA",
+      "iata": "HA",
+      "icao": "HAL",
       "asset": "hawaiian-airlines.svg",
       "type": "icon",
       "bytes": 7078,
@@ -775,6 +785,16 @@
       "type": "logo",
       "bytes": 1652,
       "sha256": "068334dded83d0cfb0a5f26a517aa93c84702dee5e9428d0017a3afb61a0acea"
+    },
+    {
+      "slug": "jetblue-airways",
+      "iata": "B6",
+      "icao": "JBU",
+      "asset": "jetblue-airways-icon.svg",
+      "type": "icon",
+      "source": "https://www.jetblue.com/favicon.ico?favicon.2k4h8gfg1omer.ico",
+      "bytes": 6742,
+      "sha256": "c0a37d68c97b6de77648df09afe9961b9eb8308e0af48ac121d5acc1d51ffd12"
     },
     {
       "slug": "jetstar",
@@ -1134,6 +1154,16 @@
       "sha256": "780240eda26a4f613db2ff52e33f82778a2e29303bbe5f95b27e076524f95408"
     },
     {
+      "slug": "royal-brunei-airlines",
+      "iata": "BI",
+      "icao": "RBA",
+      "asset": "royal-brunei-airlines-icon.svg",
+      "type": "icon",
+      "source": "https://www.flyroyalbrunei.com/wp-content/uploads/2025/12/1.0-Visual-System.pdf",
+      "bytes": 6124,
+      "sha256": "abff2f493a0c06ca4c5d9bf86760224542c927af645e69135cc1c34b4f9de960"
+    },
+    {
       "slug": "ryanair",
       "iata": "FR",
       "icao": "RYR",
@@ -1152,6 +1182,16 @@
       "sha256": "dfd65573839e67dedd29a03b9e9a40e7f47d56a54b728dc5a37566a212a1dad5"
     },
     {
+      "slug": "sas-connect",
+      "iata": "SL",
+      "icao": "SZS",
+      "asset": "scandinavian-airlines.svg",
+      "type": "icon",
+      "source": "https://soaringsymbols.org/airlines/scandinavian-airlines",
+      "bytes": 1428,
+      "sha256": "dfd65573839e67dedd29a03b9e9a40e7f47d56a54b728dc5a37566a212a1dad5"
+    },
+    {
       "slug": "saudia",
       "iata": "SV",
       "icao": "SVA",
@@ -1166,6 +1206,16 @@
       "icao": "SAS",
       "asset": "scandinavian-airlines.svg",
       "type": "logo",
+      "bytes": 1428,
+      "sha256": "dfd65573839e67dedd29a03b9e9a40e7f47d56a54b728dc5a37566a212a1dad5"
+    },
+    {
+      "slug": "scandinavian-airlines",
+      "iata": "SK",
+      "icao": "SAS",
+      "asset": "scandinavian-airlines.svg",
+      "type": "icon",
+      "source": "https://soaringsymbols.org/airlines/scandinavian-airlines",
       "bytes": 1428,
       "sha256": "dfd65573839e67dedd29a03b9e9a40e7f47d56a54b728dc5a37566a212a1dad5"
     },
@@ -1904,6 +1954,236 @@
       "source": "https://www.airmacau.com.mo/static/js/app.c7d05061f9ad6bed9e88.js",
       "bytes": 595,
       "sha256": "766d981d404f922b9ab8ccb5f72b598d17813e1f2a6f1f8868f0a21ef72a7bc7"
+    },
+    {
+      "slug": "aeroflot",
+      "iata": "SU",
+      "icao": "AFL",
+      "asset": "aeroflot.svg",
+      "type": "icon",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2026/10/20261022154249792.jpg?OGQwZDVjZGIwYTJlYTgxMzI0MWY1YThlMzhiY2U5NWQuanBn",
+      "bytes": 24098,
+      "sha256": "7aff45acdb62cc930375965149c6e190176c39eaea4311a686e5b08eb016f5d3"
+    },
+    {
+      "slug": "s7-airlines",
+      "iata": "S7",
+      "icao": "SBI",
+      "asset": "s7-airlines.svg",
+      "type": "icon",
+      "source": "https://www.s7.ru/favicon.ico",
+      "bytes": 4403,
+      "sha256": "aad88b27ef4d555d4c3b09131219b12db3acdf1482b8616a70034dd7db2bc797"
+    },
+    {
+      "slug": "air-busan",
+      "iata": "BX",
+      "icao": "ABL",
+      "asset": "air-busan.svg",
+      "type": "icon",
+      "source": "https://airport.kr/sites/ap_ko/atchmnfl/aamAac/20191106164335121_0.png",
+      "bytes": 3186,
+      "sha256": "9f204aedcd1b26ca81afd9fa7470f190b7ae99c8fe97e14645a8d34251cf0879"
+    },
+    {
+      "slug": "eastar-jet",
+      "iata": "ZE",
+      "icao": "ESR",
+      "asset": "eastar-jet.svg",
+      "type": "icon",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2024/04/20240408110707081.png?6Z+p5Zu95piT5pav6L6+TE9HTy5wbmc=",
+      "bytes": 4319,
+      "sha256": "b8096afd3456ffe5eeb9247f8b39b159d6db2e126456d2bfd151a48d8f319bf2"
+    },
+    {
+      "slug": "miat-mongolian-airlines",
+      "iata": "OM",
+      "icao": "MGL",
+      "asset": "miat-mongolian-airlines.svg",
+      "type": "icon",
+      "source": "https://airport.kr/sites/ap_ko/atchmnfl/aamAac/MGL_logo.png",
+      "bytes": 3627,
+      "sha256": "2d9395fa0cecc4547cf67aadd5fde499e76694cc3f528d52a7284edc351939a3"
+    },
+    {
+      "slug": "myanmar-airways-international",
+      "iata": "8M",
+      "icao": "MMA",
+      "asset": "myanmar-airways-international.svg",
+      "type": "icon",
+      "source": "https://airport.kr/sites/ap_ko/atchmnfl/aamAac/20191202174007161_0.jpg",
+      "bytes": 19947,
+      "sha256": "9b36299d06402d90b98df8d1def8932ec8c7ad30a55ef6ed684ec1942deb662a"
+    },
+    {
+      "slug": "srilankan-airlines",
+      "iata": "UL",
+      "icao": "ALK",
+      "asset": "srilankan-airlines.svg",
+      "type": "icon",
+      "source": "https://www.srilankan.com/assets/img/logo-ul.png",
+      "bytes": 9427,
+      "sha256": "b7299055cfcd98336ede215f797f1d935933729eb5d38e8ed444d8e5fe3ef723"
+    },
+    {
+      "slug": "scat-airlines",
+      "iata": "DV",
+      "icao": "VSV",
+      "asset": "scat-airlines.svg",
+      "type": "icon",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2025/07/th_20250707145154976.jpg?YjkxY2Q3YTAyNWM3YzI2YWJkNTExZGQ4YjU0ZDQ4NS5qcGc=",
+      "bytes": 14677,
+      "sha256": "1a345c1bd45751128fc74031d0c75f0de105fd9442e339d253e9ae2e62e5da3f"
+    },
+    {
+      "slug": "uzbekistan-airways",
+      "iata": "HY",
+      "icao": "UZB",
+      "asset": "uzbekistan-airways.svg",
+      "type": "icon",
+      "source": "https://www.uzairways.com/themes/uzairways/images/favicons/apple-icon-180x180.png",
+      "bytes": 4891,
+      "sha256": "3696471eee920ece79afccbe2aa0ed4186b76304b06095b26c49737c6fca5fc9"
+    },
+    {
+      "slug": "gulf-air",
+      "iata": "GF",
+      "icao": "GFA",
+      "asset": "gulf-air.svg",
+      "type": "icon",
+      "source": "https://www.gulfair.com/favicon.ico",
+      "bytes": 8581,
+      "sha256": "9a716382b917288c38e7bd3b733116a4cb9eb2164ed3f18f85dadd0443e33285"
+    },
+    {
+      "slug": "mahan-air",
+      "iata": "W5",
+      "icao": "IRM",
+      "asset": "mahan-air.svg",
+      "type": "icon",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2022/10/20221014183400786.png?VzUg5LyK5pyX6ams5rGJ6Iiq56m65YWs5Y+4LnBuZw==",
+      "bytes": 8443,
+      "sha256": "26130fd0e61aff818529ff4d89b1bb6d2ec73896f753e267ff9ef66ce6cbe848"
+    },
+    {
+      "slug": "batik-air",
+      "iata": "ID",
+      "icao": "BTK",
+      "asset": "batik-air.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/945dd745e91f414bb7a2cb60a0314992/images/77949de24c564d40bbc657357a43054e.png",
+      "bytes": 9099,
+      "sha256": "02b9cea1588206c7c762398fb756847e3d35e590399ef4fb12ce38c17ceca417"
+    },
+    {
+      "slug": "jeju-air",
+      "iata": "7C",
+      "icao": "JJA",
+      "asset": "jeju-air.svg",
+      "type": "icon",
+      "source": "https://static.jejuair.net/cms/images/ance_atcl/20250318172017769.pdf",
+      "bytes": 2748,
+      "sha256": "ae5d2be4227c4eab18bc4bb55a5d8957f7d712ccd84f2668d135bc494bb1058c"
+    },
+    {
+      "slug": "skymark-airlines",
+      "iata": "BC",
+      "icao": "SKY",
+      "asset": "skymark-airlines.svg",
+      "type": "icon",
+      "source": "https://www.skymark.co.jp/en/common/images/logo_header_01.png",
+      "bytes": 5532,
+      "sha256": "d6d0601626c59893f9539e12112a8ef0cc95740f1dedad502045785dcf5fb09c"
+    },
+    {
+      "slug": "south-african-airways",
+      "iata": "SA",
+      "icao": "SAA",
+      "asset": "south-african-airways.svg",
+      "type": "icon",
+      "source": "https://www.flysaa.com/o/saa-airways-theme/airways/assets/images/new_favicons/apple-touch-icon.png",
+      "bytes": 5581,
+      "sha256": "6566bb7d9a9333e01f9a51035c2a7f2f4105cfc4c0a0ad6f7482ef480da48bd3"
+    },
+    {
+      "slug": "air-india-express",
+      "iata": "IX",
+      "icao": "AXB",
+      "asset": "air-india-express.svg",
+      "type": "icon",
+      "source": "https://www.airindiaexpress.com/etc.clientlibs/air-asia/clientlibs/clientlib-react/resources/favicon.ico",
+      "bytes": 3940,
+      "sha256": "2ccd9ae0e6992d2d2bcd9b6ea6e4ba59438d2154619e8183e00c65fafc88cc64"
+    },
+    {
+      "slug": "tui-airways",
+      "iata": "BY",
+      "icao": "TOM",
+      "asset": "tui-smile.svg",
+      "type": "icon",
+      "source": "https://www.tuigroup.com/favicons/tui-favicon.svg",
+      "bytes": 495,
+      "sha256": "1cb9a7d17a99d73d172bb0abdc69fc4a22c17b94e5fd24505f8d71be4eb2176c"
+    },
+    {
+      "slug": "tui-fly-deutschland",
+      "iata": "X3",
+      "icao": "TUI",
+      "asset": "tui-smile.svg",
+      "type": "icon",
+      "source": "https://www.tuigroup.com/favicons/tui-favicon.svg",
+      "bytes": 495,
+      "sha256": "1cb9a7d17a99d73d172bb0abdc69fc4a22c17b94e5fd24505f8d71be4eb2176c"
+    },
+    {
+      "slug": "tui-fly-belgium",
+      "iata": "TB",
+      "icao": "JAF",
+      "asset": "tui-smile.svg",
+      "type": "icon",
+      "source": "https://www.tuigroup.com/favicons/tui-favicon.svg",
+      "bytes": 495,
+      "sha256": "1cb9a7d17a99d73d172bb0abdc69fc4a22c17b94e5fd24505f8d71be4eb2176c"
+    },
+    {
+      "slug": "tui-fly-netherlands",
+      "iata": "OR",
+      "icao": "TFL",
+      "asset": "tui-smile.svg",
+      "type": "icon",
+      "source": "https://www.tuigroup.com/favicons/tui-favicon.svg",
+      "bytes": 495,
+      "sha256": "1cb9a7d17a99d73d172bb0abdc69fc4a22c17b94e5fd24505f8d71be4eb2176c"
+    },
+    {
+      "slug": "batik-air-malaysia",
+      "iata": "OD",
+      "icao": "MXD",
+      "asset": "batik-air.svg",
+      "type": "icon",
+      "source": "https://airport.kr/sites/ap_ko/atchmnfl/aamAac/20230703101655682_0.png",
+      "bytes": 9099,
+      "sha256": "02b9cea1588206c7c762398fb756847e3d35e590399ef4fb12ce38c17ceca417"
+    },
+    {
+      "slug": "royal-jordanian",
+      "iata": "RJ",
+      "icao": "RJA",
+      "asset": "royal-jordanian.svg",
+      "type": "icon",
+      "source": "https://www.rj.com/-/media/Finance/Annual-Report/Annual-Report-2022-English.pdf?hash=5E3386538C5CDFB671173DBD66DB455B&rev=b0bb5990fcb740f18d7b3c5aff32edda",
+      "bytes": 8916,
+      "sha256": "cc68b9dec55c94bbee36216df41994453b2790f9873137adbfeaa87d85f2ab28"
+    },
+    {
+      "slug": "rossiya-airlines",
+      "iata": "FV",
+      "icao": "SDM",
+      "asset": "rossiya-airlines.svg",
+      "type": "icon",
+      "source": "https://www.shanghaiairport.com/uploadfiles/2024/05/20240523143337317.png?NDhkMTIxZTY2ZWZjNDYwNDkyMjRkODE2YTNmYzg5MS5wbmc=",
+      "bytes": 5665,
+      "sha256": "3f9cd0148a15c29b86f0a4f22b50b56b01a85f42e9deba3256d4de51cae5c3cc"
     }
   ]
 }
