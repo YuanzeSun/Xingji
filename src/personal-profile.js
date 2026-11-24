@@ -1,6 +1,6 @@
 import {flightNameLanguage} from './flight-passenger.js';
 import {markFieldSources} from './field-sources.js';
-import {barcodeFieldLocked} from './barcode-fields.js';
+import {ticketFieldLocked} from './barcode-fields.js';
 import { requireCompleteIdentity } from './identity.js';
 
 export const PROFILE_FIELDS = [
@@ -62,7 +62,7 @@ export function applyProfileDefaults(record, profile, { edited = [], previousPro
   const next = profileDefaults(record.type, profile,record), previous = profileDefaults(previousType, previousProfile,previousRecord), out = { ...record };
   const protectedFields = new Set(edited);
   for (const key of Object.keys(next)) {
-    if (!barcodeFieldLocked(record,key) && !protectedFields.has(key) && (!record[key] || record[key] === previous[key])) {
+    if (!ticketFieldLocked(record,key) && !protectedFields.has(key) && (!record[key] || record[key] === previous[key])) {
       out[key] = next[key];
       if(out[key]!==record[key] || !record[key])markFieldSources(out,[key],'profile');
     }

@@ -2,7 +2,7 @@ import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import {placeIdentity} from './places.js';
 import {markFieldSources,importFieldSource} from './field-sources.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
-import {barcodeFieldLocked} from './barcode-fields.js';
+import {ticketFieldLocked} from './barcode-fields.js';
 
 export const LOOKUP_FIELDS = ['railBureau','railModel','railTrainsets','railPowerSupply','railMileage','railRunner','railCarOwner','railPlatform','departureTime','arrivalDate','arrivalTime',...ACTUAL_FLIGHT_FIELDS,'flightDistance','airline','aircraft','terminal','gate','origin','destination','originCode','destinationCode'];
 export const isLookupValue = (record,key) => Object.hasOwn(record.lookupValues || {},key) && JSON.stringify(record.lookupValues[key]) === JSON.stringify(record[key]) && !record.lockedFields?.includes(key);
@@ -18,7 +18,7 @@ export function normalizeLookupValues(input) {
   return result;
 }
 export function markManualFields(record,fields) {
-  fields=fields.filter(key=>!barcodeFieldLocked(record,key));
+  fields=fields.filter(key=>!ticketFieldLocked(record,key));
   markFieldSources(record,fields,'manual');
   record.lookupValues={...record.lookupValues};
   const locked=new Set(record.lockedFields || []);
@@ -26,7 +26,7 @@ export function markManualFields(record,fields) {
   record.lockedFields=[...locked].sort();
 }
 export function applyLookupValues(record,changes,automatic=true,source) {
-  changes=Object.fromEntries(Object.entries(changes).filter(([key])=>!barcodeFieldLocked(record,key)));
+  changes=Object.fromEntries(Object.entries(changes).filter(([key])=>!ticketFieldLocked(record,key)));
   record.lookupValues={...record.lookupValues};
   changes=Object.fromEntries(Object.entries(changes).map(([key,value])=>[key,JOURNEY_DATE_FIELDS.includes(key)?journeyDate(value):value]));
   Object.assign(record,changes);

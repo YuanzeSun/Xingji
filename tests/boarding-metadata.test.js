@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readBCBP} from '../src/bcbp-reader.js';
 import {readBoardingCode} from '../src/bcbp.js';
 import {createRecord,archive,readArchive,applyImport} from '../src/model.js';
-import {barcodeFieldLocked} from '../src/barcode-fields.js';
+import {ticketFieldLocked} from '../src/barcode-fields.js';
 import {boardingJourneyMarkup,boardingMetadataDetails} from '../src/boarding-details.js';
 import {boardingMetadataValues} from '../src/boarding-metadata.js';
 import {markFieldSources} from '../src/field-sources.js';
@@ -35,7 +35,7 @@ test('individually archived legs retain their barcode metadata and display links
     return createRecord(values);
   });
   assert.equal(rows[0].actualBoardingTime,'18:21');assert.equal(rows[0].baggageTagNumbers,'0123456789–0123456790');
-  for(const key of ['actualBoardingTime','checkedBaggageCount','freeBaggageAllowance','frequentFlyerNumber','marketingCarrier'])assert.equal(barcodeFieldLocked(rows[0],key),true,key);
+  for(const key of ['actualBoardingTime','checkedBaggageCount','freeBaggageAllowance','frequentFlyerNumber','marketingCarrier'])assert.equal(ticketFieldLocked(rows[0],key),true,key);
   const second=createRecord({...rows[1],departureDate:{year:2025,dayOfYear:1}});assert.equal(calendarDate(second.departureDate),'2025-01-01');assert.equal(readBoardingCode(second.boardingCode,second.boardingLegIndex).service,'UA857');
   assert.equal(applyImport(rows,rows).records.length,2);assert.equal(readArchive(archive([second]))[0].frequentFlyerNumber,second.frequentFlyerNumber);
   assert.match(boardingJourneyMarkup(rows[0],rows),new RegExp('data-id="'+rows[1].id+'"'));assert.ok(boardingMetadataDetails(second).some(([key])=>key==='marketingCarrier'));

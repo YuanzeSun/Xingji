@@ -15,7 +15,7 @@ import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
 import { multilegCode } from './helpers/multileg-boarding-code.js';
 import {boardingPresentation} from '../src/boarding-language.js';
 import {seatClassField,bindSeatClassFields} from '../src/seat-class-field.js';
-import {barcodeFieldLocked} from '../src/barcode-fields.js';
+import {ticketFieldLocked} from '../src/barcode-fields.js';
 import { symbolImage } from '../src/barcode-symbols.js';
 import { Resvg } from '@resvg/resvg-js';
 import { DEMO_BOARDING_CODE } from '../src/demo-boarding-code.js';
@@ -112,8 +112,8 @@ test('tagged Chinese names, ticket numbers and gates autofill from QR while reco
     for(const origin of ['PEK','LHR']){const presentation=boardingPresentation({...draft,origin,originCode:origin});assert.equal(presentation.language,origin==='PEK'?'zh':'en');assert.equal(presentation.passenger,'张三');}
     const expected=bytes.slice();expected[22]=32;assert.deepEqual(codeBytes(draft.boardingCode.rawBytes),expected);
     for(const key of ['passenger','service','origin','destination','seat','seatClass','airline','ticketNumber','gate','departureDate'])assert.equal(draft.fieldSources[key],'barcode',key);
-    assert.equal(barcodeFieldLocked(draft,'seat'),true);
-    assert.equal(barcodeFieldLocked(draft,'boardingTime'),false);
+    assert.equal(ticketFieldLocked(draft,'seat'),true);
+    assert.equal(ticketFieldLocked(draft,'boardingTime'),false);
   }finally{cleanup();dom.window.close();}
 });
 

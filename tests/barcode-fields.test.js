@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {barcodeFieldLocked,refreshBarcodeFieldLocks} from '../src/barcode-fields.js';
+import {ticketFieldLocked,refreshTicketFieldLocks} from '../src/barcode-fields.js';
 import {createRecord,archive,readArchive} from '../src/model.js';
 import {createBoardingCode} from '../src/bcbp.js';
 import {applyLookupValues,markManualFields} from '../src/lookup-values.js';
@@ -12,7 +12,7 @@ const record=()=>createRecord({type:'flight',template:'air-boarding-pass',origin
 
 test('barcode-derived fields stay protected against manual attribution, provider updates and profile defaults after reopening',()=>{
   const current=readArchive(archive([record()]))[0];
-  assert.equal(barcodeFieldLocked(current,'passenger'),true);assert.equal(barcodeFieldLocked(current,'type'),true);assert.equal(barcodeFieldLocked(current,'departureDate'),false);
+  assert.equal(ticketFieldLocked(current,'passenger'),true);assert.equal(ticketFieldLocked(current,'type'),true);assert.equal(ticketFieldLocked(current,'departureDate'),false);
   applyLookupValues(current,{gate:'B9',departureTime:'08:00',passenger:'OTHER'},true,{kind:'flight-lookup'});
   assert.equal(current.gate,'A101');assert.equal(current.passenger,'张三');assert.equal(current.departureTime,'08:00');
   markManualFields(current,['passenger']);assert.equal(current.fieldSources.passenger,'barcode');
@@ -23,15 +23,15 @@ test('barcode-derived fields stay protected against manual attribution, provider
 test('readonly controls and the seat preset unlock only after the original code is removed',()=>{
   const current=record(),dom=new JSDOM('<form><label class="field"><span>交通方式</span><select name="type"><option value="flight">机票</option></select></label><label class="field"><span>姓名</span><input name="passenger"></label><label class="field"><span>日期</span><input type="date" name="departureDate"></label>'+seatClassField(current)+'</form>'),form=dom.window.document.querySelector('form');
   try{
-    refreshBarcodeFieldLocks(form,current);
+    refreshTicketFieldLocks(form,current);
     assert.equal(form.elements.passenger.readOnly,true);assert.equal(form.elements.passenger.value,'张三');assert.equal(form.elements.type.disabled,true);assert.equal(form.querySelector('[data-seat-preset]').disabled,true);assert.equal(form.elements.departureDate.readOnly,false);
     assert.ok(form.querySelector('[data-source-locked]'));
-    current.boardingCode='';current.boardingCodeSource='';refreshBarcodeFieldLocks(form,current);
+    current.boardingCode='';current.boardingCodeSource='';refreshTicketFieldLocks(form,current);
     assert.equal(form.elements.passenger.readOnly,false);assert.equal(form.elements.type.disabled,false);assert.equal(form.querySelector('[data-seat-preset]').disabled,false);
   }finally{dom.window.close();}
 });
 
 test('self-generated codes leave their ticket fields editable',()=>{
   const current={...record(),boardingCodeSource:'generated'};
-  for(const key of ['type','passenger','service','seat','seatClass','gate'])assert.equal(barcodeFieldLocked(current,key),false,key);
+  for(const key of ['type','passenger','service','seat','seatClass','gate'])assert.equal(ticketFieldLocked(current,key),false,key);
 });

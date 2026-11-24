@@ -120,17 +120,25 @@ function retainFullRoute(route, saved, stops) {
 
 export async function lookupRailDetails(query, { fetcher = globalThis.fetch, signal, enrich = true, railRoute = '', railJourney = '' } = {}) {
   const options = { fetcher, signal };
-  const main = async input => {
+  const main = async (input, reference = false) => {
     const url = new URL('https://rg-api.zenglingkun.cn/api/v2/getTrainMain');
     url.searchParams.set('trainNum',input.trainNum); url.searchParams.set('date',input.date);
-    return railDetails(await requestJSON(url,options), input);
+    return railDetails(await requestJSON(url,options), input, undefined, { reference });
   };
+  async function matchingTrip() {
+    try { return await main(query); }
+    catch (error) {
+      // Only infer an earlier first-station date from a validated matching timetable.
+      if (!error.startDate || query.date !== query.boardingDate.replaceAll('-','')) throw error;
+      return main({ ...query, date:error.startDate.replaceAll('-','') });
+    }
+  }
   let result;
-  try { result = await main(query); }
+  try { result = await matchingTrip(); }
   catch (error) {
-    // Only infer an earlier first-station date from a validated matching timetable.
-    if (!error.startDate || query.date !== query.boardingDate.replaceAll('-','')) throw error;
-    result = await main({ ...query, date:error.startDate.replaceAll('-','') });
+    if (!error.referenceDate) throw error;
+    const reference = await main({ ...query, date: error.referenceDate.replaceAll('-', '') }, true);
+    return { reference };
   }
   if (!enrich) return result;
   const journey = result.railJourney, queriedAt = journey.queriedAt;

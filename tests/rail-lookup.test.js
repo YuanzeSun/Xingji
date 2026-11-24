@@ -45,6 +45,35 @@ test('a boarding day is checked against the first-station date, including an aft
   assert.deepEqual(railCompletion({...ticket,destination:'苏州北'},result,'2026-11-16'),{});
 });
 
+test('RailGo queries the closest returned run day and displays it without saving a different day', async () => {
+  const ticket = record(), calls = [];
+  const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '<input name="service"><button type="submit">保存</button></form>');
+  const form = dom.window.document.querySelector('form');
+  const cleanup = bindRailLookup(form, {
+    getRecord: () => ticket, canQuery: () => true,
+    apply: () => assert.fail('Reference data must not be applied to the ticket'),
+    lookup: query => lookupRailDetails(query, { fetcher: async url => {
+      const date = new URL(url).searchParams.get('date');
+      calls.push(date);
+      return Response.json(payload({ rundays: date === '20261117' ? ['20261118', '20261002', '20261131', '20261116'] : ['20261116'] }));
+    } })
+  });
+  try {
+    form.querySelector('[data-rail-lookup]').click();
+    await new Promise(done => setImmediate(done));
+    assert.deepEqual(calls, ['20261117', '20261116']);
+    const reference = form.querySelector('[data-rail-reference]');
+    assert.equal(reference.hidden, false);
+    assert.match(reference.textContent, /非乘车当日 · 仅供参考.*查询始发日 2026-11-16.*乘车日 2026-11-17.*北京南 06:30.*上海虹桥 11:24/);
+    assert.equal(calendarDate(ticket.departureDate), '2026-11-17');
+    assert.equal(ticket.railModel, '');
+    assert.equal(ticket.railJourney, '');
+    ticket.service = 'G2';
+    form.elements.service.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    assert.equal(reference.hidden, true);
+  } finally { cleanup(); dom.window.close(); }
+});
+
 test('rail metadata persists through backups, is absent from printed tickets, and aggregates only included rail journeys', () => {
   const ticket=record({railBureau:'中国铁路上海局集团有限公司',railModel:'ｃｒ４００ｂｆ－ｓ'});
   assert.equal(ticket.railBureau,'上海局');assert.equal(ticket.railModel,'CR400BF-S');

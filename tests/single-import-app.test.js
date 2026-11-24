@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepareCloud } from './helpers/cloud.js';
-import { applyImport, createRecord } from '../src/model.js';
+import { applyImport, createRecord, mergeThreeWay } from '../src/model.js';
 import { normalizeRailInvoice, parseRailInvoicePage } from '../src/rail-invoice.js';
 import { browser, until } from './helpers/d1-app.js';
 import { pickReceipt, stubReceiptPDF, receiptBytes, receiptPage } from './helpers/receipt-pdf.js';
@@ -60,12 +60,14 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
     assert.deepEqual(github.records(), []);
 
     fill('passenger', '手动姓名');
+    fill('identity', 'P000001');
+    fill('service', 'G1');
     pickReceipt(window, makeFile(receiptPage({ service: 'D21', seat: '06车009号下铺', seatClass: '动卧' })));
     await until(() => status().includes('已填入'));
     const form = document.querySelector('#editor-form');
     assert.equal(form.elements.service.value, 'D21');
     assert.equal(form.elements.origin.value, '北京南');
-    assert.equal(form.elements.passenger.value, '手动姓名');
+    assert.equal(form.elements.passenger.value, '发票姓名');
     assert.equal(form.elements.carriage.value, '06');
     assert.equal(form.elements.seat.value, '009号下铺');
     assert.equal(form.elements.seatClass.value, '动卧');
@@ -73,7 +75,21 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
     assert.equal(form.elements.ticketNumber.value, '');
     assert.equal(form.elements.saleCode.value, '');
     assert.equal(form.elements.identity.required, false);
-    assert.equal(form.elements.identity.value, '');
+    assert.equal(form.elements.identity.value, 'P000001');
+    assert.equal(form.elements.identity.readOnly, false);
+    for (const key of ['service','origin','passenger','carriage','price','departureTime','departureDateYear']) {
+      assert.equal(form.elements[key].readOnly, true, key);
+    }
+    assert.equal(form.elements.departureDateMonth.disabled, true);
+    assert.equal(form.elements.departureDateDay.disabled, true);
+    assert.equal(form.querySelector('[data-seat-number]').readOnly, true);
+    assert.equal(form.querySelector('[data-berth]').disabled, true);
+    assert.equal(form.querySelector('[data-rail-standing]').disabled, true);
+    assert.equal(form.querySelector('[data-code-upload]').disabled, true);
+    fill('service', 'G2');
+    fill('departureDateYear', '2026');
+    assert.equal(form.elements.service.value, 'D21');
+    assert.equal(form.elements.departureDateYear.value, '2024');
     assert.doesNotMatch(form.textContent, /1101012000\*{4}0012/);
     assert.equal(form.querySelector('[data-field-source="service"]').dataset.sourceKind, 'pdf');
     assert.match(form.textContent, /电子报销凭证资料.*电子客票号.*2600000000000000000000001/s);
@@ -83,15 +99,21 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
     await until(() => github.records().length === 1);
     const [saved] = github.records();
     assert.deepEqual(saved.railInvoice, { electronicTicketNumber: '2600000000000000000000001' });
-    assert.equal(saved.identity, '');
+    assert.equal(saved.identity, 'P000001');
+    assert.ok(saved.lockedFields.includes('service'));
     assert.equal(saved.ticketCode, '');
     assert.doesNotMatch(JSON.stringify(saved), /26000000000000000001(?!\d)|2026-06-01|1101012000\*{4}0012|示例单位|100000000000000001/);
 
-    const printed = createRecord({ ...saved, id: 'printed-ticket', ticketNumber: 'A000001', railInvoice: undefined });
+    const printed = createRecord({ ...saved, id: 'printed-ticket', ticketNumber: 'A000001', railInvoice: undefined,
+      fieldSources: {service:'manual',departureTime:'manual'}, lockedFields: ['service','departureTime'] });
     const { records: merged } = applyImport([printed], [saved]);
     assert.equal(merged.length, 1);
     assert.equal(merged[0].ticketNumber, 'A000001');
     assert.deepEqual(merged[0].railInvoice, saved.railInvoice);
+    assert.equal(merged[0].fieldSources.service, 'pdf');
+    const edited = mergeThreeWay([printed], [{...saved, id:printed.id}], [printed]).records[0];
+    assert.equal(edited.fieldSources.service, 'pdf');
+    assert.equal(edited.fieldSources.departureTime, 'pdf');
     await until(() => !document.querySelector('dialog'));
     document.querySelector('.page-header [data-action="new"]').click();
     await until(() => document.querySelector('#editor-form'));

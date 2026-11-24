@@ -1,10 +1,10 @@
 import {BOARDING_METADATA_LABELS,BOARDING_METADATA_FIELDS} from './boarding-metadata.js';
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
-import {barcodeFieldLocked,refreshBarcodeFieldLocks} from './barcode-fields.js';
+import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
-import {fieldSourceBadge,hasFieldValue,markFieldSources,refreshFieldSources} from './field-sources.js';
+import {fieldSourceBadge,hasFieldValue,markFieldSources,railInvoiceFieldLocked,refreshFieldSources} from './field-sources.js';
 import {readBoardingCode} from './bcbp.js';
 import {flightPassengerName} from './flight-passenger.js';
 import { bindIdentityInput } from './identity.js';
@@ -472,19 +472,19 @@ function bindRailReceipt(form, activeEditor) {
       const record = await readRailInvoicePDF(selected);
       if (!active()) return;
       const changes = Object.fromEntries(Object.entries(record.fieldSources).filter(([key, kind]) =>
-        kind === 'pdf' && FIELDS.includes(key) && !['type', 'template', 'provenance'].includes(key) &&
-        !draft.lockedFields.includes(key) && draft.fieldSources[key] !== 'manual' && hasFieldValue(record[key])
+        kind === 'pdf' && FIELDS.includes(key) && !['type', 'template', 'provenance'].includes(key) && hasFieldValue(record[key])
       ).map(([key]) => [key, record[key]]));
       for (const side of ['origin', 'destination']) {
-        if (changes[side] && !Object.hasOwn(changes, side + 'Code') && !draft.lockedFields.includes(side + 'Code')) changes[side + 'Code'] = '';
+        if (changes[side] && !Object.hasOwn(changes, side + 'Code')) changes[side + 'Code'] = '';
       }
-      if (changes.railStanding && (draft.seat || changes.seat)) delete changes.railStanding;
-      if (changes.seat && draft.railStanding) delete changes.seat;
+      if (changes.railStanding) changes.seat = '';
+      else if (changes.seat) changes.railStanding = false;
       if (!Object.keys(changes).length) throw new Error('没有可填入的行程字段');
       const next = { ...draft, lookupValues: { ...draft.lookupValues } };
       if (lookupContext(draft) !== lookupContext({ ...draft, ...changes })) clearLookupValues(next);
       Object.assign(next, changes);
       for (const key of Object.keys(changes)) delete next.lookupValues[key];
+      next.lockedFields = [...new Set([...next.lockedFields, ...Object.keys(changes)])].sort();
       markFieldSources(next, Object.keys(changes), 'pdf');
       markFieldSources(next, JOURNEY_DATE_FIELDS.filter(key => changes[key]).map(key => key + 'Year'), 'pdf');
       if (!draft.sources.some(item => item.kind === 'pdf' && item.label === '电子报销凭证')) next.sources = [...draft.sources, ...record.sources];
@@ -492,7 +492,7 @@ function bindRailReceipt(form, activeEditor) {
       editRecord(next, { imported, preserve: true, original });
       modalFocus = returnFocus;
       const updatedForm = modalRoot.querySelector('#editor-form');
-      updatedForm.querySelector('[data-rail-receipt-status]').textContent = '已填入识别结果，请核对。';
+      updatedForm.querySelector('[data-rail-receipt-status]').textContent = '已填入，PDF 字段已锁定。';
       updatedForm.querySelector('[data-rail-receipt]').focus({ preventScroll: true });
     } catch (error) {
       if (active()) status.textContent = error.message || '读取 PDF 失败，请重试';
@@ -993,7 +993,7 @@ function editRecord(record = newPersonalRecord(), {
     for(const key of filled)if(form.elements[key])form.elements[key].value=draft[key];
     editor.dirty=true;
     refreshFieldSources(form,draft);
-    refreshBarcodeFieldLocks(form,draft);
+    refreshTicketFieldLocks(form,draft);
     const metadata=form.querySelector('.boarding-metadata');
     if(metadata&&BOARDING_METADATA_FIELDS.some(key=>draft[key]))metadata.open=true;
     const journey=form.querySelector('[data-boarding-journey]');
@@ -1008,20 +1008,23 @@ function editRecord(record = newPersonalRecord(), {
   form.addEventListener('input', event => {
     if (event.target.matches('[data-rail-start]')) return;
     const target=event.target;
+    const dateKey=target.closest('[data-journey-date]')?.dataset.journeyDate;
     const changedKey=target.name || (target.matches('[data-seat-preset]') ? 'seatClass'
       : target.matches('[data-seat-number],[data-berth]') ? 'seat'
       : target.matches('[data-rail-standing]') ? 'railStanding' : '');
     if (!lookupApplying && changedKey === 'type') {
-      if (typeFixed || barcodeFieldLocked(draft,'type')) { form.elements.type.value=draft.type; return; }
+      if (typeFixed || ticketFieldLocked(draft,'type')) { form.elements.type.value=draft.type; return; }
       if (['rail','flight'].includes(event.target.value) && event.target.value !== draft.type) {
         editRecord(newPersonalRecord(event.target.value));
         editor.dirty=true;
         return;
       }
     }
-    if(!lookupApplying && barcodeFieldLocked(draft,changedKey)){refreshBarcodeFieldLocks(form,draft);return;}
+    if(!lookupApplying && (ticketFieldLocked(draft,changedKey) || (dateKey && railInvoiceFieldLocked(draft,dateKey)))){
+      refreshTicketFieldLocks(form,draft);return;
+    }
     if (target.matches('[data-rail-standing]')) {
-      if(barcodeFieldLocked(draft,'seat')){refreshBarcodeFieldLocks(form,draft);return;}
+      if(ticketFieldLocked(draft,'seat')){refreshTicketFieldLocks(form,draft);return;}
       draft.railStanding = target.checked;
       if (draft.railStanding) draft.seat = '';
       markManualFields(draft, ['railStanding']);
@@ -1030,10 +1033,10 @@ function editRecord(record = newPersonalRecord(), {
     }
     const previousRecord={...draft}, previousTemplate = draft.template, previousStatus = draft.flightStatus, previousQuery=lookupContext(draft);
     if (!lookupApplying && ['passenger','identity'].includes(event.target.name)) editor.personalEdited.add(event.target.name);
-    const data = new FormData(form); for (const [key, value] of data) if (FIELDS.includes(key) && !JOURNEY_DATE_FIELDS.includes(key) && !barcodeFieldLocked(draft,key)) draft[key] = value;
+    const data = new FormData(form); for (const [key, value] of data) if (FIELDS.includes(key) && !JOURNEY_DATE_FIELDS.includes(key) && !ticketFieldLocked(draft,key)) draft[key] = value;
     for(const key of JOURNEY_DATE_FIELDS)if(form.elements[key+'Year'])draft[key]=readTicketDate(form,key,draft);
     if (!flight) {
-      if(!barcodeFieldLocked(draft,'railStanding') && !barcodeFieldLocked(draft,'seat'))draft.railStanding = form.querySelector('[data-rail-standing]').checked;
+      if(!ticketFieldLocked(draft,'railStanding') && !ticketFieldLocked(draft,'seat'))draft.railStanding = form.querySelector('[data-rail-standing]').checked;
       draft.ticketMarks = collectMarks(form).filter(mark => mark.text);
       if (data.get('template') === 'rail-receipt' && form.querySelector('[data-refund-receipt]')?.checked) draft.template = 'rail-refund-receipt';
     }
@@ -1041,7 +1044,6 @@ function editRecord(record = newPersonalRecord(), {
     if(!lookupApplying){
       const key=event.target.name || (event.target.matches('[data-seat-number],[data-berth]') ? 'seat' : event.target.matches('[data-seat-preset]') ? 'seatClass' : event.target.matches('[data-refund-receipt]') ? 'template' : '');
       if(event.target.closest('.ticket-mark-row'))markManualFields(draft,['ticketMarks']);
-      const dateKey=event.target.closest('[data-journey-date]')?.dataset.journeyDate;
       if(dateKey){markManualFields(draft,[dateKey]);markFieldSources(draft,[dateKey+'Year'],'manual');if(barcodeDateDay(draft,dateKey))draft.fieldSources[dateKey]='barcode';}
       else if(FIELDS.includes(key))markManualFields(draft,[key,...(['origin','destination'].includes(key) ? [key+'Code'] : [])]);
       if(previousQuery!==lookupContext(draft)){
@@ -1054,7 +1056,7 @@ function editRecord(record = newPersonalRecord(), {
     if (previousStatus !== draft.flightStatus || previousTemplate !== draft.template) { editRecord(draft, { imported, preserve: true, original }); return; }
     if(flight)updatePersonalFields(previousRecord);
     refreshFieldSources(form,draft);
-    refreshBarcodeFieldLocks(form,draft);
+    refreshTicketFieldLocks(form,draft);
     document.querySelector('#editor-preview').innerHTML = ticketSVG(draft);
   });
   form.addEventListener('click', event => {

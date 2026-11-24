@@ -24,11 +24,21 @@ export function railQuery(record, startDate = record.departureDate) {
   return { trainNum, date:startDate.replaceAll('-', ''), boardingDate:calendarDate(record.departureDate), origin, destination };
 }
 
-export function railDetails(payload, query, queriedAt = new Date().toISOString()) {
+const runDateLabel = value => `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6)}`;
+function nearestRunDate(runDays, boardingDate) {
+  const boardingTime = Date.parse(boardingDate);
+  const distance = date => Math.abs(Date.parse(date) - boardingTime);
+  return (runDays || []).filter(value => typeof value === 'string' && /^\d{8}$/.test(value))
+    .map(runDateLabel).filter(validDate).sort((a, b) => distance(a) - distance(b) || a.localeCompare(b))[0];
+}
+
+export function railDetails(payload, query, queriedAt = new Date().toISOString(), { reference = false } = {}) {
   const row = payload?.data;
   if (payload?.success !== true || !row || Array.isArray(row)) throw new Error('未查到该始发日期的列车资料，可手动填写');
-  if (!Array.isArray(row.numberFull) || !row.numberFull.some(number => service(number) === query.trainNum)
-    || !Array.isArray(row.rundays) || !row.rundays.includes(query.date)) throw new Error('返回资料未确认该车次与始发日期，未填入');
+  if (!Array.isArray(row.numberFull) || !row.numberFull.some(number => service(number) === query.trainNum)) {
+    throw new Error('RailGo 未确认所查车次');
+  }
+  const runDays = Array.isArray(row.rundays) ? row.rundays : [];
   if (!Array.isArray(row.timetable) || row.timetable.length > 300) throw new Error('返回时刻表格式异常，未填入');
   const from = row.timetable.findIndex(stop => stationName(stop?.station) === query.origin), to = row.timetable.findIndex(stop => stationName(stop?.station) === query.destination);
   if (from < 0 || to <= from) throw new Error('返回列车不符合已填写的乘车区间，未填入');
@@ -36,8 +46,18 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
   const stop = row.timetable[from];
   if (!Number.isInteger(stop.day) || stop.day < 0 || stop.day > 7 || !railTime(stop.depart)) throw new Error('无法确认该站的发车日期，未填入');
   const offset = stop.day + (railTime(stop.arrive) && stop.depart < stop.arrive ? 1 : 0);
-  const startDate = `${query.date.slice(0, 4)}-${query.date.slice(4, 6)}-${query.date.slice(6)}`;
-  if (shiftRailDate(startDate, offset) !== query.boardingDate) {
+  const startDate = runDateLabel(query.date);
+  const boardingDate = shiftRailDate(startDate, offset);
+  if (!runDays.includes(query.date)) {
+    const error = new Error('RailGo 未确认所查日期的开行资料');
+    if (!reference) {
+      const actualStart = shiftRailDate(query.boardingDate, -offset);
+      if (query.date === query.boardingDate.replaceAll('-', '') && runDays.includes(actualStart.replaceAll('-', ''))) error.startDate = actualStart;
+      else error.referenceDate = nearestRunDate(runDays, query.boardingDate);
+    }
+    throw error;
+  }
+  if (!reference && boardingDate !== query.boardingDate) {
     const suggested = shiftRailDate(query.boardingDate, -offset), error = new Error(`该站为始发后第 ${offset + 1} 天发车，请将列车始发日期改为 ${suggested} 后重查`);
     error.startDate = suggested; throw error;
   }
@@ -57,7 +77,7 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
     }
   }
   const railJourney = normalizeRailJourney({
-    query: { trainNum: query.trainNum, startDate: journeyDate(startDate), boardingDate: journeyDate(query.boardingDate), origin: query.origin, destination: query.destination },
+    query: { trainNum: query.trainNum, startDate: journeyDate(startDate), boardingDate: journeyDate(boardingDate), origin: query.origin, destination: query.destination },
     queriedAt,
     stops: stops.map(stop => ({ ...stop, arrivalDate: journeyDate(stop.arrivalDate), departureDate: journeyDate(stop.departureDate) })),
   });

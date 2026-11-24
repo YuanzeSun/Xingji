@@ -7,7 +7,7 @@ import {flightPassengerName} from './flight-passenger.js';
 import {normalizePlaces} from './places.js';
 import {markManualFields} from './lookup-values.js';
 import {fieldSourceBadge,markFieldSources,railBarcodeFieldLocked,refreshFieldSources} from './field-sources.js';
-import {barcodeFieldLocked,refreshBarcodeFieldLocks} from './barcode-fields.js';
+import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
 import { codeCameraMarkup, bindCodeCamera } from './code-camera.js';
 import { renderCodeData } from './barcode-data.js';
 import { isLinearTicketCode, normalizeTicketCode } from './ticket-code.js';
@@ -29,15 +29,16 @@ function railExampleMarkup(record) {
   const linear = record.template === 'rail-red-barcode';
   const example = linear ? (railLinearExample ??= renderCodeData(DEMO_RAIL_LINEAR_CODE))
     : (railQRExample ??= renderCodeData(DEMO_RAIL_TICKET_CODE));
-  return `<figure class="boarding-code-examples rail-code-example${linear ? ' rail-linear-example' : ''}" data-code-examples ${record.ticketCode ? 'hidden' : ''}><figcaption>扫码示例</figcaption><span class="boarding-code-sample-image" aria-hidden="true">${example}</span></figure>`;
+  return `<figure class="boarding-code-examples rail-code-example${linear ? ' rail-linear-example' : ''}" data-code-examples ${record.ticketCode || record.railInvoice?.electronicTicketNumber ? 'hidden' : ''}><figcaption>扫码示例</figcaption><span class="boarding-code-sample-image" aria-hidden="true">${example}</span></figure>`;
 }
 export function ticketCodeEditor(record, { fromScan = false, generator = true } = {}) {
   const { field, title, normalize } = configuration(record);
   const flight = record.type === 'flight';
-  const referenceButton = fromScan ? `<button type="button" class="button small secondary" id="code-use-scan" ${record[field] ? 'hidden' : ''}>读取本次图片中的码</button>` : '';
-  const upload = '<button type="button" class="button small secondary" data-code-upload>上传图片</button><input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden />';
+  const disabled = !flight && record.railInvoice?.electronicTicketNumber ? ' disabled' : '';
+  const referenceButton = fromScan && !disabled ? `<button type="button" class="button small secondary" id="code-use-scan" ${record[field] ? 'hidden' : ''}>读取本次图片中的码</button>` : '';
+  const upload = `<button type="button" class="button small secondary" data-code-upload${disabled}>上传图片</button><input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden${disabled} />`;
   const saved = normalize(record[field]);
-  const controls = `<div class="saved-code" id="saved-code" ${saved ? '' : 'hidden'}>${thumbnail(saved)}</div><div class="code-actions">${referenceButton}<button type="button" class="button small secondary" data-code-start>相机扫描</button>${upload}<button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>`;
+  const controls = `<div class="saved-code" id="saved-code" ${saved ? '' : 'hidden'}>${thumbnail(saved)}</div><div class="code-actions">${referenceButton}<button type="button" class="button small secondary" data-code-start${disabled}>相机扫描</button>${upload}<button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>`;
   const scan = `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}</div>${flight ? boardingExamplesMarkup(record[field]) : railExampleMarkup(record)}</div>`;
   return `<section data-code-editor class="editor-extra${flight ? '' : ' full-field rail-code-entry'}" ${flight ? '' : 'data-rail-code-entry'} id="code-editor"><h3>${flight ? title : '扫码录入'}${fieldSourceBadge(field,record)}</h3>${scan}${codeCameraMarkup()}${flight && generator ? boardingGeneratorMarkup(record) : ''}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
 }
@@ -56,11 +57,11 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     find('code-remove').hidden = !removable(draft,field);
     const reference = find('code-use-scan');
     if (reference) reference.hidden = !!draft[field];
-    section.querySelector('[data-code-examples]').hidden = !!draft[field];
+    section.querySelector('[data-code-examples]').hidden = !!(draft[field] || draft.railInvoice?.electronicTicketNumber);
   }
   function currentRecord() {
     const record={...draft};
-    for(const key of BOARDING_SHARED_FIELDS)if(form.elements[key] && !barcodeFieldLocked(draft,key))record[key]=JOURNEY_DATE_FIELDS.includes(key)?readTicketDate(form,key,draft):form.elements[key].value;
+    for(const key of BOARDING_SHARED_FIELDS)if(form.elements[key] && !ticketFieldLocked(draft,key))record[key]=JOURNEY_DATE_FIELDS.includes(key)?readTicketDate(form,key,draft):form.elements[key].value;
     return normalizePlaces(record);
   }
   function showDifferences(record=currentRecord()) {
@@ -154,7 +155,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
       refreshBoardingGenerator(form,draft,{profile});
     }
     refreshFieldSources(form,draft);
-    refreshBarcodeFieldLocks(form,draft);
+    refreshTicketFieldLocks(form,draft);
     reset();showSaved();
     if (flight) showDifferences();
     if (code.railFields) status.textContent = '已扫码录入，二维码字段已锁定';
@@ -163,7 +164,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     error.textContent='';changed({filled,previousRecord,codeStatus:status.textContent,railFields:code.railFields});
   }
   async function read(file, source = 'manual', options) {
-    if (!isCurrent()) return;
+    if (!isCurrent() || draft.railInvoice?.electronicTicketNumber) return;
     const explicit = source !== 'camera' || options?.cameraFrame === 0;
     reset(); const request = generation; loading = true;
     if (explicit) { status.textContent = '正在识别条码…'; error.textContent = ''; }
@@ -230,7 +231,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     }
     markManualFields(draft,[field]);
     consistency.hidden=true;
-    refreshFieldSources(form,draft);refreshBarcodeFieldLocks(form,draft);
+    refreshFieldSources(form,draft);refreshTicketFieldLocks(form,draft);
     status.textContent='';error.textContent='';showSaved();changed();
   });
   cancel.addEventListener('click', () => { reset(); status.textContent = ''; error.textContent = ''; updateGenerated(); });
@@ -241,7 +242,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
       editBoardingGeneratorField(input);
     } else {
       if(input.closest('[data-code-editor]'))return;
-      if(barcodeFieldLocked(draft,input.name)){refreshBarcodeFieldLocks(form,draft);return;}
+      if(ticketFieldLocked(draft,input.name)){refreshTicketFieldLocks(form,draft);return;}
       if(!BOARDING_SHARED_FIELDS.includes(input.closest('[data-journey-date]')?.dataset.journeyDate || input.name) && !input.matches('[data-seat-preset]'))return;
     }
     clearTimeout(updateTimer);
@@ -261,7 +262,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     if(draft.boardingCode && draft.boardingCodeSource!=='generated')showDifferences();
     else updateGenerated();
   }
-  refreshBarcodeFieldLocks(form,draft);
-  if (autoRead && referenceURL && !draft[field] && draft.fieldSources?.[field] !== 'manual') readReference('photo');
+  refreshTicketFieldLocks(form,draft);
+  if (autoRead && referenceURL && !draft[field] && !draft.railInvoice?.electronicTicketNumber && draft.fieldSources?.[field] !== 'manual') readReference('photo');
   return () => { disposed = true; clearTimeout(updateTimer);form.removeEventListener('input',inputChanged);form.removeEventListener('change',inputChanged);form.removeEventListener('submit',submit,true); camera.dispose(); reset(); };
 }
