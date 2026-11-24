@@ -1,7 +1,10 @@
-export function openCameraStream(mediaDevices) {
+export function openCameraStream(mediaDevices, { deviceId, zoom = false } = {}) {
   return mediaDevices.getUserMedia({
     audio: false,
-    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+    video: {
+      ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: 'environment' } }),
+      width: { ideal: 1920 }, height: { ideal: 1080 }, ...(zoom ? { zoom: true } : {})
+    }
   });
 }
 

@@ -44,7 +44,7 @@ test('flight code editor reads and rebuilds the barcode without manual crop cont
   let changes = 0;
   const dispose = bindTicketCodeEditor(form, draft, () => changes++, { loadRebuilder: async () => async (file, type) => { assert.equal(type, 'flight'); return { codes: [{ format: 'PDF417', data: code, verified: true }], issues: [] }; } });
   Object.defineProperty(form.querySelector('#code-photo'), 'files', { value: [{}] }); form.querySelector('#code-photo').dispatchEvent(new dom.window.Event('change')); await new Promise(r => setTimeout(r, 0));
-  assert.equal(form.querySelector('canvas'), null); assert.equal(form.querySelector('[type="range"]'), null);
+  assert.equal(form.querySelector('canvas'), null); assert.equal(form.querySelector('[type="range"]:not([data-code-zoom-slider])'), null);
   assert.deepEqual(draft.boardingCode, code); assert.equal(changes, 1); assert.match(form.querySelector('#code-status').textContent, /PDF417/);
   form.querySelector('#code-remove').click(); assert.equal(draft.boardingCode, ''); dispose(); dom.window.close();
 });

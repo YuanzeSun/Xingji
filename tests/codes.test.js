@@ -61,7 +61,7 @@ test('code editor rebuilds automatically, blocks pending saves and preserves exi
   const dispose = bindTicketCodeEditor(form, record, () => changed++, { loadRebuilder: async () => () => new Promise(resolve => { finish = resolve; }) });
   const choose = async () => { Object.defineProperty(form.querySelector('#code-photo'), 'files', { value: [{}], configurable: true }); form.querySelector('#code-photo').dispatchEvent(new dom.window.Event('change')); await new Promise(r => setTimeout(r, 0)); };
   await choose();
-  assert.equal(form.querySelector('#code-cropper'), null); assert.equal(form.querySelector('[type="range"]'), null);
+  assert.equal(form.querySelector('#code-cropper'), null); assert.equal(form.querySelector('[type="range"]:not([data-code-zoom-slider])'), null);
   const blocked = new dom.window.Event('submit', { bubbles: true, cancelable: true }); form.dispatchEvent(blocked); assert.equal(blocked.defaultPrevented, true);
   finish({ codes: [{ format: 'QRCode', data: code, verified: true }], issues: [] }); await new Promise(r => setTimeout(r, 0));
   assert.deepEqual(record.ticketCode, code); assert.equal(changed, 1); assert.match(form.querySelector('#code-status').textContent, /重新编码后信息已核对/);
