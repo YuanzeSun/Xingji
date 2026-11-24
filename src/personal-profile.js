@@ -11,7 +11,7 @@ export const PROFILE_FIELDS = [
 ];
 export const GENDER_OPTIONS = [['','未设置'],['男','男'],['女','女']];
 export const DOCUMENT_TYPES = { 'national-id':'居民身份证', passport:'护照', 'hk-macau-permit':'港澳通行证', 'taiwan-permit':'台湾通行证', 'residence-permit':'居留证', other:'其他证件' };
-export const MAX_MEMBERSHIPS = 20;
+const MAX_MEMBERSHIPS = 20;
 const text = (value, label, max = 100) => {
   if (value === undefined) return '';
   if (typeof value !== 'string' || value.length > max) throw new Error(`${label}格式无效或过长`);
