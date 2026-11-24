@@ -203,6 +203,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
   const camera = bindCodeCamera(section, (image, options) => read(image, 'camera', options), { asCanvas: flight, ...cameraOptions, onStart:onCameraStart, onCancel: () => { reset(); status.textContent = ''; error.textContent = ''; } });
   form.querySelector('[data-rail-photo]')?.addEventListener('click',camera.stop,true);
   form.querySelector('[data-rail-photo-file]')?.addEventListener('change',camera.stop,true);
+  form.querySelector('[data-rail-receipt-file]')?.addEventListener('change',camera.stop,true);
   section.querySelector('[data-code-upload]')?.addEventListener('click', () => photo.click());
   photo.addEventListener('change', () => { const file = photo.files?.[0]; if (file) { onCameraStart?.(); camera.stop(); read(file); } });
   find('code-use-scan')?.addEventListener('click', () => readReference());

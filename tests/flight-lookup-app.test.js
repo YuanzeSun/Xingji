@@ -5,7 +5,7 @@ import { indexedDB } from 'fake-indexeddb';
 import { prepareCloud } from './helpers/cloud.js';
 
 test('the editor fills a flight through the provider, preserves private input and saves the selected schedule and attribution', async () => {
-  const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost/#import' }), { window } = dom;
+  const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost/#archive' }), { window } = dom;
   for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData', 'Image']) Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
   Object.defineProperty(globalThis, 'navigator', { value: window.navigator, configurable: true }); Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true });
   window.scrollTo = () => {}; window.HTMLDialogElement.prototype.showModal = function() { this.open = true; }; window.HTMLDialogElement.prototype.close = function() { this.open = false; }; globalThis.confirm = () => true;
@@ -20,7 +20,7 @@ test('the editor fills a flight through the provider, preserves private input an
   const wait = async fn => { for (let i = 0; i < 250; i++) { if (await fn()) return; await new Promise(resolve => setTimeout(resolve, 5)); } assert.fail('Flight lookup did not settle'); };
   const fill = (name, value) => { const input = document.querySelector(`#editor-form [name="${name}"]`); input.value = value; input.dispatchEvent(new window.Event('input', { bubbles: true })); };
   try {
-    const db = await import('../src/db.js'); await import('../src/app.js'); await wait(() => document.querySelector('[data-action=new]'));
+    const db = await import('../src/db.js'); await import('../src/app.js'); await wait(() => document.querySelector('[data-action=new]:not(:disabled)'));
     document.querySelector('[data-action=new]').click(); await wait(() => document.querySelector('#editor-form'));
     fill('type', 'flight'); assert.ok(document.querySelector('.flight-lookup'));
     fill('service', 'CA181'); fill('departureDate', '2026-07-18'); fill('passenger', 'LI/MING'); fill('identity', 'P000001'); fill('seat', '24K'); fill('seatClass', 'Y'); fill('price', '580'); fill('pnr', 'ABC123'); fill('aircraftRegistration', 'B-0001');

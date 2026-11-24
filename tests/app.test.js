@@ -125,9 +125,9 @@ test('app creates, reloads, edits, imports and filters personal records without 
   await waitFor(() => !document.querySelector('dialog'));
   records = await get('records', []); assert.equal(records[0].type, 'rail'); assert.equal(records[0].template, 'rail-receipt');
   assert.deepEqual(records[0].ticketMarks, []);
-  click('[data-action="navigate"][data-page="import"]'); await waitFor(() => document.querySelector('#import-text'));
-  document.querySelector('#import-text').value = '日期：2026-11-15 车次：G6203\n出发：广州南 到达：深圳北\n座位：06A 票价：74.50 （网）';
-  click('[data-action="parse-text"]'); await waitFor(() => document.querySelector('#editor-form'));fill('departureTime','08:00');fill('passenger','示例旅客');fill('identity','P000001');fill('carriage','05');fill('seatClass','二等座');
+  click('[data-action="new"]'); await waitFor(() => document.querySelector('#editor-form'));
+  fill('origin','广州南');fill('destination','深圳北');fill('service','G6203');fill('departureDate','2026-11-15');
+  fill('seat','06A');fill('price','74.50');fill('departureTime','08:00');fill('passenger','示例旅客');fill('identity','P000001');fill('carriage','05');fill('seatClass','二等座');
   document.querySelector('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await waitFor(() => document.querySelector('#editor-error')?.textContent.includes('与已有票据冲突'));
   assert.equal((await get('records', []))[0].seat, '09A');
@@ -155,16 +155,8 @@ test('app creates, reloads, edits, imports and filters personal records without 
   assert.equal(document.querySelector('#github-form,[data-action="import-csv"]'), null);
   assert.equal(document.querySelector('[data-action="restore"]'), null);
   assert.doesNotMatch(document.body.textContent, /回收站/);
-  click('[data-action="navigate"][data-page="import"]'); await waitFor(() => document.querySelector('#import-files'));
-  const input = document.querySelector('#import-files');
-  assert.doesNotMatch(input.accept, /csv/i);
-  Object.defineProperty(input, 'files', {
-    value: [{ name: 'tickets.csv', type: 'text/csv', size: 10, text: async () => assert.fail('CSV should not be read') }],
-    configurable: true,
-  });
-  input.dispatchEvent(new window.Event('change', { bubbles: true }));
-  await waitFor(() => document.querySelector('#import-status').textContent.includes('请选择图片'));
-  assert.equal(document.querySelector('dialog'), null);
+  await waitFor(() => document.querySelector('[data-action=import-json]:not(:disabled)'));
+  const input = document.querySelector('#import-json-file');
   const json = JSON.stringify(fullBackup(Array.from({ length: 100 }, (_, i) => createRecord({
     service: 'G' + (100 + i), departureDate: '2026-10-01', origin: '测试出发' + i, destination: '测试到达' + i,
     departureTime: '08:00', passenger: '测试旅客', identity: 'TEST123', carriage: '05', seat: '08F', seatClass: '二等座'

@@ -1,62 +1,58 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { archive, createRecord } from '../src/model.js';
 import { prepareCloud } from './helpers/cloud.js';
 import { browser, until } from './helpers/d1-app.js';
+import { pickReceipt, stubReceiptPDF } from './helpers/receipt-pdf.js';
 
-test('file and text imports accept one ticket per review and reject multiple tickets', async () => {
+test('ticket entry is in the archive and rail receipts accept one PDF journey per review', async () => {
   const window = browser();
   location.hash = 'import';
   const github = await prepareCloud();
-  const fields = {
-    departureDate: '2024-10-01', origin: '北京南', destination: '南京南',
-    departureTime: '08:00', passenger: '测试旅客', identity: 'TEST123',
-    carriage: '05', seatClass: '二等座'
-  };
-  const first = createRecord({ ...fields, id: 'one', service: 'G21' });
-  const second = createRecord({ ...fields, id: 'two', service: 'G33' });
-  const file = (...records) => {
-    const json = JSON.stringify(archive(records));
-    return { name: 'tickets.json', size: json.length, text: async () => json };
-  };
-  const input = () => document.querySelector('#import-files');
-  const status = () => document.querySelector('#import-status').textContent;
-  const pick = (...files) => {
-    Object.defineProperty(input(), 'files', { value: files, configurable: true });
-    input().dispatchEvent(new window.Event('change', { bubbles: true }));
+  const pdf = stubReceiptPDF();
+  const makeFile = (text, name = '发票.PDF') => ({
+    name, size: 100, arrayBuffer: async () => new TextEncoder().encode(text).buffer
+  });
+  const status = () => document.querySelector('[data-rail-receipt-status]').textContent;
+  const journey = '车次：G21\n出发站：北京南\n到达站：南京南\n日期：2024-10-01\n时间：08:00\n座位：08F';
+  const fill = (key, value) => {
+    const field = document.querySelector('#editor-form').elements[key];
+    field.value = value;
+    field.dispatchEvent(new window.Event('input', { bubbles: true }));
   };
   try {
     await import('../src/app.js');
-    await until(input);
-    assert.equal(input().multiple, false);
+    await until(() => document.querySelector('.page-header [data-action="new"]:not(:disabled)'));
+    assert.equal(location.hash, '#archive');
+    assert.equal(document.querySelector('nav [data-page="import"], #import-files, #import-text'), null);
+    document.querySelector('.page-header [data-action="new"]').click();
+    await until(() => document.querySelector('#editor-form'));
+    fill('type', 'flight');
+    assert.equal(document.querySelector('[data-rail-receipt-file], #import-text, [data-ticket-clipboard]'), null);
+    fill('type', 'rail');
+    assert.equal(document.querySelector('[data-code-editor]').nextElementSibling, document.querySelector('[data-rail-receipt-entry]'));
+    assert.equal(document.querySelector('[data-rail-receipt-entry]').nextElementSibling, document.querySelector('[data-rail-photo-entry]'));
+    assert.equal(document.querySelector('[data-rail-receipt-file]').accept, '.pdf,application/pdf');
 
-    const drop = new window.Event('drop', { bubbles: true, cancelable: true });
-    Object.defineProperty(drop, 'dataTransfer', { value: { files: [file(first), file(second)] } });
-    document.querySelector('#dropzone').dispatchEvent(drop);
-    assert.match(status(), /一个文件/);
-    assert.equal(document.querySelector('dialog'), null);
-
-    pick(file(first, second));
-    await until(() => status().includes('多张票据'));
-    assert.equal(document.querySelector('dialog'), null);
-
-    const text = document.querySelector('#import-text');
-    text.value = '车次：G21\n出发站：北京南\n到达站：南京南\n日期：2024-10-01\n\n车次：G33\n出发站：南京南\n到达站：上海虹桥\n日期：2024-10-02';
-    document.querySelector('[data-action="parse-text"]').click();
-    await until(() => document.querySelector('#toast-root').textContent.includes('多张票据'));
-    assert.ok(text.value);
-    assert.equal(document.querySelector('dialog'), null);
+    for (const name of ['发票.json', '发票.txt', '发票.eml']) {
+      pickReceipt(window, { name, arrayBuffer() { assert.fail('Only PDFs should be read'); } });
+      assert.match(status(), /PDF 格式/);
+    }
+    pickReceipt(window, makeFile(journey + '\f车次：G33\n出发站：南京南\n到达站：上海虹桥\n日期：2024-10-02'));
+    await until(() => status().includes('多段行程'));
+    assert.equal(document.querySelector('[name="service"]').value, '');
     assert.deepEqual(github.records(), []);
 
-    pick(file(first));
-    await until(() => document.querySelector('#editor-form'));
-    const editor = document.querySelector('#editor-form');
-    assert.match(editor.querySelector('[type="submit"]').textContent, /保存票据/);
-    editor.elements.seat.value = '09F';
-    editor.elements.seat.dispatchEvent(new window.Event('input', { bubbles: true }));
-    editor.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-    await until(() => !document.querySelector('dialog') && github.records().length === 1);
-    assert.equal(github.records()[0].id, 'one');
-    assert.equal(github.records()[0].seat, '09F');
-  } finally { window.close(); }
+    fill('passenger', '手动姓名');
+    pickReceipt(window, makeFile(journey + '\n旅客姓名：发票姓名'));
+    await until(() => status().includes('已填入'));
+    const form = document.querySelector('#editor-form');
+    assert.equal(form.elements.service.value, 'G21');
+    assert.equal(form.elements.origin.value, '北京南');
+    assert.equal(form.elements.passenger.value, '手动姓名');
+    assert.equal(form.querySelector('[data-field-source="service"]').dataset.sourceKind, 'pdf');
+    assert.deepEqual(github.records(), []);
+  } finally {
+    pdf.deregister();
+    window.close();
+  }
 });

@@ -5,7 +5,7 @@ import { indexedDB } from 'fake-indexeddb';
 import { prepareCloud } from './helpers/cloud.js';
 
 test('manual entry always previews, validates required fields and resolves airport codes and zones automatically', async () => {
-  const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost/#import' }), { window } = dom;
+  const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost/#archive' }), { window } = dom;
   for (const key of ['window','document','location','history','sessionStorage','FormData','Image']) Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true});
   Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});
   Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});
@@ -16,9 +16,9 @@ test('manual entry always previews, validates required fields and resolves airpo
   const fill=(name,value)=>{const input=document.querySelector(`#editor-form [name="${name}"]`);assert.ok(input,name);input.value=value;input.dispatchEvent(new window.Event('input',{bubbles:true}));};
   const submit=()=>document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
   const db=await import('../src/db.js'); await prepareCloud();
-  await import('../src/app.js'); await wait(()=>document.querySelector('.manual-panel'));
+  await import('../src/app.js'); await wait(()=>document.querySelector('[data-action=new]:not(:disabled)'));
   assert.equal(document.querySelector('#manual-form'),null);
-  click('.manual-panel [data-action="new"]'); await wait(()=>document.querySelector('#editor-preview'));
+  click('[data-action="new"]'); await wait(()=>document.querySelector('#editor-preview'));
   assert.equal(document.querySelector('.editor-fields details:not(.rail-start-override):not(.rail-lookup-result):not([data-rail-photo-entry])'),null);
   assert.equal(document.querySelector('[data-rail-photo-entry]').open,false);
   assert.equal(document.querySelector('[data-code-editor]').tagName,'SECTION');
@@ -48,11 +48,11 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.match(document.querySelector('#editor-preview').textContent,/0000002000\*{4}1234/);
   submit();await wait(()=>!document.querySelector('dialog'));
   let records=await db.get('records',[]);assert.equal(records.length,1);assert.equal(records[0].gate,'5B');assert.equal(records[0].orderNumber,'E000000001');
-  click('.manual-panel [data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
+  click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
   fill('origin','清河');fill('destination','天津');fill('service','G103');fill('departureDate','2026-11-15');fill('departureTime','08:00');fill('passenger','示例旅客');fill('carriage','05');fill('seatClass','二等座');fill('identity','000000200001011234');fill('seat','08F');fill('price','100');
   submit();await wait(()=>!document.querySelector('dialog'));
   records=await db.get('records',[]);assert.equal(records.length,1);assert.equal(records[0].price,'100');assert.equal(records[0].seat,'08F');
-  click('.manual-panel [data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
+  click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
   fill('type','flight');fill('passenger','示例旅客');fill('identity','P000001');fill('seat','24K');fill('seatClass','Y');fill('departureTime','12:00');assert.match(document.querySelector('[name="seat"]').closest('.field').textContent.trim(),/^座位号\*/);assert.equal(document.querySelector('[data-field-source="seat"]').textContent,'手动输入');
   assert.equal(document.querySelector('[name="originCode"]').type,'hidden');
   assert.equal(document.querySelector('[name="departureZone"], [name="arrivalZone"]'),null);
@@ -74,7 +74,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.equal(flight.originCode,'PEK');assert.equal(flight.destinationCode,'HND');
   assert.equal(flight.departureZone,'Asia/Shanghai');assert.equal(flight.arrivalZone,'Asia/Tokyo');
   assert.equal(document.querySelector('#city-reference'),null);
-  click('.manual-panel [data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
+  click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
   const railOrigin=document.querySelector('[name="origin"]');railOrigin.focus();fill('origin','beijingnan');
   assert.equal(railOrigin.getAttribute('aria-expanded'),'true');
   railOrigin.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));

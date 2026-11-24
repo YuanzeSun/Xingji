@@ -8,35 +8,6 @@ import { aircraftMentions, extractAircraft } from './aircraft.js';
 import {labelledFlightTimes} from './flight-times.js';
 import { readRailSeatClasses } from './seat-classes.js';
 
-export function decodeMail(raw) {
-  const split = raw.search(/\r?\n\r?\n/);
-  if (split === -1) return htmlText(raw);
-  const header = raw.slice(0, split);
-  const body = raw.slice(split).trim();
-  const boundary = header.match(/boundary\s*=\s*"?([^"\s;]+)/i)?.[1];
-  if (boundary) {
-    const parts = body.split('--' + boundary).slice(1).filter(p => !/^--/.test(p.trim()));
-    const preferred = parts.filter(p => /Content-Type:\s*text\/plain/i.test(p));
-    return (preferred.length ? preferred : parts.filter(p => /Content-Type:\s*(text\/html|multipart\/)/i.test(p))).map(decodeMail).join('\n');
-  }
-  let decoded = body;
-  if (/Content-Transfer-Encoding:\s*base64/i.test(header)) {
-    try { decoded = new TextDecoder(/charset\s*=\s*"?(gbk|gb2312|gb18030)/i.test(header) ? 'gb18030' : 'utf-8').decode(Uint8Array.from(atob(body.replace(/\s/g, '')), c => c.charCodeAt(0))); } catch { throw new Error('邮件内容无法解码，请复制正文导入'); }
-  } else if (/Content-Transfer-Encoding:\s*quoted-printable/i.test(header)) {
-    const text = body.replace(/=\r?\n/g, '');
-    const bytes = [];
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === '=' && /^[A-Fa-f0-9]{2}$/.test(text.slice(i + 1, i + 3))) { bytes.push(parseInt(text.slice(i + 1, i + 3), 16)); i += 2; }
-      else bytes.push(...new TextEncoder().encode(text[i]));
-    }
-    decoded = new TextDecoder(/charset\s*=\s*"?(gbk|gb2312|gb18030)/i.test(header) ? 'gb18030' : 'utf-8').decode(new Uint8Array(bytes));
-  }
-  return htmlText(decoded);
-}
-export function htmlText(value) {
-  // Never insert imported HTML into the DOM or load external email resources.
-  return value.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<(br|\/p|\/div|\/tr)\b[^>]*>/gi, '\n').replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/[ \t]+/g, ' ');
-}
 const capture = (text, re) => text.match(re)?.[1]?.trim() || '';
 function parseOne(text, sourceKind, label) {
   const planes = aircraftMentions(text);

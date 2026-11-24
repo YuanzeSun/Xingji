@@ -13,7 +13,7 @@ test('sample mode exposes only browsing pages and preserves private records when
   window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){this.open=false;};
   const original=createRecord({id:'private-ticket',origin:'清河',destination:'天津',service:'G103',departureDate:'2026-11-15'}),server=await prepareCloud([original]),db=await import('../src/db.js');
   const wait=async predicate=>{for(let i=0;i<300;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('Demo UI did not settle');};
-  const pages=[['archive','我的票据'],['map','行程地图'],['statistics','数据统计'],['import','录入票据'],['data','数据与同步']];
+  const pages=[['archive','我的票据'],['map','行程地图'],['statistics','数据统计'],['data','数据与同步']];
   const go=async(page,title)=>{location.hash=page;await wait(()=>document.querySelector('.page-header h1')?.textContent===title);};
   const toggle=async enabled=>{const input=document.querySelector('#demo-toggle');input.checked=enabled;input.dispatchEvent(new window.Event('change',{bubbles:true}));await wait(async()=>await db.get('showDemo')===enabled && !document.querySelector('#demo-toggle').disabled);};
   try{
@@ -30,9 +30,8 @@ test('sample mode exposes only browsing pages and preserves private records when
     await go('archive','我的票据');assert.equal(document.querySelectorAll('.ticket-card').length,7);document.querySelector('[data-action="view"][data-id="demo-2"]').click();await wait(()=>document.querySelector('.detail-grid'));
     assert.equal(document.querySelector('#modal-root [data-action="new"],#modal-root [data-action="edit"],#modal-root [data-action="delete"]'),null);
     document.querySelector('[data-action="close-modal"]').click();await go('archive','我的票据');await toggle(false);
-    assert.ok(document.querySelector('[data-action="new"]'));assert.ok(document.querySelector('nav [data-page="import"]'));assert.ok(document.querySelector('nav [data-page="data"]'));
+    assert.ok(document.querySelector('[data-action="new"]'));assert.equal(document.querySelector('nav [data-page="import"]'),null);assert.ok(document.querySelector('nav [data-page="data"]'));
     await go('archive','我的票据');assert.equal(document.querySelector('[data-action="scan-ticket"]'),null);assert.ok(document.querySelector('[data-action="new"]'));assert.equal(document.querySelectorAll('.ticket-card').length,1);
-    await go('import','录入票据');assert.ok(document.querySelector('.manual-panel'));assert.equal(document.querySelector('#camera-file'),null);
     assert.deepEqual(await db.get('records'),[original]);assert.deepEqual(server.records(),[original]);
   }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();}
 });

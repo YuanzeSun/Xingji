@@ -36,7 +36,7 @@ test('rail QR entry queries RailGo once and locks the separate photo scan until 
   const fixture = await writeBarcode(seated, { format: 'QRCode', addQuietZones: true });
   const pixels = symbolImage(fixture.symbol);
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>',
-    { url: 'http://localhost:4173/#import' });
+    { url: 'http://localhost:4173/#archive' });
   const { window } = dom;
   for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData']) {
     Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
@@ -100,12 +100,15 @@ test('rail QR entry queries RailGo once and locks the separate photo scan until 
   const submit = () => form().dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   try {
     await import('../src/app.js');
-    await waitFor(() => document.querySelector('.manual-panel [data-action="new"]:not(:disabled)'));
-    document.querySelector('.manual-panel [data-action="new"]').click();
+    await waitFor(() => document.querySelector('[data-action="new"]:not(:disabled)'));
+    document.querySelector('[data-action="new"]').click();
     await waitFor(form);
     const scanEntry = form().querySelector('[data-rail-qr-entry]');
     const photoEntry = () => form().querySelector('[data-rail-photo-entry]');
-    assert.equal(scanEntry.nextElementSibling, photoEntry());
+    const receipt = () => form().querySelector('[data-rail-receipt]');
+    assert.equal(scanEntry.nextElementSibling, receipt().closest('[data-rail-receipt-entry]'));
+    assert.equal(receipt().closest('[data-rail-receipt-entry]').nextElementSibling, photoEntry());
+    assert.equal(receipt().disabled, false);
     assert.equal(photoEntry().open, false);
     assert.equal(scanEntry.querySelector('[data-code-start]').textContent, '相机扫描');
     assert.equal(scanEntry.querySelector('[data-code-upload]').textContent, '上传图片');
@@ -123,6 +126,8 @@ test('rail QR entry queries RailGo once and locks the separate photo scan until 
     assert.equal(photoEntry().open, false);
     assert.equal(photoEntry().querySelector('[data-rail-photo-lock]').hidden, false);
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, true);
+    assert.equal(receipt().disabled, true);
+    assert.equal(form().querySelector('#rail-receipt-lock').hidden, false);
     assert.ok(form().querySelector('[data-code-examples][hidden]'));
     await waitFor(() => field('railModel').value === 'CR400BF-S');
     assert.deepEqual(railQueries, [[['trainNum', 'G103'], ['date', '20251124']]]);
@@ -171,6 +176,7 @@ test('rail QR entry queries RailGo once and locks the separate photo scan until 
     assert.equal(form().querySelector('[data-seat-number]').value, '10F');
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);
     assert.equal(photoEntry().querySelector('[data-rail-photo-lock]').hidden, true);
+    assert.equal(receipt().disabled, false);
     fill('service', 'G105');
     submit();
     await waitFor(() => !form() && server.records()[0].service === 'G105');

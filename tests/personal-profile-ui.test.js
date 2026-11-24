@@ -18,7 +18,7 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   const wait=async fn=>{for(let i=0;i<400;i++){if(await fn())return;await new Promise(r=>setTimeout(r,10));}assert.fail('Profile UI did not settle');};
   const click=selector=>{const button=document.querySelector(selector);assert.ok(button,selector);button.click();};
   const fill=(selector,value,event='input')=>{const input=document.querySelector(selector);assert.ok(input,selector);input.value=value;input.dispatchEvent(new window.Event(event,{bubbles:true}));};
-  const go=async page=>{click(`[data-action=navigate][data-page=${page}]`);await wait(()=>document.querySelector(page==='data'?'#profile-form':page==='import'?'.manual-panel':'.ticket-card'));};
+  const go=async page=>{click(`[data-action=navigate][data-page=${page}]`);await wait(()=>document.querySelector(page==='data'?'#profile-form':'.ticket-card'));};
   const save=async check=>{document.querySelector('#profile-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await wait(async()=>check()&&!(await db.get('syncMeta')).pending&&!document.querySelector('#profile-form [type=submit]').disabled);};
   await import('../src/app.js'); await wait(()=>document.querySelector('#profile-form [name=chineseName]')?.disabled===false);
   assert.equal(document.querySelector('#profile-form [required]'),null);
@@ -27,7 +27,7 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   await save(()=>server.settings().profile?.chineseName==='示例旅客');
   assert.equal(server.settings().profile.firstName,''); assert.equal(server.settings().profile.lastName,''); assert.equal(server.settings().profile.documents.length,0);
   assert.equal(server.settings().flightMcpKey,'keep-this-key'); assert.deepEqual(server.records(),[old]);
-  await go('import'); click('.manual-panel [data-action=new]'); await wait(()=>document.querySelector('#editor-form'));
+  await go('archive'); click('[data-action=new]'); await wait(()=>document.querySelector('#editor-form'));
   assert.equal(document.querySelector('#editor-form [name=passenger]').value,'示例旅客');
   assert.equal(document.querySelector('#editor-form [name=identity]').value,'');
   fill('#editor-form [name=type]','flight');
@@ -56,7 +56,7 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   fill('#profile-form [data-doc-field=number]','E00000000');
   document.querySelector('#profile-form [data-doc-field=number]').blur();
   await save(()=>server.settings().profile?.documents[0]?.number==='E00000000');
-  await go('import'); click('.manual-panel [data-action=new]'); await wait(()=>document.querySelector('#editor-form'));
+  await go('archive'); click('[data-action=new]'); await wait(()=>document.querySelector('#editor-form'));
   fill('#editor-form [name=type]','flight');
   assert.equal(document.querySelector('#editor-form [name=passenger]').value,'ZHANG/SAN');
   assert.equal(document.querySelector('#editor-form [name=identity]').value,'E00000000');
@@ -95,6 +95,6 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   for(const key of ['chineseName','firstName','lastName','gender'])fill(`#profile-form [name=${key}]`,'');
   click('[data-profile-remove]');
   await save(()=>!server.settings().profile);
-  await go('import');click('.manual-panel [data-action=new]');await wait(()=>document.querySelector('#editor-form'));assert.equal(document.querySelector('#editor-form [name=passenger]').value,'');assert.equal(document.querySelector('#editor-form [name=identity]').value,'');
+  await go('archive');click('[data-action=new]');await wait(()=>document.querySelector('#editor-form'));assert.equal(document.querySelector('#editor-form [name=passenger]').value,'');assert.equal(document.querySelector('#editor-form [name=identity]').value,'');
   dom.window.close();
 });

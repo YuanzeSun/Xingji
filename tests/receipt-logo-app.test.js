@@ -6,7 +6,7 @@ import { createRecord } from '../src/model.js';
 import { prepareCloud } from './helpers/cloud.js';
 
 test('the editor saves refund fees with matching validation and restricts transport switching to new tickets', async () => {
-  const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url:'http://localhost/#import' }), { window } = dom;
+  const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url:'http://localhost/#archive' }), { window } = dom;
   for (const key of ['window','document','location','history','sessionStorage','FormData','Image']) Object.defineProperty(globalThis, key, { value:key === 'window' ? window : window[key], configurable:true });
   Object.defineProperty(globalThis, 'navigator', { value:window.navigator, configurable:true });
   Object.defineProperty(globalThis, 'indexedDB', { value:indexedDB, configurable:true });
@@ -19,8 +19,8 @@ test('the editor saves refund fees with matching validation and restricts transp
   const wait = async fn => { for (let i=0; i<300; i++) { if (await fn()) return; await new Promise(resolve=>setTimeout(resolve,5)); } assert.fail('Editor did not settle'); };
   const fill = (name,value) => { const el=document.querySelector(`[name="${name}"]`);el.value=value;el.dispatchEvent(new window.Event('input',{bubbles:true})); };
   try {
-    await import('../src/app.js'); await wait(()=>document.querySelector('.manual-panel'));
-    document.querySelector('.manual-panel [data-action="new"]').click();
+    await import('../src/app.js'); await wait(()=>document.querySelector('[data-action=new]:not(:disabled)'));
+    document.querySelector('[data-action="new"]').click();
     await wait(()=>document.querySelector('#editor-form'));
     assert.equal(document.querySelector('[name="template"] option[value="rail-refund-receipt"]'),null);
     document.querySelector('[data-refund-receipt]').click();

@@ -2,7 +2,7 @@ import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRecord, archive, readArchive, mergeThreeWay, applyImport, validDate, partition } from '../src/model.js';
-import { parseText, decodeMail, mapFlightResult } from '../src/importers.js';
+import { parseText, mapFlightResult } from '../src/importers.js';
 import { ticketSVG } from '../src/tickets.js';
 const sample = (values = {}) => createRecord({ id: 'test-1', origin: '北京南', destination: '上海虹桥', service: 'G103', departureDate: '2026-11-15', departureTime: '08:00', passenger: '张三', ...values });
 
@@ -57,11 +57,6 @@ test('order numbers survive backups independently of ticket numbers and do not m
   assert.equal(applyImport([r], [other]).records.length, 2);
   const parsed = parseText('日期：2026-11-15 车次：G103\n出发：北京南 到达：上海虹桥\n订单号：E123456789 票号：A01234567')[0];
   assert.equal(parsed.orderNumber, r.orderNumber); assert.equal(parsed.ticketNumber, r.ticketNumber);
-});
-test('multipart email decodes Chinese content without executing HTML', () => {
-  const body = '日期：2026-11-15 车次：G103 出发：北京南 到达：上海虹桥';
-  const mail = `MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary="abc"\r\n\r\n--abc\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(body).toString('base64')}\r\n--abc\r\nContent-Type: text/html\r\n\r\n<script>bad()</script>\r\n--abc--`;
-  const text = decodeMail(mail); assert.equal(text.trim(), body); assert.equal(parseText(text)[0].origin, '北京南');
 });
 test('unsupported flight responses are never silently guessed', () => {
   assert.throws(() => mapFlightResult({ data: [{ route: 'unknown' }] }), /结构/);
