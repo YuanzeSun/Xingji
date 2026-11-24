@@ -31,10 +31,13 @@ function readConditional(value,first,shared) {
   let offset=0;
   if(first&&value[0]==='>'&&/^\d[\dA-F]{2}$/.test(value.slice(1,4))){
     const end=4+parseInt(value.slice(2,4),16);if(end>value.length)return {};
-    const unique=value.slice(4,end),series=[];
+    const version=Number(value[1]),unique=value.slice(4,end),series=[];
     for(const start of [11,24,37]){
-      const raw=unique.slice(start,start+13);if(!/^\d{13}$/.test(raw)||+raw.slice(10)===0)continue;
-      const number=raw.slice(0,10),count=Number(raw.slice(10));
+      const raw=unique.slice(start,start+13);if(!/^\d{13}$/.test(raw)||/^0+$/.test(raw))continue;
+      const number=raw.slice(0,10);let count=Number(raw.slice(10));
+      // Resolution 792 v6 used 000 for a single bag. Since v7 it is 001.
+      if(version===6 && count===0)count=1;
+      if(count===0)continue;
       if(Number(number)+count-1<=9999999999)series.push({number,count});
     }
     if(series.length)shared.baggageSeries=series;
@@ -48,7 +51,7 @@ function readConditional(value,first,shared) {
   if(repeated.length>=18&&carrier(marketing))extra.marketingCarrier=marketing;
   if(repeated.length>=21&&carrier(program))extra.frequentFlyerCarrier=program;
   if(repeated.length>=37){const number=repeated.slice(21,37).trim();if(/^[A-Z0-9]{1,16}$/.test(number))extra.frequentFlyerNumber=number;}
-  if(repeated.length>=41){const allowance=repeated.slice(38,41).trim();if(/^(?:\d{1,2}[KP]|\dPC|\d{1,3})$/.test(allowance))extra.freeBaggageAllowance=allowance;}
+  if(repeated.length>=41){const allowance=repeated.slice(38,41).trim().toUpperCase();if(/^(?:\d{1,2}[KLP]|\dPC|\d{1,3})$/.test(allowance))extra.freeBaggageAllowance=allowance;}
   return extra;
 }
 function readAirlineExtras(value) {

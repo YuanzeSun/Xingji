@@ -13,7 +13,8 @@ import { ticketCodeEditor, bindTicketCodeEditor } from '../src/code-editor.js';
 import { BOARDING_SHARED_FIELDS } from '../src/boarding-code-state.js';
 import { JSDOM } from 'jsdom';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
-import { multilegCode } from './helpers/multileg-boarding-code.js';
+import { multilegCode, multilegPayload } from './helpers/multileg-boarding-code.js';
+import { BOARDING_METADATA_FIELDS } from '../src/boarding-metadata.js';
 import {boardingPresentation} from '../src/boarding-language.js';
 import {seatClassField,bindSeatClassFields} from '../src/seat-class-field.js';
 import {ticketFieldLocked} from '../src/barcode-fields.js';
@@ -116,6 +117,42 @@ test('tagged Chinese names, ticket numbers and gates autofill from QR while reco
     assert.equal(ticketFieldLocked(draft,'seat'),true);
     assert.equal(ticketFieldLocked(draft,'boardingTime'),false);
   }finally{cleanup();dom.window.close();}
+});
+
+test('a boarding QR fills available baggage, loyalty and marketing fields and leaves absent fields blank', async () => {
+  const payload = multilegPayload({ count: 1 });
+  const withMetadata = payload.replace('>8', '>6').replace('0123456789002', '0123456789000').replace('20K', '40l');
+  const withoutMetadata = payload.slice(0, 58) + '00';
+  const metadata = {
+    baggageTagNumbers: '0123456789', checkedBaggageCount: '1', freeBaggageAllowance: '40L',
+    frequentFlyerCarrier: 'CA', frequentFlyerNumber: '00000123456789', marketingCarrier: 'LH'
+  };
+  for (const [text, expected] of [[withMetadata, metadata], [withoutMetadata, {}]]) {
+    const bytes = Uint8Array.from(text, character => character.charCodeAt(0));
+    const { symbol } = await writeBarcode(bytes, { format: 'QRCode' });
+    const result = await rebuildCodeSymbols(symbolImage(symbol, 'flight'), 'flight', { boardingPass: true });
+    assert.deepEqual(result.issues, []);
+    assert.equal(result.codes.length, 1);
+
+    const draft = createRecord({ type: 'flight', template: 'air-boarding-pass' });
+    const inputs = BOARDING_METADATA_FIELDS.map(key => `<input name="${key}">`).join('');
+    const dom = new JSDOM(`<form>${inputs}${ticketCodeEditor(draft)}</form>`);
+    const form = dom.window.document.querySelector('form');
+    const dispose = bindTicketCodeEditor(form, draft, () => {}, { loadRebuilder: async () => async () => result });
+    try {
+      const input = form.querySelector('#code-photo');
+      Object.defineProperty(input, 'files', { value: [new Blob(['QR fixture'])] });
+      input.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(draft.service, 'CA1234');
+      const saved = createRecord(draft);
+      for (const key of BOARDING_METADATA_FIELDS) {
+        assert.equal(form.elements[key].value, expected[key] ?? '', key);
+        assert.equal(form.elements[key].readOnly, key in expected, key);
+        assert.equal(saved[key], expected[key] ?? '', key);
+      }
+    } finally { dispose(); dom.window.close(); }
+  }
 });
 
 test('two scans of a connecting boarding pass can save each chosen flight separately', async () => {
