@@ -73,7 +73,6 @@ test('sorting is stable, chronological in either direction and does not mutate t
   assert.equal(searchTickets(rows, { sort: 'newest' }).records.at(-1).id, 'undated');
   assert.equal(searchTickets(rows, { sort: 'oldest' }).records.at(-1).id, 'undated');
   assert.equal(searchTickets(rows, { sort: 'oldest' }).records[0].id, 'previous');
-  assert.deepEqual(searchTickets([record('g103'), record('g9', { service: 'G9' })], { sort: 'service' }).records.map(r => r.id), ['g9', 'g103']);
   assert.deepEqual(rows, copy);
 });
 

@@ -1,12 +1,12 @@
 import {calendarDate} from './journey-date.js';
 import {railTrainsetIds} from './rail-journey.js';
 import { TEMPLATES, validDate } from './model.js';
-import { resolveCity, resolveCities, matchesCity, locationWords } from './locations.js';
+import { resolveCities, matchesCity, locationWords } from './locations.js';
 import { FLIGHT_STATUSES } from './flight-status.js';
 import { SUPPLEMENT_FIELDS } from './rail-template.js';
 
 export const DEFAULT_SEARCH = Object.freeze({ query: '', type: 'all', year: 'all', city: '', originCity: '', destinationCity: '', origin: '', destination: '', bothDirections: false, service: '', passenger: '', dateFrom: '', dateTo: '', seatClass: '', airline: '', template: '', minPrice: '', maxPrice: '', code: '', provenance: '', mark: '', sort: 'newest' });
-export const SORTS = Object.freeze({ newest: '出发日期：由近到远', oldest: '出发日期：由远到近', service: '车次 / 航班号', route: '出发城市与到达城市', 'price-asc': '票价：从低到高', 'price-desc': '票价：从高到低' });
+export const SORTS = Object.freeze({ newest: '出发日期：由近到远', oldest: '出发日期：由远到近', 'price-asc': '票价：从低到高', 'price-desc': '票价：从高到低' });
 const text = value => String(value ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 const compact = value => text(value).replace(/[\s'’·-]/g, '');
 const contains = (value, query) => compact(value).includes(compact(query));
@@ -97,8 +97,6 @@ export function searchTickets(records, input = {}) {
   matched.sort((a, b) => {
     let order = 0;
     if (f.sort.startsWith('price-')) order = a.price === '' || b.price === '' ? a.price === b.price ? 0 : a.price === '' ? 1 : -1 : (Number(a.price) - Number(b.price)) * (f.sort === 'price-asc' ? 1 : -1);
-    else if (f.sort === 'service') order = collator.compare(a.service, b.service);
-    else if (f.sort === 'route') order = collator.compare(resolveCity(a, 'origin').city, resolveCity(b, 'origin').city) || collator.compare(resolveCity(a, 'destination').city, resolveCity(b, 'destination').city) || collator.compare(a.origin, b.origin);
     return order || byDate(a, b) || collator.compare(a.id, b.id);
   });
   return { records: matched, error: '' };

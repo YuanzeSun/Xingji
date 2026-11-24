@@ -59,7 +59,7 @@ test('small grid is a ticket wall, while medium retains the original size and ch
   root.innerHTML=ticketCollection(rows.slice(0,48),{mode:'list',size:'medium'},{icon,selected:new Set(['row-2'])});
   assert.equal(root.querySelectorAll('.timeline-item').length,48);assert.equal(root.querySelectorAll('.timeline-year-heading').length,2);
   assert.equal(root.querySelector('[data-archive-select="row-2"]').checked,true);assert.equal(root.querySelector('.ticket-preview'),null);
-  root.innerHTML=ticketCollection([rows[0],rows[20],rows[1]],{mode:'list',size:'medium'},{icon,sort:'service'});
+  root.innerHTML=ticketCollection([rows[0],rows[20],rows[1]],{mode:'list',size:'medium'},{icon,sort:'price-asc'});
   assert.equal(root.querySelector('.timeline-year-heading'),null);assert.deepEqual([...root.querySelectorAll('.timeline-item')].map(button=>button.dataset.id),['row-0','row-20','row-1']);
   dom.window.close();
 });
