@@ -2,7 +2,7 @@ import {sameDate} from './journey-date.js';
 import { createRecord, validDate } from './model.js';
 import { resolvePlace } from './places.js';
 import { AIRPORT_TIMEZONES } from './data/airport-timezones.js';
-import { identifyAircraft } from './aircraft.js';
+import { reconcileAircraft } from './aircraft.js';
 import { flightNumber, flightQuery } from './flight-query.js';
 
 const clean = value => typeof value === 'string' && !/^(?:-+|null|undefined|n\/?a)$/i.test(value.trim()) ? value.trim().slice(0, 1000) : '';
@@ -38,14 +38,16 @@ export function flightCandidates(result, input) {
     const actualDeparture = airportTime(row.FlightDeptimeDate, AIRPORT_TIMEZONES[dep]), actualArrival = airportTime(row.FlightArrtimeDate, AIRPORT_TIMEZONES[arr]);
     // The tool defines kilometres, without certifying a sum of actual track points.
     const distance = typeof row.distance === 'number' || typeof row.distance === 'string' ? String(row.distance).trim() : '';
+    const aircraft = reconcileAircraft([row.miniAirplaneModels, row.generic, row.aircraftType]
+      .map(value => Number.isInteger(value) ? String(value) : clean(value)));
     const record = createRecord({ type: 'flight', template: 'air-boarding-pass', service: query.fnum, departureDate: departure.date, departureTime: departure.time,
       origin: dep, originCode: dep, destination: arr, destinationCode: arr,
       arrivalDate: arrival?.date || '', arrivalTime: arrival?.time || '', airline: clean(row.FlightCompany),
       actualDepartureDate: actualDeparture?.date || '', actualDepartureTime: actualDeparture?.time || '', actualArrivalDate: actualArrival?.date || '', actualArrivalTime: actualArrival?.time || '',
       flightDistance: /^(?:0|[1-9]\d{0,5})(?:\.\d{1,3})?$/.test(distance) && Number(distance) > 0 && Number(distance) <= 100000 ? distance : '',
-      aircraft: [row.miniAirplaneModels, row.generic, row.aircraftType].map(clean).find(value => identifyAircraft(value) || /\d/.test(value)) || '', terminal: clean(row.FlightDepTerminal), gate: clean(row.BoardGate) });
-    const id = JSON.stringify([record.service, record.departureDate, dep, arr, record.departureTime, record.arrivalDate, record.arrivalTime, record.actualDepartureDate, record.actualDepartureTime, record.actualArrivalDate, record.actualArrivalTime, record.flightDistance, record.aircraft, record.terminal, record.gate]);
-    candidates.set(id, record);
+      aircraft: aircraft.name, terminal: clean(row.FlightDepTerminal), gate: clean(row.BoardGate) });
+    const id = JSON.stringify([record.service, record.departureDate, dep, arr, record.departureTime, record.arrivalDate, record.arrivalTime, record.actualDepartureDate, record.actualDepartureTime, record.actualArrivalDate, record.actualArrivalTime, record.flightDistance, record.aircraft, aircraft.conflicts, record.terminal, record.gate]);
+    candidates.set(id, aircraft.conflicts.length ? { ...record, aircraftConflicts: aircraft.conflicts } : record);
   }
   return [...candidates.values()];
 }

@@ -11,7 +11,7 @@ function placesPanel(title, places, type) {
 const rankings = {
   'rail-models': { title: '乘坐车型', data: 'railModels', unit: '种', option: 'railPowerSupplies', label: '细分供电制式' },
   'rail-bureaus': { title: '担当路局', data: 'railBureaus', unit: '个', option: 'railUnits', label: '细分车辆归属单位' },
-  aircraft: { title: '乘坐机型', data: 'aircraft', unit: '种', option: 'aircraftSubtypes', label: '细分子型号' }
+  aircraft: { title: '乘坐机型', data: 'aircraft', unit: '种', option: 'aircraftSubtypes' }
 };
 
 export function mountStatistics(container, records, { options = {} } = {}) {
@@ -25,7 +25,13 @@ export function mountStatistics(container, records, { options = {} } = {}) {
     const { title, data, unit, option, label } = rankings[kind];
     const rows = statistics[data], view = rankingCharts[kind] || 'donut';
     const chooser = Object.entries(rankingViews).map(([value, name]) => `<button type="button" data-stat-view="${value}" aria-pressed="${view === value}">${name}</button>`).join('');
-    return `<section class="statistics-panel statistics-ranking" data-stat-ranking="${kind}"><header><h2>${title}</h2><span>${rows.length} ${unit}</span></header><div class="statistics-ranking-controls"><div class="statistics-view-picker" role="group" aria-label="${title}图表样式">${chooser}</div><label><input type="checkbox" data-stat-option="${option}" ${options[option] ? 'checked' : ''}/>${label}</label></div><div data-stat-plot>${rankingChartMarkup(title, rows, view)}</div></section>`;
+    const grouping = kind === 'aircraft'
+      ? `<select data-stat-option="${option}" aria-label="机型统计口径"><option value="model" ${options[option] ? 'selected' : ''}>按机型</option><option value="series" ${options[option] ? '' : 'selected'}>按系列</option></select>`
+      : `<label><input type="checkbox" data-stat-option="${option}" ${options[option] ? 'checked' : ''}/>${label}</label>`;
+    const unknown = kind === 'aircraft' && statistics.unknownAircraft
+      ? `<p class="fine-print">未识别机型 · ${statistics.unknownAircraft} 次</p>`
+      : '';
+    return `<section class="statistics-panel statistics-ranking" data-stat-ranking="${kind}"><header><h2>${title}</h2><span>${rows.length} ${unit}</span></header><div class="statistics-ranking-controls"><div class="statistics-view-picker" role="group" aria-label="${title}图表样式">${chooser}</div>${grouping}</div><div data-stat-plot>${rankingChartMarkup(title, rows, view)}</div>${unknown}</section>`;
   }
   function render() {
     chartCleanup();
@@ -124,7 +130,7 @@ export function mountStatistics(container, records, { options = {} } = {}) {
   const change = event => {
     const target = event.target;
     if (target.matches('[data-stat-option]') && ['railUnits','railPowerSupplies','aircraftSubtypes'].includes(target.dataset.statOption)) {
-      options[target.dataset.statOption]=target.checked;
+      options[target.dataset.statOption] = target.dataset.statOption === 'aircraftSubtypes' ? target.value === 'model' : target.checked;
       const scroll=container.querySelector('.statistics-chart-scroll'); if(scroll) scrollPositions[options.period]=scroll.scrollLeft;
       const key=target.dataset.statOption; render(); container.querySelector(`[data-stat-option="${key}"]`).focus(); return;
     }

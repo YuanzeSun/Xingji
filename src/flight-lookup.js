@@ -4,6 +4,7 @@ import { flightCandidates, flightCompletion } from './flight-lookup-model.js';
 import { flightQuery } from './flight-query.js';
 import { FlightConnector } from './mcp.js';
 import { flightTrackRequest, readFlightTrack } from './flight-track.js';
+import { reconcileAircraft } from './aircraft.js';
 
 export function flightLookupMarkup() {
   return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><div data-flight-candidates></div></section>`;
@@ -20,12 +21,15 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
   if (!desktop()) { button.disabled = true; status.textContent = '飞常准查询需电脑端行迹连接扩展'; }
   async function accept(index, connector) {
     if (!validContext(candidateStamp) || !candidates[index]) { list.innerHTML = ''; status.textContent = '查询条件已改变，请重新查询'; return; }
-    const previousRows = candidates, changes = flightCompletion(getRecord(), candidates[index]);
+    const previousRows = candidates, candidate = candidates[index], recordBeforeLookup = getRecord();
+    const changes = flightCompletion(recordBeforeLookup, candidate);
+    const conflicts = candidate.aircraftConflicts || reconcileAircraft([recordBeforeLookup.aircraft, candidate.aircraft]).conflicts;
     candidates = []; candidateStamp = ''; list.innerHTML = '';
     const count = Object.keys(changes).filter(field => !field.endsWith('Code')).length;
     if (count) apply(changes, { kind: 'flight-lookup', label: '飞常准航班查询', at: new Date().toISOString() });
     cache.set(JSON.stringify(flightQuery(getRecord())), { rows: previousRows, at: Date.now() });
-    const summary = count ? `已补全 ${count} 项。` : '已有信息均已填写。';
+    const conflictNotice = conflicts.length ? `机型有出入（${conflicts.join('、')}），请核对。` : '';
+    const summary = (count ? `已补全 ${count} 项。` : conflictNotice ? '' : '已有信息均已填写。') + conflictNotice;
     status.textContent = summary;
     if (!applyTrack) return;
     const record = getRecord(), context = stamp();

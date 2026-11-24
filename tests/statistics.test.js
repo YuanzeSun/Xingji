@@ -48,7 +48,7 @@ test('statistics keep airport and station identities, combine return air routes 
   assert.equal(data.rail, 2); assert.equal(data.flight, 4);
   assert.equal(data.stations.length, 2); assert.equal(data.airports.length, 3);
   assert.equal(data.routes.length, 2); assert.equal(data.routes.find(route => route.id === 'HND-PEK').count, 2);
-  assert.deepEqual(data.aircraft, [{ name: '737-800', count: 2 }, { name: 'A320', count: 1 }]);
+  assert.deepEqual(data.aircraft, [{ name: '737-800', count: 2 }, { name: 'A320（子型号未确认）', count: 1 }]);
   assert.equal(data.unknownAircraft, 1); assert.equal(data.unknownRoutes, 1); assert.equal(data.unknownPlaces, 1);
   assert.deepEqual(data.countries.map(row => row.code).sort(), ['CN', 'JP']);
   assert.equal(JSON.stringify(rows), before);
@@ -176,11 +176,11 @@ test('rail ownership and aircraft subtype toggles change only their own rankings
   assert.deepEqual(grouped.aircraft,[{name:'737',count:3},{name:'DHC-8',count:2}]);
   for(const key of ['rail','flight','airports','stations','countries','continents','routes'])assert.deepEqual(grouped[key],normal[key]);
   const dom=new JSDOM('<div id="root"></div>'),root=dom.window.document.querySelector('#root'),options={...range};let cleanup=mountStatistics(root,rows,{options});
-  const change=(key,checked)=>{const input=root.querySelector(`[data-stat-option="${key}"]`);input.checked=checked;input.dispatchEvent(new dom.window.Event('change',{bubbles:true}));};
-  assert.equal(root.querySelector('[data-stat-option="railUnits"]').checked,false);assert.equal(root.querySelector('[data-stat-option="aircraftSubtypes"]').checked,true);
-  change('railUnits',true);assert.match(root.querySelector('[data-stat-ranking="rail-bureaus"]').textContent,/南京动车段/);
-  change('aircraftSubtypes',false);assert.doesNotMatch(root.querySelector('[data-stat-ranking="aircraft"]').textContent,/737-800|737-200|MAX/);
-  cleanup();cleanup=mountStatistics(root,rows,{options});assert.equal(root.querySelector('[data-stat-option="railUnits"]').checked,true);assert.equal(root.querySelector('[data-stat-option="aircraftSubtypes"]').checked,false);
+  const change=(key,attributes)=>{const input=root.querySelector(`[data-stat-option="${key}"]`);Object.assign(input,attributes);input.dispatchEvent(new dom.window.Event('change',{bubbles:true}));};
+  assert.equal(root.querySelector('[data-stat-option="railUnits"]').checked,false);assert.equal(root.querySelector('[data-stat-option="aircraftSubtypes"]').value,'model');
+  change('railUnits',{checked:true});assert.match(root.querySelector('[data-stat-ranking="rail-bureaus"]').textContent,/南京动车段/);
+  change('aircraftSubtypes',{value:'series'});assert.doesNotMatch(root.querySelector('[data-stat-ranking="aircraft"]').textContent,/737-800|737-200|MAX/);
+  cleanup();cleanup=mountStatistics(root,rows,{options});assert.equal(root.querySelector('[data-stat-option="railUnits"]').checked,true);assert.equal(root.querySelector('[data-stat-option="aircraftSubtypes"]').value,'series');
   assert.equal(JSON.stringify(rows),before);cleanup();dom.window.close();
 });
 
@@ -204,7 +204,7 @@ test('each ranking switches charts independently and keeps its grouping and date
   const rows = [
     rail({ railModel: '25GDC600V', railBureau: '上海局', railCarOwner: '上海动车段' }),
     rail({ railModel: '25GAC380V', railBureau: '上海局', railCarOwner: '南京动车段' }),
-    ...['737-800', '737-200', 'A320', 'A321', 'A380', '787-9', 'DHC-8-400'].map(aircraft => flight({ aircraft }))
+    ...['737-800', '737-200', 'A320', 'A321', 'A380', '787-9', 'DHC-8-400', '未知型号'].map(aircraft => flight({ aircraft }))
   ];
   const dom = new JSDOM('<div id="root"></div>'), root = dom.window.document.querySelector('#root');
   const options = { ...range };
@@ -225,13 +225,14 @@ test('each ranking switches charts independently and keeps its grouping and date
     assert.ok(card('rail-models').querySelector('.statistics-column-scroll'));
     assert.equal(root.querySelector('.statistics-trend'), trend);
     const tail = card('aircraft').querySelector('.statistics-ring-other');
+    assert.match(card('aircraft').textContent, /未识别机型 · 1 次/);
     assert.match(tail.querySelector('summary').textContent, /其他（2 项）2 次28\.6%/);
     assert.equal(tail.querySelectorAll('li').length, 2);
     assert.equal(card('aircraft').querySelector('.statistics-ring strong').textContent, '7');
     change('[data-stat-option=railPowerSupplies]', { checked: true });
     assert.equal(picked('rail-models'), 'columns');
     assert.match(card('rail-models').textContent, /DC600V/);
-    change('[data-stat-option=aircraftSubtypes]', { checked: false });
+    change('[data-stat-option=aircraftSubtypes]', { value: 'series' });
     assert.equal(picked('aircraft'), 'donut');
     assert.equal(card('aircraft').querySelector('.statistics-ring strong').textContent, '7');
     assert.doesNotMatch(card('aircraft').textContent, /737-800/);

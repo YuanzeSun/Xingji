@@ -1,6 +1,6 @@
 import {calendarDate} from './journey-date.js';
 import { resolvePlace } from './places.js';
-import { identifyAircraft, normalizeAircraft, aircraftSeries } from './aircraft.js';
+import { aircraftClassification } from './aircraft.js';
 import { dateInterval } from './search.js';
 import { CONTINENT_AIRPORT_CODES } from './data/airport-geography.js';
 import { isJourneyRecord } from './record-kind.js';
@@ -78,9 +78,11 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
       if (place.continent) continents.add(place.continent);
     }
     if (record.type !== 'flight') continue;
-    const precise=identifyAircraft(record.aircraft) || normalizeAircraft(record.aircraft).normalize('NFKC').toUpperCase().replace(/\s+/g,'').replace(/[–—]/g,'-');
-    const model=options.aircraftSubtypes ? precise : aircraftSeries(precise);
-    if (model) aircraft.set(model, (aircraft.get(model) || 0) + 1); else unknownAircraft++;
+    const classification = aircraftClassification(record.aircraft);
+    if (classification) {
+      const model = options.aircraftSubtypes ? classification.label : classification.series;
+      aircraft.set(model, (aircraft.get(model) || 0) + 1);
+    } else unknownAircraft++;
     if (endpoints.some(place => !place)) { unknownRoutes++; continue; }
     const pair = options.mergeDirections ? [...endpoints].sort((a,b)=>a.code.localeCompare(b.code)) : endpoints, id=pair.map(place=>place.code).join('-');
     if (!routes.has(id)) routes.set(id, { id, from: pair[0], to: pair[1], count: 0 });

@@ -87,6 +87,27 @@ test('typing never calls a provider; one candidate fills automatically and repea
   } finally { instance.dispose(); instance.dom.window.close(); }
 });
 
+test('provider aircraft names agree across fields or leave the aircraft field for review', async () => {
+  const [compatible] = flightCandidates(payload([row({ miniAirplaneModels: '737-8Q8', generic: 738, aircraftType: 'Boeing 737' })]), input);
+  assert.equal(compatible.aircraft, '737-8Q8');
+  const [shared] = flightCandidates(payload([row({ miniAirplaneModels: 'B739', generic: '737-924ER', aircraftType: 'Boeing 737' })]), input);
+  assert.equal(shared.aircraft, '737-924ER');
+  const [conflicting] = flightCandidates(payload([row({ miniAirplaneModels: '737-8Q8', generic: 'B38M', aircraftType: '波音' })]), input);
+  assert.equal(conflicting.aircraft, '');
+  assert.deepEqual(conflicting.aircraftConflicts, ['737-8Q8', '737 MAX 8']);
+  for (const [candidate, current] of [[conflicting, ''], [compatible, '737 MAX 8']]) {
+    const instance = component({ rows: [candidate] });
+    try {
+      instance.current.aircraft = current;
+      instance.form.querySelector('[data-flight-lookup]').click();
+      await settle();
+      assert.equal(instance.current.aircraft, current);
+      assert.equal(instance.current.gate, 'E18');
+      assert.match(instance.form.querySelector('[data-flight-status]').textContent, /机型有出入.*请核对/);
+    } finally { instance.dispose(); instance.dom.window.close(); }
+  }
+});
+
 test('several legs require a choice, while a changed query or closed editor discards late results', async () => {
   const rows = flightCandidates(payload([row(), row({ FlightDepcode: 'PVG', FlightArrcode: 'HKG', FlightDeptimePlanDate: '2026-07-18 13:00:00' })]), input);
   const instance = component({ rows });

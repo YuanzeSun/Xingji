@@ -35,7 +35,7 @@ test('main coupon and stub visibly mark special tickets in both boarding languag
 test('special tickets remain in the archive but never contribute to any journey dimension, map or city count',()=>{
  const normal=flight({id:'normal'}),special=['open','invalid'].map((flightStatus,i)=>flight({id:'special-'+i,flightStatus,origin:'LHR',destination:'SYD',aircraft:'E195-E2'}));
  const data=journeyStatistics([normal,...special],{dateTo:'2023-12-31'});
- assert.equal(data.flight,1);assert.equal(data.records.length,1);assert.deepEqual(data.aircraft,[{name:'DHC-8',count:1}]);
+ assert.equal(data.flight,1);assert.equal(data.records.length,1);assert.deepEqual(data.aircraft,[{name:'DHC-8（子型号未确认）',count:1}]);
  assert.deepEqual(data.countries.map(x=>x.code),['CN']);assert.equal(data.airports.length,2);assert.equal(data.routes.length,1);
  assert.equal(journeyNetwork([normal,...special]).records.length,1);
  assert.equal(cityOverview([normal,...special]).cities.length,2);
