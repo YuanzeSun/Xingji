@@ -10,7 +10,12 @@ test('rail and flight require their visible essential fields, with carriage limi
     const record = { type, ...Object.fromEntries(requiredTicketFields(type).map(key => [key,key==='departureDate'?'2026-11-18':'value'])) };
     assert.doesNotThrow(() => validateTicketForm(record));
     for (const key of requiredTicketFields(type)) assert.throws(() => validateTicketForm({ ...record, [key]: ' ' }), new RegExp(ticketFieldLabel(key, type)));
-    if (type === 'flight') { assert.equal(requiredTicketFields(type).includes('carriage'), false); assert.equal(ticketFieldLabel('seat', type), '座位号'); }
+    if (type === 'flight') {
+      assert.equal(requiredTicketFields(type).includes('carriage'), false);
+      assert.equal(ticketFieldLabel('seat', type), '座位号');
+      assert.doesNotThrow(() => validateTicketForm({ ...record, departureTime: '' }));
+      assert.throws(() => validateTicketForm({ ...record, departureDate: { year: 2026, dayOfYear: null } }), /计划起飞日期/);
+    }
   }
 });
 

@@ -387,7 +387,8 @@ function archivePage() {
   const result = searchTickets(rs, state.filters);
   reconcileSelection(archiveSelected,result.error ? [] : result.records);
   const railCount = rs.filter(r => isJourneyRecord(r) && r.type === 'rail').length, flightCount = rs.filter(r => isJourneyRecord(r) && r.type === 'flight').length;
-  const intro = header('我的票据', '', state.showDemo ? '' : `<button class="button primary" data-action="new">${icon('plus')}录入</button>`);
+  const entry = state.showDemo ? '' : `<button type="button" class="button primary" data-action="new" data-type="rail">${icon('train')}录入火车</button><button type="button" class="button primary" data-action="new" data-type="flight">${icon('plane')}录入机票</button>`;
+  const intro = header('我的票据', '', entry);
   const demo = guestDemoNotice() || (state.showDemo ? `<div class="demo-banner">${icon('info')}<span><strong>示例数据</strong> · 虚构记录</span><button data-action="exit-demo">${hasCloud() && state.syncMeta.verified ? '返回我的票据' : '退出示例模式'} ${icon('arrow')}</button></div>` : '');
   const stats = `<section class="stats" aria-label="票夹概览"><div><span class="stat-label">${icon('ticket')}票据总数</span><strong>${rs.length}<small>张${state.showDemo ? '示例' : ''}</small></strong></div><div><span class="stat-label">${icon('train')}火车票</span><strong>${railCount}<small>程</small></strong></div><div><span class="stat-label">${icon('plane')}机票</span><strong>${flightCount}<small>程</small></strong></div><div><span class="stat-label">${icon('map')}涉及城市</span><strong>${cities.length}<small>城</small></strong></div></section>`;
   return intro + demo + stats + searchPanel(rs, state.filters, result, { open: state.filterOpen, routesOpen: state.routesOpen, demo: state.showDemo }) + ticketViewControls(ticketView) + '<div id="archive-selection">' + (archiveIsSpace() ? '' : archiveSelectionMarkup(result, archiveSelected, { canDelete:canWrite() && !state.showDemo && !state.saving })) + '</div><section id="search-results" aria-label="票据总数">' + searchResults(rs, result) + '</section>' + pageFooter('<span id="archive-match-count">' + (state.showDemo ? '示例' : '私人') + '票夹 · ' + result.records.length + ' 张票据</span>');
@@ -397,7 +398,9 @@ function searchResults(rs, result) {
   if (result.error) return '<div class="empty-state"><h2>请调整筛选条件</h2><p>检查上方日期或票价范围后，结果会自动更新。</p><button class="button secondary" data-action="reset-filters">清除筛选</button></div>';
   const view=ticketView,rows=archiveIsSpace() ? visible : visible.slice(0,state.limit);
   const collection=ticketCollection(rows,view,{icon,selected:archiveSelected,sort:state.filters.sort});
-  return visible.length ? collection + (!archiveIsSpace() && visible.length>state.limit ? `<div class="load-more"><button class="button secondary" data-action="load-more">继续翻看 · 已显示 ${state.limit} / ${visible.length} 张</button></div>` : '') : `<div class="empty-state">${icon('ticket')}<h2>${rs.length ? '还没有匹配的票据' : '暂无票据'}</h2><p>${rs.length ? '试试减少条件，或查找其他路线、旅客与日期。' : '填写信息或扫描纸质票据。'}</p><button class="button primary" data-action="${rs.length ? 'reset-filters' : 'new'}">${icon(rs.length ? 'search' : 'plus')}${rs.length ? '清除筛选' : '录入票据'}</button></div>`;
+  if (visible.length) return collection + (!archiveIsSpace() && visible.length > state.limit ? `<div class="load-more"><button class="button secondary" data-action="load-more">继续翻看 · 已显示 ${state.limit} / ${visible.length} 张</button></div>` : '');
+  const empty = rs.length ? '<h2>还没有匹配的票据</h2><p>试试减少条件，或查找其他路线、旅客与日期。</p><button class="button primary" data-action="reset-filters">' + icon('search') + '清除筛选</button>' : '<h2>暂无票据</h2>';
+  return `<div class="empty-state">${icon('ticket')}${empty}</div>`;
 }
 function refreshSearch() {
   clearTimeout(searchTimer);
@@ -428,9 +431,13 @@ function updateSearch(key, value, immediate = false) {
   clearTimeout(searchTimer); if (immediate) refreshSearch(); else searchTimer = setTimeout(refreshSearch, 140);
 }
 
-function newPersonalRecord(type = 'rail') {
-  const values=applyProfileDefaults({type,template:type === 'flight' ? 'air-boarding-pass' : DEFAULT_RAIL_TEMPLATE},state.settings.profile);
-  markFieldSources(values,['type','template'],'default');
+function newPersonalRecord(type) {
+  const flight = type === 'flight';
+  const values = applyProfileDefaults({
+    type, template: flight ? 'air-boarding-pass' : DEFAULT_RAIL_TEMPLATE,
+    departureDate: flight ? { year: new Date().getFullYear(), dayOfYear: null } : ''
+  }, state.settings.profile);
+  markFieldSources(values, ['type', 'template', 'departureDateYear'], 'default');
   return createRecord(values);
 }
 function railReceiptControls() {
@@ -1009,7 +1016,7 @@ function railTicketOptions(draft) {
   </div>`;
 }
 
-function editRecord(record = newPersonalRecord(), {
+function editRecord(record, {
   imported = false, preserve = false, original = clone(record), photo = preserve ? editor?.photo : null,
   scannedRail, scannedRailQR, railPointsTrip
 } = {}) {
@@ -2187,7 +2194,7 @@ const actions = {
   },
   'enter-demo': async button => { button.disabled=true; try { await setDemoMode(true); navigate('archive'); } finally { button.disabled=false; } },
   'exit-demo': async () => { await setDemoMode(false); render(); },
-  new: () => { if (!state.showDemo && closeModal() !== false) editRecord(); },
+  new: button => { if (!state.showDemo && closeModal() !== false) editRecord(newPersonalRecord(button.dataset.type)); },
   view: button => viewRecord(button.dataset.id),
   edit: button => { const r = findRecord(button.dataset.id); if (r) editRecord(r); },
   'close-modal': () => closeModal(),

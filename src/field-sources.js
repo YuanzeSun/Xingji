@@ -50,7 +50,8 @@ export function copyFieldSource(target,source,key) {
   }
 }
 export function fieldSourceLabel(record,key) {
-  if(!hasFieldValue(sourceFieldValue(record,key)))return '未填写';
+  const value = JOURNEY_DATE_FIELDS.includes(key) ? journeyDate(record[key])?.dayOfYear : sourceFieldValue(record,key);
+  if(!hasFieldValue(value))return '未填写';
   return FIELD_SOURCES[record.fieldSources?.[key]] || '未记录';
 }
 export function fieldSourceBadge(key,record) {

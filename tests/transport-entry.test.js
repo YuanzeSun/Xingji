@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {indexedDB} from 'fake-indexeddb';
 import {prepareCloud} from './helpers/cloud.js';
+import {calendarDate} from '../src/journey-date.js';
 
-test('switching new ticket modes clears all fields and editing saved tickets keeps the transport fixed',async()=>{
+test('archive entries preselect each transport and share a switchable editor',async()=>{
   const dom=new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>',{url:'http://localhost/#archive'}),{window}=dom;
   for(const key of ['window','document','location','history','sessionStorage','FormData','Image'])Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true});
   Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});
@@ -14,13 +15,21 @@ test('switching new ticket modes clears all fields and editing saved tickets kee
   const server=await prepareCloud([],{profile});
   const wait=async predicate=>{for(let i=0;i<300;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('Transport editor did not settle: '+(document.querySelector('#editor-error')?.textContent || ''));};
   const form=()=>document.querySelector('#editor-form');
+  const entry=type=>document.querySelector(`.page-header [data-action="new"][data-type="${type}"]`);
+  const year=String(new Date().getFullYear());
   const fill=(key,value,event='input')=>{const input=form().elements[key];assert.ok(input,key);input.value=value;input.dispatchEvent(new window.Event(event,{bubbles:true}));};
   const fillAll=values=>{for(const [key,value] of Object.entries(values))fill(key,value);};
   const controls=()=>[...form().querySelectorAll('input[name],select[name]')].map(input=>[input.name,input.value,input.checked]);
   const submit=async()=>{form().dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>!form() && !document.querySelector('[data-action="new"]').disabled);};
   try{
-    await import('../src/app.js');await wait(()=>document.querySelector('[data-action=new]:not(:disabled)'));
-    document.querySelector('[data-action="new"]').click();await wait(form);
+    await import('../src/app.js');await wait(()=>entry('rail')?.disabled===false && entry('flight')?.disabled===false);
+    assert.equal(document.querySelectorAll('[data-action="new"]').length,2);
+    assert.equal(entry('rail').textContent,'录入火车');
+    assert.equal(entry('flight').textContent,'录入机票');
+    entry('rail').click();await wait(form);
+    assert.equal(form().elements.type.value,'rail');
+    assert.equal(form().elements.departureDateYear.value,'');
+    assert.equal(form().elements.departureTime.required,true);
     assert.ok(form().querySelector('[data-rail-photo]'));
     const blankRail=controls();
     fillAll({origin:'北京南',destination:'南京南',service:'G21',departureDate:'2026-11-16',departureTime:'08:00',arrivalDate:'2026-11-16',arrivalTime:'12:00',passenger:'旧姓名',identity:'OLD123',carriage:'03',seat:'08A',seatClass:'二等座',railTrainsets:'CR400BF-B-5099',railBureau:'北京局',railModel:'CR400BF-B',railMileage:'1020',orderNumber:'OLDORDER',gate:'A10',price:'400',offsetX:'4'});
@@ -30,7 +39,8 @@ test('switching new ticket modes clears all fields and editing saved tickets kee
     assert.ok(form().querySelector('#code-photo'));
     assert.equal(form().elements.template.value,'air-boarding-pass');
     assert.equal(form().elements.passenger.value,'DOE/JANE');assert.equal(form().elements.identity.value,'P000001');
-    for(const key of ['origin','destination','originCode','destinationCode','service','departureDate','departureTime','arrivalDate','arrivalTime','seat','orderNumber','gate','price'])assert.equal(form().elements[key].value,'',key);
+    for(const key of ['origin','destination','originCode','destinationCode','service','departureTime','arrivalDate','arrivalTime','seat','orderNumber','gate','price'])assert.equal(form().elements[key].value,'',key);
+    assert.equal(form().elements.departureDateYear.value,year);
     assert.equal(form().elements.offsetX.value,'0');assert.equal(document.querySelector('[data-field-source="passenger"]').textContent,'个人资料');
     fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDate:'2026-11-17',departureTime:'09:00',arrivalDate:'2026-11-17',arrivalTime:'13:00',actualDepartureDate:'2026-11-17',actualDepartureTime:'09:10',actualArrivalDate:'2026-11-17',actualArrivalTime:'13:15',passenger:'OLD/NAME',identity:'OLDPASSPORT',seat:'20C',seatClass:'S',airline:'中国国际航空',aircraft:'777-300ER',aircraftRegistration:'B-0001',flightDistance:'8000',pnr:'ABC123',ticketNumber:'1230000000001',terminal:'T3',boardingTime:'08:30',orderNumber:'FLIGHTORDER',gate:'B20',price:'5000',offsetY:'5'});
     fill('type','rail');
@@ -43,8 +53,19 @@ test('switching new ticket modes clears all fields and editing saved tickets kee
     assert.equal(rail.seatClass,'二等座');assert.equal(rail.railStanding,true);assert.equal(rail.seat,'');
     for(const key of ['actualDepartureDate','actualDepartureTime','actualArrivalDate','actualArrivalTime','flightDistance','airline','aircraft','aircraftRegistration','pnr','terminal','boardingTime','orderNumber','gate','price','boardingCode'])assert.equal(rail[key],'',key);
     assert.deepEqual(rail.ticketMarks,[]);assert.equal(rail.fieldSources.airline,undefined);
-    document.querySelector('[data-action="new"]').click();await wait(form);fill('type','flight');
-    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDate:'2026-11-17',departureTime:'09:00',seat:'20C',seatClass:'Y'});await submit();
+    entry('flight').click();await wait(form);
+    assert.equal(form().elements.type.value,'flight');
+    assert.equal(form().elements.type.disabled,false);
+    assert.equal(form().elements.departureDateYear.value,year);
+    assert.equal(form().elements.departureDateMonth.value,'');
+    assert.equal(form().elements.departureDateDay.value,'');
+    assert.equal(form().elements.departureTime.required,false);
+    assert.equal(form().querySelector('[data-field-source="departureDateYear"]').textContent,'默认值');
+    assert.equal(form().querySelector('[data-field-source="departureDate"]').textContent,'未填写');
+    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDateMonth:'11',departureDateDay:'17',seat:'20C',seatClass:'Y'});await submit();
+    const flight=server.records().find(row=>row.type==='flight');
+    assert.equal(calendarDate(flight.departureDate),year+'-11-17');
+    assert.equal(flight.departureTime,'');
     document.querySelector('[data-action="navigate"][data-page="archive"]').click();
     for(const ticket of server.records()){
       await wait(()=>document.querySelector(`[data-action="view"][data-id="${ticket.id}"]`));

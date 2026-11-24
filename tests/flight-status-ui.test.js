@@ -26,6 +26,8 @@ test('an OPEN ticket can be saved without a flight or date, edited to invalid an
   assert.equal(document.querySelector('#editor-form [name="origin"]'),originInput,'ordinary flight typing must not replace the form or lose focus');
   fill('flightStatus','open');
   assert.equal(document.querySelector('[name="service"]').required,false);assert.equal(document.querySelector('[name="departureDate"]').required,false);
+  assert.equal(document.querySelector('[name="departureDateYear"]').value,String(new Date().getFullYear()));
+  fill('departureDateYear','');
   assert.equal(document.querySelector('[data-seat-preset]').required,false);
   assert.equal(document.querySelector('[name="seatClass"]').getAttribute('aria-required'),'false');
   fill('origin','LHR');fill('destination','SYD');fill('passenger','TEST/USER');
