@@ -4,7 +4,7 @@ import {JOURNEY_DATE_FIELDS,journeyDate,storedJourneyDate,calendarDate,fullDate,
 import {readBoardingCode} from './bcbp.js';
 export {resolveRecordConflict} from './record-merge-metadata.js';
 import {LOOKUP_FIELDS,normalizeLookupValues,isLookupValue as isAutomatic} from './lookup-values.js';
-import {normalizeFieldSources,markFieldSources,importFieldSource,hasFieldValue,sourceFieldValue} from './field-sources.js';
+import {normalizeFieldSources,markFieldSources,importFieldSource,hasFieldValue,railBarcodeFieldLocked,sourceFieldValue} from './field-sources.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {BOARDING_FIELDS,refreshGeneratedCode,operatingFlight} from './boarding-code-state.js';
 import { normalizeRailRoute, railRouteMatches } from './rail-route-snapshot.js';
@@ -317,24 +317,27 @@ export function mergeThreeWay(baseRecords, localRecords, remoteRecords) {
     merged.lockedFields = union(l.lockedFields, r.lockedFields);
     for (const field of FIELDS.filter(key=>!['lookupValues','fieldSources'].includes(key) && !BOARDING_FIELDS.includes(key))) {
       const lv = l[field], rv = r[field], bv = b?.[field];
-      const ls=fieldState(l,field),rs=fieldState(r,field),bs=fieldState(b,field);
+      const trackRailBarcodeLock=[b,l,r].some(record=>record && railBarcodeFieldLocked(record,field));
+      const ls=fieldState(l,field,trackRailBarcodeLock),rs=fieldState(r,field,trackRailBarcodeLock),bs=fieldState(b,field,trackRailBarcodeLock);
       if(equal(lv,rv)){
-        const owner=r.lockedFields.includes(field) || (isAutomatic(l,field) && !isAutomatic(r,field)) ? r : l;
-        takeField(merged,owner,field);continue;
+        let owner=r.lockedFields.includes(field) || (isAutomatic(l,field) && !isAutomatic(r,field)) ? r : l;
+        if(trackRailBarcodeLock && equal(rs,bs))owner=l;
+        else if(trackRailBarcodeLock && equal(ls,bs))owner=r;
+        takeField(merged,owner,field,trackRailBarcodeLock);continue;
       }
-      if(equal(rs,bs)){takeField(merged,l,field);continue;}
+      if(equal(rs,bs)){takeField(merged,l,field,trackRailBarcodeLock);continue;}
       if (!b) {
         const empty = value => !value || (Array.isArray(value) && !value.length);
         const ll = l.lockedFields.includes(field), rl = r.lockedFields.includes(field);
-        if (empty(lv) && !ll) { takeField(merged,r,field); continue; }
-        if (empty(rv) && !rl) { takeField(merged,l,field); continue; }
-        if (ll !== rl) { takeField(merged,rl ? r : l,field); continue; }
+        if (empty(lv) && !ll) { takeField(merged,r,field,trackRailBarcodeLock); continue; }
+        if (empty(rv) && !rl) { takeField(merged,l,field,trackRailBarcodeLock); continue; }
+        if (ll !== rl) { takeField(merged,rl ? r : l,field,trackRailBarcodeLock); continue; }
         if (['template', 'provenance', 'offsetX', 'offsetY', 'departureZone', 'arrivalZone'].includes(field) && !ll && !rl) continue;
       }
-      if (equal(ls,bs))takeField(merged,r,field);
+      if (equal(ls,bs))takeField(merged,r,field,trackRailBarcodeLock);
       else {
-        takeField(merged,l,field);
-        conflicts.push({id,field,base:bv,local:lv,remote:rv,fieldSources:{local:l.fieldSources[field],remote:r.fieldSources[field]},...(LOOKUP_FIELDS.includes(field) ? {context:{local:clone(l),remote:clone(r)}} : {})});
+        takeField(merged,l,field,trackRailBarcodeLock);
+        conflicts.push({id,field,base:bv,local:lv,remote:rv,fieldSources:{local:l.fieldSources[field],remote:r.fieldSources[field]},...(trackRailBarcodeLock ? {trackRailBarcodeLock} : {}),...(trackRailBarcodeLock || LOOKUP_FIELDS.includes(field) ? {context:{local:clone(l),remote:clone(r)}} : {})});
       }
     }
     merged.sources = union(l.sources, r.sources);

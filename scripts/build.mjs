@@ -12,7 +12,7 @@ await mkdir(out, { recursive: true });
 await cp(join(root, 'public'), out, { recursive: true });
 await cp(join(root, 'LICENSE'), join(out, 'LICENSE'));
 await mkdir(join(out, 'licenses'), { recursive: true });
-for (const name of ['SOARING-SYMBOLS-MIT.txt', 'airline-logos.json']) await cp(join(root, 'licenses', name), join(out, 'licenses', name));
+for (const name of ['SOARING-SYMBOLS-MIT.txt', 'Arnie97-rail-qr-MIT.txt', 'airline-logos.json']) await cp(join(root, 'licenses', name), join(out, 'licenses', name));
 await mkdir(join(out, 'downloads'), { recursive: true });
 await writeFile(join(out, 'downloads/xingji-variflight-extension.zip'), await extensionArchive(root));
 await mkdir(join(out, 'src'), { recursive: true });

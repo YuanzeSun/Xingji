@@ -428,11 +428,12 @@ function newPersonalRecord(type = 'rail') {
   markFieldSources(values,['type','template'],'default');
   return createRecord(values);
 }
-function railPhotoControls() {
-  return `<section class="editor-extra full-field"><div class="button-row">
-    <button type="button" class="button secondary" data-rail-photo>${icon('camera')}拍照识别</button>
+function railPhotoControls(qrButton) {
+  return `<div class="button-row rail-entry-actions">
+    <button type="button" class="button secondary" data-rail-photo>${icon('camera')}扫描录入</button>
+    ${qrButton}
     <label class="button secondary">选择火车票照片<input type="file" accept="image/*" data-rail-photo-file hidden /></label>
-    </div><div data-rail-camera></div><p role="status" data-rail-photo-status></p></section>`;
+    </div><div data-rail-camera></div><p role="status" data-rail-photo-status></p>`;
 }
 
 function bindRailPhoto(form) {
@@ -445,7 +446,7 @@ function bindRailPhoto(form) {
   const current = () => editor === activeEditor && isArchiveContext(activeEditor.context) && canWrite();
   async function read(photo) {
     railCameraCleanup?.(); railCameraCleanup = null;
-    shutter.disabled = file.disabled = true;
+    for (const control of form.querySelectorAll('[data-rail-photo], [data-rail-photo-file], [data-code-start], #code-photo')) control.disabled = true;
     status.textContent = '正在识别火车票…';
     let record, multiplePrintedTickets;
     try {
@@ -800,7 +801,7 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
   const flight = draft.type === 'flight';
   const basics = flight ? ['origin','destination','service','departureDate','departureTime','arrivalTime','arrivalDate','boardingTime','passenger','identity','airline','seat','seatClass','price','gate'] : ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seatClass','seat','price','gate','railPlatform'];
   const extra = flight ? ['orderNumber', 'terminal', 'aircraft', 'aircraftRegistration', 'pnr', 'ticketNumber', 'flightDistance'] : ['arrivalDate','arrivalTime','railBureau','railRunner','railCarOwner','railModel','railPowerSupply','railMileage','orderNumber','ticketNumber','saleCode','issuer'];
-  openModal(modalHead(importIndex !== null ? '核对这张票据' : state.records.some(r => r.id === draft.id) ? '编辑票据' : '添加一张票据', '红色<span class="required-mark">*</span> 为保存票据必填') + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${field('type', draft, { options: [['rail', '火车票'], ['flight', '机票']] })}${flight ? '<input type="hidden" name="template" value="air-boarding-pass" />' : field('template', {...draft,template:isRefundReceipt(draft) ? 'rail-receipt' : draft.template}, { options: Object.entries(TEMPLATES).filter(([id]) => id !== 'rail-refund-receipt' && id.startsWith('rail-')).sort(([a],[b]) => Number(b === DEFAULT_RAIL_TEMPLATE) - Number(a === DEFAULT_RAIL_TEMPLATE)) })}${flight ? '' : railPhotoControls()}${!flight && ['rail-receipt','rail-refund-receipt'].includes(draft.template) ? '<label class="checkbox-row receipt-refund-switch"><input type="checkbox" data-refund-receipt ' + (isRefundReceipt(draft) ? 'checked' : '') + ' />退票费凭证' + fieldSourceBadge('template',draft) + '</label>' : ''}${flight ? field('flightStatus', draft, { options: Object.entries(FLIGHT_STATUSES) }) + ticketCodeEditor(draft,!!localFileURL,'',{generator:false}) : ''}${flight || isRefundReceipt(draft) ? '' : '<label class="checkbox-row full-field"><input type="checkbox" data-rail-standing ' + (draft.railStanding ? 'checked' : '') + ' />无座' + fieldSourceBadge('railStanding',draft) + '</label>'}${basics.filter(key => !(draft.railStanding && key === 'seat')).map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ticketCodeEditor(draft, !!localFileURL)}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div><p class="fine-print"></p>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div><div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="${fromBatch ? 'back-to-batch' : 'close-modal'}">${fromBatch ? '返回校对' : '取消'}</button>${fromBatch ? '' : `<span class="save-note">${icon('database')}保存票据</span>`}<div class="spacer"></div><button class="button primary" type="submit">${icon('check')}${fromBatch ? '完成校对' : '保存票据'}</button></div></form>`, true);
+  openModal(modalHead(importIndex !== null ? '核对这张票据' : state.records.some(r => r.id === draft.id) ? '编辑票据' : '添加一张票据', '红色<span class="required-mark">*</span> 为保存票据必填') + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${field('type', draft, { options: [['rail', '火车票'], ['flight', '机票']] })}${flight ? '<input type="hidden" name="template" value="air-boarding-pass" />' : field('template', {...draft,template:isRefundReceipt(draft) ? 'rail-receipt' : draft.template}, { options: Object.entries(TEMPLATES).filter(([id]) => id !== 'rail-refund-receipt' && id.startsWith('rail-')).sort(([a],[b]) => Number(b === DEFAULT_RAIL_TEMPLATE) - Number(a === DEFAULT_RAIL_TEMPLATE)) })}${flight ? '' : ticketCodeEditor(draft, !!localFileURL, '', { railPhoto:railPhotoControls })}${!flight && ['rail-receipt','rail-refund-receipt'].includes(draft.template) ? '<label class="checkbox-row receipt-refund-switch"><input type="checkbox" data-refund-receipt ' + (isRefundReceipt(draft) ? 'checked' : '') + ' />退票费凭证' + fieldSourceBadge('template',draft) + '</label>' : ''}${flight ? field('flightStatus', draft, { options: Object.entries(FLIGHT_STATUSES) }) + ticketCodeEditor(draft,!!localFileURL,'',{generator:false}) : ''}${flight || isRefundReceipt(draft) ? '' : '<label class="checkbox-row full-field"><input type="checkbox" data-rail-standing ' + (draft.railStanding ? 'checked' : '') + ' />无座' + fieldSourceBadge('railStanding',draft) + '</label>'}${basics.filter(key => !(draft.railStanding && key === 'seat')).map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ''}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div><p class="fine-print"></p>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div><div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="${fromBatch ? 'back-to-batch' : 'close-modal'}">${fromBatch ? '返回校对' : '取消'}</button>${fromBatch ? '' : `<span class="save-note">${icon('database')}保存票据</span>`}<div class="spacer"></div><button class="button primary" type="submit">${icon('check')}${fromBatch ? '完成校对' : '保存票据'}</button></div></form>`, true);
   // openModal replaces the DOM, but keeps the editor state deliberately.
   const form = document.querySelector('#editor-form');
   bindRailPhoto(form);
@@ -830,10 +831,48 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
     if(input.matches('[data-refund-receipt]'))input.dispatchEvent(new window.Event('input',{bubbles:true}));
     if(input.tagName==='SELECT'&&FIELDS.includes(input.name)&&draft[input.name]!==input.value)input.dispatchEvent(new window.Event('input',{bubbles:true}));
   });
-  codeCleanup = bindTicketCodeEditor(form, draft, ({filled=[],previousRecord={...draft},automatic=false}={}) => { if(automatic){refreshFieldSources(form,draft);document.querySelector('#editor-preview').innerHTML=ticketSVG(draft);return;}if(lookupContext(previousRecord)!==lookupContext(draft)){const cleared=clearLookupValues(draft);for(const key of Object.keys(cleared))if(form.elements[key])form.elements[key].value='';} normalizePlaces(draft); updatePersonalFields(previousRecord); for(const key of filled)if(form.elements[key])form.elements[key].value=draft[key]; editor.dirty = true; refreshFieldSources(form,draft); refreshBarcodeFieldLocks(form,draft);const metadata=form.querySelector('.boarding-metadata');if(metadata&&BOARDING_METADATA_FIELDS.some(key=>draft[key]))metadata.open=true;const journey=form.querySelector('[data-boarding-journey]');if(journey)journey.innerHTML=boardingJourneyMarkup(draft);document.querySelector('#editor-preview').innerHTML = ticketSVG(draft); }, { onMultiple:importIndex===null&&!state.records.some(record=>record.id===draft.id) ? (code,current,image)=>reviewBoardingLegs(code,{...draft,...current},image).catch(fail) : undefined, profile:state.settings.profile, preserveGenerator:!!generatorSettings, referenceURL: localFileURL, isCurrent: () => isArchiveContext(context), autoRead: draft.type === 'rail' && !!localFileURL && !draft.ticketCode });
+  codeCleanup = bindTicketCodeEditor(form, draft, ({filled=[],previousRecord={...draft},automatic=false,codeStatus=''}={}) => {
+    if(automatic){
+      refreshFieldSources(form,draft);
+      document.querySelector('#editor-preview').innerHTML=ticketSVG(draft);
+      return;
+    }
+    if(lookupContext(previousRecord)!==lookupContext(draft)){
+      const cleared=clearLookupValues(draft);
+      for(const key of Object.keys(cleared)) {
+        if(JOURNEY_DATE_FIELDS.includes(key))writeTicketDate(form,key,'');
+        else if(form.elements[key])form.elements[key].value='';
+      }
+    }
+    if(!flight && filled.length){
+      editRecord(draft, importIndex, true, original);
+      document.querySelector('#editor-form #code-status').textContent=codeStatus;
+      return;
+    }
+    normalizePlaces(draft);
+    updatePersonalFields(previousRecord);
+    for(const key of filled)if(form.elements[key])form.elements[key].value=draft[key];
+    editor.dirty=true;
+    refreshFieldSources(form,draft);
+    refreshBarcodeFieldLocks(form,draft);
+    const metadata=form.querySelector('.boarding-metadata');
+    if(metadata&&BOARDING_METADATA_FIELDS.some(key=>draft[key]))metadata.open=true;
+    const journey=form.querySelector('[data-boarding-journey]');
+    if(journey)journey.innerHTML=boardingJourneyMarkup(draft);
+    document.querySelector('#editor-preview').innerHTML=ticketSVG(draft);
+  }, {
+    onMultiple:importIndex===null&&!state.records.some(record=>record.id===draft.id) ? (code,current,image)=>reviewBoardingLegs(code,{...draft,...current},image).catch(fail) : undefined,
+    onCameraStart:() => { railCameraCleanup?.(); railCameraCleanup=null; },
+    profile:state.settings.profile, preserveGenerator:!!generatorSettings, referenceURL:localFileURL,
+    isCurrent:() => form.isConnected && !form.dataset.pending && canWrite() && isArchiveContext(context),
+    autoRead:draft.type==='rail' && !!localFileURL && !draft.ticketCode
+  });
   form.addEventListener('input', event => {
     if (event.target.matches('[data-rail-start]')) return;
-    const changedKey=event.target.name || (event.target.matches('[data-seat-preset]') ? 'seatClass' : '');
+    const target=event.target;
+    const changedKey=target.name || (target.matches('[data-seat-preset]') ? 'seatClass'
+      : target.matches('[data-seat-number],[data-berth]') ? 'seat'
+      : target.matches('[data-rail-standing]') ? 'railStanding' : '');
     if (!lookupApplying && changedKey === 'type') {
       if (typeFixed || barcodeFieldLocked(draft,'type')) { form.elements.type.value=draft.type; return; }
       if (['rail','flight'].includes(event.target.value) && event.target.value !== draft.type) {
@@ -843,8 +882,9 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
       }
     }
     if(!lookupApplying && barcodeFieldLocked(draft,changedKey)){refreshBarcodeFieldLocks(form,draft);return;}
-    if (event.target.matches('[data-rail-standing]')) {
-      draft.railStanding = event.target.checked;
+    if (target.matches('[data-rail-standing]')) {
+      if(barcodeFieldLocked(draft,'seat')){refreshBarcodeFieldLocks(form,draft);return;}
+      draft.railStanding = target.checked;
       if (draft.railStanding) draft.seat = '';
       markManualFields(draft, ['railStanding']);
       editRecord(draft, importIndex, true, original);
@@ -854,7 +894,11 @@ function editRecord(record = newPersonalRecord(), importIndex = null, preserve =
     if (!lookupApplying && ['passenger','identity'].includes(event.target.name)) editor.personalEdited.add(event.target.name);
     const data = new FormData(form); for (const [key, value] of data) if (FIELDS.includes(key) && !JOURNEY_DATE_FIELDS.includes(key) && !barcodeFieldLocked(draft,key)) draft[key] = value;
     for(const key of JOURNEY_DATE_FIELDS)if(form.elements[key+'Year'])draft[key]=readTicketDate(form,key,draft);
-    if (!flight) { draft.railStanding = form.querySelector('[data-rail-standing]')?.checked === true; draft.ticketMarks = collectMarks(form).filter(mark => mark.text); if (data.get('template') === 'rail-receipt' && form.querySelector('[data-refund-receipt]')?.checked) draft.template = 'rail-refund-receipt'; }
+    if (!flight) {
+      if(!barcodeFieldLocked(draft,'railStanding') && !barcodeFieldLocked(draft,'seat'))draft.railStanding = form.querySelector('[data-rail-standing]')?.checked === true;
+      draft.ticketMarks = collectMarks(form).filter(mark => mark.text);
+      if (data.get('template') === 'rail-receipt' && form.querySelector('[data-refund-receipt]')?.checked) draft.template = 'rail-refund-receipt';
+    }
     normalizePlaces(draft);
     if(!lookupApplying){
       const key=event.target.name || (event.target.matches('[data-seat-number],[data-berth]') ? 'seat' : event.target.matches('[data-seat-preset]') ? 'seatClass' : event.target.matches('[data-refund-receipt]') ? 'template' : '');
