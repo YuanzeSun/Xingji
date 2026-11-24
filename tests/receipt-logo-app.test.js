@@ -52,8 +52,8 @@ test('the editor saves refund fees with matching validation and restricts transp
     assert.equal(Object.hasOwn(refund, 'railShowIssuer'), false);
     assert.equal(rows.find(row=>row.id==='original').price,'415.0');
     document.querySelector('[data-action="navigate"][data-page="statistics"]').click();
-    await wait(()=>document.querySelector('.statistics-summary'));
-    assert.match(document.querySelector('.statistics-summary').textContent,/火车1次飞机0次/);
+    await wait(()=>document.querySelector('.statistics-journey-metrics'));
+    assert.deepEqual(Array.from(document.querySelectorAll('.statistics-journey-card dl > div:first-child strong'), value => value.textContent), ['1 次', '0 班']);
     document.querySelector('[data-action="navigate"][data-page="archive"]').click();
     await wait(()=>document.querySelector(`[data-action="view"][data-id="${refund.id}"]`));
     document.querySelector(`[data-action="view"][data-id="${refund.id}"]`).click();

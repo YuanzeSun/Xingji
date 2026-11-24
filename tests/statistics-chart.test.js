@@ -18,14 +18,14 @@ const position=root=>{const scroll=root.querySelector('.statistics-chart-scroll'
 test('chart buttons preserve the viewed date, fit the complete range and retain zoom without changing statistics',()=>{
   const f=setup(),{root,dom,records,options}=f,before=JSON.stringify(records);let cleanup=mountStatistics(root,records,{options});
   try{
-    const summary=root.querySelector('.statistics-summary').textContent,scroll=root.querySelector('.statistics-chart-scroll');scroll.scrollLeft=1000;
+    const summary=root.querySelector('.statistics-journey-metrics').textContent,scroll=root.querySelector('.statistics-chart-scroll');scroll.scrollLeft=1000;
     const center=position(root),initial=width(root);
     root.querySelector('[data-stat-zoom="in"]').click();assert.ok(width(root)>initial);assert.ok(Math.abs(position(root)-center)<.001);
     const saved=options.chartZoom;cleanup();cleanup=mountStatistics(root,records,{options});assert.equal(options.chartZoom,saved);
     root.querySelector('[data-stat-zoom="fit"]').click();assert.equal(width(root),360);assert.equal(root.querySelector('[data-stat-zoom="out"]').disabled,true);
     assert.ok(root.querySelectorAll('.statistics-axis').length<15);assert.equal(root.querySelectorAll('[data-stat-period]').length,72);
     root.querySelector('[data-stat-zoom="in"]').click();assert.ok(width(root)>360);
-    assert.equal(root.querySelector('.statistics-summary').textContent,summary);assert.equal(JSON.stringify(records),before);
+    assert.equal(root.querySelector('.statistics-journey-metrics').textContent,summary);assert.equal(JSON.stringify(records),before);
   }finally{cleanup();dom.window.close();}
 });
 

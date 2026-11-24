@@ -418,12 +418,7 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 .statistics-reset-symbol{display:none}
 .statistics-range>p{font-size:12px;line-height:1.7;color:#75816f;margin:12px 0 0}
 .statistics-range>p.form-error{color:var(--red)}
-.statistics-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.statistics-summary>div{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
-.statistics-summary>div>span{font-size:12px;color:#6b796b;white-space:nowrap}
-.statistics-summary strong{display:inline-flex;align-items:baseline;gap:4px;font-size:20px;font-weight:600;line-height:1.3;color:var(--green);font-variant-numeric:tabular-nums;white-space:nowrap}
-.statistics-summary small{font-size:12px;font-weight:400;color:#7a8573}
-.statistics-journey-card dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0 0}
+.statistics-journey-card dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px;margin:12px 0 0}
 .statistics-journey-card dt{font-size:14px;color:#52654e}
 .statistics-journey-card dd{display:grid;gap:4px;margin:4px 0 0}
 .statistics-journey-card strong{font-size:clamp(18px,4.8vw,25px);line-height:1.2;font-weight:600;color:var(--green);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
@@ -563,7 +558,6 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
   .statistics-range .statistics-date-button{width:100%;font-size:16px;padding:6px 4px;min-width:0}
   .statistics-range .text-button{width:44px;min-height:44px;margin:0;padding:0;font-size:22px;line-height:1}
   .statistics-reset-symbol{display:inline}.statistics-reset-label{display:none}
-  .statistics-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.statistics-summary>div{padding:7px 10px}.statistics-summary strong{font-size:18px}
   .statistics-columns{grid-template-columns:1fr;gap:16px}.statistics-panel{padding:18px}.statistics-panel>header{flex-wrap:wrap;gap:12px;margin-bottom:17px}
   .statistics-panel h2{font-size:17px}.statistics-period-controls{width:100%;justify-content:space-between}
   .statistics-routes td{padding:10px 6px}.statistics-routes td:last-child{width:38px}.statistics-route-pair{grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr);gap:5px}.statistics-place-list{max-height:280px}

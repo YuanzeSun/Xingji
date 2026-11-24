@@ -40,8 +40,8 @@ test('rail mileage and flown distance share the date filter and show independent
   const root = dom.window.document.querySelector('#root');
   const unmount = mountStatistics(root, rows, { options: { ...range } });
   const [railCard, flightCard] = root.querySelectorAll('.statistics-journey-metrics > section');
-  assert.match(railCard.querySelector('dl > div').textContent, /铁路里程.*1,318 km.*1 \/ 1/);
-  assert.match(flightCard.querySelector('dl > div').textContent, /实际飞行航程.*333\.6 km.*1 \/ 2/);
+  assert.match(railCard.textContent, /铁路里程.*1,318 km.*1 \/ 1/);
+  assert.match(flightCard.textContent, /实际飞行航程.*333\.6 km.*1 \/ 2/);
   unmount();
   dom.window.close();
 });
@@ -74,7 +74,7 @@ test('rail and flight travel times are totaled independently across dates, time 
   const cards = () => [...root.querySelectorAll('.statistics-journey-metrics > section')];
   assert.deepEqual(cards().map(card => card.querySelector('h2').textContent), ['火车', '飞机']);
   assert.deepEqual(cards().map(card => [...card.querySelectorAll('dt')].map(label => label.textContent)), [
-    ['铁路里程', '总在途时间'], ['实际飞行航程', '总在途时间']
+    ['乘坐次数', '火车站数', '铁路里程', '总在途时间'], ['航班数', '机场数', '实际飞行航程', '总在途时间']
   ]);
   const duration = index => cards()[index].querySelector('dl > div:last-child').textContent;
   assert.match(duration(0), /总在途时间.*1 小时 40 分.*1 \/ 3 程可计算/);
@@ -237,12 +237,12 @@ test('statistics controls refresh every dimension, offer monthly data and show e
     const dot = root.querySelector('[data-stat-period="2023-01"]'); dot.dispatchEvent(new dom.window.FocusEvent('focusin', { bubbles: true }));
     assert.match(root.querySelector('output').textContent, /火车 0 次/);
     applyStatisticsDate(root, '[data-stat-from]', '2024-01-01');
-    assert.match(root.querySelector('.statistics-summary').textContent, /火车0次飞机1次/);
+    assert.deepEqual(Array.from(root.querySelectorAll('.statistics-journey-card dl > div:first-child strong'), value => value.textContent), ['0 次', '1 班']);
     applyStatisticsDate(root, '[data-stat-to]', '2023-12-31');
-    assert.equal(root.querySelector('.statistics-summary'), null);
+    assert.equal(root.querySelector('.statistics-journey-metrics'), null);
     assert.match(root.querySelector('[role="alert"]').textContent, /起始日期/);
     root.querySelector('[data-stat-reset]').click();
-    assert.equal(root.querySelector('[data-stat-from]').textContent, '不限'); assert.ok(root.querySelector('.statistics-summary'));
+    assert.equal(root.querySelector('[data-stat-from]').textContent, '不限'); assert.ok(root.querySelector('.statistics-journey-metrics'));
   } finally { cleanup(); dom.window.close(); }
 });
 
@@ -398,22 +398,22 @@ test('the automatic end date rolls over on return and a chosen date stays fixed'
   bindTestDialogs(dom.window);
   const rows = [rail({ departureDate: '2026-11-19' }), rail({ departureDate: '2026-11-20' })], options = {};
   const end = () => root.querySelector('[data-stat-to]').textContent;
-  const count = () => root.querySelector('.statistics-summary strong').textContent;
+  const count = () => root.querySelector('.statistics-journey-card strong').textContent;
   let cleanup = () => {};
   try {
     cleanup = mountStatistics(root, rows, { options });
     assert.equal(end(), '2026-11-19');
-    assert.equal(count(), '1次');
+    assert.equal(count(), '1 次');
     cleanup();
     clock = new NativeDate(2026, 10, 20, 0, 1);
     cleanup = mountStatistics(root, rows, { options });
     assert.equal(end(), '2026-11-20');
-    assert.equal(count(), '2次');
+    assert.equal(count(), '2 次');
     applyStatisticsDate(root, '[data-stat-to]', '2026-11-19');
     clock = new NativeDate(2026, 10, 21, 0, 1);
     dom.window.dispatchEvent(new dom.window.Event('focus'));
     assert.equal(end(), '2026-11-19');
-    assert.equal(count(), '1次');
+    assert.equal(count(), '1 次');
     root.querySelector('[data-stat-reset]').click();
     assert.equal(end(), '2026-11-21');
     clock = new NativeDate(2026, 10, 22, 0, 1);

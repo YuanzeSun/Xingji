@@ -17,10 +17,12 @@ test('statistics navigation reads the current archive, preserves its range acros
   const server = await prepareCloud(rows);
   const wait = async fn => { for (let i = 0; i < 200; i++) { if (fn()) return; await new Promise(resolve => setTimeout(resolve, 5)); } assert.fail('Statistics page did not settle'); };
   const click = page => document.querySelector(`[data-action="navigate"][data-page="${page}"]`).click();
+  const counts = () => Array.from(document.querySelectorAll('.statistics-journey-card'), card =>
+    Array.from(card.querySelectorAll('dl > div:nth-child(-n+2) strong'), value => value.textContent));
   try {
     await import('../src/app.js'); await wait(() => document.querySelector('[data-page="statistics"]'));
-    click('statistics'); await wait(() => document.querySelector('.statistics-summary'));
-    assert.equal(location.hash, '#statistics'); assert.match(document.querySelector('.statistics-summary').textContent, /火车1次飞机1次/);
+    click('statistics'); await wait(() => document.querySelector('.statistics-journey-metrics'));
+    assert.equal(location.hash, '#statistics'); assert.deepEqual(counts(), [['1 次', '2 个'], ['1 班', '2 个']]);
     const from = document.querySelector('[data-stat-from]');
     from.click();
     const dialog = document.querySelector('.statistics-date-dialog');
@@ -30,7 +32,7 @@ test('statistics navigation reads the current archive, preserves its range acros
     date.dispatchEvent(new window.Event('change', { bubbles: true }));
     assert.equal(dialog.open, true);
     assert.equal(from.textContent, '不限');
-    assert.match(document.querySelector('.statistics-summary').textContent, /火车1次飞机1次/);
+    assert.deepEqual(counts(), [['1 次', '2 个'], ['1 班', '2 个']]);
     dialog.querySelector('[data-cancel-date]').click();
     assert.equal(from.textContent, '不限');
     const end = document.querySelector('[data-stat-to]');
@@ -41,9 +43,9 @@ test('statistics navigation reads the current archive, preserves its range acros
     endForm.querySelector('[data-clear-date]').click();
     assert.equal(document.querySelector('[data-stat-to]').textContent, todayDate());
     applyStatisticsDate(document, '[data-stat-from]', '2024-01-01');
-    assert.match(document.querySelector('.statistics-summary').textContent, /火车0次飞机1次/);
+    assert.deepEqual(counts(), [['0 次', '0 个'], ['1 班', '2 个']]);
     click('archive'); await wait(() => document.querySelector('.ticket-grid'));
-    click('statistics'); await wait(() => document.querySelector('.statistics-summary'));
+    click('statistics'); await wait(() => document.querySelector('.statistics-journey-metrics'));
     assert.equal(document.querySelector('[data-stat-from]').textContent, '2024-01-01');
     assert.equal(server.calls.some(call => ['POST', 'PATCH', 'DELETE'].includes(call.method)), false);
     assert.equal(server.records().length, 3);
