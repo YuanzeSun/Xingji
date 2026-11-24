@@ -1,8 +1,8 @@
+import { parseScanText } from '../src/scan-engine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord, archive, readArchive, applyImport, mergeThreeWay } from '../src/model.js';
-import { parseText } from '../src/importers.js';
 import { ticketSVG } from '../src/tickets.js';
 import { normalizeMarks, describeMarks, marksFromText } from '../src/ticket-marks.js';
 
@@ -17,8 +17,8 @@ test('marks are opt-in, validated and only inferred from explicit printed notati
   assert.throws(() => normalizeMarks([{ text: '网', shape: 'box' }]), /仅支持圆圈或仅文字/);
   assert.deepEqual(marksFromText('票面标识：网 学'), normalizeMarks('网 学'));
   assert.deepEqual(marksFromText('（网） （学） （网）'), normalizeMarks([{ text: '网', shape: 'circle' }, { text: '学', shape: 'circle' }]));
-  assert.deepEqual(parseText('C2021 北京南→天津 （网）')[0].ticketMarks, normalizeMarks('网'));
-  assert.deepEqual(parseText('CA181 北京首都→东京羽田 （网）')[0].ticketMarks, []);
+  assert.deepEqual(parseScanText('C2021 北京南→天津 （网）')[0].ticketMarks, normalizeMarks('网'));
+  assert.deepEqual(parseScanText('登机牌 CA181 北京首都→东京羽田 （网）'), []);
   for (const bad of [[{ text: '<script>' }], [{ text: '网', shape: 'unknown' }], [{ text: '网', offsetX: 101 }], [{ text: '网', offsetY: Infinity }], Array(5).fill({ text: '网' })]) {
     assert.throws(() => sample({ ticketMarks: bad }), /标识/);
   }

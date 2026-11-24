@@ -24,16 +24,16 @@ test('airport variants share canonical names and IATA identities without equatin
 
 test('multi-source rail records merge in storage data, enriching fields and retaining manual corrections and source history', () => {
   const manual = rail('a', { seat: '08F', lockedFields: ['seat'], sources: [{ kind: 'manual', label: '手动录入' }] });
-  const email = rail('b', { origin: 'QIP', destination: 'Shanghaihongqiao', service: 'ｇ１０３', seat: '08F', price: '553.00', sources: [{ kind: 'email', label: '邮件' }] });
+  const pdf = rail('b', { origin: 'QIP', destination: 'Shanghaihongqiao', service: 'ｇ１０３', seat: '08F', price: '553.00', sources: [{ kind: 'pdf', label: '电子报销凭证' }] });
   const scan = rail('c', { origin: '清河站', destination: '上海虹桥站', passenger: '', carriage: '05', sources: [{ kind: 'scan', label: '扫描' }] });
-  const result = applyImport([manual], [email, scan]);
+  const result = applyImport([manual], [pdf, scan]);
   assert.equal(result.added, 0); assert.equal(result.records.length, 1);
   const r = result.records[0];
   assert.equal(r.seat, '08F'); assert.equal(r.carriage, '05'); assert.equal(r.price, '553.00');
   assert.equal(r.sources.length, 3); assert.deepEqual(r.mergedIds, ['b', 'c']);
   assert.deepEqual(readArchive(archive(result.records)), result.records);
-  assert.equal(applyImport(result.records, [email]).records.length, 1);
-  assert.equal(deduplicateRecords([manual, email]).length, 1, 'existing underlying duplicates are also consolidated');
+  assert.equal(applyImport(result.records, [pdf]).records.length, 1);
+  assert.equal(deduplicateRecords([manual, pdf]).length, 1, 'existing underlying duplicates are also consolidated');
 });
 
 test('rail imports reject known conflicting fields and accept interchangeable formatting and missing fields', () => {
@@ -73,7 +73,7 @@ test('different passengers, journeys and ambiguous unnamed tickets remain separa
 
 test('synchronization writes one merged record and absorbed IDs cannot re-create it on a later device sync', async () => {
   const a = flight('a', { seat: '08F', sources: [{ kind: 'scan', label: '原票' }] });
-  const b = flight('b', { origin: '首都国际机场', price: '500', sources: [{ kind: 'email', label: '邮件' }] });
+  const b = flight('b', { origin: '首都国际机场', price: '500', sources: [{ kind: 'flight-lookup', label: '飞常准历史行程' }] });
   let stored = [a], writes = 0;
   const store = { read: async () => ({ records: structuredClone(stored) }), write: async records => { stored = structuredClone(records); writes++; } };
   const first = await synchronize(store, [], [b]);

@@ -2,7 +2,6 @@ import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseScanText } from '../src/scan-engine.js';
-import { parseText, parseSingleTicket } from '../src/importers.js';
 import { parseRailOrder } from '../src/rail-order.js';
 import { railTimeWords, railRouteAreas } from '../src/ocr-layout.js';
 
@@ -28,7 +27,6 @@ test('12306 screenshots prefer the travel date over order timestamps and ignore 
   assert.equal(r.seatClass, '二等座'); assert.equal(r.price, '553.00'); assert.equal(r.ticketNumber, '');
   assert.equal(r.orderNumber, 'E000000001');
   assert.equal(r.sources[0].label, 'order.png'); assert.equal(r.provenance, 'reconstruction');
-  assert.equal(calendarDate(parseText(screenshot)[0].departureDate), '2026-11-15');
 });
 
 test('labelled purchase details allow full-width punctuation, spaced Chinese, split values and numeric trains', () => {
@@ -51,7 +49,7 @@ test('labelled purchase details allow full-width punctuation, spaced Chinese, sp
   assert.equal(r.origin, '北京南'); assert.equal(r.destination, '上海虹桥');
   assert.equal(r.departureTime, '20:10'); assert.equal(r.arrivalTime, '08:20');
   assert.equal(r.carriage, '02'); assert.equal(r.seat, '018下铺');
-  assert.equal(r.identity, '110101********1234'); assert.equal(r.price, '300.50');
+  assert.equal(r.identity, ''); assert.equal(r.price, '300.50');
 });
 
 test('known OCR text from a screenshot recovers stations and the travel date while conflicting arrival digits stay blank', () => {
@@ -96,7 +94,7 @@ test('passengers on one order keep their names, seats and fares separate and sha
   assert.deepEqual(records.map(r => [r.passenger, r.carriage, r.seat, r.price]), [['示例甲', '05', '08F', '553'], ['示例乙', '06', '12A', '300']]);
   assert.ok(records.every(r => r.service === 'G103' && calendarDate(r.departureDate) === '2026-11-15'));
   assert.ok(records.every(r => r.orderNumber === 'E123456789' && !r.ticketNumber));
-  assert.equal(parseSingleTicket(text), null, 'camera acceptance must not silently collapse a family order');
+  assert.deepEqual(parseScanText(text, 'camera', { singleTicket: true }), [], 'camera acceptance must not silently collapse a family order');
 });
 
 test('coordinates recover left departure and right arrival times even when OCR reads the columns in reverse', () => {

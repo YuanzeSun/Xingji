@@ -1,5 +1,3 @@
-import { DEFAULT_RAIL_TEMPLATE } from './model.js';
-
 export function printedRailTemplate(text = '') {
   const compact = text.replace(/\s/g, '');
   if (/退票(?:手续)?费/.test(compact)) return 'rail-refund-receipt';
@@ -15,10 +13,6 @@ export function detectedRailTemplate(text = '', { paperColor = '', departureDate
   if (printed) return printed;
   if (paperColor === 'red') return departureDate && +departureDate.slice(0, 4) < 2015 ? 'rail-red-classic' : 'rail-red';
   return paperColor === 'blue' ? 'rail-blue' : '';
-}
-
-export function railTemplateFromText(text = '', options) {
-  return detectedRailTemplate(text, options) || DEFAULT_RAIL_TEMPLATE;
 }
 
 export function railPaperFromPixels(data, { faint = false } = {}) {

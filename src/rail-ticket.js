@@ -206,7 +206,7 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
   const ticketNumber = printedRailNumber(raw.split('\n').slice(0, 3).join('\n'));
   if (!pair.length && !service && !(printed && (exactDate || date) && (price || seat.carriage || ticketNumber))) return false;
   const seatClass = readRailSeatClasses(compact)[0] || '';
-  const identity = raw.match(/(\d{6,14}[*xX]{2,8}\d{2,4})\s+([\p{Script=Han}]{2,8})/u);
+  const passenger = raw.match(/\d{6,14}[*xX]{2,8}\d{2,4}\s+([\p{Script=Han}]{2,8})/u)?.[1] || '';
   let origin = route?.origin || pair[0]?.row[0] || '', destination = route?.destination || pair[1]?.row[0] || '';
   for (const side of route ? [] : ['origin', 'destination']) {
     const explicit = raw.match(new RegExp((side === 'origin' ? '出发站' : '到达站') + '[：:]\\s*([^\\n]+)'));
@@ -242,7 +242,7 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
   const record = createRecord({ type: 'rail', ...(template && { template }), origin, destination,
     originCode: pair[0]?.row[0] === origin ? pair[0].row[3] : '', destinationCode: pair[1]?.row[0] === destination ? pair[1].row[3] : '', service,
     departureDate: validDate(departureDate) ? departureDate : '', departureTime: printedTime || (time ? `${time[1].padStart(2, '0')}:${time[2]}` : ''),
-    carriage: seat.carriage, seat: seat.seat, seatClass, railStanding: seat.railStanding || /无\s*座|站票/.test(seatRow) || /(?:席别|座位)[：:\s]*无\s*座|(?:商务座|一等座|二等座|硬座|软座)[：:\s]*无\s*座|^\s*无\s*座\s*$/m.test(compact), price, identity: identity?.[1] || '', passenger: identity?.[2] || '',
+    carriage: seat.carriage, seat: seat.seat, seatClass, railStanding: seat.railStanding || /无\s*座|站票/.test(seatRow) || /(?:席别|座位)[：:\s]*无\s*座|(?:商务座|一等座|二等座|硬座|软座)[：:\s]*无\s*座|^\s*无\s*座\s*$/m.test(compact), price, passenger,
     ticketNumber,
     saleCode: printedRailNumber(raw.split('\n').filter(line => line.trim()).slice(-3).join('\n'), true),
     issuer,

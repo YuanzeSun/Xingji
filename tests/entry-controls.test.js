@@ -5,7 +5,6 @@ import { dateControl, bindDatePickers } from '../src/date-field.js';
 import { seatField, bindSeatFields } from '../src/seat-field.js';
 import { seatClassField, bindSeatClassFields } from '../src/seat-class-field.js';
 import { createRecord, archive, readArchive } from '../src/model.js';
-import { parseText } from '../src/importers.js';
 import { parseScanText } from '../src/scan-engine.js';
 import { ticketSVG } from '../src/tickets.js';
 
@@ -91,10 +90,10 @@ test('a temporary seat-class change hides sleeper positions without forgetting t
 test('rail defaults use reimbursement stock and preserve explicit template choices', () => {
   assert.equal(createRecord().template, 'rail-receipt');
   const text = '日期：2026-11-16 车次：T42 出发：西安 到达：北京西 09车015号下铺 硬卧';
-  const imported = parseText(text)[0];
+  const imported = parseScanText(text)[0];
   assert.equal(imported.template, 'rail-receipt'); assert.equal(imported.seat, '015号下铺');
-  assert.equal(parseText('蓝色磁介质票\n' + text)[0].template, 'rail-blue');
-  assert.equal(parseText('经典红票\n' + text)[0].template, 'rail-red-classic');
+  assert.equal(parseScanText('蓝色磁介质票\n' + text)[0].template, 'rail-blue');
+  assert.equal(parseScanText('经典红票\n' + text)[0].template, 'rail-red-classic');
 });
 
 test('printed rail OCR keeps upper, middle and lower berth words after the seat number', () => {

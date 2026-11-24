@@ -1,8 +1,9 @@
+import { parseScanText } from '../src/scan-engine.js';
 import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRecord, archive, readArchive, mergeThreeWay, applyImport, validDate, partition } from '../src/model.js';
-import { parseText, mapFlightResult } from '../src/importers.js';
+import { mapFlightResult } from '../src/importers.js';
 import { ticketSVG } from '../src/tickets.js';
 const sample = (values = {}) => createRecord({ id: 'test-1', origin: '北京南', destination: '上海虹桥', service: 'G103', departureDate: '2026-11-15', departureTime: '08:00', passenger: '张三', ...values });
 
@@ -21,7 +22,7 @@ test('backup roundtrip preserves template, manual locks and unicode', () => {
 });
 test('duplicate sources enrich missing fields without replacing corrections', () => {
   const before = sample({ seat: '08F', price: '', lockedFields: ['seat'], sources: [{ kind: 'manual', label: '校对', at: '2026-01-01' }] });
-  const incoming = sample({ id: 'other-id', seat: '08F', price: '553.00', sources: [{ kind: 'email', label: '通知', at: '2026-01-02' }] });
+  const incoming = sample({ id: 'other-id', seat: '08F', price: '553.00', sources: [{ kind: 'pdf', label: '电子报销凭证', at: '2026-01-02' }] });
   const merged = applyImport([before], [incoming]);
   assert.equal(merged.added, 0); assert.equal(merged.enriched, 1); assert.equal(merged.records[0].seat, '08F'); assert.equal(merged.records[0].price, '553.00'); assert.equal(merged.records[0].sources.length, 2);
   assert.equal(applyImport([before], [sample({ id: 'different-passenger', passenger: '李四' })]).added, 1);
@@ -55,7 +56,7 @@ test('order numbers survive backups independently of ticket numbers and do not m
   }
   const other = sample({ id: 'another-passenger', orderNumber: r.orderNumber, passenger: '李四' });
   assert.equal(applyImport([r], [other]).records.length, 2);
-  const parsed = parseText('日期：2026-11-15 车次：G103\n出发：北京南 到达：上海虹桥\n订单号：E123456789 票号：A01234567')[0];
+  const parsed = parseScanText('日期：2026-11-15 车次：G103\n出发：北京南 到达：上海虹桥\n订单号：E123456789 票号：A01234567')[0];
   assert.equal(parsed.orderNumber, r.orderNumber); assert.equal(parsed.ticketNumber, r.ticketNumber);
 });
 test('unsupported flight responses are never silently guessed', () => {

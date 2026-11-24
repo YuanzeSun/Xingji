@@ -1,11 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { identifyAircraft, normalizeAircraft, extractAircraft, aircraftMentions } from '../src/aircraft.js';
+import { identifyAircraft, normalizeAircraft } from '../src/aircraft.js';
 import { AIRCRAFT_ALIASES } from '../src/data/aircraft-reference.js';
 import { createRecord, archive, readArchive } from '../src/model.js';
-import { parseText, mapFlightResult } from '../src/importers.js';
-import { parseFlightScreenshot } from '../src/flight-screenshot.js';
+import { mapFlightResult } from '../src/importers.js';
 import { flightCandidates } from '../src/flight-lookup-model.js';
 import { journeyStatistics } from '../src/statistics-model.js';
 import { ticketSVG } from '../src/tickets.js';
@@ -43,42 +42,7 @@ test('regional, turboprop and mainline aircraft share canonical names without lo
   assert.notEqual(normalizeAircraft('DHC-8-402'), normalizeAircraft('Q400'));
 });
 
-test('OCR finds additional types and labelled equipment codes without treating fares, seats or registrations as aircraft', () => {
-  for (const [input, expected] of examples) assert.equal(extractAircraft(`机型：${input}`), expected, input);
-  for (const [input, expected] of [['DHC-8', 'DHC-8'], ['Dash 8 Q400', 'DHC-8-400'], ['ATR 72-600', 'ATR 72-600'], ['CRJ900', 'CRJ-900'], ['E195-E2', 'E195-E2'], ['C919', 'C919']]) assert.equal(extractAircraft(input), expected, input);
-  assert.equal(extractAircraft('AIRCRAFT TYPE: DH8D'), 'DHC-8-400');
-  assert.equal(extractAircraft('空客320'), 'A320'); assert.equal(extractAircraft('BOEING737-800'), '737-800');
-  assert.equal(extractAircraft('机型：738'), '737-800');
-  for (const text of ['票价738元\n座位12A', '票价737元', '航班号 C919', '飞机编号 B-1900', '注册号 C-GABC', 'PNR DH8D12', 'PNR DHT', '编号 AB-DH8D', '机号 B738', '空客', '庞巴迪']) assert.equal(extractAircraft(text), '', text);
-  const mentions = aircraftMentions('  DHC-8 / ATR 72-600');
-  assert.deepEqual(mentions.map(row => [row.model, row.index]), [['DHC-8', 2], ['ATR 72-600', 10]]);
-});
-
-test('flight screenshots keep one journey when equipment resembles a flight number', () => {
-  for (const model of ['DHC-8', 'DH8D', 'ATR72-600', 'E190', 'E195-E2', 'CRJ900', 'C919', 'A320neo', 'MD-82', 'Q400']) {
-    const [row, ...extra] = parseFlightScreenshot(`行程详情\n测试航空 CA1234\nPEK -> SHA\n2023-11-18 08:00 10:00\n${model}\n飞机编号 B-0001`);
-    assert.equal(extra.length, 0, model); assert.equal(row.service, 'CA1234', model);
-    assert.equal(row.aircraft, normalizeAircraft(model), model); assert.equal(row.aircraftRegistration, 'B-0001');
-  }
-  const rows = parseFlightScreenshot('历史行程\nCA1234\nPEK -> SHA\n2023-11-18 08:00 10:00\nDHC-8\n航班点评\nMU5678\nSHA -> PEK\n2023-11-19 08:00 10:00\nE190\n航班点评');
-  assert.deepEqual(rows.map(row => [row.service, row.aircraft]), [['CA1234', 'DHC-8'], ['MU5678', 'E190']]);
-  const labelled = parseFlightScreenshot('行程详情\n航班号 C919\nPEK -> SHA\n2023-11-18 08:00 10:00\n机型: DHC-8');
-  assert.equal(labelled[0].service, 'C919'); assert.equal(labelled[0].aircraft, 'DHC-8');
-  for (const model of ['TU-154', 'IL-114', 'AN-148', 'E-195']) {
-    const [row] = parseFlightScreenshot(`行程详情\nCA1234\nPEK -> SHA\n2023-11-18 08:00 10:00\n${model}`);
-    assert.equal(row.aircraft, normalizeAircraft(model)); assert.equal(row.aircraftRegistration, '', model);
-    const [registered] = parseFlightScreenshot(`行程详情\nCA1234\nPEK -> SHA\n2023-11-18 08:00 10:00\n${model}\nC-GABC`);
-    assert.equal(registered.aircraftRegistration, 'C-GABC', model);
-  }
-});
-
-test('text, JSON, backups and rendered boarding passes retain canonical aircraft', () => {
-  const [text] = parseText('机型: E190\n航班: CA1234\n日期: 2023-11-18\n出发机场: PEK\n到达机场: SHA');
-  assert.equal(text.service, 'CA1234'); assert.equal(text.aircraft, 'E190');
-  const [paragraphs] = parseText('航班: CA1234\n\n机型: C919\n日期: 2023-11-18\n出发机场: PEK\n到达机场: SHA');
-  assert.equal(paragraphs.service, 'CA1234'); assert.equal(paragraphs.originCode, 'PEK'); assert.equal(paragraphs.aircraft, 'C919');
-  const [unknown] = parseText('航班: CA1234\n机型: X-900\n备注: 我也坐过 A320');
-  assert.equal(unknown.aircraft, 'X-900');
+test('provider history, backups and rendered boarding passes retain canonical aircraft', () => {
   for (const input of ['DHC-8', 'Q400', 'ATR 72-600', 'Embraer E195-E2', 'CRJ900']) {
     const record = createRecord({ type: 'flight', template: 'air-boarding-pass', service: 'CA1234', origin: 'PEK', destination: 'SHA', aircraft: input });
     const expected = normalizeAircraft(input);

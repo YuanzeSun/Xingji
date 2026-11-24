@@ -1,14 +1,14 @@
+import { parseScanText } from '../src/scan-engine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRecord, archive, readArchive } from '../src/model.js';
-import { parseText } from '../src/importers.js';
 import { normalizeSeatClass } from '../src/seat-classes.js';
 
 test('common seat class aliases are stored consistently across entry, imports and export', () => {
   for (const value of ['二等', '二等座', ' 二 等 座 ']) assert.equal(createRecord({ seatClass: value }).seatClass, '二等座');
-  assert.equal(parseText('日期：2026-11-15 车次：G103 出发：北京南 到达：上海虹桥 二等座')[0].seatClass, '二等座');
+  assert.equal(parseScanText('日期：2026-11-15 车次：G103 出发：北京南 到达：上海虹桥 二等座')[0].seatClass, '二等座');
   assert.throws(() => createRecord({ seatClass: '站票' }), /单独选择无座/);
-  const [record] = parseText('车次：G103 日期：2026-11-15 出发：北京南 到达：上海虹桥 二等座 05车无座');
+  const [record] = parseScanText('车次：G103 日期：2026-11-15 出发：北京南 到达：上海虹桥 二等座 05车无座');
   const saved = readArchive(archive([record]))[0];
   assert.equal(saved.seatClass, '二等座');
   assert.equal(saved.railStanding, true);
@@ -36,12 +36,9 @@ test('a standing ticket keeps its class and does not require an assigned place',
   for (const value of ['Y','y','Y舱','Y 舱','经济舱（Y）','Y（经济舱）']) assert.equal(normalizeSeatClass(value,'flight'),'Y');
   assert.equal(normalizeSeatClass('M1','flight'),'M1');
   assert.equal(normalizeSeatClass('经济舱','flight'),'经济舱');
-  const input='航班：CA181 日期：2026-11-15 出发：北京首都 到达：东京羽田\n舱位：M1 经济舱';
-  assert.equal(parseText(input)[0].seatClass,'M1');
-  assert.equal(parseText(input.replace('舱位：M1','CLASS Y'))[0].seatClass,'Y');
   const imported = createRecord({ type: 'flight', template: 'air-boarding-pass', service: 'CA181', seatClass: 'M1', identity: 'E12****89', gate: '32A' });
   assert.equal(imported.seatClass,'M1'); assert.equal(imported.identity,'E12****89'); assert.equal(imported.gate,'32A');
-  assert.equal(parseText('车次：D3759 日期：2023-05-26 出发：柳州 到达：来宾北 检票:5B')[0].gate,'5B');
+  assert.equal(parseScanText('车次：D3759 日期：2023-05-26 出发：柳州 到达：来宾北 检票:5B')[0].gate,'5B');
   const record=createRecord({type:'flight',template:'air-boarding-pass',seatClass:'j'});
   assert.equal(readArchive(archive([record]))[0].seatClass,'J');
 });

@@ -1,8 +1,8 @@
-import { createRecord, now, validDate } from './model.js';
+import { createRecord, DEFAULT_RAIL_TEMPLATE, validDate } from './model.js';
 import { STATIONS } from './data/location-reference.js';
 import { railTimeWords, railRouteAreas } from './ocr-layout.js';
 import { marksFromText } from './ticket-marks.js';
-import { railTemplateFromText } from './rail-template.js';
+import { printedRailTemplate } from './rail-template.js';
 import { readRailSeatClasses } from './seat-classes.js';
 
 const stationNames = new Set(STATIONS.map(row => row[0]));
@@ -48,12 +48,11 @@ function passengerFields(text) {
   let passenger = labelled(text, '乘车人(?:姓名)?|旅客姓名|姓名').split(/身份证|中国居民|证件|成人票|儿童票|学生票|席别|座位|车厢|票价|\n/)[0].trim();
   if (!passenger) passenger = text.match(/(?:^|\n)\s*([\u3400-\u9fff·*＊]{2,12}?)(?=中国居民身份证|居民身份证|身份证|成人票|学生票|儿童票)/)?.[1] || '';
   if (!/^[\u3400-\u9fffA-Za-z·.*＊ -]{2,50}$/.test(passenger)) passenger = '';
-  const identity = labelled(text, '证件号码|证件号|身份证号|身份证').match(/[0-9*＊Xx]{8,18}/)?.[0] || text.match(/\b\d{4,6}[*＊]{3,12}\d{2,4}\b/)?.[0] || '';
   const fareText = text.split('\n').filter(line => !/合计|总计|订单金额|支付总额|实付总额|保险|酒店|手续费/.test(line)).join('\n');
   const ticketPrice = labelled(fareText, '票价|票面价').match(/(?:[¥￥]\s*)?(\d+(?:\.\d{1,2})?)/)?.[1];
   const amounts = [...fareText.matchAll(/[¥￥]\s*(\d+(?:\.\d{1,2})?)/g)].map(match => match[1]);
   const ticketNumber = labelled(text, '电子客票号|客票号|票号').match(/[A-Z0-9-]{6,30}/i)?.[0] || '';
-  return { passenger, identity, carriage, seat, seatClass: classes.length === 1 ? classes[0] : '', railStanding: /无\s*座|站票/.test(text), price: ticketPrice || only(amounts), ticketNumber, ticketMarks: marksFromText(text) };
+  return { passenger, carriage, seat, seatClass: classes.length === 1 ? classes[0] : '', railStanding: /无\s*座|站票/.test(text), price: ticketPrice || only(amounts), ticketNumber, ticketMarks: marksFromText(text) };
 }
 function passengerBlocks(text) {
   const nameStarts = [...text.matchAll(/(?:^|\n)\s*(?:(?:乘车人(?:姓名)?|旅客姓名|姓名)\s*:?|[\u3400-\u9fff·*＊]{2,12}?(?=中国居民身份证|居民身份证|身份证|成人票|学生票|儿童票))/g)];
@@ -61,8 +60,7 @@ function passengerBlocks(text) {
   const paid = text.split(/\n[^\n]*(?:已支付|未支付|已完成|已退票|已改签)[^\n]*(?:\n|$)/).filter(block => readRailSeatClasses(block).length || /\d\s*车|乘车人|旅客姓名|无座/.test(block));
   return paid.length > 1 ? paid : [text];
 }
-// Returns null for other documents so that the existing paper-ticket and flight parsers still apply.
-export function parseRailOrder(raw, sourceKind = 'scan', label = '12306截图', { layout = '' } = {}) {
+export function parseRailOrder(raw, label = '12306截图', { layout = '' } = {}) {
   if (!isRailOrderText(raw)) return null;
   const text = normal(raw).split(/\n\s*(?:预订酒店|更多服务|温馨提示|推荐酒店|猜你喜欢|广告)/)[0];
   const service = railOrderService(text);
@@ -95,6 +93,10 @@ export function parseRailOrder(raw, sourceKind = 'scan', label = '12306截图', 
   }
   const gate = labelled(text, '检票口').match(/^[\u3400-\u9fffA-Za-z0-9、或\-/]{1,30}/)?.[0] || '';
   const orderNumber = only([...text.matchAll(/(?:电子订单号|订单编号|订单号)\s*:?\s*([A-Z0-9]{6,30})/gi)].map(match => match[1].toUpperCase()));
-  const shared = { type: 'rail', template: railTemplateFromText(text), service, origin, destination, departureDate, departureTime, arrivalDate, arrivalTime, gate, orderNumber, sources: [{ kind: sourceKind, label, at: now() }], provenance: sourceKind === 'scan' ? 'reconstruction' : 'commemorative' };
+  const shared = {
+    template: printedRailTemplate(text) || DEFAULT_RAIL_TEMPLATE,
+    service, origin, destination, departureDate, departureTime, arrivalDate, arrivalTime, gate, orderNumber,
+    sources: [{ kind: 'scan', label }], provenance: 'reconstruction'
+  };
   return passengerBlocks(text).map(block => createRecord({ ...shared, ...passengerFields(block) }));
 }

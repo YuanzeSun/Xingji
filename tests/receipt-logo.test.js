@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord, deduplicateRecords, archive, readArchive } from '../src/model.js';
-import { parseText } from '../src/importers.js';
 import { parseScanText } from '../src/scan-engine.js';
 import { ticketSVG } from '../src/tickets.js';
 import { layoutFontFiles } from '../src/ticket-layouts.js';
@@ -46,11 +45,10 @@ test('receipt and refund-fee layouts never print travel restrictions; refund amo
   assert.match(ticketSVG(createRecord({ ...fields, template:'rail-blue' })), /限乘当日当次车/);
 });
 
-test('refund fee survives OCR, text import, JSON without merging into the original journey', async () => {
+test('refund fee survives OCR and JSON without merging into the original journey', async () => {
   const text = 'R063196\n上海虹桥站 G104 济南西站\nShanghaihongqiao Jinanxi\n2024年06月18日 07:13开 08车08A号\n￥41.5元 二等座\n退票费\n仅供报销使用\n报销凭证 遗失不补\n退票改签时须交回车站';
   const refund = parseScanText(text)[0];
   assert.equal(refund.template, 'rail-refund-receipt'); assert.equal(refund.price, '41.5');
-  assert.equal(parseText('车次：G104 日期：2024-06-18 出发：上海虹桥 到达：济南西 退票费 金额：41.5')[0].template, refund.template);
   const ticket = createRecord({ ...fields, id:'original', template:'rail-receipt' });
   const fee = createRecord({ ...fields, id:'refund', template:'rail-refund-receipt' });
   const rows = deduplicateRecords([ticket, fee, { ...fee, id:'refund-scan' }]);

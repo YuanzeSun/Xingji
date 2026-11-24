@@ -3,7 +3,7 @@ import { chooseRailReading, fullRailRead, recognizedRailRecords, recognizePaddle
 import { dateRectangle, readPrintedDate } from './scan-date.js';
 import { isRailOrderText, railOrderService } from './rail-order.js';
 import { railTimeWords } from './ocr-layout.js';
-import { isFlightScreenshotText } from './flight-screenshot.js';
+import { isFlightPhotoText } from './scan-engine.js';
 import { refineRailService, refineRailTemplate, refineRailReceipt, refineRailFields, railReadScore, preferEnhancedRailRead } from './rail-ocr.js';
 import { railValueRegions } from './rail-photo-layout.js';
 import { prepareRailPhoto, prepareOCRImage, railPhotoColor, cropColoredRailPaper } from './scan-image.js';
@@ -45,7 +45,7 @@ async function createRecognizer(progress) {
     async recognize(image) {
       image = await prepareOCRImage(image);
       let { data } = await worker.recognize(image, {}, { text: true, tsv: true });
-      if (/BOARDING\s*(?:PASS|CARD)|登\s*[机機]\s*牌|航班(?:号)?[：:\s]*[A-Z]{2}\s*\d|\bFLIGHT\b/i.test(data.text) || isFlightScreenshotText(data.text)) {
+      if (isFlightPhotoText(data.text)) {
         return { text: '', flightImage: true };
       }
       const photo = image;

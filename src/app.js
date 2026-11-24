@@ -7,7 +7,7 @@ import {barcodeRequiredMark,boardingGeneratorMarkup,readBoardingGenerator,refres
 import {fieldSourceBadge,hasFieldValue,markFieldSources,refreshFieldSources} from './field-sources.js';
 import {readBoardingCode} from './bcbp.js';
 import {flightPassengerName} from './flight-passenger.js';
-import { bindIdentityInput, hasMaskedIdentity } from './identity.js';
+import { bindIdentityInput } from './identity.js';
 import {markManualFields,applyLookupValues,lookupContext,clearLookupValues} from './lookup-values.js';
 import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } from './arithmetic-confirm.js';
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
@@ -889,10 +889,6 @@ function editRecord(record = newPersonalRecord(), {
   const context = preserve && editor ? editor.context : archiveContext();
   setImportReference(photo);
   const draft = normalizePlaces(clone(record));
-  if (hasMaskedIdentity(draft.identity)) {
-    draft.identity = '';
-    if (imported) markFieldSources(draft, ['identity'], 'ocr');
-  }
   if(draft.type==='flight' && draft.boardingCodeSource==='original')draft.passenger=flightPassengerName(draft,readBoardingCode(draft.boardingCode,draft.boardingLegIndex) || {});
   const generatorSettings = preserve && draft.type==='flight' ? readBoardingGenerator(modalRoot) : undefined;
   draft.flightStatus = draft.type === 'flight' ? normalizeFlightStatus(draft.flightStatus) : '';
@@ -906,7 +902,7 @@ function editRecord(record = newPersonalRecord(), {
     + (flight
       ? '<input type="hidden" name="template" value="air-boarding-pass" />'
         + field('flightStatus', draft, { options: Object.entries(FLIGHT_STATUSES) })
-        + ticketCodeEditor(draft, { fromScan:!!localFileURL, generator:false })
+        + ticketCodeEditor(draft, { generator:false })
       : ticketCodeEditor(draft, { fromScan:!!localFileURL }) + railReceiptControls() + railPhotoControls() + railTicketOptions(draft));
   const invoiceRows = railInvoiceDetails(draft.railInvoice);
   const invoiceDetails = invoiceRows.length ? `<details class="editor-extra"><summary>电子报销凭证资料</summary><dl class="detail-grid">${invoiceRows.map(([label, value]) => `<div><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`).join('')}</dl></details>` : '';
@@ -1174,12 +1170,6 @@ async function importBackup(file) {
       applyAccessPolicy();
     }
   }
-}
-function reviewSingleImport(records, { photo, task } = {}) {
-  if (!records.length || !mayOpenImport(task)) return false;
-  if (records.length > 1) throw new Error('识别到多张票据，请分开导入');
-  editRecord(records[0], { imported: true, photo });
-  return true;
 }
 function queuedBackupButton() {
   return imports.backup ? '<div class="button-row"><button class="button secondary" data-action="review-uploaded-backup">继续恢复已读取的备份</button></div>' : '';
@@ -1940,7 +1930,8 @@ async function checkFlights() {
       try {
         const records = mapFlightResult(payload);
         if (records.length === 1) {
-          if (reviewSingleImport(records, { task })) state.flightResult = null;
+          editRecord(records[0], { imported: true });
+          state.flightResult = null;
         } else if (records.length > 1) {
           toast(`已取得 ${records.length} 条历史行程，可查看本次接口返回`);
         } else {
@@ -2075,8 +2066,6 @@ window.addEventListener('beforeinstallprompt', event => { event.preventDefault()
 window.addEventListener('beforeunload', event => { if (state.profileDirty || editor?.dirty && !editor.imported) { event.preventDefault(); event.returnValue = ''; } });
 async function boot() {
   try {
-    sessionStorage.removeItem('xingji-github-token');
-    sessionStorage.removeItem('xingji-d1-token');
     const snapshot = await readSyncState({ session: true });
     useSnapshot(snapshot);
     state.showDemo = snapshot.showDemo;

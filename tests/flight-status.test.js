@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord, archive, readArchive, applyImport } from '../src/model.js';
-import { parseText, mapFlightResult } from '../src/importers.js';
+import { mapFlightResult } from '../src/importers.js';
 import { validateTicketForm } from '../src/ticket-form.js';
 import { ticketSVG } from '../src/tickets.js';
 import { journeyStatistics, tripSeries } from '../src/statistics-model.js';
@@ -43,12 +43,9 @@ test('special tickets remain in the archive but never contribute to any journey 
  assert.match(timeline([normal,...special],()=>''),/data-id="special-0"/);assert.match(timeline([normal,...special],()=>''),/data-id="special-1"/);
  assert.equal(journeyStatistics(special,{dateTo:'2023-12-31'}).omittedDates,0);
 });
-test('JSON, text and cloud round trips preserve state, and automatic deduplication cannot change a normal journey into an invalid one',async()=>{
+test('Provider, archive and cloud round trips preserve state, and automatic deduplication cannot change a normal journey into an invalid one',async()=>{
  const invalid=flight({id:'invalid',flightStatus:'invalid'}),normal=flight({id:'normal'});
  for(const r of [readArchive(archive([invalid]))[0],mapFlightResult([{flightStatus:'invalid'}])[0]])assert.equal(r.flightStatus,'invalid');
- assert.equal(parseText('航班: CA1234\n出发机场:PEK\n到达机场:SHA\n机票状态:OPEN')[0].flightStatus,'open');
- assert.equal(parseText('OPEN\nPEK -> SHA\n姓名:TEST/USER')[0].type,'flight');
- assert.equal(parseText('车次:G103\n日期:2023-11-18\n票据状态:无效\n出发站:柳州\n到达站:来宾北')[0].type,'rail');
  assert.equal(applyImport([normal],[invalid]).records.length,2);
  const server=new MemoryGitHub([normal,invalid]),store=new GitHubStore({owner:'user',repo:'data',branch:'main',id:77},'fake-key',server.fetch);
  const snapshot=await store.read();assert.equal(snapshot.records.find(r=>r.id==='invalid').flightStatus,'invalid');

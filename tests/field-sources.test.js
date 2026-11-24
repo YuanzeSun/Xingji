@@ -1,21 +1,21 @@
+import { parseScanText } from '../src/scan-engine.js';
 import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRecord,archive,readArchive,mergeThreeWay,resolveRecordConflict,deduplicateRecords} from '../src/model.js';
-import {parseText} from '../src/importers.js';
 import {fieldSourceLabel,fieldSourceBadge,markFieldSources} from '../src/field-sources.js';
 import {markManualFields,applyLookupValues,clearLookupValues} from '../src/lookup-values.js';
 import {applyProfileDefaults} from '../src/personal-profile.js';
 
 const flight=extra=>createRecord({type:'flight',template:'air-boarding-pass',service:'CA1234',origin:'PEK',destination:'SHA',departureDate:'2026-05-18',passenger:'张三',...extra});
 
-test('defaults, profile values and text imports record their actual origins without relabelling existing data',()=>{
+test('defaults, profile values and OCR record their actual origins without relabelling existing data',()=>{
   const blank=createRecord();assert.equal(blank.fieldSources.type,'default');assert.equal(blank.fieldSources.template,'default');assert.equal(fieldSourceLabel(blank,'passenger'),'未填写');
   const profile={chineseName:'张三',lastName:'ZHANG',firstName:'SAN',documents:[{id:'id',type:'national-id',number:'000000200001011234'}]};
   const filled=applyProfileDefaults({type:'rail',passenger:'',identity:''},profile);assert.equal(filled.fieldSources.passenger,'profile');assert.equal(filled.fieldSources.identity,'profile');
   const supplied={...filled,fieldSources:{passenger:'barcode',identity:'profile'}};assert.equal(applyProfileDefaults(supplied,profile).fieldSources.passenger,'barcode');
-  const [text]=parseText('车次：G21\n出发站：北京南\n到达站：南京南\n日期：2026-11-16','text');assert.equal(text.fieldSources.service,'text');
-  assert.equal(fieldSourceLabel(text,'service'),'文字导入');assert.match(fieldSourceBadge('service',text),/data-source-kind="text"/);
+  const [scan]=parseScanText('车次：G21\n出发站：北京南\n到达站：南京南\n日期：2026-11-16');assert.equal(scan.fieldSources.service,'ocr');
+  assert.equal(fieldSourceLabel(scan,'service'),'图片识别');assert.match(fieldSourceBadge('service',scan),/data-source-kind="ocr"/);
 });
 
 test('barcode field origins survive query fills, manual changes and context clearing',()=>{
