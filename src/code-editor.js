@@ -37,10 +37,7 @@ export function ticketCodeEditor(record, { fromScan = false, generator = true } 
   const { field, title, normalize } = configuration(record);
   const flight = record.type === 'flight';
   const referenceButton = fromScan ? `<button type="button" class="button small secondary" id="code-use-scan" ${record[field] ? 'hidden' : ''}>读取本次图片中的码</button>` : '';
-  const file = '<input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden />';
-  const upload = flight
-    ? '<label class="button small secondary">上传图片' + file + '</label>'
-    : '<button type="button" class="button small secondary" data-code-upload>上传图片</button>' + file;
+  const upload = '<button type="button" class="button small secondary" data-code-upload>上传图片</button><input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden />';
   const saved = normalize(record[field]);
   const controls = `<div class="saved-code" id="saved-code" ${!flight && !saved ? 'hidden' : ''}>${thumbnail(saved, title)}</div><div class="code-actions">${referenceButton}<button type="button" class="button small secondary" data-code-start>相机扫描</button>${upload}<button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>`;
   let guidance = flight ? '请扫描自己登机牌上的完整码。' : '请对准票面上的二维码或一维条码。';
@@ -220,7 +217,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
   form.querySelector('[data-rail-photo]')?.addEventListener('click',camera.stop,true);
   form.querySelector('[data-rail-photo-file]')?.addEventListener('change',camera.stop,true);
   form.querySelector('[data-rail-receipt-file]')?.addEventListener('change',camera.stop,true);
-  section.querySelector('[data-code-upload]')?.addEventListener('click', () => photo.click());
+  section.querySelector('[data-code-upload]').addEventListener('click', () => photo.click());
   photo.addEventListener('change', () => { const file = photo.files?.[0]; if (file) { onCameraStart?.(); camera.stop(); read(file); } });
   find('code-use-scan')?.addEventListener('click', () => readReference());
   find('code-remove').addEventListener('click', () => {

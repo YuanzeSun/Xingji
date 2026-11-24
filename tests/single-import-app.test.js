@@ -18,6 +18,16 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
     field.value = value;
     field.dispatchEvent(new window.Event('input', { bubbles: true }));
   };
+  const cancelPicker = (buttonSelector, inputSelector) => {
+    const form = document.querySelector('#editor-form');
+    const input = form.querySelector(inputSelector);
+    let opened = false;
+    input.addEventListener('click', () => { opened = true; }, { once: true });
+    form.querySelector(buttonSelector).click();
+    assert.equal(opened, true);
+    input.dispatchEvent(new window.Event('cancel', { bubbles: true }));
+    assert.equal(document.querySelector('#editor-form'), form, 'closing the file picker must keep the editor open');
+  };
   try {
     await import('../src/app.js');
     await until(() => document.querySelector('.page-header [data-action="new"]:not(:disabled)'));
@@ -25,8 +35,15 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
     assert.equal(document.querySelector('nav [data-page="import"], #import-files, #import-text'), null);
     document.querySelector('.page-header [data-action="new"]').click();
     await until(() => document.querySelector('#editor-form'));
+    cancelPicker('[data-code-upload]', '#code-photo');
+    document.querySelector('[data-rail-photo-entry]').open = true;
+    cancelPicker('[data-rail-photo-upload]', '[data-rail-photo-file]');
+    cancelPicker('[data-rail-receipt]', '[data-rail-receipt-file]');
     fill('type', 'flight');
     assert.equal(document.querySelector('[data-rail-receipt-file], #import-text, [data-ticket-clipboard]'), null);
+    fill('service', 'CA181');
+    cancelPicker('[data-code-upload]', '#code-photo');
+    assert.equal(document.querySelector('#editor-form').elements.service.value, 'CA181');
     fill('type', 'rail');
     assert.equal(document.querySelector('[data-code-editor]').nextElementSibling, document.querySelector('[data-rail-receipt-entry]'));
     assert.equal(document.querySelector('[data-rail-receipt-entry]').nextElementSibling, document.querySelector('[data-rail-photo-entry]'));
@@ -76,6 +93,12 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
     assert.equal(merged.length, 1);
     assert.equal(merged[0].ticketNumber, 'A000001');
     assert.deepEqual(merged[0].railInvoice, saved.railInvoice);
+    await until(() => !document.querySelector('dialog'));
+    document.querySelector('.page-header [data-action="new"]').click();
+    await until(() => document.querySelector('#editor-form'));
+    const dialog = document.querySelector('dialog');
+    dialog.dispatchEvent(new window.Event('cancel', { cancelable: true }));
+    assert.equal(document.querySelector('dialog'), null, 'the dialog itself can still be dismissed');
   } finally {
     pdf.deregister();
     window.close();

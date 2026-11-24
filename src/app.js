@@ -792,7 +792,13 @@ function openModal(html, wide = false) {
   disposeModalBindings();
   modalFocus = document.activeElement;
   modalRoot.innerHTML = `<dialog class="modal ${wide ? 'wide' : ''}">${html}</dialog>`;
-  const dialog = modalRoot.querySelector('dialog'); dialog.addEventListener('cancel', event => { event.preventDefault(); closeModal(); });
+  const dialog = modalRoot.querySelector('dialog');
+  dialog.addEventListener('cancel', event => {
+    // A file input also emits a bubbling cancel event when its picker is dismissed.
+    if (event.target !== dialog) return;
+    event.preventDefault();
+    closeModal();
+  });
   dialog.addEventListener('click', event => { if (event.target === dialog && (!editor?.dirty || editor.imported)) closeModal(); });
   dialog.showModal(); document.body.classList.add('modal-open');
   applyAccessPolicy();
