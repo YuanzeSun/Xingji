@@ -1,10 +1,10 @@
-import {BOARDING_METADATA_FIELDS,boardingMetadataValues} from './boarding-metadata.js';
+import {BOARDING_METADATA_FIELDS} from './boarding-metadata.js';
 import {fieldState,takeField,takeBoardingCode,mergeBoardingCode} from './record-merge-metadata.js';
 import {JOURNEY_DATE_FIELDS,journeyDate,storedJourneyDate,dateLabel} from './journey-date.js';
 import {readBoardingCode} from './bcbp.js';
 export {resolveRecordConflict} from './record-merge-metadata.js';
 import {LOOKUP_FIELDS,normalizeLookupValues,isLookupValue as isAutomatic} from './lookup-values.js';
-import {normalizeFieldSources,markFieldSources,importFieldSource,hasFieldValue,railBarcodeFieldLocked,railImportFieldLocked,railInvoiceFieldLocked,sourceFieldValue} from './field-sources.js';
+import {normalizeFieldSources,markFieldSources,importFieldSource,hasFieldValue,matchedIdentityLocked,railBarcodeFieldLocked,railImportFieldLocked,railInvoiceFieldLocked,sourceFieldValue} from './field-sources.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {BOARDING_FIELDS,refreshGeneratedCode,operatingFlight} from './boarding-code-state.js';
 import { normalizeRailRoute, railRouteMatches } from './rail-route-snapshot.js';
@@ -114,11 +114,6 @@ export function validateRecord(input) {
       const boarding = readBoardingCode(out.boardingCode);
       const index = Number(out.boardingLegIndex);
       if (index >= (boarding?.legCount ?? 1)) throw new Error('条码航段无效');
-      if (boarding) {
-        const leg = boarding.legs[index];
-        for(const [key,value] of Object.entries(boardingMetadataValues(leg))){out[key]=value;out.fieldSources[key]='barcode';}
-        out.departureDate=journeyDate({year:out.departureDate?.year??null,dayOfYear:leg.dayOfYear});out.fieldSources.departureDate='barcode';
-      }
       out.boardingCodeOperatingFlight = '';
     } else {
       if (out.boardingLegIndex !== '0') throw new Error('条码航段无效');
@@ -225,7 +220,7 @@ export function mergeThreeWay(baseRecords, localRecords, remoteRecords) {
     merged.lockedFields = union(l.lockedFields, r.lockedFields);
     for (const field of FIELDS.filter(key=>!['lookupValues','fieldSources'].includes(key) && !BOARDING_FIELDS.includes(key))) {
       const lv = l[field], rv = r[field], bv = b?.[field];
-      const trackFieldLock=[b,l,r].some(record=>record && (railBarcodeFieldLocked(record,field) || railImportFieldLocked(record,field)));
+      const trackFieldLock=[b,l,r].some(record=>record && (matchedIdentityLocked(record,field) || railBarcodeFieldLocked(record,field) || railImportFieldLocked(record,field)));
       const ls=fieldState(l,field,trackFieldLock),rs=fieldState(r,field,trackFieldLock),bs=fieldState(b,field,trackFieldLock);
       if(equal(lv,rv)){
         let owner=r.lockedFields.includes(field) || (isAutomatic(l,field) && !isAutomatic(r,field)) ? r : l;

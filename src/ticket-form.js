@@ -22,24 +22,23 @@ export function refreshRailQRMarks(root, record) {
 }
 
 const journeyFields = ['origin', 'destination', 'service', 'departureDate'];
-const passengerFields = ['passenger', 'identity', 'seat', 'seatClass'];
+const passengerFields = ['passenger', 'seat', 'seatClass'];
 const flightFields = [...journeyFields, ...passengerFields];
 const railFields = [...journeyFields, 'departureTime', ...passengerFields];
-export function requiredTicketFields(type, template, flightStatus = 'normal', railStanding = false, fromRailInvoice = false) {
+export function requiredTicketFields(type, template, flightStatus = 'normal', railStanding = false) {
   if (type === 'flight') return ['open', 'invalid'].includes(flightStatus) ? ['origin', 'destination', 'passenger'] : flightFields;
   if (template === 'rail-supplement') return ['origin', 'destination', 'service', 'departureDate'];
   const fields = template === 'rail-refund-receipt'
-    ? ['origin', 'destination', 'service', 'departureDate', 'passenger', 'identity', 'price']
+    ? ['origin', 'destination', 'service', 'departureDate', 'passenger', 'price']
     : railStanding ? railFields.filter(key => key !== 'seat') : [...railFields, 'carriage'];
-  if (isAnonymousRedTemplate(template)) return fields.filter(key => key !== 'passenger' && key !== 'identity');
-  return fromRailInvoice ? fields.filter(key => key !== 'identity') : fields;
+  return isAnonymousRedTemplate(template) ? fields.filter(key => key !== 'passenger') : fields;
 }
 
 export function requiredRecordFields(record) {
   if (record.template !== 'rail-refund-receipt' && isRailPointsRecord(record)) {
     return ['origin', 'destination', 'service', 'departureDate'];
   }
-  return requiredTicketFields(record.type, record.template, record.flightStatus, record.railStanding, !!record.railInvoice?.electronicTicketNumber);
+  return requiredTicketFields(record.type, record.template, record.flightStatus, record.railStanding);
 }
 
 export function ticketFieldLabel(key, type, fallback = key) {

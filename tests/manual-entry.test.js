@@ -34,11 +34,12 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.equal(document.querySelector('[name="template"]').value,'rail-receipt');
   assert.equal(document.querySelector('[name="departureDateYear"]').type,'number');
   const identity = document.querySelector('[name="identity"]');
+  assert.equal(identity.required, false);
   const star = new window.InputEvent('beforeinput', { data: '＊', inputType: 'insertText', bubbles: true, cancelable: true });
   assert.equal(identity.dispatchEvent(star), false);
   fill('identity','0000002000****1234');
   assert.equal(identity.value, '');
-  for(const name of ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seat']){
+  for(const name of ['origin','destination','service','departureDate','departureTime','passenger','carriage','seat']){
     const input=name==='seat'?document.querySelector('[data-seat-number]'):document.querySelector(`[name="${name}"]`);
     assert.equal(input.required,true);
     assert.ok(document.querySelector(`[name="${name}"]`).closest('.field').querySelector('.required-mark'));

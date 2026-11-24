@@ -1,10 +1,10 @@
 import { escape as e } from './html.js';
 import {journeyDate,calendarDate,monthDay,dateFromMonthDay} from './journey-date.js';
-import {readBoardingCode} from './bcbp.js';
 import {fieldSourceBadge,railBarcodeFieldLocked,railImportFieldLocked} from './field-sources.js';
 import {ticketRequiredMark} from './ticket-form.js';
 
-export const barcodeDateDay=(record,key)=>key==='departureDate'&&record.type==='flight'&&record.boardingCodeSource==='original' ? readBoardingCode(record.boardingCode,record.boardingLegIndex)?.dayOfYear : null;
+export const barcodeDateDay=(record,key)=>key==='departureDate'&&record.type==='flight'&&record.boardingCodeSource==='original' &&
+  record.fieldSources?.departureDate === 'barcode' ? journeyDate(record.departureDate)?.dayOfYear : null;
 const options=(count,current,unit)=>'<option value="">'+unit+'</option>'+Array.from({length:count},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}" ${Number(current)===i+1?'selected':''}>${i+1}${unit}</option>`).join('');
 export function ticketDateField(key,record,{label,required=false}={}) {
   const date=journeyDate(record[key]),md=monthDay(date),ordinal=barcodeDateDay(record,key),locked=!!ordinal||railBarcodeFieldLocked(record,key)||railImportFieldLocked(record,key);

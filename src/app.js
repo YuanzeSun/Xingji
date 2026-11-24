@@ -5,9 +5,7 @@ import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
 import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railImportFieldLocked,refreshFieldSources,RAILGO_REFERENCE_SOURCE} from './field-sources.js';
-import {readBoardingCode} from './bcbp.js';
-import {flightPassengerName} from './flight-passenger.js';
-import { bindIdentityInput, maskIdentity } from './identity.js';
+import { bindIdentityInput, maskIdentity, printedIdentityHint } from './identity.js';
 import {markManualFields,applyLookupValues,lookupContext,clearLookupValues} from './lookup-values.js';
 import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } from './arithmetic-confirm.js';
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
@@ -54,7 +52,7 @@ import { bindStationPicker } from './station-picker.js';
 import { FLIGHT_STATUSES, normalizeFlightStatus } from './flight-status.js';
 import { isRefundReceipt, isJourneyRecord } from './record-kind.js';
 import { bindUppercaseInputs } from './uppercase-input.js';
-import { personalProfile, applyProfileDefaults, profileDefaults } from './personal-profile.js';
+import { personalProfile, applyProfileDefaults, lockMatchedIdentity, matchProfileIdentity } from './personal-profile.js';
 import { personalProfilePanel, collectPersonalProfile, bindPersonalProfileForm, personalProfileSummary } from './personal-profile-form.js';
 import { cityOverview } from './locations.js';
 import { DEFAULT_SEARCH, searchOptions, searchTickets, clearSearchField } from './search.js';
@@ -485,7 +483,7 @@ function bindRailReceipt(form, activeEditor) {
     refreshRailReceipt(form, activeEditor);
     status.textContent = '正在读取 PDF…';
     try {
-      const record = await readRailInvoicePDF(selected);
+      const { record, identityHint } = await readRailInvoicePDF(selected);
       if (!active()) return;
       const changes = Object.fromEntries(Object.entries(record.fieldSources).filter(([key, kind]) =>
         kind === 'pdf' && FIELDS.includes(key) && !['type', 'template', 'provenance'].includes(key) && hasFieldValue(record[key])
@@ -503,6 +501,7 @@ function bindRailReceipt(form, activeEditor) {
       next.lockedFields = [...new Set([...next.lockedFields, ...Object.keys(changes)])].sort();
       markFieldSources(next, Object.keys(changes), 'pdf');
       markFieldSources(next, JOURNEY_DATE_FIELDS.filter(key => changes[key]).map(key => key + 'Year'), 'pdf');
+      lockMatchedIdentity(next, matchProfileIdentity(identityHint, state.settings.profile));
       if (!draft.sources.some(item => item.kind === 'pdf' && item.label === '电子报销凭证')) next.sources = [...draft.sources, ...record.sources];
       const returnFocus = modalFocus;
       editRecord(next, { imported, preserve: true, original });
@@ -574,14 +573,17 @@ function bindRailPhoto(form) {
     refreshRailReceipt(form, activeEditor);
     for (const control of form.querySelectorAll('[data-rail-photo-controls], [data-code-start], [data-code-upload], #code-photo')) control.disabled = true;
     status.textContent = '正在识别火车票…';
-    let record, multiplePrintedTickets;
+    let record, multiplePrintedTickets, identityHint;
     try {
       const { recognize } = await import('./ocr.js');
       if (!current()) return;
       const reading = await recognize(photo, progress => { if (current()) status.textContent = progress; });
       multiplePrintedTickets = reading.multiplePrintedTickets;
       const candidates = parseScanText(reading.text, '火车票照片', reading);
-      if (candidates.length === 1) [record] = candidates;
+      if (candidates.length === 1 && !multiplePrintedTickets) {
+        [record] = candidates;
+        identityHint = printedIdentityHint(reading.text);
+      }
     } catch { /* The photo is still available for manual entry. */ }
     finally {
       activeEditor.railPhotoPending = false;
@@ -593,6 +595,7 @@ function bindRailPhoto(form) {
     const next = { ...draft, ...changes, sources: record ? [...draft.sources, ...record.sources] : draft.sources };
     if (changes.template) next.lockedFields = draft.lockedFields.filter(key => key !== 'template');
     markFieldSources(next, Object.keys(changes), 'ocr');
+    if (!draft.identity) lockMatchedIdentity(next, matchProfileIdentity(identityHint, state.settings.profile));
     if (changes.departureDate?.year) markFieldSources(next, ['departureDateYear'], 'ocr');
     if (lookupContext(draft) !== lookupContext(next)) clearLookupValues(next);
     editRecord(next, { imported, preserve: true, original, photo, scannedRail: record });
@@ -1010,11 +1013,11 @@ function editRecord(record, {
   const context = preserve && editor ? editor.context : archiveContext();
   setImportReference(photo);
   const draft = normalizePlaces(clone(record));
-  if(draft.type==='flight' && draft.boardingCodeSource==='original')draft.passenger=flightPassengerName(draft,readBoardingCode(draft.boardingCode,draft.boardingLegIndex) || {});
   const generatorSettings = preserve && draft.type==='flight' ? readBoardingGenerator(modalRoot) : undefined;
   draft.flightStatus = draft.type === 'flight' ? normalizeFlightStatus(draft.flightStatus) : '';
   const personalEdited = preserve ? new Set(editor?.personalEdited || []) : new Set(record.lockedFields || []);
-  const typeFixed = imported || state.records.some(record => record.id === draft.id);
+  const editingSaved = state.records.some(record => record.id === draft.id);
+  const typeFixed = imported || editingSaved;
   editor = { original, draft, imported, context, dirty: preserve, personalEdited, photo };
   const flight = draft.type === 'flight';
   const basics = flight ? ['origin','destination','service','departureDate','departureTime','arrivalTime','arrivalDate','boardingTime','passenger','identity','airline','seat','seatClass','price','gate'] : ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seatClass','seat','price','gate','railPlatform'];
@@ -1024,7 +1027,7 @@ function editRecord(record, {
     + (flight
       ? '<input type="hidden" name="template" value="air-boarding-pass" />'
         + field('flightStatus', draft, { options: Object.entries(FLIGHT_STATUSES) })
-        + ticketCodeEditor(draft, { generator:false })
+        + ticketCodeEditor(draft, { generator:false, editingSaved })
       : ticketCodeEditor(draft, { fromScan:!!localFileURL }) + railReceiptControls() + railPhotoControls() + railTicketOptions(draft));
   const invoiceRows = railInvoiceDetails(draft.railInvoice);
   const invoiceDetails = invoiceRows.length ? `<details class="editor-extra"><summary>电子报销凭证资料</summary><dl class="detail-grid">${invoiceRows.map(([label, value]) => `<div><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`).join('')}</dl></details>` : '';
@@ -1046,12 +1049,8 @@ function editRecord(record, {
   form.elements.type.disabled = typeFixed;
   let lookupApplying=false;
   function updatePersonalFields(previousRecord) {
-    if(!imported && !state.records.some(record=>record.id===draft.id))Object.assign(draft,applyProfileDefaults(draft,state.settings.profile,{edited:[...editor.personalEdited],previousRecord}));
-    if(draft.type==='flight' && draft.boardingCodeSource==='original'){
-      const passenger=flightPassengerName(draft,readBoardingCode(draft.boardingCode,draft.boardingLegIndex) || {});
-      if(passenger!==draft.passenger){draft.passenger=passenger;markFieldSources(draft,['passenger'],'barcode');}
-    }
-    for(const key of ['passenger','identity'])if(form.elements[key])form.elements[key].value=draft[key];
+    if(!imported && !editingSaved)Object.assign(draft,applyProfileDefaults(draft,state.settings.profile,{edited:[...editor.personalEdited],previousRecord}));
+    form.elements.passenger.value=draft.passenger;
     if(draft.passenger!==previousRecord.passenger)refreshBoardingPassenger(form,draft,{profile:state.settings.profile,resetName:draft.boardingCodeSource!=='original'});
   }
   form.setAttribute('autocapitalize', 'characters');
@@ -1074,13 +1073,16 @@ function editRecord(record, {
     if(input.matches('[data-refund-receipt]'))input.dispatchEvent(new window.Event('input',{bubbles:true}));
     if(input.tagName==='SELECT'&&FIELDS.includes(input.name)&&draft[input.name]!==input.value)input.dispatchEvent(new window.Event('input',{bubbles:true}));
   });
-  codeCleanup = bindTicketCodeEditor(form, draft, ({filled=[],previousRecord={...draft},automatic=false,codeStatus='',railFields}={}) => {
+  codeCleanup = bindTicketCodeEditor(form, draft, ({filled=[],previousRecord={...draft},automatic=false,codeStatus='',railFields,rescan}={}) => {
     if(automatic){
       refreshFieldSources(form,draft);
       document.querySelector('#editor-preview').innerHTML=ticketSVG(draft);
       return;
     }
-    if (lookupContext(previousRecord)!==lookupContext(draft)) clearEditorLookupValues();
+    if (lookupContext(previousRecord)!==lookupContext(draft)) {
+      if (rescan) { draft.lookupValues = {}; delete draft.flightTrack; }
+      else clearEditorLookupValues();
+    }
     if (railFields || draft.template !== previousRecord.template) {
       const scannedRailQR = railFields ? { ...railFields, type:'rail' } : undefined;
       editRecord(draft, { imported, preserve: true, original, scannedRailQR });
@@ -1102,12 +1104,12 @@ function editRecord(record, {
     document.querySelector('#editor-preview').innerHTML=ticketSVG(draft);
   }, {
     onCameraStart:stopRailCamera,
-    profile:state.settings.profile, preserveGenerator:!!generatorSettings, referenceURL:localFileURL,
+    profile:state.settings.profile, preserveGenerator:!!generatorSettings, referenceURL:localFileURL, editingSaved,
     isCurrent:() => form.isConnected && !form.dataset.pending && canWrite() && isArchiveContext(context),
     autoRead:draft.type==='rail' && !!localFileURL && !draft.ticketCode
   });
   form.addEventListener('input', event => {
-    if (event.target.matches('[data-rail-start]')) return;
+    if (event.target.matches('[data-rail-start]') || event.target.closest('[data-code-editor]')) return;
     const target=event.target;
     const dateKey=target.closest('[data-journey-date]')?.dataset.journeyDate;
     const changedKey=target.name || (target.matches('[data-seat-preset]') ? 'seatClass'
@@ -1133,7 +1135,7 @@ function editRecord(record, {
       return;
     }
     const previousRecord={...draft}, previousQuery=lookupContext(draft);
-    if (!lookupApplying && ['passenger','identity'].includes(event.target.name)) editor.personalEdited.add(event.target.name);
+    if (!lookupApplying && event.target.name === 'passenger') editor.personalEdited.add('passenger');
     const data = new FormData(form); for (const [key, value] of data) if (FIELDS.includes(key) && !JOURNEY_DATE_FIELDS.includes(key) && !ticketFieldLocked(draft,key)) draft[key] = value;
     for(const key of JOURNEY_DATE_FIELDS)if(form.elements[key+'Year'])draft[key]=readTicketDate(form,key,draft);
     if (!flight) {
@@ -2144,14 +2146,7 @@ async function editRailPointsTrip(button) {
   const record = session?.records.find(item => item.record.id === button.dataset.id)?.record;
   if (!record || !canWrite() || !await currentArchive(session.context) || !button.isConnected || !canWrite()) return;
   const entry = root.querySelector('[data-action="rail-points"]');
-  const draft = clone(record);
-  const profile = profileDefaults('rail', state.settings.profile);
-  const name = value => value.normalize('NFKC').replace(/\s+/gu, '');
-  if (!draft.identity && profile.identity && draft.passenger && name(draft.passenger) === name(profile.passenger)) {
-    draft.identity = profile.identity;
-    markFieldSources(draft, ['identity'], 'profile');
-  }
-  editRecord(draft, { imported: true, railPointsTrip: record });
+  editRecord(record, { imported: true, railPointsTrip: record });
   modalFocus = entry;
 }
 const actions = {

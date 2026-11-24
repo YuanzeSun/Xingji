@@ -29,7 +29,7 @@ test('generated codes follow ticket changes while preserving adopted status, for
 
 test('original codes retain all bytes, compare only known flight-day data, and normalize seat padding and codeshares',()=>{
   const original=flight({boardingCodeSource:'original'}),changed=createRecord({...original,seat:'20C',service:'BA123',pnr:'OTHER',departureDate:'2026-11-18'});
-  assert.deepEqual(changed.boardingCode,original.boardingCode);assert.ok(boardingCodeDifferences(changed).includes('座位'));assert.equal(boardingCodeDifferences(changed).includes('出发日期'),false,'the original barcode preserves its ordinal date');
+  assert.deepEqual(changed.boardingCode,original.boardingCode);assert.ok(boardingCodeDifferences(changed).includes('座位'));assert.equal(boardingCodeDifferences(changed).includes('出发日期'),true,'the reviewed ticket date is preserved independently of the barcode');
   assert.deepEqual(boardingCodeDifferences({...original,seat:'0012A'}),[]);
   assert.equal(boardingCodeDifferences({...original,departureDate:''}).includes('出发日期'),false);
   assert.equal(boardingCodeDifferences({...original,departureDate:'2025-11-17'}).includes('出发日期'),false,'BCBP does not encode the year');

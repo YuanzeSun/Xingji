@@ -46,7 +46,7 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   const number = document.querySelector('#profile-form [data-doc-field=number]');
   assert.equal(number.value,'E000000**');
   assert.equal(number.getAttribute('value'),'E000000**');
-  assert.match(document.querySelector('#profile-form [name=flightDocument]').textContent,/E000000\*\*/);
+  assert.equal(document.querySelector('#profile-form [name=flightDocument], #profile-form [name=railDocument]'),null);
   number.focus();
   assert.equal(number.value,'E00000000');
   fill('#profile-form [data-doc-field=number]','E00000012');
@@ -60,12 +60,12 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   await go('archive'); click('[data-action=new]'); await wait(()=>document.querySelector('#editor-form'));
   fill('#editor-form [name=type]','flight');
   assert.equal(document.querySelector('#editor-form [name=passenger]').value,'ZHANG/SAN');
-  assert.equal(document.querySelector('#editor-form [name=identity]').value,'E00000000');
+  assert.equal(document.querySelector('#editor-form [name=identity]').value,'');
   fill('#editor-form [name=origin]','PEK');fill('#editor-form [name=destination]','SHA');
   assert.equal(document.querySelector('#editor-form [name=passenger]').value,'示例旅客');assert.equal(document.querySelector('#editor-form [name=identity]').value,'');
   assert.equal(document.querySelector('[data-bcbp="passenger"]').value,'ZHANG/SAN');
   fill('#editor-form [name=destination]','LHR');
-  assert.equal(document.querySelector('#editor-form [name=passenger]').value,'ZHANG/SAN');assert.equal(document.querySelector('#editor-form [name=identity]').value,'E00000000');
+  assert.equal(document.querySelector('#editor-form [name=passenger]').value,'ZHANG/SAN');assert.equal(document.querySelector('#editor-form [name=identity]').value,'');
   assert.equal(document.querySelector('[data-bcbp="passenger"]'),null);
   assert.equal(document.querySelector('#editor-form [name=nationality],#editor-form [name=gender],#editor-form [name=identityType]'),null);
   fill('#editor-form [name=passenger]','zhang/San-Ming');
@@ -84,7 +84,7 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   assert.equal(document.querySelector('#editor-form [name=passenger]').value,'示例旅客');
   fill('#editor-form [name=type]','flight');
   assert.equal(document.querySelector('#editor-form [name=passenger]').value,'ZHANG/SAN');
-  assert.equal(document.querySelector('#editor-form [name=identity]').value,'E00000000');
+  assert.equal(document.querySelector('#editor-form [name=identity]').value,'');
   fill('#editor-form [name=passenger]','单独修改'); fill('#editor-form [name=type]','rail');
   assert.equal(document.querySelector('#editor-form [name=passenger]').value,'示例旅客');
   assert.equal(document.querySelector('#editor-form [name=identity]').value,'');

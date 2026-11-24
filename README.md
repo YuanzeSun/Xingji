@@ -21,7 +21,7 @@
 
 ![票夹中的机票和火车录入入口](docs/images/ticket-entry.jpg)
 
-![录入票据信息并实时预览票面](docs/images/manual-entry.jpg)
+![核对登机牌扫码结果并实时预览票面](docs/images/manual-entry.jpg)
 
 ![从 12306 积分明细选择乘车记录](docs/images/rail-points-import.jpg)
 

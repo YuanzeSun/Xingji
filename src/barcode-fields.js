@@ -1,8 +1,8 @@
 import {refreshTicketDateLocks} from './date-field.js';
-import {railBarcodeFieldLocked, railImportFieldLocked, railInvoiceFieldLocked, railPointsFieldLocked} from './field-sources.js';
+import {matchedIdentityLocked, railBarcodeFieldLocked, railImportFieldLocked, railInvoiceFieldLocked, railPointsFieldLocked} from './field-sources.js';
 import {splitBerth} from './seat-field.js';
 import {refreshRailQRMarks} from './ticket-form.js';
-export const ticketFieldLocked = (record, key) => railImportFieldLocked(record,key) || railBarcodeFieldLocked(record,key) ||
+export const ticketFieldLocked = (record, key) => matchedIdentityLocked(record,key) || railImportFieldLocked(record,key) || railBarcodeFieldLocked(record,key) ||
   (key!=='departureDate' && record.type === 'flight' && !!record.boardingCode && record.boardingCodeSource === 'original' && (key === 'type' || record.fieldSources?.[key]==='barcode'));
 
 export function refreshTicketFieldLocks(root, record) {
@@ -19,7 +19,8 @@ export function refreshTicketFieldLocks(root, record) {
       field.toggleAttribute('data-barcode-locked', locked);
       for (const badge of field.querySelectorAll('[data-field-source]')) {
         badge.toggleAttribute('data-source-locked', locked);
-        if (locked) badge.title = railPointsFieldLocked(record,key) ? '12306 导入，字段已锁定'
+        if (locked) badge.title = matchedIdentityLocked(record,key) ? '已唯一匹配常用证件，字段已锁定'
+          : railPointsFieldLocked(record,key) ? '12306 导入，字段已锁定'
           : railInvoiceFieldLocked(record,key) ? 'PDF 导入，字段已锁定' : '条码读取，移除原始条码后可编辑';
       }
       const preset = field.querySelector('[data-seat-preset]');

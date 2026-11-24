@@ -44,8 +44,8 @@ export function boardingCodeDifferences(record) {
   if(record.boardingCodeSource==='generated')return [];
   const saved=readBoardingCode(record.boardingCode,record.boardingLegIndex);if(!saved)return [];
   const current=boardingCodeDefaults(record,{useSaved:false}),differences=[];
-  for(const [key,label] of [['origin','出发机场'],['destination','到达机场'],['pnr','PNR']])if(current[key] && upper(current[key])!==upper(saved[key]))differences.push(label);
-  if(current.seat && seat(current.seat)!==seat(saved.seat))differences.push('座位');
+  for(const [key,label] of [['origin','出发机场'],['destination','到达机场'],['pnr','PNR']])if(current[key] && saved[key] && upper(current[key])!==upper(saved[key]))differences.push(label);
+  if(current.seat && saved.seat && seat(current.seat)!==seat(saved.seat))differences.push('座位');
   if(current.carrier && current.flightNumber && upper(current.carrier)+upper(current.flightNumber).replace(/^0+(?=\d)/,'')!==upper(saved.service))differences.push('航班（请核对是否代码共享）');
   if(current.date && journeyDate(current.date).dayOfYear!==saved.dayOfYear)differences.push('出发日期');
   const name=value=>upper(value).replace(/[^A-Z]/g,'');

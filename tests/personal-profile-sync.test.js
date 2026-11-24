@@ -18,7 +18,7 @@ test('a saved partial profile reaches another device and concurrent service key 
  assert.equal(server.settings().flightMcpKey,'another-key');
  const received=await store(server).read();
  const r=createRecord(applyProfileDefaults({type:'rail'},received.settings.profile));
- assert.equal(r.passenger,'示例旅客');assert.equal(r.identity,'000000200001011234');
+ assert.equal(r.passenger,'示例旅客');assert.equal(r.identity,'');assert.equal(received.settings.profile.documents[0].number,'000000200001011234');
  assert.equal(createRecord(applyProfileDefaults({type:'flight',template:'air-boarding-pass'},received.settings.profile)).passenger,'');
 });
 

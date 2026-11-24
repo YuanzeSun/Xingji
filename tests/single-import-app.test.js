@@ -9,7 +9,8 @@ import { pickReceipt, stubReceiptPDF, receiptBytes, receiptPage } from './helper
 test('ticket entry is in the archive and rail receipts accept one PDF journey per review', async () => {
   const window = browser();
   location.hash = 'import';
-  const github = await prepareCloud();
+  const identity = '110101200001010012';
+  const github = await prepareCloud([], { profile: { documents: [{ type: 'national-id', number: identity }] } });
   const pdf = stubReceiptPDF();
   const makeFile = (...pages) => ({ name: '发票.PDF', size: 100, arrayBuffer: async () => receiptBytes(...pages) });
   const status = () => document.querySelector('[data-rail-receipt-status]').textContent;
@@ -62,7 +63,7 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
     fill('passenger', '手动姓名');
     fill('identity', 'P000001');
     fill('service', 'G1');
-    pickReceipt(window, makeFile(receiptPage({ service: 'D21', seat: '06车009号下铺', seatClass: '动卧' })));
+    pickReceipt(window, makeFile(receiptPage({ service: 'D21', seat: '06车009号下铺', seatClass: '动卧', identity: 'AB1234**' })));
     await until(() => status().includes('已填入'));
     const form = document.querySelector('#editor-form');
     assert.equal(form.elements.service.value, 'D21');
@@ -117,6 +118,21 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
     await until(() => !document.querySelector('dialog'));
     document.querySelector('.page-header [data-action="new"]').click();
     await until(() => document.querySelector('#editor-form'));
+    pickReceipt(window, makeFile(receiptPage({ service: 'G21', electronicTicketNumber: '2600000000000000000000002' })));
+    await until(() => status().includes('已填入'));
+    const matched = document.querySelector('#editor-form');
+    assert.equal(matched.elements.identity.value, identity);
+    assert.equal(matched.elements.identity.readOnly, true);
+    fill('identity', 'AB123456');
+    assert.equal(matched.elements.identity.value, identity);
+    matched.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await until(() => github.records().length === 2 && !document.querySelector('dialog'));
+    const collected = github.records().find(record => record.service === 'G21');
+    assert.equal(collected.identity, identity);
+    assert.equal(collected.fieldSources.identity, 'profile-match');
+    assert.ok(!JSON.stringify(collected).includes('1101012000****0012'));
+    document.querySelector('.page-header [data-action="new"]').click();
+    await until(() => document.querySelector('#editor-form'));
     const dialog = document.querySelector('dialog');
     dialog.dispatchEvent(new window.Event('cancel', { cancelable: true }));
     assert.equal(document.querySelector('dialog'), null, 'the dialog itself can still be dismissed');
@@ -126,10 +142,11 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
   }
 });
 
-test('rail invoices discard masked values before preview and storage', () => {
+test('rail invoices expose masked identity only as a transient match hint', () => {
   const parsed = parseRailInvoicePage(receiptPage({ passenger: '示例＊' }));
   assert.equal(parsed.passenger, '');
-  assert.equal(parsed.identity, '');
+  assert.equal(parsed.identity, undefined);
+  assert.equal(parsed.identityHint, '1101012000****0012');
   const expected = { electronicTicketNumber: '2600000000000000000000001' };
   assert.deepEqual(parsed.railInvoice, expected);
   assert.deepEqual(normalizeRailInvoice({

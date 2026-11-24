@@ -153,11 +153,11 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(photoEntry().querySelector('[data-rail-photo]').textContent, '相机扫描');
     assert.equal(photoEntry().querySelector('[data-rail-photo-upload]').textContent, '上传图片');
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);
-    for (const name of ['origin', 'destination', 'service', 'departureDate', 'departureTime', 'seatClass', 'identity', 'passenger']) {
+    for (const name of ['origin', 'destination', 'service', 'departureDate', 'departureTime', 'seatClass', 'passenger']) {
       assert.deepEqual(fieldStars(name), ['必填'], name);
       assert.equal(field(name).closest('.field').querySelector('.barcode-required-mark'), null, name);
     }
-    for (const name of ['price', 'saleCode']) {
+    for (const name of ['price', 'saleCode', 'identity']) {
       assert.deepEqual(fieldStars(name), ['生成二维码必填'], name);
       assert.equal(field(name).required, false);
     }
@@ -180,7 +180,7 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     await waitFor(() => field('railModel').value === 'CR400BF-S');
     assert.deepEqual(railQueries, [[['trainNum', 'G103'], ['date', '20251124']]]);
     assert.equal(field('arrivalTime').value, '12:45');
-    for (const [name, value] of Object.entries({ service: 'G103', origin: '北京南', destination: '上海虹桥', departureTime: '08:15', passenger: '李', carriage: '03', price: '553.5', ticketNumber: 'A001234' })) {
+    for (const [name, value] of Object.entries({ service: 'G103', origin: '北京南', destination: '上海虹桥', departureTime: '08:15', passenger: '李', identity: '100000000000000001', carriage: '03', price: '553.5', ticketNumber: 'A001234' })) {
       assert.equal(field(name).value, value, name);
       assert.equal(field(name).readOnly, true, name);
     }
@@ -207,6 +207,7 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(record.fieldSources.departureDateYear, 'manual');
     assert.equal(record.ticketCode.rawBytes, btoa(seated));
     assert.ok(record.lockedFields.includes('seat'));
+    assert.equal(record.fieldSources.identity, 'barcode');
 
     document.querySelector('[data-action="navigate"][data-page="archive"]').click();
     await waitFor(() => document.querySelector('[data-action="view"]'));

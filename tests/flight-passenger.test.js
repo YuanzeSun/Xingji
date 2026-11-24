@@ -28,18 +28,18 @@ test('structured ticket numbers and tagged Chinese names are decoded without inv
   assert.equal(readBCBP(payload.replace('#9418:21','#9429:90')).recordedBoardingTime,undefined);
 });
 
-test('profile names and documents follow domestic and international routes without replacing manual corrections',()=>{
+test('profile names follow domestic and international routes without replacing manual corrections',()=>{
   const unknown={type:'flight'},domestic={...unknown,origin:'PEK',destination:'SHA'},international={...domestic,destination:'LHR'};
   assert.equal(flightNameLanguage(domestic),'zh');assert.equal(flightNameLanguage(international),'en');
-  assert.equal(profileDefaults('flight',profile,domestic).passenger,'张三');assert.equal(profileDefaults('flight',profile,domestic).identity,'000000200001011234');
+  assert.equal(profileDefaults('flight',profile,domestic).passenger,'张三');assert.equal(profileDefaults('flight',profile,domestic).identity,undefined);
   for(const route of [international,{...domestic,origin:'LHR',destination:'MAN'},{...domestic,destination:'HKG'}]){
-    assert.equal(profileDefaults('flight',profile,route).passenger,'ZHANG/SAN');assert.equal(profileDefaults('flight',profile,route).identity,'E00000000');
+    assert.equal(profileDefaults('flight',profile,route).passenger,'ZHANG/SAN');assert.equal(profileDefaults('flight',profile,route).identity,undefined);
   }
   const initial={...unknown,...profileDefaults('flight',profile,unknown)};
   const cn=applyProfileDefaults({...initial,...domestic},profile,{previousRecord:initial});
-  assert.equal(cn.passenger,'张三');assert.equal(cn.identity,'000000200001011234');
+  assert.equal(cn.passenger,'张三');assert.equal(cn.identity,undefined);
   const en=applyProfileDefaults({...cn,...international},profile,{previousRecord:cn});
-  assert.equal(en.passenger,'ZHANG/SAN');assert.equal(en.identity,'E00000000');
+  assert.equal(en.passenger,'ZHANG/SAN');assert.equal(en.identity,undefined);
   const manual=applyProfileDefaults({...cn,...international,passenger:'其他旅客',identity:''},profile,{previousRecord:cn,edited:['passenger','identity']});
   assert.equal(manual.passenger,'其他旅客');assert.equal(manual.identity,'');
 });

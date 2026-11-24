@@ -42,7 +42,10 @@ test('a new scan during a pending flight lookup discards the response for the ol
   const page=editor(()=>new Promise(done=>{resolve=done;}));
   try{
     await page.scan();page.date('2026-05-18');page.query();
-    await page.scan('4321');const before=structuredClone(page.draft);resolve([schedule()]);await settle();
+    await page.scan('4321');
+    page.form.querySelector('[name=scan-service][value=scanned]').click();
+    page.form.querySelector('[data-scan-confirm]').click();
+    const before=structuredClone(page.draft);resolve([schedule()]);await settle();
     assert.equal(page.applies,0);assert.deepEqual(page.draft,before);assert.equal(page.draft.service,'CA4321');assert.match(page.form.querySelector('[data-flight-status]').textContent,/已改变/);
   }finally{page.dispose();}
 });

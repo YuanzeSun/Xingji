@@ -38,7 +38,7 @@ test('archive entries preselect each transport and share a switchable editor',as
     assert.equal(form().querySelector('[data-rail-photo]'),null);
     assert.ok(form().querySelector('#code-photo'));
     assert.equal(form().elements.template.value,'air-boarding-pass');
-    assert.equal(form().elements.passenger.value,'DOE/JANE');assert.equal(form().elements.identity.value,'P000001');
+    assert.equal(form().elements.passenger.value,'DOE/JANE');assert.equal(form().elements.identity.value,'');
     for(const key of ['origin','destination','originCode','destinationCode','service','departureTime','arrivalDate','arrivalTime','seat','orderNumber','gate','price'])assert.equal(form().elements[key].value,'',key);
     assert.equal(form().elements.departureDateYear.value,year);
     assert.equal(form().elements.offsetX.value,'0');assert.equal(document.querySelector('[data-field-source="passenger"]').textContent,'个人资料');

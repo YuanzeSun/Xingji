@@ -46,8 +46,7 @@ export function parseRailInvoicePage({ view: [left, bottom, right, top], items }
   const [seatClass = ''] = readRailSeatClasses(text(.61, .675, .6));
   const price = /^票价:?[¥￥]?([\d,]+(?:\.\d{1,2})?)$/.exec(compact(text(.52, .59, 0, .5)))?.[1]?.replaceAll(',', '') || '';
   const passenger = text(.39, .45, .28, .66);
-  const identityOnInvoice = compact(text(.39, .45, 0, .28));
-  const identity = /^[A-Z0-9]{3,40}$/i.test(identityOnInvoice) ? identityOnInvoice : '';
+  const identityHint = compact(text(.39, .45, 0, .28));
   const electronicTicketNumber = /^电子客票号:(\d{25})$/.exec(compact(text(.24, .30, 0, .64)))?.[1] || '';
 
   if (!/^\p{Script=Han}+$/u.test(origin) || !/^\p{Script=Han}+$/u.test(destination) ||
@@ -61,6 +60,6 @@ export function parseRailInvoicePage({ view: [left, bottom, right, top], items }
   return {
     type: 'rail', origin, destination, originCode, destinationCode, service, departureDate,
     departureTime: time[1].padStart(2, '0') + ':' + time[2], carriage, seat, seatClass, railStanding,
-    price, passenger: passenger.includes('*') ? '' : passenger, identity, railInvoice: { electronicTicketNumber }
+    price, passenger: passenger.includes('*') ? '' : passenger, identityHint, railInvoice: { electronicTicketNumber }
   };
 }

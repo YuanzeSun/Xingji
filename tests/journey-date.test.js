@@ -37,7 +37,7 @@ test('all planned and actual dates and cached railway stop dates remain ordinal 
 
 test('barcode month and day are locked, while changing only the year preserves its recorded ordinal',()=>{
   const code=createBoardingCode({passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:{year:null,dayOfYear:60},cabin:'Y',seat:'12A',sequence:'25',status:'1'});
-  const record=createRecord({type:'flight',template:'air-boarding-pass',boardingCode:code,boardingCodeSource:'original',boardingLegIndex:'0'});
+  const record=createRecord({type:'flight',template:'air-boarding-pass',departureDate:{year:null,dayOfYear:60},fieldSources:{departureDate:'barcode'},boardingCode:code,boardingCodeSource:'original',boardingLegIndex:'0'});
   assert.deepEqual(record.departureDate,{year:null,dayOfYear:60});assert.equal(readBoardingCode(code).dayOfYear,60);
   const dom=new JSDOM('<form>'+ticketDateField('departureDate',record,{label:'计划起飞日期',required:true})+'</form>'),form=dom.window.document.querySelector('form');
   bindTicketDates(form,()=>record);form.addEventListener('input',()=>{record.departureDate=readTicketDate(form,'departureDate',record);refreshTicketDateLocks(form,record);});

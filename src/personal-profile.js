@@ -1,7 +1,7 @@
 import {flightNameLanguage} from './flight-passenger.js';
 import {markFieldSources} from './field-sources.js';
 import {ticketFieldLocked} from './barcode-fields.js';
-import { requireCompleteIdentity } from './identity.js';
+import { identityPattern, requireCompleteIdentity } from './identity.js';
 
 export const PROFILE_FIELDS = [
   ['chineseName','中文姓名','text',100], ['firstName','英文名（First name）','text',150], ['lastName','英文姓（Last name）','text',100],
@@ -40,22 +40,33 @@ export function personalProfile(value = {}) {
     requireCompleteIdentity(number);
     return { id, type, label:text(doc.label,'证件名称',80), number, expiry:fullDate(text(doc.expiry,'有效期',10),'有效期') };
   }).filter(doc=>doc.label || doc.number || doc.expiry);
-  for (const key of ['railDocument','flightDocument']) {
-    const selected = text(value[key], '默认证件');
-    profile[key] = selected === 'none' || profile.documents.some(doc=>doc.id === selected) ? selected : '';
-  }
   return profile;
 }
 export const hasPersonalProfile = value => JSON.stringify(personalProfile(value)) !== JSON.stringify(personalProfile());
+
+export function matchProfileIdentity(hint, profile) {
+  const pattern = identityPattern(hint);
+  if (!/^[A-Z0-9*]{3,128}$/.test(pattern) || !/[A-Z0-9]/.test(pattern)) return '';
+  const matches = (profile?.documents || []).filter(doc => {
+    const number = identityPattern(doc.number);
+    return /^[A-Z0-9]+$/.test(number) && number.length === pattern.length &&
+      Array.from(pattern).every((char, index) => char === '*' || char === number[index]);
+  });
+  return matches.length === 1 ? matches[0].number : '';
+}
+
+export function lockMatchedIdentity(record, identity) {
+  if (!identity) return;
+  record.identity = identity;
+  record.lockedFields = [...new Set([...record.lockedFields, 'identity'])].sort();
+  markFieldSources(record, ['identity'], 'profile-match');
+}
+
 export function profileDefaults(type, value, record={}) {
-  const profile = personalProfile(value), defaults = Object.fromEntries(['passenger','identity'].map(key=>[key,'']));
+  const profile = personalProfile(value), defaults = { passenger: '' };
   if (!profile.autoFill) return defaults;
   const domestic=type==='flight' && flightNameLanguage(record)==='zh';
   defaults.passenger = type === 'flight' && !domestic ? [profile.lastName,profile.firstName].filter(Boolean).join('/') : profile.chineseName;
-  const choice = type === 'flight' ? profile.flightDocument : profile.railDocument;
-  const doc = choice === 'none' ? null : choice ? profile.documents.find(doc=>doc.id === choice)
-    : profile.documents.find(doc=>doc.type === (type === 'flight' && !domestic ? 'passport' : 'national-id') && doc.number);
-  if (doc?.number) defaults.identity = doc.number;
   return defaults;
 }
 export function applyProfileDefaults(record, profile, { edited = [], previousProfile = profile, previousType = record.type, previousRecord = record } = {}) {

@@ -145,7 +145,7 @@ test('12306 sends the selected dates and holds results for individual review', a
   assert.equal(form.elements.origin.value, '北京南');
   assert.equal(form.elements.destination.value, '上海虹桥');
   assert.equal(form.elements.departureTime.required, false);
-  assert.equal(form.elements.identity.value, identity);
+  assert.equal(form.elements.identity.value, '');
   for (const key of ['origin', 'destination', 'service', 'departureDateYear', 'passenger', 'carriage', 'orderNumber']) assert.equal(form.elements[key].readOnly, true, key);
   for (const selector of ['[name=departureDateMonth]', '[name=departureDateDay]', '[data-seat-preset]', '[data-code-start]', '[data-code-upload]', '#code-photo', '[data-rail-receipt]', '[data-rail-receipt-file]', '[data-rail-photo]', '[data-rail-photo-upload]']) {
     assert.equal(form.querySelector(selector).matches(':disabled'), true, selector);
@@ -168,7 +168,7 @@ test('12306 sends the selected dates and holds results for individual review', a
   assert.equal(saved.price, '');
   assert.equal(saved.fieldSources.service, 'rail-points');
   assert.equal(saved.fieldSources.passenger, 'rail-points');
-  assert.equal(saved.fieldSources.identity, 'profile');
+  assert.equal(saved.fieldSources.identity, undefined);
   assert.ok(saved.lockedFields.includes('departureDate'));
   const view = `[data-action="view"][data-id="${saved.id}"]`;
   await until(() => document.querySelector(view));

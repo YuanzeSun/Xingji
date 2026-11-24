@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { personalProfile, profileDefaults, applyProfileDefaults } from '../src/personal-profile.js';
+import { personalProfile, profileDefaults, applyProfileDefaults, lockMatchedIdentity, matchProfileIdentity } from '../src/personal-profile.js';
+import { printedIdentityHint } from '../src/identity.js';
+import { ticketFieldLocked } from '../src/barcode-fields.js';
 import { sharedSettings, mergeSettings } from '../src/shared-settings.js';
 import { createRecord, archive, readArchive } from '../src/model.js';
 import { personalProfilePanel, personalProfileSummary } from '../src/personal-profile-form.js';
@@ -13,34 +15,44 @@ test('personal information is entirely optional and only the explicitly configur
   for (const type of ['rail','flight']) assert.ok(Object.values(profileDefaults(type)).every(value=>value===''));
   const chineseOnly = {chineseName:'示例旅客'};
   const rail = profileDefaults('rail',chineseOnly), flight = profileDefaults('flight',chineseOnly);
-  assert.equal(rail.passenger,'示例旅客'); assert.equal(rail.identity,''); assert.equal(Object.hasOwn(rail,'gender'),false);
-  assert.equal(flight.passenger,''); assert.equal(flight.identity,'');
+  assert.deepEqual(rail,{passenger:'示例旅客'});
+  assert.deepEqual(flight,{passenger:''});
   assert.equal(profileDefaults('rail',{firstName:'SAN',lastName:'ZHANG'}).passenger,'');
   assert.equal(profileDefaults('flight',{firstName:'SAN',lastName:'ZHANG'}).passenger,'ZHANG/SAN');
   const passportOnly = {documents:[{id:'passport',type:'passport',number:'E00000000'}]};
-  assert.equal(profileDefaults('flight',passportOnly).identity,'E00000000');
-  assert.equal(profileDefaults('flight',passportOnly).passenger,'');
-  assert.equal(profileDefaults('rail',passportOnly).identity,'');
+  assert.deepEqual(profileDefaults('flight',passportOnly),{passenger:''});
+  assert.deepEqual(profileDefaults('rail',passportOnly),{passenger:''});
   for (const type of ['rail','flight']) {
     const values = profileDefaults(type,{gender:'男'});
-    assert.deepEqual(values,{passenger:'',identity:''});
+    assert.deepEqual(values,{passenger:''});
   }
 });
 
-test('document defaults are selected per transport type, with explicit overrides and opt-out', () => {
-  assert.equal(profileDefaults('rail',profile).identity,'000000200001011234');
-  assert.equal(profileDefaults('flight',profile).identity,'E00000000');
-  assert.equal(profileDefaults('flight',profile).passenger,'ZHANG/SAN');
-  assert.equal(profileDefaults('rail',{...profile,railDocument:'permit'}).identity,'H00000000');
-  assert.equal(profileDefaults('flight',{...profile,flightDocument:'none'}).identity,'');
-  assert.ok(Object.values(profileDefaults('rail',{...profile,autoFill:false})).every(value=>value===''));
-  assert.equal(profileDefaults('rail',{documents:[{id:'partial',type:'national-id',expiry:'2030-01-01'}]}).identity,'');
+test('a complete or masked ticket number locks only a unique matching document', () => {
+  assert.equal(matchProfileIdentity('ｅ００００００００', profile),'E00000000');
+  const hint = printedIdentityHint('票价 41.00\n0000002000XXXX1234 示例旅客');
+  assert.equal(hint, '0000002000****1234');
+  assert.equal(printedIdentityHint('证件号码：e000000＊＊'), 'e000000**');
+  assert.equal(matchProfileIdentity('0000002000••••1234', profile),'000000200001011234');
+  assert.equal(matchProfileIdentity('E000000＊＊', {...profile,autoFill:false}),'E00000000');
+  for (const unmatched of ['', 'E12345678', '*********', 'E0000**', '000000200001011235']) assert.equal(matchProfileIdentity(unmatched,profile),'');
+  const ambiguous = {...profile,documents:[...profile.documents,{type:'passport',number:'E00000001'}]};
+  assert.equal(matchProfileIdentity('E000000**', ambiguous),'');
+  assert.equal(matchProfileIdentity('E00000001', ambiguous),'E00000001');
+  assert.equal(matchProfileIdentity('E00000000', {...ambiguous,documents:[...ambiguous.documents,{type:'other',number:'E00000000'}]}),'');
+  const record = createRecord();
+  lockMatchedIdentity(record, matchProfileIdentity(hint, profile));
+  const [stored] = readArchive(archive([record]));
+  assert.equal(stored.identity, '000000200001011234');
+  assert.equal(stored.fieldSources.identity, 'profile-match');
+  assert.ok(ticketFieldLocked(stored, 'identity'));
+  assert.ok(!JSON.stringify(stored).includes(hint));
 });
 
 test('type changes and profile updates respect per-ticket corrections and intentionally blank fields', () => {
   const record = createRecord(applyProfileDefaults({type:'rail'},profile)), before = structuredClone(profile);
   const flight = applyProfileDefaults({...record,type:'flight'},profile,{previousType:'rail'});
-  assert.equal(flight.passenger,'ZHANG/SAN'); assert.equal(flight.identity,'E00000000');
+  assert.equal(flight.passenger,'ZHANG/SAN'); assert.equal(flight.identity,'');
   const corrected = applyProfileDefaults({...record,type:'flight',passenger:'单票姓名',identity:''},profile,{previousType:'rail',edited:['passenger','identity']});
   assert.equal(corrected.passenger,'单票姓名'); assert.equal(corrected.identity,''); assert.ok(!Object.hasOwn(corrected,'identityType'));
   const changed = applyProfileDefaults(record,{...profile,chineseName:'新的姓名'},{previousProfile:profile});
@@ -49,10 +61,11 @@ test('type changes and profile updates respect per-ticket corrections and intent
   assert.deepEqual(profile,before); assert.equal(record.type,'rail');
 });
 
-test('ticket defaults and backups contain only the saved name and document number', () => {
+test('ticket defaults and backups prefill the saved name without choosing a document', () => {
   const settings = sharedSettings({flightMcpKey:'private-key',profile});
   const record = createRecord(applyProfileDefaults({type:'rail'},settings.profile));
   for(const key of ['identityType','gender','nationality','address'])assert.equal(Object.hasOwn(record,key),false);
+  assert.equal(record.identity, '');
   assert.deepEqual(readArchive(archive([record])),[record]);
   assert.ok(!JSON.stringify(record).includes('private-key'));
 });

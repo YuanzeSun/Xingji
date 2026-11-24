@@ -13,9 +13,11 @@ export const isRailPointsRecord = record => record.type === 'rail' && !!record.s
 export const railPointsFieldLocked = (record, key) => record.type === 'rail' &&
   record.fieldSources?.[key] === RAIL_POINTS_SOURCE && !!record.lockedFields?.includes(key);
 export const railImportFieldLocked = (record, key) => railInvoiceFieldLocked(record, key) || railPointsFieldLocked(record, key);
+export const matchedIdentityLocked = (record, key) => key === 'identity' &&
+  record.fieldSources?.identity === 'profile-match' && !!record.lockedFields?.includes(key);
 export const railCodeEntryLocked = record => record.type === 'rail' &&
   (!!record.railInvoice?.electronicTicketNumber || isRailPointsRecord(record));
-const FIELD_SOURCES=Object.freeze({manual:'手动输入',barcode:'条码',variflight:'飞常准',railgo:'RailGo',profile:'个人资料',ocr:'图片识别',pdf:'PDF 导入',default:'默认值',generated:'自动生成',database:'地点数据库',lookup:'查询补全',[RAIL_POINTS_SOURCE]:'12306 积分',[RAILGO_REFERENCE_SOURCE]:'RailGo 参考'});
+const FIELD_SOURCES=Object.freeze({manual:'手动输入',barcode:'条码',variflight:'飞常准',railgo:'RailGo',profile:'个人资料','profile-match':'证件匹配',ocr:'图片识别',pdf:'PDF 导入',default:'默认值',generated:'自动生成',database:'地点数据库',lookup:'查询补全',[RAIL_POINTS_SOURCE]:'12306 积分',[RAILGO_REFERENCE_SOURCE]:'RailGo 参考'});
 const metadata=new Set(['fieldSources','lookupValues','boardingCodeSource','boardingCodeOperatingFlight','deleted']);
 const editorSettings=new Set(['type','template','flightStatus','provenance','offsetX','offsetY']);
 export const hasFieldValue=value=>value!==undefined && value!==null && value!==false && value!=='' && (!Array.isArray(value) || value.length>0);

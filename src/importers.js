@@ -37,5 +37,6 @@ export async function readRailInvoicePDF(file) {
     }
   } finally { await doc.destroy(); }
   if (!invoice) throw new Error('未识别到铁路电子发票，请选择 12306 下载的 PDF');
-  return createRecord({ ...invoice, sources: [{ kind: 'pdf', label: '电子报销凭证', at: now() }] });
+  const { identityHint, ...values } = invoice;
+  return { identityHint, record: createRecord({ ...values, sources: [{ kind: 'pdf', label: '电子报销凭证', at: now() }] }) };
 }
