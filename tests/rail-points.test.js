@@ -27,7 +27,7 @@ test('12306 reads the existing browser session, paginates, and returns trip fiel
   t.after(() => { delete globalThis.location; });
   const requests = [];
   const trades = Array.from({ length: 11 }, (_, index) => ({ trade_id: String(index), trade_type: '0', record_sum: '11' }));
-  let signedIn = true;
+  let signedIn = true, hasTrades = true, listStatus = true;
   t.mock.method(globalThis, 'fetch', async (path, options) => {
     requests.push(path);
     assert.equal(options.credentials, 'same-origin');
@@ -37,7 +37,7 @@ test('12306 reads the existing browser session, paginates, and returns trip fiel
       assert.equal(options.body.get('queryStartDate'), '20251124');
       assert.equal(options.body.get('queryEndDate'), '20261124');
       const page = Number(options.body.get('pageIndex'));
-      return Response.json({ status: 1, data: trades.slice((page - 1) * 10, page * 10) });
+      return Response.json({ status: page === 1 ? listStatus : 1, data: hasTrades ? trades.slice((page - 1) * 10, page * 10) : null });
     }
     assert.equal(path, '/tlcx/memberInfo/PointDetailQuery');
     const detail = {
@@ -46,7 +46,7 @@ test('12306 reads the existing browser session, paginates, and returns trip fiel
       v_assignee_id_name: '示例甲', sequence_no: 'E000000001', v_assignee_id_no: '1234****5678'
     };
     const id = options.body.get('trade_id');
-    if (id === '0') return Response.json({ status: '1', data: [detail, { ...detail, query_type: 'fc' }] });
+    if (id === '0') return Response.json({ status: true, data: [detail, { ...detail, query_type: 'fc' }] });
     if (id === '10') return Response.json({ status: '1', data: [{ ...detail, query_type: 'tg',
       resign_station_train_code: 'G25', resign_train_date: '20261118', resign_board_station_telecode: 'VNP',
       resign_arrive_station_telecode: 'AOH', resign_seat_type_code: 'M', v_assignee_id_name: '示＊甲' }] });
@@ -63,22 +63,29 @@ test('12306 reads the existing browser session, paginates, and returns trip fiel
   assert.equal(records[1].record.orderNumber, 'E000000001');
   assert.equal(records[1].record.fieldSources.departureDate, 'rail-points');
   assert.deepEqual(records[1].record.lockedFields, []);
+  hasTrades = false;
+  assert.deepEqual(await readTrips('2025-11-24', '2026-11-24'), { rides: [] });
+  listStatus = false;
+  assert.match((await readTrips('2025-11-24', '2026-11-24')).error, /第 1 页积分流水/);
   signedIn = false;
   const failed = await readTrips('2025-11-24', '2026-11-24');
   assert.match(failed.error, /扫码登录/);
-  assert.equal(requests.length, 15);
+  assert.equal(requests.length, 19);
 });
 
-test('12306 results stay in review until a single user-selected trip is saved', async t => {
+test('12306 sends the selected dates and holds results for individual review', async t => {
   const window = browser();
   const github = await prepareCloud();
   t.after(() => { window.close(); delete globalThis.chrome; });
   Object.defineProperty(window.navigator, 'userAgent', { configurable: true, value: 'Mozilla/5.0 Chrome/142.0' });
+  const today = Date.parse(railPointsRange().end);
+  const daysBefore = days => new Date(today - days * 86400000).toISOString().slice(0, 10);
+  const range = { start: daysBefore(45), end: daysBefore(3) };
   let reply, installed = false;
   globalThis.chrome = { runtime: { sendMessage(id, request, callback) {
     assert.equal(id, XINGJI_CONNECTOR_ID);
     if (request.action === 'connectorStatus') { callback(installed ? { installed: true } : undefined); return; }
-    assert.deepEqual(request, { action: 'readRailPoints', ...railPointsRange() });
+    assert.deepEqual(request, { action: 'readRailPoints', ...range });
     reply = callback;
   } } };
   await import('../src/app.js');
@@ -97,8 +104,11 @@ test('12306 results stay in review until a single user-selected trip is saved', 
   assert.equal(document.querySelector('[data-connector-installation]').textContent, '已安装');
   document.querySelector(action).click();
   await until(() => document.querySelector('#rail-points-form'));
-  assert.equal(document.querySelector('#rail-points-form a').href, RAIL_POINTS_PAGE);
-  document.querySelector('#rail-points-form [type="submit"]').click();
+  const query = document.querySelector('#rail-points-form');
+  assert.equal(query.querySelector('a').href, RAIL_POINTS_PAGE);
+  query.elements.start.value = range.start;
+  query.elements.end.value = range.end;
+  query.querySelector('[type="submit"]').click();
   await until(() => reply);
   reply({ rides: [ride, { ...ride, service: 'G25' }] });
   await until(() => document.querySelectorAll('[data-action="rail-points-trip"]').length === 2);

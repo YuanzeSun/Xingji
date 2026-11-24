@@ -14,6 +14,7 @@ export async function readTrips(start, end) {
 
     const lookupSignal = AbortSignal.timeout(120000);
     const loggedOut = '请在 12306 积分查询页面扫码登录，再回来查询。';
+    const successful = value => value === true || value === 1 || value === '1';
     async function post(path, parameters) {
       const response = await fetch('/tlcx/' + path, {
         method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'manual',
@@ -28,15 +29,16 @@ export async function readTrips(start, end) {
     }
 
     const session = await post('login/checkLogin', {});
-    if (![true, 1, '1'].includes(session.data?.flag)) throw new Error(loggedOut);
+    if (!successful(session.data?.flag)) throw new Error(loggedOut);
     const points = new Map();
     const pageSize = 10;
     for (let pageIndex = 1; ; pageIndex++) {
       const response = await post('memberInfo/pointSimpleQuery', {
         queryType: '0', queryStartDate: start.replaceAll('-', ''), queryEndDate: end.replaceAll('-', ''), pageIndex, pageSize
       });
-      if (String(response.status) !== '1' || !Array.isArray(response.data)) throw new Error('未能读取 12306 积分流水。');
-      const rows = response.data;
+      if (!successful(response.status)) throw new Error(`12306 未能返回第 ${pageIndex} 页积分流水，请在官网用相同日期查询确认。`);
+      const rows = response.data ?? [];
+      if (!Array.isArray(rows)) throw new Error('未能识别 12306 积分流水的返回格式。');
       const previousSize = points.size;
       for (const row of rows) {
         const tradeId = String(row?.trade_id ?? ''), tradeType = String(row?.trade_type ?? '');
@@ -51,7 +53,7 @@ export async function readTrips(start, end) {
     const rides = [];
     async function readDetail({ tradeId, tradeType }) {
       const response = await post('memberInfo/PointDetailQuery', { queryType: tradeType, trade_id: tradeId });
-      if (String(response.status) !== '1') {
+      if (!successful(response.status)) {
         if (String(response.errorMsg ?? response.message ?? '').includes('无积分详情')) return;
         throw new Error('未能读完整乘车明细，请缩小日期范围后重试。');
       }
