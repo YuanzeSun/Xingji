@@ -449,8 +449,9 @@
       "iata": "CM",
       "icao": "CMP",
       "aliases": [],
-      "type": "icon",
-      "file": "copa-airlines.svg"
+      "type": "logo",
+      "file": "copa-airlines.svg",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/copa-airlines/logo.svg"
     },
     {
       "name": "Delta Air Lines",
@@ -467,8 +468,9 @@
       "iata": "U2",
       "icao": "EZY",
       "aliases": [],
-      "type": "icon",
-      "file": "easyjet.svg"
+      "type": "logo",
+      "file": "easyjet.svg",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/easyjet/logo.svg"
     },
     {
       "name": "EgyptAir",
@@ -863,8 +865,9 @@
       "iata": "LL",
       "icao": "LVL",
       "aliases": [],
-      "type": "icon",
-      "file": "level.svg"
+      "type": "logo",
+      "file": "level.svg",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/level/logo.svg"
     },
     {
       "name": "Lion Air",
@@ -917,8 +920,9 @@
       "iata": "DY",
       "icao": "NOZ",
       "aliases": [],
-      "type": "icon",
-      "file": "norwegian-air-shuttle.svg"
+      "type": "logo",
+      "file": "norwegian-air-shuttle.svg",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/norwegian-air-shuttle/logo.svg"
     },
     {
       "name": "Oman Air",
@@ -1241,8 +1245,9 @@
       "iata": "UA",
       "icao": "UAL",
       "aliases": [],
-      "type": "icon",
-      "file": "united-airlines.svg"
+      "type": "logo",
+      "file": "united-airlines.svg",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/united-airlines/logo.svg"
     },
     {
       "name": "VietJet Air",
@@ -1378,6 +1383,359 @@
       "aliases": [],
       "type": "icon",
       "file": "xiamenair.svg"
+    },
+    {
+      "name": "9 Air",
+      "slug": "9-air",
+      "iata": "AQ",
+      "icao": "JYH",
+      "aliases": [
+        "九元航空",
+        "9Air"
+      ],
+      "type": "icon",
+      "file": "9-air.svg",
+      "source": "https://www.9air.com/favicon.png"
+    },
+    {
+      "name": "Air Changan",
+      "slug": "air-changan",
+      "iata": "9H",
+      "icao": "CGN",
+      "aliases": [
+        "长安航空",
+        "长安航"
+      ],
+      "type": "icon",
+      "file": "air-changan.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202403/80ac0c3607d74055a467dda403e8ca71/images/5cc4e37a1b2149349698014f9cadc772.png"
+    },
+    {
+      "name": "Air Travel",
+      "slug": "air-travel",
+      "iata": "A6",
+      "icao": "OTC",
+      "aliases": [
+        "湖南航空",
+        "湖南航"
+      ],
+      "type": "icon",
+      "file": "air-travel.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202403/eae12e1f3d15433a835d7abee92501c5/images/dfee6ebef77945ad9703908fa9855c68.png"
+    },
+    {
+      "name": "Beijing Capital Airlines",
+      "slug": "beijing-capital-airlines",
+      "iata": "JD",
+      "icao": "CBJ",
+      "aliases": [
+        "首都航空",
+        "北京首都航空"
+      ],
+      "type": "icon",
+      "file": "beijing-capital-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202403/1bffbee0309f46e59dcd839566fdc5ec/images/89db17fdea3a4af7bffc2be1db105ad7.png"
+    },
+    {
+      "name": "Chengdu Airlines",
+      "slug": "chengdu-airlines",
+      "iata": "EU",
+      "icao": "UEA",
+      "aliases": [
+        "成都航空",
+        "成都航"
+      ],
+      "type": "icon",
+      "file": "chengdu-airlines.svg",
+      "source": "https://www.cdal.com.cn/stdair/airline/eu/images/logo.png"
+    },
+    {
+      "name": "China Express Airlines",
+      "slug": "china-express-airlines",
+      "iata": "G5",
+      "icao": "HXA",
+      "aliases": [
+        "华夏航空",
+        "华夏航"
+      ],
+      "type": "icon",
+      "file": "china-express-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/420e7f8a9937442b9b7a12e1575685df/images/7abb76a007e4493c98bf13555cda8475.png"
+    },
+    {
+      "name": "China United Airlines",
+      "slug": "china-united-airlines",
+      "iata": "KN",
+      "icao": "CUA",
+      "aliases": [
+        "中国联合航空",
+        "中国联航"
+      ],
+      "type": "icon",
+      "file": "china-united-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/c5072eba69f445f8b2b46984dc68cd40/images/a9e8729917e9450cb1502e8fc68ae24a.png"
+    },
+    {
+      "name": "Chongqing Airlines",
+      "slug": "chongqing-airlines",
+      "iata": "OQ",
+      "icao": "CQN",
+      "aliases": [
+        "重庆航空",
+        "重庆航"
+      ],
+      "type": "icon",
+      "file": "chongqing-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/3442db05553c43208d97ecc315dc7a21/images/0a8ac6996fe64a77beb72f76909d8a20.png"
+    },
+    {
+      "name": "Colorful Guizhou Airlines",
+      "slug": "colorful-guizhou-airlines",
+      "iata": "GY",
+      "icao": "CGZ",
+      "aliases": [
+        "多彩贵州航空",
+        "多彩贵州"
+      ],
+      "type": "icon",
+      "file": "colorful-guizhou-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202208/fbff81efafff465dadda0dfe88cfbd6c/images/107e802a34324673960d9beff4cfbd75.png"
+    },
+    {
+      "name": "Donghai Airlines",
+      "slug": "donghai-airlines",
+      "iata": "DZ",
+      "icao": "EPA",
+      "aliases": [
+        "东海航空",
+        "东海航"
+      ],
+      "type": "icon",
+      "file": "donghai-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/8e529bb400f847b9936ad25250f43405/images/2dee090a955b44889b780de9a45fe882.png"
+    },
+    {
+      "name": "Fuzhou Airlines",
+      "slug": "fuzhou-airlines",
+      "iata": "FU",
+      "icao": "FZA",
+      "aliases": [
+        "福州航空",
+        "福州航"
+      ],
+      "type": "icon",
+      "file": "fuzhou-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/ccc2a811e5f94b629ab7998dab5a49eb/images/52a82d9133bb49f781f7c5216c3c424b.png"
+    },
+    {
+      "name": "GX Airlines",
+      "slug": "gx-airlines",
+      "iata": "GX",
+      "icao": "CBG",
+      "aliases": [
+        "北部湾航空",
+        "广西北部湾航空"
+      ],
+      "type": "logo",
+      "file": "gx-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/049daf6b6f714674914b79c9b0c75c1f/images/d7895c9d8b0b45b79608d472809155c1.png"
+    },
+    {
+      "name": "Hebei Airlines",
+      "slug": "hebei-airlines",
+      "iata": "NS",
+      "icao": "HBH",
+      "aliases": [
+        "河北航空",
+        "河北航"
+      ],
+      "type": "icon",
+      "file": "hebei-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/acfe2197ba6d46d5ade34bd4f243826c/images/a015756587164ca1b7fa1630880eee3d.png"
+    },
+    {
+      "name": "Jiangxi Air",
+      "slug": "jiangxi-air",
+      "iata": "RY",
+      "icao": "CJX",
+      "aliases": [
+        "江西航空",
+        "江西航"
+      ],
+      "type": "icon",
+      "file": "jiangxi-air.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/3da8ffa5286d4ba6b0719e1714033cec/images/c0e77863ab21405c9d7c3450bbbcdfa7.png"
+    },
+    {
+      "name": "Kunming Airlines",
+      "slug": "kunming-airlines",
+      "iata": "KY",
+      "icao": "KNA",
+      "aliases": [
+        "昆明航空",
+        "昆明航"
+      ],
+      "type": "icon",
+      "file": "kunming-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/c4c38d9161d7416792005c2ab74848ce/images/6f536f3b22144b72894fb1c2421c6456.png"
+    },
+    {
+      "name": "LJ Air",
+      "slug": "lj-air",
+      "iata": "LT",
+      "icao": "SNG",
+      "aliases": [
+        "龙江航空",
+        "龙江航"
+      ],
+      "type": "icon",
+      "file": "lj-air.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202208/75959d8b4f474cbab22b5995b2481b75/images/bd910a32c3854539abb5e2ebfa409803.png"
+    },
+    {
+      "name": "Loong Air",
+      "slug": "loong-air",
+      "iata": "GJ",
+      "icao": "CDC",
+      "aliases": [
+        "长龙航空",
+        "浙江长龙航空"
+      ],
+      "type": "icon",
+      "file": "loong-air.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/f4dff1615bcb4bb287f938ca692a0482/images/cc4fa1a048b0445c801e787b99de2306.png"
+    },
+    {
+      "name": "Lucky Air",
+      "slug": "lucky-air",
+      "iata": "8L",
+      "icao": "LKE",
+      "aliases": [
+        "祥鹏航空",
+        "祥鹏航"
+      ],
+      "type": "icon",
+      "file": "lucky-air.svg",
+      "source": "https://www.luckyair.net/_next/static/media/logo.8L.c23b3b5d.png"
+    },
+    {
+      "name": "Okay Airways",
+      "slug": "okay-airways",
+      "iata": "BK",
+      "icao": "OKA",
+      "aliases": [
+        "奥凯航空",
+        "奥凯航"
+      ],
+      "type": "icon",
+      "file": "okay-airways.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/38c73a555de34f23b68d3dfc1b9e4329/images/165ef70b7bd4413f867f58167340af1e.png"
+    },
+    {
+      "name": "Qingdao Airlines",
+      "slug": "qingdao-airlines",
+      "iata": "QW",
+      "icao": "QDA",
+      "aliases": [
+        "青岛航空",
+        "青岛航"
+      ],
+      "type": "icon",
+      "file": "qingdao-airlines.svg",
+      "source": "https://www.qdairlines.com/favicon.ico"
+    },
+    {
+      "name": "Ruili Airlines",
+      "slug": "ruili-airlines",
+      "iata": "DR",
+      "icao": "RLH",
+      "aliases": [
+        "瑞丽航空",
+        "苏南瑞丽航空"
+      ],
+      "type": "icon",
+      "file": "ruili-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202403/50e1584e483d43dbae52f324ff553a24/images/48815f340438459484b4d3b1007149a2.jpeg"
+    },
+    {
+      "name": "Spring Airlines",
+      "slug": "spring-airlines",
+      "iata": "9C",
+      "icao": "CQH",
+      "aliases": [
+        "春秋航空",
+        "中国春秋航空"
+      ],
+      "type": "icon",
+      "file": "spring-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/8466c9b403b14de1a1d9e51422c2029b/images/73065cbe6d6c40d9a381d2f745053df8.png"
+    },
+    {
+      "name": "Suparna Airlines",
+      "slug": "suparna-airlines",
+      "iata": "Y8",
+      "icao": "YZR",
+      "aliases": [
+        "金鹏航空",
+        "金鹏航"
+      ],
+      "type": "icon",
+      "file": "suparna-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/e9fa0b6bfb414ecc85a1471a37b22052/images/6b06b0a212bb48579a0bfd10011c04da.png"
+    },
+    {
+      "name": "Tianjin Airlines",
+      "slug": "tianjin-airlines",
+      "iata": "GS",
+      "icao": "GCR",
+      "aliases": [
+        "天津航空",
+        "天津航"
+      ],
+      "type": "icon",
+      "file": "tianjin-airlines.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/71e1ebd8a05c40a3ba3a7e1af4ed4c82/images/74c6d95c23d8448488bc1910f41cc248.png"
+    },
+    {
+      "name": "Urumqi Air",
+      "slug": "urumqi-air",
+      "iata": "UQ",
+      "icao": "CUH",
+      "aliases": [
+        "乌鲁木齐航空",
+        "乌鲁木齐航"
+      ],
+      "type": "icon",
+      "file": "urumqi-air.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/6e95f27eb3df4116a95b0f82da61e945/images/4f72c1d821c64e2bb13898c786bfc4cc.png"
+    },
+    {
+      "name": "West Air",
+      "slug": "west-air",
+      "iata": "PN",
+      "icao": "CHB",
+      "aliases": [
+        "西部航空",
+        "西部航"
+      ],
+      "type": "icon",
+      "file": "west-air.svg",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/5db37144e96145f5a4cfe6bfd05ece32/images/8acde515bffd4bacba4747c8fc632425.png"
+    },
+    {
+      "name": "Xizang Airlines",
+      "slug": "xizang-airlines",
+      "iata": "TV",
+      "icao": "TBA",
+      "aliases": [
+        "Tibet Airlines",
+        "西藏航空",
+        "西藏航",
+        "藏航"
+      ],
+      "type": "icon",
+      "file": "xizang-airlines.svg",
+      "source": "https://www.tibetairlines.com.cn/stdair/airline/tv/images/logo.png"
     }
   ]
 }

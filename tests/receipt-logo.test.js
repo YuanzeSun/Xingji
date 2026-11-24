@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Resvg } from '@resvg/resvg-js';
 import { JSDOM } from 'jsdom';
 import { createRecord, archive, readArchive } from '../src/model.js';
 import { reviewTicketImport } from '../src/ticket-import-review.js';
@@ -66,15 +67,31 @@ test('refund fee survives OCR and JSON without merging into the original journey
 });
 
 test('the unified local SVG library matches explicit airline names and codes, without flight-prefix guesses', () => {
-  assert.equal(Object.keys(AIRLINE_LOGOS).length, 153);
+  assert.equal(Object.keys(AIRLINE_LOGOS).length, 180);
   for (const name of ['国航', '中国国际航空', 'Air China', 'ca', 'CCA', '中国国际航空股份有限公司']) assert.equal(airlineLogo(name)?.code, 'CA');
   for (const [name, code] of [['中国东方航空','MU'],['南航','CZ'],['海南航空','HU'],['吉祥航空','HO'],['厦航','MF'],['Cathay Pacific','CX'],['Singapore Airlines','SQ'],['ANA','NH']]) assert.equal(airlineLogo(name)?.code, code, name);
+  for (const name of ['西藏航空', '西藏航空有限公司', '藏航', 'Tibet Airlines', 'Xizang Airlines', 'TV', 'TBA']) assert.equal(airlineLogo(name)?.code, 'TV', name);
   assert.equal(airlineLogo('不存在的航空'), null); assert.equal(airlineLogo('SL'), null);
-  const record = createRecord({ type:'flight', template:'air-boarding-pass', airline:'国航', origin:'PEK', destination:'HND', service:'CA181' });
+  const record = createRecord({ type:'flight', template:'air-boarding-pass', airline:'国航', origin:'PEK', destination:'HND', service:'CA181', departureTime:'08:40' });
   const before = JSON.stringify(record), svg = ticketSVG(record), doc = new JSDOM(svg, { contentType:'image/svg+xml' }).window.document;
-  assert.ok(doc.querySelector('[data-airline-logo="CA"] image').getAttribute('href').startsWith('data:image/svg+xml;base64,'));
+  const header = doc.querySelector('[data-airline-logo="CA"] image').getAttribute('href');
+  assert.ok(header.startsWith('data:image/svg+xml;base64,'));
+  assert.equal(doc.querySelector('[data-airline-watermark="CA"] image').getAttribute('href'), header);
+  assert.deepEqual([...doc.querySelectorAll('path[data-boarding-pen]')].map(path => path.getAttribute('data-boarding-pen')), ['destination', 'departure']);
   assert.equal(doc.querySelectorAll('image[href^="http"]').length, 0);
   assert.doesNotMatch(ticketSVG({ ...record, airline:'' }), /data-airline-logo=/);
-  assert.doesNotMatch(ticketSVG({ ...record, airline:'未知航空' }), /data-airline-logo=/);
+  assert.doesNotMatch(ticketSVG({ ...record, airline:'未知航空' }), /data-airline-(?:logo|watermark)=/);
+  assert.doesNotMatch(ticketSVG({ ...record, departureTime:'', destination:'', destinationCode:'' }), /data-boarding-pen=/);
   assert.equal(JSON.stringify(record), before);
+});
+
+test('every embedded airline mark uses the same square SVG and retains transparent space', () => {
+  for (const [slug, { image }] of Object.entries(AIRLINE_LOGOS)) {
+    const svg = Buffer.from(image.split(',')[1], 'base64');
+    assert.match(svg.toString(), /viewBox="0 0 24 24"/, slug);
+    const { pixels } = new Resvg(svg, { font: { loadSystemFonts: false } }).render();
+    assert.equal(pixels.length, 24 * 24 * 4, slug);
+    const corners = [0, 23, 23 * 24, 24 * 24 - 1];
+    assert.ok(corners.some(index => pixels[index * 4 + 3] === 0), slug);
+  }
 });

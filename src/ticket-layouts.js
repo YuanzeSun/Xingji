@@ -272,6 +272,12 @@ function supplement(r) {
     ${renderTicketCode(r, 724, 417, 132)}
   </g>`;
 }
+function boardingPenCircle(field, x, y, width, height, reverse = false) {
+  const at = (u, v) => `${(x + width * (reverse ? 1 - u : u)).toFixed(1)} ${(y + height * v).toFixed(1)}`;
+  const outline = `M${at(.79,.15)} C${at(.60,-.09)} ${at(.23,-.04)} ${at(.09,.20)} S${at(-.03,.78)} ${at(.16,.90)} C${at(.41,1.08)} ${at(.84,.98)} ${at(.96,.68)} S${at(.92,.12)} ${at(.71,.05)}`;
+  return `<path data-boarding-pen="${field}" aria-hidden="true" d="${outline}" fill="none" stroke="#394b73" stroke-width="3" stroke-linecap="round" opacity=".79"/>`;
+}
+
 function flight(r) {
   const presentation = boardingPresentation(r), words = presentation.words;
   const inactive = isInactiveFlight(r), open = r.flightStatus === 'open';
@@ -292,17 +298,25 @@ function flight(r) {
   const logo = airlineLogo(r.airline), headingX = logo ? 100 : 34;
   const mainHeading = airportHeading(departureAirport, headingX, 460, 25, 2);
   const stubHeading = airportHeading(departureAirport, 1065, 275, 19, 3);
-  const routeName = (side, x) => {
-    const name = presentation[side] || '—';
-    if (textUnits(name) * 16 <= 190) return printed(x, 293, name, 25, 190, 'TicketHei,TicketLatin');
+  const routeName = (value, x) => {
+    const name = value || '—', units = textUnits(name);
+    if (units * 16 <= 190) return { markup: printed(x, 293, name, 25, 190, 'TicketHei,TicketLatin'), width: Math.min(units * 25, 190), top: 264 };
     const lines = wrapText(name, 190 / 18);
     if (lines.length > 2) {
       const ending = [...lines.slice(1).join(' ')];
       while (textUnits(ending.join('') + '…') * 18 > 190) ending.pop();
       lines.splice(1, lines.length - 1, ending.join('') + '…');
     }
-    return `<g aria-label="${esc(name)}">${lines.map((line, i) => text(x, 281 + i * 21, line, 18, 'TicketHei,TicketLatin,TicketArabic')).join(' ')}</g>`;
+    return {
+      markup: `<g aria-label="${esc(name)}">${lines.map((line, i) => text(x, 281 + i * 21, line, 18, 'TicketHei,TicketLatin,TicketArabic')).join(' ')}</g>`,
+      width: Math.max(...lines.map(line => textUnits(line) * 18)), top: 251
+    };
   };
+  const originName = routeName(presentation.origin, 35), destinationName = routeName(presentation.destination, 265);
+  const destinationWidth = Math.max(destinationName.width, textUnits(r.destinationCode || '') * 18);
+  const destinationMark = presentation.destination || r.destinationCode
+    ? boardingPenCircle('destination', 248, destinationName.top, Math.max(68, destinationWidth + 38), (r.destinationCode ? 332 : 307) - destinationName.top) : '';
+  const departureMark = r.departureTime ? boardingPenCircle('departure', 695, 309, 131, 43, true) : '';
   const codeSize = r.boardingCode ? boardingCodeSize(r.boardingCode) : null;
   const portraitCode = codeSize && codeSize.height > codeSize.width * 1.5;
   const code = !codeSize ? '' : portraitCode
@@ -310,8 +324,9 @@ function flight(r) {
     : `<g data-boarding-code-position="horizontal">${renderBoardingCode(r, 35, 350, 394, 82)}</g>`;
   return `<g data-boarding-language="${presentation.language}" lang="${presentation.language === 'zh' ? 'zh-CN' : 'en'}"><rect width="1230" height="500" rx="3" fill="#fffdf6"/>
   <path d="M3 0h1224q3 0 3 3v61H0V3q0-3 3-3" fill="#304b58"/>
+  ${logo ? `<svg data-airline-watermark="${logo.code}" x="0" y="64" width="1230" height="436" overflow="hidden" aria-hidden="true"><image x="475" y="-150" width="748" height="730" preserveAspectRatio="xMidYMid meet" opacity=".12" href="${logo.image}"/></svg>` : ''}
   <path d="M900 66v426" stroke="#a2a49b" stroke-dasharray="3 5" stroke-width="1"/>
-  ${logo ? `<metadata>Airline mark: Soaring Symbols 0.4.1; https://github.com/soaring-symbols/soaring-symbols. Marks belong to their respective airlines.</metadata><g data-airline-logo="${logo.code}" role="img" aria-label="${esc(logo.name)} 标志"><title>${esc(logo.name)}</title><rect x="30" y="8" width="48" height="48" rx="3" fill="#fff"/><image x="34" y="12" width="40" height="40" preserveAspectRatio="xMidYMid meet" href="${logo.image}"/></g>` : ''}
+  ${logo ? `<metadata>Airline mark: ${esc(logo.source || 'Soaring Symbols 0.4.1 (https://github.com/soaring-symbols/soaring-symbols)')}. Marks belong to their respective airlines.</metadata><g data-airline-logo="${logo.code}" role="img" aria-label="${esc(logo.name)} 标志"><title>${esc(logo.name)}</title><rect x="30" y="8" width="48" height="48" rx="3" fill="#fff"/><image x="34" y="12" width="40" height="40" preserveAspectRatio="xMidYMid meet" href="${logo.image}"/></g>` : ''}
   <g fill="#fffdf6" data-boarding-header="true">${mainHeading.markup}${printed(headingX, mainHeading.multiline ? 61 : 52, presentation.airline, mainHeading.multiline ? 9 : 12, 460, 'TicketHei,TicketLatin')}${text(869, 42, words.title, 20, 'TicketHei', 'text-anchor="end"')}${stubHeading.markup}${text(1065, stubHeading.multiline ? 61 : 49, words.title, stubHeading.multiline ? 9 : 12, 'TicketHei', 'text-anchor="middle"')}</g>
   <g fill="#1a2022" transform="translate(${Number(r.offsetX) || 0} ${Number(r.offsetY) || 0})">
     <g data-boarding-section="main">
@@ -319,7 +334,7 @@ function flight(r) {
       ${label(35, 181, words.flight)}${printed(35, 215, service, 29, 165)}
       ${label(233, 181, words.date)}${printed(233, 215, date(r.departureDate) || (open ? 'OPEN' : ''), 25, 212)}
       ${label(35, 260, words.from)}${label(265, 260, words.to)}
-      ${routeName('origin', 35)}${routeName('destination', 265)}
+      ${originName.markup}${destinationName.markup}
       ${printed(35, 321, r.originCode, 18, 190)}${printed(265, 321, r.destinationCode, 18, 183)}
       <g data-route-plane="right" transform="translate(238 285) scale(.24)"><path d="M30 0C30-2 26-3 20-3H6L-10-23H-17L-9-3H-22L-29-10H-34L-29 0L-34 10H-29L-22 3H-9L-17 23H-10L6 3H20C26 3 30 2 30 0Z" fill="#4a5557"/></g>
       ${label(510, 100, words.gate)}${printed(510, 147, r.gate, 39, 155)}
@@ -333,6 +348,7 @@ function flight(r) {
       ${inactive ? `<g data-flight-status="${r.flightStatus}" aria-label="${statusLabel}" fill="#a04039"><rect x="510" y="429" width="355" height="29" rx="2" fill="none" stroke="#a04039" stroke-width="1.5"/>${text(687, 450, statusLabel, 21, 'TicketMono,TicketHei', 'text-anchor="middle"')}</g>` : ''}
       ${r.ticketNumber ? printed(35, 475, words.ticket + ' ' + r.ticketNumber, 17, 410) : ''}
       ${r.pnr ? printed(510, 475, words.pnr + ' ' + r.pnr, 17, 355) : ''}
+      ${destinationMark}${departureMark}
     </g>
     <g data-boarding-section="stub">
       ${label(930, 100, words.name)}${printed(930, 133, presentation.passenger, 22, 270)}

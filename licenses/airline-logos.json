@@ -1,7 +1,6 @@
 {
   "source": "https://github.com/soaring-symbols/soaring-symbols",
   "version": "0.4.1",
-  "checked": "2026-11-17",
   "notice": "The original catalogue is MIT licensed. Airline marks belong to their respective owners and are excluded from the library MIT and application licenses.",
   "images": [
     {
@@ -450,9 +449,10 @@
       "iata": "CM",
       "icao": "CMP",
       "asset": "copa-airlines.svg",
-      "type": "icon",
-      "bytes": 1790,
-      "sha256": "8c973cbb5ae96677b8275626f31947b9afb7f65ea46a8671eaae2596d5fdc6af"
+      "type": "logo",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/copa-airlines/logo.svg",
+      "bytes": 6688,
+      "sha256": "3006d89930ac570bac470a5cf3f74760d87e63fde2485929aaaa85d74e9a3ac2"
     },
     {
       "slug": "delta-air-lines",
@@ -468,9 +468,10 @@
       "iata": "U2",
       "icao": "EZY",
       "asset": "easyjet.svg",
-      "type": "icon",
-      "bytes": 784,
-      "sha256": "387c4ed30f08b630a8931f27bf5f245cae469d5e51579085406adec698fb0c40"
+      "type": "logo",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/easyjet/logo.svg",
+      "bytes": 3099,
+      "sha256": "10834b2bee847f93fe34a604b31830363368656dad0c62977cae9ae1115be5c6"
     },
     {
       "slug": "egyptair",
@@ -864,9 +865,10 @@
       "iata": "LL",
       "icao": "LVL",
       "asset": "level.svg",
-      "type": "icon",
-      "bytes": 178,
-      "sha256": "59037e3c3c4f33af8d2277cfddc9072fcb7b5c263247561b8abb213f15551991"
+      "type": "logo",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/level/logo.svg",
+      "bytes": 2652,
+      "sha256": "5cc3f6f6e35f4e4c177d2f61bbba8945e75a9981a0c6d89a21f5319d8b96097e"
     },
     {
       "slug": "lion-air",
@@ -918,9 +920,10 @@
       "iata": "DY",
       "icao": "NOZ",
       "asset": "norwegian-air-shuttle.svg",
-      "type": "icon",
-      "bytes": 2462,
-      "sha256": "f54633fbc5129302d4957417c8cd6a4d6b9bfda21f3127dad9a7fe8bff4b8f8c"
+      "type": "logo",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/norwegian-air-shuttle/logo.svg",
+      "bytes": 3318,
+      "sha256": "46d210f7501f63fb4a7876132922b9a8853d244b0bf1ecd43513d5e2cece669e"
     },
     {
       "slug": "oman-air",
@@ -1242,9 +1245,10 @@
       "iata": "UA",
       "icao": "UAL",
       "asset": "united-airlines.svg",
-      "type": "icon",
-      "bytes": 4223,
-      "sha256": "468fd4faa748a20d141b8a595ac9d1ffbe684bd6b2a134d63a7d86751b9de95c"
+      "type": "logo",
+      "source": "https://raw.githubusercontent.com/soaring-symbols/soaring-symbols/d17fee025427c2ca2c8ecc03b724a1257823ecf4/airlines/united-airlines/logo.svg",
+      "bytes": 5459,
+      "sha256": "dcd99a560753709edf9598bdee4ac6c16e81a6456b5ab09e79a6b1cf86ca5d5b"
     },
     {
       "slug": "vietjet-air",
@@ -1380,6 +1384,276 @@
       "type": "icon",
       "bytes": 526,
       "sha256": "15fa244fcd8f170fa3bcb72475d5e8e251ae71a5596db1212a0ded364081008c"
+    },
+    {
+      "slug": "9-air",
+      "iata": "AQ",
+      "icao": "JYH",
+      "asset": "9-air.svg",
+      "type": "icon",
+      "source": "https://www.9air.com/favicon.png",
+      "bytes": 2516,
+      "sha256": "89cc1777aa995655e1c3be90a028986e56fc68f15b2dfbaeeb6e7c194f54eac3"
+    },
+    {
+      "slug": "air-changan",
+      "iata": "9H",
+      "icao": "CGN",
+      "asset": "air-changan.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202403/80ac0c3607d74055a467dda403e8ca71/images/5cc4e37a1b2149349698014f9cadc772.png",
+      "bytes": 13676,
+      "sha256": "b83b00d04f9d58409f4f84aab2e1a5d1cc26aca871845d1993db2fae70e80e00"
+    },
+    {
+      "slug": "air-travel",
+      "iata": "A6",
+      "icao": "OTC",
+      "asset": "air-travel.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202403/eae12e1f3d15433a835d7abee92501c5/images/dfee6ebef77945ad9703908fa9855c68.png",
+      "bytes": 3591,
+      "sha256": "6849ce2ffe537a7be6aeca5e0a6906f8d37a5f83722f291581bf4c353f5eb2f1"
+    },
+    {
+      "slug": "beijing-capital-airlines",
+      "iata": "JD",
+      "icao": "CBJ",
+      "asset": "beijing-capital-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202403/1bffbee0309f46e59dcd839566fdc5ec/images/89db17fdea3a4af7bffc2be1db105ad7.png",
+      "bytes": 5789,
+      "sha256": "d57c47bceb2e042bb1a195053321bf08c879e1c16bc848ec1f0ba6d92d6d27f5"
+    },
+    {
+      "slug": "chengdu-airlines",
+      "iata": "EU",
+      "icao": "UEA",
+      "asset": "chengdu-airlines.svg",
+      "type": "icon",
+      "source": "https://www.cdal.com.cn/stdair/airline/eu/images/logo.png",
+      "bytes": 13018,
+      "sha256": "9fabe1c39fdc217b559070f1b601f09743ffb2667b2ad7696d585e4379394849"
+    },
+    {
+      "slug": "china-express-airlines",
+      "iata": "G5",
+      "icao": "HXA",
+      "asset": "china-express-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/420e7f8a9937442b9b7a12e1575685df/images/7abb76a007e4493c98bf13555cda8475.png",
+      "bytes": 3551,
+      "sha256": "525e4aa1b66d4ff6551a8311cb9f4288038b256381dc1b9542612ea11a1933a0"
+    },
+    {
+      "slug": "china-united-airlines",
+      "iata": "KN",
+      "icao": "CUA",
+      "asset": "china-united-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/c5072eba69f445f8b2b46984dc68cd40/images/a9e8729917e9450cb1502e8fc68ae24a.png",
+      "bytes": 5040,
+      "sha256": "307bdb6ac361e52e945790a533fb59cbed7e437c8dc8e133498ece2e09649637"
+    },
+    {
+      "slug": "chongqing-airlines",
+      "iata": "OQ",
+      "icao": "CQN",
+      "asset": "chongqing-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/3442db05553c43208d97ecc315dc7a21/images/0a8ac6996fe64a77beb72f76909d8a20.png",
+      "bytes": 5988,
+      "sha256": "b94e3e75f208c883a232395930b352de3b9e46704f23eecc679985b0e3226508"
+    },
+    {
+      "slug": "colorful-guizhou-airlines",
+      "iata": "GY",
+      "icao": "CGZ",
+      "asset": "colorful-guizhou-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202208/fbff81efafff465dadda0dfe88cfbd6c/images/107e802a34324673960d9beff4cfbd75.png",
+      "bytes": 18360,
+      "sha256": "df73a408d5a317249338489036c0bd641e8b4d8890cbd731141864dcfdd32da0"
+    },
+    {
+      "slug": "donghai-airlines",
+      "iata": "DZ",
+      "icao": "EPA",
+      "asset": "donghai-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/8e529bb400f847b9936ad25250f43405/images/2dee090a955b44889b780de9a45fe882.png",
+      "bytes": 8041,
+      "sha256": "23e94f3d41a24a20193fa9350463a9578da5201260ceb77bac76f6a5d6c61598"
+    },
+    {
+      "slug": "fuzhou-airlines",
+      "iata": "FU",
+      "icao": "FZA",
+      "asset": "fuzhou-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/ccc2a811e5f94b629ab7998dab5a49eb/images/52a82d9133bb49f781f7c5216c3c424b.png",
+      "bytes": 12732,
+      "sha256": "3c32809f0b593e92098f2a457fd2997dd5752f937930df71fbab06fddbdb7070"
+    },
+    {
+      "slug": "gx-airlines",
+      "iata": "GX",
+      "icao": "CBG",
+      "asset": "gx-airlines.svg",
+      "type": "logo",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/049daf6b6f714674914b79c9b0c75c1f/images/d7895c9d8b0b45b79608d472809155c1.png",
+      "bytes": 5018,
+      "sha256": "d564c0c6b2563b5f1d5b5832a3414ce83feeb305c2e7bfd16d0933a3ba8bffc7"
+    },
+    {
+      "slug": "hebei-airlines",
+      "iata": "NS",
+      "icao": "HBH",
+      "asset": "hebei-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/acfe2197ba6d46d5ade34bd4f243826c/images/a015756587164ca1b7fa1630880eee3d.png",
+      "bytes": 6786,
+      "sha256": "8eb306a60364c78ee3ce189128b9c8be61f6fba9b1158790da76896605f0231e"
+    },
+    {
+      "slug": "jiangxi-air",
+      "iata": "RY",
+      "icao": "CJX",
+      "asset": "jiangxi-air.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/3da8ffa5286d4ba6b0719e1714033cec/images/c0e77863ab21405c9d7c3450bbbcdfa7.png",
+      "bytes": 4257,
+      "sha256": "6942c6872f88503c282312e1c1fe97951d1a2aa89f049164e7b1f2b02069c662"
+    },
+    {
+      "slug": "kunming-airlines",
+      "iata": "KY",
+      "icao": "KNA",
+      "asset": "kunming-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/c4c38d9161d7416792005c2ab74848ce/images/6f536f3b22144b72894fb1c2421c6456.png",
+      "bytes": 4586,
+      "sha256": "f3603e734578a81b1ad7e484e6d483f1579002f4907b7e294635c6bcffb166ee"
+    },
+    {
+      "slug": "lj-air",
+      "iata": "LT",
+      "icao": "SNG",
+      "asset": "lj-air.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202208/75959d8b4f474cbab22b5995b2481b75/images/bd910a32c3854539abb5e2ebfa409803.png",
+      "bytes": 3728,
+      "sha256": "7a4ebd14287c041a8ac7cba9321961dce9971804e0e375ecf3aa57f1ef54e433"
+    },
+    {
+      "slug": "loong-air",
+      "iata": "GJ",
+      "icao": "CDC",
+      "asset": "loong-air.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/f4dff1615bcb4bb287f938ca692a0482/images/cc4fa1a048b0445c801e787b99de2306.png",
+      "bytes": 4948,
+      "sha256": "9c9e6b2046f73e0c7b98b14f5a2d124a40c50d3679d5634b1eb5c9d2260cf357"
+    },
+    {
+      "slug": "lucky-air",
+      "iata": "8L",
+      "icao": "LKE",
+      "asset": "lucky-air.svg",
+      "type": "icon",
+      "source": "https://www.luckyair.net/_next/static/media/logo.8L.c23b3b5d.png",
+      "bytes": 23540,
+      "sha256": "c3f81f357d5a547cdbcb1559ecff9edd03dccf5476d33ca69525a2bf01919624"
+    },
+    {
+      "slug": "okay-airways",
+      "iata": "BK",
+      "icao": "OKA",
+      "asset": "okay-airways.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/38c73a555de34f23b68d3dfc1b9e4329/images/165ef70b7bd4413f867f58167340af1e.png",
+      "bytes": 4249,
+      "sha256": "cc3e3fdf9b9be3ef6d3bfc1b71cdde462063c5267a66eb787badb1f4b36c7255"
+    },
+    {
+      "slug": "qingdao-airlines",
+      "iata": "QW",
+      "icao": "QDA",
+      "asset": "qingdao-airlines.svg",
+      "type": "icon",
+      "source": "https://www.qdairlines.com/favicon.ico",
+      "bytes": 4140,
+      "sha256": "056b4bbf5bb442aa9430fa2d5d7215004da75b9a0242fe4b8fb4bfe2049a0528"
+    },
+    {
+      "slug": "ruili-airlines",
+      "iata": "DR",
+      "icao": "RLH",
+      "asset": "ruili-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202403/50e1584e483d43dbae52f324ff553a24/images/48815f340438459484b4d3b1007149a2.jpeg",
+      "bytes": 11671,
+      "sha256": "9431932d94ff9c6b034be11e07f5ab032897ced363e18f3401fdedfca22143e3"
+    },
+    {
+      "slug": "spring-airlines",
+      "iata": "9C",
+      "icao": "CQH",
+      "asset": "spring-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/8466c9b403b14de1a1d9e51422c2029b/images/73065cbe6d6c40d9a381d2f745053df8.png",
+      "bytes": 3181,
+      "sha256": "2ad69d634030da8890e01af8e0f283c2f56a1a44d0710eec54e0c602207b08e4"
+    },
+    {
+      "slug": "suparna-airlines",
+      "iata": "Y8",
+      "icao": "YZR",
+      "asset": "suparna-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/e9fa0b6bfb414ecc85a1471a37b22052/images/6b06b0a212bb48579a0bfd10011c04da.png",
+      "bytes": 6388,
+      "sha256": "bf49c310771652b6c7f72f687089dca65cfc9c6ef96ecd375953975c665c9760"
+    },
+    {
+      "slug": "tianjin-airlines",
+      "iata": "GS",
+      "icao": "GCR",
+      "asset": "tianjin-airlines.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/71e1ebd8a05c40a3ba3a7e1af4ed4c82/images/74c6d95c23d8448488bc1910f41cc248.png",
+      "bytes": 5959,
+      "sha256": "ceff5179e3c23602014277ea843de829ef5a79e18aa41e8e692994e257502af9"
+    },
+    {
+      "slug": "urumqi-air",
+      "iata": "UQ",
+      "icao": "CUH",
+      "asset": "urumqi-air.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/6e95f27eb3df4116a95b0f82da61e945/images/4f72c1d821c64e2bb13898c786bfc4cc.png",
+      "bytes": 3867,
+      "sha256": "6b0e9cf578906b93ed53ed2f43e8989bfdd3cccd09b7b5743ac3d3dbef1f24bf"
+    },
+    {
+      "slug": "west-air",
+      "iata": "PN",
+      "icao": "CHB",
+      "asset": "west-air.svg",
+      "type": "icon",
+      "source": "https://www.szairport.com/szairport/hkgs/202008/5db37144e96145f5a4cfe6bfd05ece32/images/8acde515bffd4bacba4747c8fc632425.png",
+      "bytes": 3790,
+      "sha256": "45939ea58fd9e1f6391a94eb43eee3266e9896f358b233678c284c032396e8df"
+    },
+    {
+      "slug": "xizang-airlines",
+      "iata": "TV",
+      "icao": "TBA",
+      "asset": "xizang-airlines.svg",
+      "type": "icon",
+      "source": "https://www.tibetairlines.com.cn/stdair/airline/tv/images/logo.png",
+      "bytes": 4442,
+      "sha256": "9d9338d742c00fc89d75e881e1cc55e41e92f0746376303c0079a2390367a215"
     }
   ]
 }
