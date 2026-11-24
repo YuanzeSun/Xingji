@@ -564,7 +564,7 @@ select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-w
 @media(max-width:680px){.map-card .map-totals{padding:7px 8px}.map-card .map-totals>span{gap:4px;font-size:11px}.map-card .map-totals strong{font-size:18px}}
 
 .rail-line-name{pointer-events:none}.rail-line-name text{fill:#ffcf8e;stroke:#173047;paint-order:stroke;stroke-linejoin:round;font-family:inherit;font-weight:550}
-.editor-footer{flex-wrap:wrap}.editor-error{flex:0 0 100%;margin:0 0 6px;padding:12px 14px;border:1px solid #be493f;border-left:4px solid #a33229;border-radius:6px;background:#fff0ec;color:#8d2821;font-size:15px;line-height:1.6}.editor-error[hidden]{display:none}.field-invalid input:not([type="hidden"]),.field-invalid select{border-color:#b94135;background-color:#fff5f1}.field-invalid>span{color:#a33229}.receipt-refund-switch{grid-column:1/-1;margin:0 0 18px}.operation-status{display:flex;align-items:center;gap:10px;min-height:48px}form[aria-busy="true"] [type="submit"]{opacity:.85;cursor:wait}#editor-form .field{scroll-margin-top:110px;scroll-margin-bottom:160px}
+.editor-footer{flex-wrap:wrap}.editor-error{flex:0 0 100%;margin:0 0 6px;padding:12px 14px;border:1px solid #be493f;border-left:4px solid #a33229;border-radius:6px;background:#fff0ec;color:#8d2821;font-size:15px;line-height:1.6}.editor-error[hidden]{display:none}.field-invalid input:not([type="hidden"]),.field-invalid select{border-color:#b94135;background-color:#fff5f1}.field-invalid>span{color:#a33229}.operation-status{display:flex;align-items:center;gap:10px;min-height:48px}form[aria-busy="true"] [type="submit"]{opacity:.85;cursor:wait}#editor-form .field{scroll-margin-top:110px;scroll-margin-bottom:160px}
 .code-consistency{font-size:14px;line-height:1.6;color:#795520;background:#faf2df;border:1px solid #e7d7b4;border-radius:6px;padding:10px 12px;margin:12px 0}.code-consistency[hidden]{display:none}
 .editor-fields>.boarding-generator{margin-top:22px;border-top:1px solid var(--line);padding-top:18px}.boarding-generator fieldset{border:0;margin:0;padding:0;min-width:0}.boarding-generator fieldset:disabled{opacity:.55}.form-grid>[data-code-editor]{grid-column:1/-1;min-width:0;margin-bottom:20px}
 @media(max-width:680px){.editor-layout.flight-editor-layout{flex-direction:column}}
@@ -634,3 +634,9 @@ select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-w
 .rail-photo-entry>summary [data-rail-photo-lock]{margin-inline-start:6px}
 .rail-photo-entry fieldset{border:0;padding:0;margin:0;min-inline-size:0}
 .rail-photo-entry [data-rail-photo-status]:empty{display:none}
+
+.rail-ticket-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end;gap:4px 13px;margin-bottom:18px}
+.rail-ticket-options>.field{margin-bottom:0}
+.rail-ticket-flags{display:flex;flex-wrap:wrap;column-gap:14px}
+.rail-ticket-flags>.checkbox-row{margin:0;min-height:44px}
+@media(max-width:540px){.rail-ticket-options{grid-template-columns:1fr}}

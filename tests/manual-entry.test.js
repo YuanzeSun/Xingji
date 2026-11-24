@@ -22,6 +22,11 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.equal(document.querySelector('.editor-fields details:not(.rail-start-override):not(.rail-lookup-result):not([data-rail-photo-entry])'),null);
   assert.equal(document.querySelector('[data-rail-photo-entry]').open,false);
   assert.equal(document.querySelector('[data-code-editor]').tagName,'SECTION');
+  const ticketOptions=document.querySelector('.rail-ticket-options');
+  assert.equal(document.querySelector('[data-rail-photo-entry]').nextElementSibling,ticketOptions);
+  assert.ok(ticketOptions.querySelector('[name="template"]'));
+  assert.ok(ticketOptions.querySelector('[data-refund-receipt]'));
+  assert.ok(ticketOptions.querySelector('[data-rail-standing]'));
   assert.equal(document.querySelector('[name="template"]').value,'rail-receipt');
   assert.equal(document.querySelector('[name="departureDateYear"]').type,'number');
   const identity = document.querySelector('[name="identity"]');
