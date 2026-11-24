@@ -35,11 +35,13 @@
 
 ![登机牌详情、行李、起降时间和示例航迹](docs/images/boarding-pass-details.jpg)
 
-### 行程地图与铁路线
+### 行程地图与路线播放
 
-![行程地图](docs/images/journey-map.jpg)
+![年度行程逐段播放](docs/images/annual-journey-playback.gif)
 
-![G21 北京南至南京南，图中标注京沪高速线](docs/images/railway-line-names.png)
+![G21 从北京南到南京南，沿京沪高速线播放](docs/images/rail-route-playback.gif)
+
+![北京首都至东京羽田的示例飞行航迹播放](docs/images/flight-track-playback.gif)
 
 ### 数据统计
 
