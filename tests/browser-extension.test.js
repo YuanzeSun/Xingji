@@ -3,13 +3,16 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { supportsDesktopMcp } from '../src/device.js';
 
-test('the extension has no scripts and changes only the flight endpoint response for the app origin', async () => {
-  const manifest = JSON.parse(await readFile(new URL('../extensions/xingji-variflight/manifest.json', import.meta.url), 'utf8'));
-  const rules = JSON.parse(await readFile(new URL('../extensions/xingji-variflight/rules.json', import.meta.url), 'utf8'));
+test('the shared extension exposes the 12306 reader and scopes flight header changes to the Xingji origin', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../extensions/xingji-connector/manifest.json', import.meta.url), 'utf8'));
+  const rules = JSON.parse(await readFile(new URL('../extensions/xingji-connector/rules.json', import.meta.url), 'utf8'));
   assert.equal(manifest.manifest_version, 3);
-  assert.equal(manifest.background, undefined); assert.equal(manifest.content_scripts, undefined);
-  assert.deepEqual(manifest.permissions, ['declarativeNetRequestWithHostAccess']);
-  assert.deepEqual(manifest.host_permissions, ['https://yuanzesun.github.io/*', 'https://c-gw.variflight.com/*']);
+  assert.deepEqual(manifest.background, { service_worker: 'background.js', type: 'module' });
+  assert.equal(manifest.content_scripts, undefined);
+  assert.deepEqual(manifest.permissions, ['scripting', 'declarativeNetRequestWithHostAccess']);
+  assert.deepEqual(manifest.host_permissions, ['https://cx.12306.cn/*', 'https://yuanzesun.github.io/*', 'https://c-gw.variflight.com/*']);
+  assert.deepEqual(manifest.externally_connectable.matches, ['https://yuanzesun.github.io/Xingji/*']);
+  assert.deepEqual(manifest.declarative_net_request.rule_resources, [{ id: 'flight_session', enabled: true, path: 'rules.json' }]);
   assert.equal(rules.length, 1);
   assert.equal(rules[0].condition.urlFilter, '|https://c-gw.variflight.com/chat_message/mcp/api|');
   assert.deepEqual(rules[0].condition.initiatorDomains, ['yuanzesun.github.io']);

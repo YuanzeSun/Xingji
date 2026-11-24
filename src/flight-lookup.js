@@ -20,7 +20,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
   let disposed = false, busy = false, candidates = [], candidateStamp = '', cacheOwner = '', selectedKey = '';
   const stamp = () => { const record = getRecord(); return JSON.stringify(['type', 'service', 'departureDate', 'origin', 'originCode', 'destination', 'destinationCode'].map(field => record[field] || '')); };
   const validContext = original => !disposed && form.isConnected && canQuery() && desktop() && stamp() === original && getKey() === selectedKey;
-  if (!desktop()) { button.disabled = true; status.textContent = '飞常准查询需电脑端连接扩展'; }
+  if (!desktop()) { button.disabled = true; status.textContent = '飞常准查询需电脑端行迹连接扩展'; }
   function accept(index) {
     if (!validContext(candidateStamp) || !candidates[index]) { list.innerHTML = ''; status.textContent = '查询条件已改变，请重新查询'; return; }
     const previousRows = candidates, changes = flightCompletion(getRecord(), candidates[index]);
@@ -34,7 +34,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     if (busy || disposed || !canQuery()) return;
     list.innerHTML = ''; candidates = [];
     try {
-      if (!desktop()) throw new Error('请在电脑浏览器使用飞常准连接扩展查询');
+      if (!desktop()) throw new Error('请在电脑 Chrome 或 Edge 安装行迹连接扩展后查询');
       const request = flightQuery(getRecord()), key = getKey();
       if (!key) throw new Error('请先在“数据与同步”配置飞常准 Key');
       if (cacheOwner !== key) { cache.clear(); cacheOwner = key; }

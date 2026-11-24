@@ -6,13 +6,11 @@ function crc32(bytes) {
   for (const byte of bytes) { crc ^= byte; for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1)); }
   return (crc ^ 0xffffffff) >>> 0;
 }
-const extensionFiles = {
-  'xingji-variflight': ['manifest.json', 'rules.json', 'INSTALL.txt'],
-  'xingji-12306': ['manifest.json', 'background.js', 'read-trips.js', 'INSTALL.txt']
-};
-export async function extensionArchive(root, extension) {
+export async function extensionArchive(root) {
+  const extension = 'xingji-connector';
+  const files = ['manifest.json', 'background.js', 'read-trips.js', 'rules.json', 'INSTALL.txt', 'LICENSE'];
   const parts = [], directory = []; let offset = 0;
-  for (const name of [...extensionFiles[extension], 'LICENSE']) {
+  for (const name of files) {
     const source = await readFile(name === 'LICENSE' ? join(root, name) : join(root, 'extensions', extension, name), 'utf8');
     const bytes = Buffer.from(source.replace(/\r\n/g, '\n'));
     const filename = Buffer.from(extension + '/' + name), checksum = crc32(bytes);
@@ -21,6 +19,6 @@ export async function extensionArchive(root, extension) {
     const central = Buffer.alloc(46); central.writeUInt32LE(0x02014b50); central.writeUInt16LE(20, 4); central.writeUInt16LE(20, 6); central.writeUInt16LE(0x800, 8); central.writeUInt16LE(33, 14); central.writeUInt32LE(checksum, 16); central.writeUInt32LE(bytes.length, 20); central.writeUInt32LE(bytes.length, 24); central.writeUInt16LE(filename.length, 28); central.writeUInt32LE(offset, 42);
     directory.push(central, filename); offset += local.length + filename.length + bytes.length;
   }
-  const central = Buffer.concat(directory), end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50); end.writeUInt16LE(4, 8); end.writeUInt16LE(4, 10); end.writeUInt32LE(central.length, 12); end.writeUInt32LE(offset, 16);
+  const central = Buffer.concat(directory), end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50); end.writeUInt16LE(files.length, 8); end.writeUInt16LE(files.length, 10); end.writeUInt32LE(central.length, 12); end.writeUInt32LE(offset, 16);
   return Buffer.concat([...parts, central, end]);
 }

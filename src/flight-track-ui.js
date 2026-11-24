@@ -129,7 +129,7 @@ export function mountFlightTrack(container, record, { getKey, desktop, canSave, 
   }
 
   if (record.flightTrack) show(record.flightTrack);
-  else if (flightStr && !desktop()) status.textContent = '请在电脑浏览器使用飞常准连接扩展查询航迹。';
+  else if (flightStr && !desktop()) status.textContent = '请在电脑 Chrome 或 Edge 安装行迹连接扩展后查询航迹。';
   else if (flightStr && !getKey()) status.textContent = '请先在「数据与同步」配置飞常准 Key。';
   else if (flightStr) status.textContent = '查询使用你的飞常准账户额度。';
   queryButton.disabled = !flightStr || !desktop() || !getKey();

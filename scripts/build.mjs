@@ -23,9 +23,7 @@ await cp(join(root, 'LICENSE'), join(out, 'LICENSE'));
 await mkdir(join(out, 'licenses'), { recursive: true });
 for (const name of ['SOARING-SYMBOLS-MIT.txt', 'Arnie97-rail-qr-MIT.txt', 'airline-logos.json']) await cp(join(root, 'licenses', name), join(out, 'licenses', name));
 await mkdir(join(out, 'downloads'), { recursive: true });
-for (const extension of ['xingji-variflight', 'xingji-12306']) {
-  await writeFile(join(out, 'downloads', extension + '-extension.zip'), await extensionArchive(root, extension));
-}
+await writeFile(join(out, 'downloads/xingji-connector-extension.zip'), await extensionArchive(root));
 await mkdir(join(out, 'src'), { recursive: true });
 const styles = await readFile(join(root, 'src/styles.css'));
 const cssPath = `src/styles-${createHash('sha256').update(styles).digest('hex').slice(0, 12)}.css`;

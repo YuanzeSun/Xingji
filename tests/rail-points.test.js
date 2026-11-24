@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { unzipSync } from 'fflate';
-import { readTrips } from '../extensions/xingji-12306/read-trips.js';
+import { readTrips } from '../extensions/xingji-connector/read-trips.js';
 import { extensionArchive } from '../scripts/package-extension.mjs';
 import { RAIL_POINTS_EXTENSION, RAIL_POINTS_PAGE, railPointsRange, railPointsRecords } from '../src/rail-points.js';
 import { browser, until } from './helpers/d1-app.js';
@@ -12,16 +12,13 @@ import { prepareCloud } from './helpers/cloud.js';
 const ride = { date: '20261116', service: 'G21', originCode: 'VNP', destinationCode: 'AOH',
   seatClassCode: 'O', carriage: '05', passenger: '示例甲', orderNumber: 'E000000001' };
 
-test('the 12306 extension includes its worker and is available only to the Xingji page', async () => {
-  const manifest = JSON.parse(await readFile(new URL('../extensions/xingji-12306/manifest.json', import.meta.url), 'utf8'));
+test('the shared extension keeps the 12306 messaging ID and packages both integrations', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../extensions/xingji-connector/manifest.json', import.meta.url), 'utf8'));
   const digest = createHash('sha256').update(Buffer.from(manifest.key, 'base64')).digest('hex').slice(0, 32);
   const id = [...digest].map(digit => String.fromCharCode(97 + parseInt(digit, 16))).join('');
   assert.equal(id, RAIL_POINTS_EXTENSION);
-  assert.deepEqual(manifest.permissions, ['scripting']);
-  assert.deepEqual(manifest.host_permissions, ['https://cx.12306.cn/*']);
-  assert.deepEqual(manifest.externally_connectable.matches, ['https://yuanzesun.github.io/Xingji/*']);
-  const recordedFiles = Object.keys(unzipSync(await extensionArchive(process.cwd(), 'xingji-12306')));
-  assert.ok(['manifest.json', 'background.js', 'read-trips.js', 'INSTALL.txt'].every(file => recordedFiles.includes('xingji-12306/' + file)));
+  const recordedFiles = Object.keys(unzipSync(await extensionArchive(process.cwd())));
+  assert.deepEqual(recordedFiles, ['manifest.json', 'background.js', 'read-trips.js', 'rules.json', 'INSTALL.txt', 'LICENSE'].map(file => 'xingji-connector/' + file));
 });
 
 test('12306 reads the existing browser session, paginates, and returns trip fields only', async t => {
@@ -85,6 +82,8 @@ test('12306 results stay in review until a single user-selected trip is saved', 
   await import('../src/app.js');
   const action = '[data-action="rail-points"]';
   await until(() => document.querySelector(action)?.disabled === false);
+  assert.equal(document.querySelector(action).closest('section').querySelector('a[download]').getAttribute('href'),
+    document.querySelector('.desktop-flight-settings a[download]').getAttribute('href'));
   document.querySelector(action).click();
   await until(() => document.querySelector('#rail-points-form'));
   assert.equal(document.querySelector('#rail-points-form a').href, RAIL_POINTS_PAGE);

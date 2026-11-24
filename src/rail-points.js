@@ -32,7 +32,7 @@ export function railPointsRange(today = new Date()) {
 
 export function readRailPoints({ start, end }, runtime = globalThis.chrome?.runtime) {
   return new Promise((resolve, reject) => {
-    const missing = () => reject(new Error('请安装「行迹 · 12306 连接」扩展，然后刷新行迹。'));
+    const missing = () => reject(new Error('请安装「行迹 · 连接扩展」，然后刷新行迹。'));
     if (typeof runtime?.sendMessage !== 'function') { missing(); return; }
     runtime.sendMessage(RAIL_POINTS_EXTENSION, { action: 'readRailPoints', start, end }, result => {
       if (runtime.lastError || !result) { missing(); return; }
