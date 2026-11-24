@@ -2,6 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import {JSD
 import {prepareCloud} from './helpers/cloud.js';
 test('saving or receiving a shared MCP key never consumes quota; explicit refresh alone queries flights',async()=>{
  const dom=new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>',{url:'http://localhost/#data'}),{window}=dom;
+ Object.defineProperty(window.navigator,'userAgent',{value:'Mozilla/5.0 (Macintosh) Chrome/142.0',configurable:true});
  for(const key of ['window','document','location','history','sessionStorage','FormData'])Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true});
  Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});window.scrollTo=()=>{};
  window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
@@ -20,6 +21,7 @@ test('saving or receiving a shared MCP key never consumes quota; explicit refres
  const yearInput=document.querySelector('#flight-year');assert.equal(yearInput.value,String(new Date().getFullYear()));yearInput.value='2024';yearInput.dispatchEvent(new window.Event('input',{bubbles:true}));assert.equal(queries,0);
  assert.equal(document.querySelector('#flight-form [name="key"]').value,'initial-key');assert.equal(queries,0);
  assert.equal(document.querySelector('[aria-labelledby="travel-services-title"] a[download]').getAttribute('href'),'./downloads/xingji-connector-extension.zip');
+ assert.ok(document.querySelector('[aria-labelledby="travel-services-title"] [data-action="rail-points"]'));
  assert.deepEqual([...document.querySelectorAll('[aria-labelledby="archive-sync-title"] h3')].map(heading => heading.textContent), ['Cloudflare D1', 'GitHub 私有仓库']);
  let form=document.querySelector('#flight-form');form.elements.key.value='saved-once-key';form.dispatchEvent(new window.Event('input',{bubbles:true}));form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
  await wait(async()=>server.settings().flightMcpKey==='saved-once-key'&&!(await db.get('syncMeta')).pending&&!document.querySelector('#flight-form [name="key"]').disabled);
@@ -43,11 +45,16 @@ test('saving or receiving a shared MCP key never consumes quota; explicit refres
  assert.equal(document.querySelector('#flight-form [name="key"]').disabled,true);
  form=document.querySelector('#flight-form');form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,20));
  assert.equal((await db.get('settings')).flightMcpKey,'changed-on-other-device');assert.equal(queries,2);
- Object.defineProperty(navigator,'userAgent',{value:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',configurable:true});
- document.querySelector('[data-action="navigate"][data-page="archive"]').click();await wait(()=>document.querySelector('h1')?.textContent==='我的票据');
- document.querySelector('[data-action="navigate"][data-page="data"]').click();await wait(()=>document.querySelector('.data-layout'));
+ for (const userAgent of ['Mozilla/5.0 (Macintosh) Version/26.0 Safari/605.1.15', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)']) {
+   Object.defineProperty(navigator,'userAgent',{value:userAgent,configurable:true});
+   document.querySelector('[data-action="navigate"][data-page="archive"]').click();await wait(()=>document.querySelector('h1')?.textContent==='我的票据');
+   document.querySelector('[data-action="navigate"][data-page="data"]').click();await wait(()=>document.querySelector('.data-layout'));
+   assert.equal(document.querySelector('#travel-services-title'),null);
+   assert.equal(document.querySelector('[data-action="rail-points"]'),null);
+   assert.equal(document.querySelector('#flight-form'),null);
+ }
  const install=document.querySelector('.data-layout').firstElementChild;
  assert.ok(install.classList.contains('install-panel'));assert.match(install.textContent,/随身票夹.*Safari.*共享.*添加到主屏幕.*编辑操作/);
- assert.equal(document.querySelector('#flight-form'),null);assert.equal(document.querySelector('[data-action="flight-refresh"]'),null);assert.equal(queries,2);
+ assert.equal(queries,2);
  dom.window.close();
 });

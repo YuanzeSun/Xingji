@@ -20,8 +20,7 @@ import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, acti
 import { TicketImportReview } from './ticket-import-review.js';
 import { sharedSettings, sameSettings, maskedKey, wasUnlinked } from './shared-settings.js';
 import { watchAppUpdates } from './app-update.js';
-import { isBrowserConnectorInstalled } from './browser-connector.js';
-import { supportsDesktopMcp } from './device.js';
+import { isBrowserConnectorInstalled, supportsBrowserConnector } from './browser-connector.js';
 import { archiveResetMarkup, prepareArchiveReset, createPairedReset, matchesResetPair, continuePairedReset } from './archive-reset.js';
 import { ArchiveResetError, GitHubStore, synchronize } from './github.js';
 import { D1Store, workerURL } from './d1.js';
@@ -631,11 +630,10 @@ function flightSettingsPanel() {
   return `<section class="settings-provider desktop-flight-settings"><div class="panel-heading"><span class="panel-icon">${icon('plane')}</span><div><h3>飞常准历史行程</h3><p>按年手动查询</p></div></div><label class="field"><span>历史行程年份</span><input id="flight-year" type="number" inputmode="numeric" min="1900" max="${new Date().getFullYear()}" step="1" value="${e(state.flightYear)}" /></label><form id="flight-form"><label class="field"><span>个人MCP Key</span><input type="password" name="key" value="${e(state.flightKeyDraft ?? flightKey())}" autocomplete="off" data-setting-control /></label><p class="form-error" role="alert">${e(state.settingsError)}</p><div class="button-row flight-actions"><button class="button secondary" type="submit" data-setting-control>保存并同步</button><button class="button secondary" type="button" data-action="flight-refresh">${icon('refresh', imports.task?.kind === 'flight' ? 'spin' : '')}${imports.task?.kind === 'flight' ? '正在查询…' : '查询历史行程'}</button></div></form>${state.flightResult ? '<button class="text-button" data-action="flight-result">查看本次接口返回</button>' : ''}<a class="small-link" href="https://cmcp.variflight.com/tools/" target="_blank" rel="noopener noreferrer">平台文档与授权说明 ↗</a></section>`;
 }
 function railPointsPanel() {
-  if (!/Chrome\/|Chromium\/|Edg\//.test(navigator.userAgent)) return '';
   return `<section class="settings-provider"><div class="panel-heading"><span class="panel-icon">${icon('ticket')}</span><div><h3>12306 乘车记录</h3><p>铁路畅行会员</p></div></div><div class="button-row"><button type="button" class="button secondary" data-action="rail-points">从 12306 导入</button></div></section>`;
 }
 function travelServicesPanel() {
-  if (!supportsDesktopMcp()) return '';
+  if (!supportsBrowserConnector()) return '';
   return `<section class="panel" aria-labelledby="travel-services-title">
     <div class="panel-heading travel-services-heading"><div><h2 id="travel-services-title">行程服务</h2><p>连接扩展适用于电脑 Chrome 或 Edge</p></div><div class="button-row connector-controls"><a class="button secondary" href="./downloads/xingji-connector-extension.zip" download="行迹连接扩展.zip">下载行迹连接扩展</a><span class="status-pill connected" data-connector-installation role="status" ${connectorInstalled ? '' : 'hidden'}>已安装</span></div></div>
     <div class="settings-grid">${railPointsPanel()}${flightSettingsPanel()}</div>
@@ -933,7 +931,7 @@ function bindFlightTrackDetail(container, record) {
     return saved;
   };
   import('./flight-track-ui.js').then(({ mountFlightTrack }) => {
-    if (container.isConnected) flightTrackCleanup = mountFlightTrack(container, record, { getKey: flightKey, desktop: supportsDesktopMcp, canSave, save });
+    if (container.isConnected) flightTrackCleanup = mountFlightTrack(container, record, { getKey: flightKey, desktop: supportsBrowserConnector, canSave, save });
   }).catch(() => {
     if (container.isConnected) container.textContent = '航迹未能加载，请刷新后再试。';
   });
@@ -1252,7 +1250,7 @@ function editRecord(record = newPersonalRecord(), {
     } finally {lookupApplying=false;}
   }
   if (flight) flightLookupCleanup = bindFlightLookup(form, {
-    getRecord: () => draft, getKey: flightKey, canQuery: canWrite, desktop: supportsDesktopMcp, apply: applyEditorLookup,
+    getRecord: () => draft, getKey: flightKey, canQuery: canWrite, desktop: supportsBrowserConnector, apply: applyEditorLookup,
     applyTrack: track => { draft.flightTrack = track; editor.dirty = true; },
     onPending: trackLookup
   });
@@ -2056,7 +2054,7 @@ async function savePersonalProfile(event) {
   finally { state.saving = false; release(); render(); }
 }
 async function checkFlights() {
-  if (!supportsDesktopMcp()) return toast('请在电脑浏览器查询飞常准行程');
+  if (!supportsBrowserConnector()) return toast('请在电脑 Chrome 或 Edge 使用行迹连接扩展查询飞常准行程');
   if (!flightKey()) return;
   if (!navigator.onLine) return toast('请联网后查询历史行程', true);
   const task = startImport('flight');
@@ -2106,7 +2104,7 @@ function railPointsResults(records) {
   }).join('')}</ul>`;
 }
 function showRailPoints() {
-  if (!canWrite() || !navigator.onLine) return;
+  if (!supportsBrowserConnector() || !canWrite() || !navigator.onLine) return;
   const session = imports.railPoints;
   const available = railPointsRange();
   const { start, end } = session?.range || available;

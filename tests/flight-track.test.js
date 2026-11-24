@@ -47,6 +47,7 @@ test('flight tracks save with a lookup in the editor or from details and can rep
     url: 'http://localhost/#archive', pretendToBeVisual: true,
   });
   const { window } = dom;
+  Object.defineProperty(window.navigator, 'userAgent', { value: 'Mozilla/5.0 (Windows NT 10.0) Chrome/142.0', configurable: true });
   for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData']) {
     Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
   }

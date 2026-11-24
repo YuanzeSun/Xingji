@@ -7,6 +7,7 @@ import { createRecord } from '../src/model.js';
 
 test('optional profile saves partially, pre-fills new forms, preserves manual changes and never rewrites old tickets', async () => {
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>',{url:'http://localhost/#data'}), {window}=dom;
+  Object.defineProperty(window.navigator, 'userAgent', { value: 'Mozilla/5.0 (Windows NT 10.0) Chrome/142.0' });
   for (const key of ['window','document','location','history','sessionStorage','FormData','Image']) Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true});
   Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});
   Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});

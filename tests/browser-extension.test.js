@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { supportsDesktopMcp } from '../src/device.js';
-import { isBrowserConnectorInstalled } from '../src/browser-connector.js';
+import { isBrowserConnectorInstalled, supportsBrowserConnector } from '../src/browser-connector.js';
 
 test('the shared extension exposes the 12306 reader and scopes flight header changes to the Xingji origin', async () => {
   const manifest = JSON.parse(await readFile(new URL('../extensions/xingji-connector/manifest.json', import.meta.url), 'utf8'));
@@ -22,11 +21,14 @@ test('the shared extension exposes the 12306 reader and scopes flight header cha
   assert.ok(rules[0].action.responseHeaders.some(header => header.header === 'Access-Control-Expose-Headers' && header.operation === 'append' && header.value === 'Mcp-Session-Id'));
 });
 
-test('MCP is available on desktop browsers and hidden on Android, iPhone and iPad', () => {
-  assert.equal(supportsDesktopMcp({ userAgent: 'Mozilla/5.0 (Windows NT 10.0) Chrome/142', platform: 'Win32', maxTouchPoints: 10 }), true);
-  assert.equal(supportsDesktopMcp({ userAgent: 'Mozilla/5.0 (Macintosh) Chrome/142', platform: 'MacIntel', maxTouchPoints: 0 }), true);
-  for (const userAgent of ['Mozilla/5.0 (Linux; Android 15)', 'Mozilla/5.0 (iPhone; CPU iPhone OS 18)', 'Mozilla/5.0 (iPad; CPU OS 18)']) assert.equal(supportsDesktopMcp({ userAgent }), false);
-  assert.equal(supportsDesktopMcp({ userAgent: 'Mozilla/5.0 (Macintosh) Safari', platform: 'MacIntel', maxTouchPoints: 5 }), false);
+test('the shared connector supports desktop Chrome and Edge and excludes Safari and mobile browsers', () => {
+  assert.equal(supportsBrowserConnector({ userAgent: 'Mozilla/5.0 (Windows NT 10.0) Chrome/142', platform: 'Win32', maxTouchPoints: 10 }), true);
+  assert.equal(supportsBrowserConnector({ userAgent: 'Mozilla/5.0 (Macintosh) Chrome/142', platform: 'MacIntel', maxTouchPoints: 0 }), true);
+  assert.equal(supportsBrowserConnector({ userAgent: 'Mozilla/5.0 (Macintosh) Chrome/142 Safari/537.36 Edg/142' }), true);
+  for (const userAgent of ['Mozilla/5.0 (Linux; Android 15) Chrome/142 Mobile', 'Mozilla/5.0 (iPhone) CriOS/142', 'Mozilla/5.0 (iPad; CPU OS 18) EdgiOS/142', 'Mozilla/5.0 (Macintosh) Version/26.0 Safari/605.1.15', 'Mozilla/5.0 (X11) Firefox/145']) {
+    assert.equal(supportsBrowserConnector({ userAgent }), false, userAgent);
+  }
+  assert.equal(supportsBrowserConnector({ userAgent: 'Mozilla/5.0 (Macintosh) Chrome/142', platform: 'MacIntel', maxTouchPoints: 5 }), false);
 });
 
 test('connector status requires an acknowledgement from the installed worker', async t => {

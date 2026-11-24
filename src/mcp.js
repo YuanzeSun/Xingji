@@ -43,7 +43,7 @@ export class FlightConnector {
   async connect() {
     const initialized = await this.send('initialize', { protocolVersion: this.protocolVersion, capabilities: {}, clientInfo: { name: 'xingji', version: '1.0.0' } });
     this.protocolVersion = initialized?.protocolVersion || this.protocolVersion;
-    if (!this.session) throw new Error('请先在电脑 Chrome 或 Edge 安装并启用“行迹 · 飞常准连接”扩展，再刷新网页重试');
+    if (!this.session) throw new Error('请先在电脑 Chrome 或 Edge 安装并启用「行迹 · 连接扩展」，再刷新网页重试');
     await this.send('notifications/initialized', {}, true);
   }
   async #callTool(name, args, failure) {
