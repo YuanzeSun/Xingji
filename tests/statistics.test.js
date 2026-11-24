@@ -88,7 +88,7 @@ test('rail and flight travel times are totaled independently across dates, time 
 });
 
 test('statistics default to an unbounded start and today, compare dates only and respect edited bounds', () => {
-  assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railPowerSupplies:false, aircraftSubtypes:true, marketingAirlines:false });
+  assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railSubtypes:true, aircraftSubtypes:true, marketingAirlines:false });
   const rows = [rail({ id: 'past' }), flight({ id: 'today', departureDate: '2026-11-16', departureTime: '23:59' }), rail({ id: 'future', departureDate: '2026-11-17' }), rail({ id: 'deleted', deleted: true }), rail({ id: 'undated', departureDate: '' })];
   const result = statisticsRange(rows, range);
   assert.deepEqual(result.records.map(row => row.id), ['past', 'today']); assert.equal(result.omittedDates, 1);
@@ -323,18 +323,61 @@ test('rail ownership and aircraft subtype toggles change only their own rankings
 
 test('rail power supply grouping separates conventional coaches, preserves EMUs and survives switching pages',()=>{
   const rows=[rail({railModel:'25GDC600V'}),rail({railModel:'25GAC380V'}),rail({railModel:'25G',railPowerSupply:'DC600V'}),rail({railModel:'25G'}),rail({railModel:'CR400AF / CR400AF'}),rail({railModel:'25T',railPowerSupply:'DC600V',departureDate:'2200-01-01'}),rail({railModel:'25T',template:'rail-refund-receipt'})];
-  const before=JSON.stringify(rows),normal=journeyStatistics(rows,range),split=journeyStatistics(rows,{...range,railPowerSupplies:true});
+  const before=JSON.stringify(rows),normal=journeyStatistics(rows,{...range,railSubtypes:false}),split=journeyStatistics(rows,range);
   assert.deepEqual(normal.railModels,[{name:'25G',count:4},{name:'CR400AF',count:1}]);
-  assert.deepEqual(Object.fromEntries(split.railModels.map(row=>[row.name,row.count])),{'25G · DC600V':2,'25G · AC380V':1,'25G · 供电制式未知':1,CR400AF:1});
+  assert.deepEqual(Object.fromEntries(split.railModels.map(row=>[row.name,row.count])),{'25G · DC600V':2,'25G · AC380V':1,'25G':1,CR400AF:1});
   for(const key of ['rail','flight','railMileage','railMileageTrips','aircraft','railBureaus','airports','stations','routes'])assert.deepEqual(split[key],normal[key]);
   const dom=new JSDOM('<div id="root"></div>'),root=dom.window.document.querySelector('#root'),options={...range};let cleanup=mountStatistics(root,rows,{options});
-  const change=checked=>{const toggle=root.querySelector('[data-stat-option="railPowerSupplies"]');toggle.checked=checked;toggle.dispatchEvent(new dom.window.Event('change',{bubbles:true}));};
+  const change=checked=>{const toggle=root.querySelector('[data-stat-option="railSubtypes"]');toggle.checked=checked;toggle.dispatchEvent(new dom.window.Event('change',{bubbles:true}));};
   try{
-    assert.equal(root.querySelector('[data-stat-option="railPowerSupplies"]').checked,false);change(true);
+    assert.equal(root.querySelector('[data-stat-option="railSubtypes"]').checked,true);
     assert.match(root.querySelector('[data-stat-ranking="rail-models"]').textContent,/DC600V/);
-    cleanup();cleanup=mountStatistics(root,rows,{options});assert.equal(root.querySelector('[data-stat-option="railPowerSupplies"]').checked,true);
-    change(false);assert.doesNotMatch(root.querySelector('[data-stat-ranking="rail-models"]').textContent,/DC600V|AC380V|供电制式未知/);assert.equal(JSON.stringify(rows),before);
+    change(false);
+    cleanup();cleanup=mountStatistics(root,rows,{options});assert.equal(root.querySelector('[data-stat-option="railSubtypes"]').checked,false);
+    assert.doesNotMatch(root.querySelector('[data-stat-ranking="rail-models"]').textContent,/DC600V|AC380V/);assert.equal(JSON.stringify(rows),before);
   }finally{cleanup();dom.window.close();}
+});
+
+test('rail model statistics uses saved submodels, preserves compound labels and groups known variants on request', () => {
+  const date = journeyDate('2024-02-29');
+  const railJourney = {
+    query: { trainNum: 'D821', startDate: date, boardingDate: date, origin: '北京南', destination: '上海虹桥' },
+    queriedAt: '2024-02-29T00:00:00Z',
+    stops: [{ station: '北京南', departureDate: date, departureTime: '09:00' }, { station: '上海虹桥', arrivalDate: date, arrivalTime: '16:00' }],
+    trainsets: [{ id: 'CRH5G-5218', model: 'CRH5G', subModel: '技术提升型' }, { id: 'CRH5G-5229', model: 'CRH5G', subModel: '技术提升型' }],
+    coupling: true,
+  };
+  const rows = [
+    rail({ service: 'D821', railModel: 'CRH5G', railJourney }), rail({ railModel: 'ｃｒｈ５ｇ (技术提升)' }),
+    rail({ railModel: 'CRH5G' }), rail({ railModel: 'CRH5G（旧型）' }), rail({ railModel: 'CRH5A' }),
+    rail({ railModel: 'CRH2C1 / CRH2C一阶段 / CRH2C（一阶）' }),
+    rail({ railModel: 'CRH380A(统型,公务版) / CR400BF-GS' }), rail({ railModel: 'CR400BF-S / CR400BF-GS' }),
+    rail({ railModel: '25G (DC600V 供电)' }), rail({ railModel: '25T (BSP)', railPowerSupply: 'AC380V' }),
+    rail({ railModel: 'CR200J3-C / CR200J1-D' }), rail({ railModel: 'CRH6A-A / CRH6A' }),
+    rail({ railModel: '未知车型（说明）' }),
+  ];
+  const before = JSON.stringify(rows);
+  const counts = options => Object.fromEntries(journeyStatistics(rows, { ...range, ...options }).railModels.map(({ name, count }) => [name, count]));
+  assert.deepEqual(counts(), {
+    'CRH5G（技术提升型）': 2, CRH5G: 1, 'CRH5G（旧型）': 1, CRH5A: 1, 'CRH2C（一阶段）': 1,
+    'CRH380A（统型、公务版）': 1, 'CR400BF-GS': 2, 'CR400BF-S': 1, '25G · DC600V': 1, '25T（BSP） · AC380V': 1,
+    'CR200J3-C': 1, 'CR200J1-D': 1, 'CRH6A-A': 1, CRH6A: 1, '未知车型(说明)': 1,
+  });
+  assert.deepEqual(counts({ railSubtypes: false }), {
+    CRH5G: 4, CRH5A: 1, CRH2C: 1, CRH380A: 1, CR400BF: 2, '25G': 1, '25T': 1,
+    CR200J: 1, CRH6A: 1, '未知车型(说明)': 1,
+  });
+  const dom = new JSDOM('<div id="root"></div>'), root = dom.window.document.querySelector('#root');
+  const cleanup = mountStatistics(root, rows, { options: { ...range } });
+  try {
+    const subtype = root.querySelector('[data-stat-option="railSubtypes"]');
+    assert.equal(subtype.checked, true);
+    subtype.checked = false;
+    subtype.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    assert.doesNotMatch(root.querySelector('[data-stat-ranking="rail-models"]').textContent, /技术提升型|公务版|CR400BF-GS|DC600V|AC380V/);
+    assert.equal(root.querySelector('[data-stat-option="aircraftSubtypes"]').checked, true);
+    assert.equal(JSON.stringify(rows), before);
+  } finally { cleanup(); dom.window.close(); }
 });
 
 test('each ranking switches charts independently and keeps its grouping and date filters', () => {
@@ -366,9 +409,9 @@ test('each ranking switches charts independently and keeps its grouping and date
     assert.match(tail.querySelector('summary').textContent, /其他（2 项）2 次28\.6%/);
     assert.equal(tail.querySelectorAll('li').length, 2);
     assert.equal(card('aircraft').querySelector('.statistics-ring strong').textContent, '7');
-    change('[data-stat-option=railPowerSupplies]', { checked: true });
+    change('[data-stat-option=railSubtypes]', { checked: false });
     assert.equal(picked('rail-models'), 'columns');
-    assert.match(card('rail-models').textContent, /DC600V/);
+    assert.doesNotMatch(card('rail-models').textContent, /DC600V/);
     change('[data-stat-option=aircraftSubtypes]', { checked: false });
     assert.equal(picked('aircraft'), 'donut');
     assert.equal(card('aircraft').querySelector('.statistics-ring strong').textContent, '7');

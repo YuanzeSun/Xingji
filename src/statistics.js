@@ -15,7 +15,7 @@ function placesPanel(title, places, type) {
 }
 
 const rankings = {
-  'rail-models': { title: '乘坐车型', data: 'railModels', unit: '种', option: 'railPowerSupplies', label: '细分供电制式' },
+  'rail-models': { title: '乘坐车型', data: 'railModels', unit: '种', option: 'railSubtypes', label: '细分子型号' },
   'rail-bureaus': { title: '担当路局', data: 'railBureaus', unit: '个', option: 'railUnits', label: '细分车辆归属单位' },
   aircraft: { title: '乘坐机型', data: 'aircraft', unit: '种', option: 'aircraftSubtypes', label: '细分子型号', unknown: 'unknownAircraft', unknownLabel: '未识别机型' },
   airlines: { title: '乘坐航司', data: 'airlines', unit: '家', unknown: 'unknownAirlines', unknownLabel: '未识别航司' }

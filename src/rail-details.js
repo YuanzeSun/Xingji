@@ -29,7 +29,7 @@ export function splitRailModel(value = '') {
   const model=text.split(/\s*\/\s*/).map(part=>{
     if(/^(?:AC|DC)\s*\d+(?:\.\d+)?\s*V$/.test(part)){powers.push(normalizeRailPowerSupply(part));return '';}
     if(!/^25[A-Z]/.test(part))return part;
-    const cleaned=part.replace(/(?:AC|DC)\s*\d+(?:\.\d+)?\s*V/g,power=>{powers.push(normalizeRailPowerSupply(power));return '';}).replace(/\(\s*\)|（\s*）/g,'').trim();
+    const cleaned=part.replace(/((?:AC|DC)\s*\d+(?:\.\d+)?\s*V)(?:\s*供电)?/g,(_,power)=>{powers.push(normalizeRailPowerSupply(power));return '';}).replace(/\(\s*\)/g,'').trim();
     return cleaned;
   }).filter(Boolean).join(' / ');
   return {model,powerSupply:[...new Set(powers)].join(' / ')};

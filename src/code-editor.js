@@ -9,7 +9,7 @@ import {fieldSourceBadge,markFieldSources,railBarcodeFieldLocked,railCodeEntryLo
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
 import { codeCameraMarkup, bindCodeCamera } from './code-camera.js';
 import { renderCodeData } from './barcode-data.js';
-import { isLinearTicketCode, normalizeTicketCode } from './ticket-code.js';
+import { hasRailQRCode, isLinearTicketCode, normalizeTicketCode } from './ticket-code.js';
 import { normalizeBoardingCode } from './boarding-code.js';
 import { DEMO_BOARDING_CODE } from './demo-boarding-code.js';
 import { DEMO_RAIL_LINEAR_CODE, DEMO_RAIL_TICKET_CODE, DEMO_TICKET_CODE } from './demo-code.js';
@@ -18,7 +18,8 @@ import {escape as e} from './html.js';
 import {applyTicketIdentity} from './personal-profile.js';
 
 const configuration = record => record.type === 'flight' ? { field: 'boardingCode', normalize: normalizeBoardingCode } : { field: 'ticketCode', normalize: normalizeTicketCode };
-const removable = (record,field) => !!record[field] && record.boardingCodeSource!=='generated';
+const codeRemovalLocked = (record, editingSaved) => editingSaved && (record.type === 'flight' || hasRailQRCode(record));
+const removable = (record, field, editingSaved) => !codeRemovalLocked(record, editingSaved) && !!record[field] && record.boardingCodeSource !== 'generated';
 const thumbnail = code => code ? `${renderCodeData(code)}<span>已收录</span>` : '';
 let boardingExamples, railQRExample, railLinearExample;
 function boardingExamplesMarkup(hidden) {
@@ -40,7 +41,7 @@ export function ticketCodeEditor(record, { fromScan = false, editingSaved = fals
   const referenceButton = fromScan && !disabled ? `<button type="button" class="button small secondary" id="code-use-scan" ${record[field] ? 'hidden' : ''}>读取本次图片中的码</button>` : '';
   const upload = `<button type="button" class="button small secondary" data-code-upload${disabled}>上传图片</button><input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden${disabled} />`;
   const saved = normalize(record[field]);
-  const remove = flight && editingSaved ? '' : `<button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button>`;
+  const remove = codeRemovalLocked(record, editingSaved) ? '' : `<button type="button" class="button small secondary" id="code-remove" ${removable(record, field, editingSaved) ? '' : 'hidden'}>移除</button>`;
   const controls = `<div class="saved-code" id="saved-code" ${saved ? '' : 'hidden'}>${thumbnail(saved)}</div><div class="code-actions">${referenceButton}<button type="button" class="button small secondary" data-code-start${disabled}>相机扫描</button>${upload}${remove}</div>`;
   const scan = `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}</div>${flight ? boardingExamplesMarkup(record[field]) : railExampleMarkup(record)}</div>`;
   return `<section data-code-editor class="editor-extra${flight ? '' : ' full-field rail-code-entry'}" ${flight ? '' : 'data-rail-code-entry'} id="code-editor"><h3>${title}${fieldSourceBadge(field,record)}</h3>${scan}${codeCameraMarkup()}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
@@ -58,7 +59,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     saved.innerHTML = thumbnail(draft[field]);
     saved.hidden = !draft[field];
     const remove = find('code-remove');
-    if (remove) remove.hidden = !removable(draft,field);
+    if (remove) remove.hidden = !removable(draft, field, editingSaved);
     const reference = find('code-use-scan');
     if (reference) reference.hidden = !!draft[field];
     section.querySelector('[data-code-examples]').hidden = !!draft[field] || railCodeEntryLocked(draft);
@@ -176,6 +177,12 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
   function use(code) {
     if (!isCurrent()) return;
     if (flight) { useFlight(code); return; }
+    if (codeRemovalLocked(draft, editingSaved) && isLinearTicketCode(code.data)) {
+      reset();
+      status.textContent = '';
+      error.textContent = '已收录的二维码只能用二维码替换';
+      return;
+    }
     const previousRecord={...draft};
     draft[field] = normalize(code.data);
     markManualFields(draft,[field]);
@@ -275,7 +282,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
   photo.addEventListener('change', () => { const file = photo.files?.[0]; if (file) { onCameraStart?.(); camera.stop(); read(file); } });
   find('code-use-scan')?.addEventListener('click', () => readReference());
   find('code-remove')?.addEventListener('click', () => {
-    if((flight && editingSaved) || !removable(draft,field))return;
+    if (!removable(draft, field, editingSaved)) return;
     reset();
     if(!flight)draft.lockedFields=draft.lockedFields.filter(key=>!railBarcodeFieldLocked(draft,key));
     draft[field]='';

@@ -1059,7 +1059,7 @@ function editRecord(record, {
       ? '<input type="hidden" name="template" value="air-boarding-pass" />'
         + field('flightStatus', draft, { options: Object.entries(FLIGHT_STATUSES) })
         + ticketCodeEditor(draft, { editingSaved })
-      : ticketCodeEditor(draft, { fromScan:!!localFileURL }) + railReceiptControls() + railPhotoControls() + railTicketOptions(draft));
+      : ticketCodeEditor(draft, { fromScan:!!localFileURL, editingSaved }) + railReceiptControls() + railPhotoControls() + railTicketOptions(draft));
   const invoiceRows = railInvoiceDetails(draft.railInvoice);
   const invoiceDetails = invoiceRows.length ? `<details class="editor-extra"><summary>电子报销凭证资料</summary><dl class="detail-grid">${invoiceRows.map(([label, value]) => `<div><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`).join('')}</dl></details>` : '';
   const requiredHint = `<span class="editor-required-hint"><span><b class="required-mark" role="img" aria-label="红色星号">*</b> 保存必填</span><span><b class="required-mark barcode-required-mark" role="img" aria-label="蓝色星号">*</b> 生成${flight ? '条码' : '二维码'}必填</span></span>`;

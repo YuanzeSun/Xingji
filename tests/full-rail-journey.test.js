@@ -51,11 +51,11 @@ test('mileage matching permits absent arrival at the first station and departure
   assert.equal(result.railMileage,'1014');
   assert.equal(calendarDate(result.railJourney.stops[0].arrivalDate),'');assert.equal(result.railJourney.stops.at(-1).departureDate,'');
 });
-test('rolling stock model and explicit power supply are independent; identical models share one ranking',()=>{
+test('rolling stock model and explicit power supply are saved separately and can share one ranking',()=>{
   for(const [input,model,power] of [['25TDC600V','25T','DC600V'],['25GAC380V','25G','AC380V'],['25K','25K',''],['25B','25B',''],['CR400BF-A','CR400BF-A',''],['25T AC380V/DC600V','25T','AC380V / DC600V']])assert.deepEqual(splitRailModel(input),{model,powerSupply:power});
   const dc=ticket({railModel:'25GDC600V'}),ac=ticket({railModel:'25GAC380V'});
   assert.equal(dc.railModel,'25G');assert.equal(dc.railPowerSupply,'DC600V');assert.equal(ac.railPowerSupply,'AC380V');
-  const stats=journeyStatistics([dc,ac],{dateTo:'2026-11-17'});assert.deepEqual(stats.railModels,[{name:'25G',count:2}]);
+  const stats=journeyStatistics([dc,ac],{dateTo:'2026-11-17',railSubtypes:false});assert.deepEqual(stats.railModels,[{name:'25G',count:2}]);
 });
 test('rail mileage follows the statistics date range, omits missing distances and excludes refunds',()=>{
   const rows=[ticket({railMileage:'1014'}),ticket({railMileage:''}),ticket({railMileage:'999',departureDate:'2200-01-01'}),ticket({railMileage:'999',template:'rail-refund-receipt'})];

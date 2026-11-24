@@ -9,8 +9,8 @@ import { dateInterval } from './search.js';
 import { CONTINENT_AIRPORT_CODES } from './data/airport-geography.js';
 import { isJourneyRecord } from './record-kind.js';
 import { flightTrackDistanceKm } from './flight-track.js';
-import { normalizeRailBureau, normalizeRailModel, normalizeRailPowerSupply } from './rail-details.js';
-import { railJourneyMatches, railText, isEmuModel } from './rail-journey.js';
+import { normalizeRailBureau } from './rail-details.js';
+import { railModelsForRecord } from './rail-model-statistics.js';
 import { journeyMinutes } from './journey-duration.js';
 
 const CONTINENTS = Object.freeze({ AF: '非洲', AN: '南极洲', AS: '亚洲', EU: '欧洲', NA: '北美洲', OC: '大洋洲', SA: '南美洲' });
@@ -19,14 +19,6 @@ const airportContinents = new Map(Object.entries(CONTINENT_AIRPORT_CODES).flatMa
 const laoStations = new Set(['YTM', 'VBM', 'VJM', 'VFM', 'VCM', 'VOM']);
 const regionNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' });
 const compare = new Intl.Collator('zh-CN', { numeric: true }).compare;
-function railModelsForRecord(record, options) {
-  const model = railText(record.railModel);
-  const values = model ? [model] : railJourneyMatches(record) ? record.railJourney.trainsets.map(stock => railText(stock.model)) : [];
-  const models = values.flatMap(value => value.split(/[/、,，;；+]/)).map(normalizeRailModel).filter(Boolean);
-  if (!options.railPowerSupplies) return new Set(models);
-  const supply = normalizeRailPowerSupply(record.railPowerSupply || '') || '供电制式未知';
-  return new Set(models.map(model => isEmuModel(model) ? model : `${model} · ${supply}`));
-}
 export const countryName = code => code === 'CN' ? '中国' : regionNames.of(code) || code;
 export function todayDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -34,7 +26,7 @@ export function todayDate(date = new Date()) {
 export function statisticsOptions(input = {}, today = todayDate()) {
   const selectedEnd = input.dateTo || today;
   const dateTo = dateInterval(selectedEnd)?.end > today ? today : selectedEnd;
-  return { dateFrom: input.dateFrom ?? '', dateTo, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railPowerSupplies:input.railPowerSupplies === true, aircraftSubtypes:input.aircraftSubtypes !== false, marketingAirlines:input.marketingAirlines === true };
+  return { dateFrom: input.dateFrom ?? '', dateTo, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railSubtypes:input.railSubtypes !== false, aircraftSubtypes:input.aircraftSubtypes !== false, marketingAirlines:input.marketingAirlines === true };
 }
 
 export function statisticsRange(records, input = {}, today = todayDate()) {
