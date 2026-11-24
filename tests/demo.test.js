@@ -55,4 +55,7 @@ test('demo flights have independent boarding codes and cover the aircraft groupi
   const counts = grouping => Object.fromEntries(journeyStatistics(rows,{aircraftGrouping:grouping}).aircraft.map(({name,count})=>[name,count]));
   assert.deepEqual(counts('model'),{'737-800':2,'737 MAX 8':1,A321ceo:1,'A330-300':1});
   assert.deepEqual(counts('series'),{'737':3,A321:1,A330:1});
+  const mileage = journeyStatistics(rows, { dateTo: '2026-11-17' }, '2026-11-17');
+  assert.equal(mileage.actualFlightDistanceTrips, 1);
+  assert.ok(mileage.actualFlightDistance > 2000);
 });

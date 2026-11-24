@@ -3,8 +3,9 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { indexedDB } from 'fake-indexeddb';
 import { createRecord, validateRecord } from '../src/model.js';
-import { flightTrackRequest, readFlightTrack } from '../src/flight-track.js';
+import { flightTrackDistanceKm, flightTrackRequest, readFlightTrack } from '../src/flight-track.js';
 import { journeyNetwork, networkGeometry } from '../src/journey-map-model.js';
+import { journeyStatistics } from '../src/statistics-model.js';
 import { prepareCloud } from './helpers/cloud.js';
 
 const flight = createRecord({
@@ -109,6 +110,7 @@ test('flight tracks save with a lookup in the editor or from details and can rep
     assert.deepEqual(requests, [{ name: 'getFlightTrackLine', arguments: { flightStr } }]);
     assert.deepEqual(server.records()[0].flightTrack.segments, coordinates);
     assert.equal(server.records()[0].passenger, 'TEST/PASSENGER');
+    assert.match(element('[data-flight-track-source]').textContent, /航迹约 [\d,.]+ km/);
     const svg = element('.flight-track-frame svg'), [first, second] = svg.querySelectorAll('.flight-track-highlight path');
     assert.ok(Number(svg.getAttribute('viewBox').split(' ')[2]) < 400, 'fits across the date line');
     const cityLabels = [...svg.querySelectorAll('.route-city text')].map(label => label.textContent);
@@ -184,6 +186,10 @@ test('flight tracks save with a lookup in the editor or from details and can rep
     finishTrack();
     const savedFlight = await waitFor(() => server.records().find(record => record.service === 'MF8179'));
     assert.deepEqual(savedFlight.flightTrack.segments, domesticCoordinates);
+    const mileage = journeyStatistics(server.records(), { dateTo: '2026-11-24' }, '2026-11-24');
+    assert.equal(mileage.actualFlightDistanceTrips, 2);
+    const expected = flightTrackDistanceKm({ segments: coordinates }) + flightTrackDistanceKm({ segments: domesticCoordinates });
+    assert.equal(mileage.actualFlightDistance, expected);
     assert.deepEqual(requests.slice(1), [
       { name: 'getFlightStatus', arguments: { fnum: 'MF8179', date: '2026-08-11' } },
       { name: 'getFlightTrackLine', arguments: { flightStr: domesticFlightStr } },

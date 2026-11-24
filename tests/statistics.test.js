@@ -6,10 +6,44 @@ import { createRecord } from '../src/model.js';
 import { journeyDate } from '../src/journey-date.js';
 import { statisticsOptions, statisticsRange, todayDate, journeyStatistics, tripSeries } from '../src/statistics-model.js';
 import { mountStatistics } from '../src/statistics.js';
+import { flightTrackRequest } from '../src/flight-track.js';
 
 const rail = extra => createRecord({ origin: '北京南', destination: '上海虹桥', departureDate: '2024-02-29', ...extra });
 const flight = extra => createRecord({ type: 'flight', template: 'air-boarding-pass', origin: 'PEK', destination: 'HND', departureDate: '2024-03-01', aircraft: 'Boeing 737-800', ...extra });
 const range = { dateFrom: '', dateTo: '2026-11-16' };
+
+test('rail mileage and flown distance share the date filter and show independent coverage', () => {
+  const base = flight({ id: 'tracked', service: 'CA123', flightDistance: '750' });
+  const tracked = createRecord({ ...base, flightTrack: {
+    flightStr: flightTrackRequest(base), queriedAt: '2024-03-02T00:00:00Z',
+    segments: [[[179, 0], [-179, 0]], [[30, 0], [31, 0]]]
+  } });
+  const rows = [
+    rail({ railMileage: '1318' }), tracked, flight({ id: 'untracked', flightDistance: '9999' }),
+    createRecord({ ...tracked, id: 'void', flightStatus: 'invalid' }),
+    createRecord({ ...tracked, id: 'deleted', deleted: true })
+  ];
+  const all = journeyStatistics(rows, range);
+  assert.equal(all.railMileage, 1318);
+  assert.equal(all.railMileageTrips, 1);
+  assert.equal(all.flight, 2);
+  assert.equal(all.actualFlightDistanceTrips, 1);
+  // These are two disconnected segments at the equator, spanning two degrees and one degree.
+  assert.ok(Math.abs(all.actualFlightDistance - 333.585) < 0.001);
+  const beforeFlight = journeyStatistics(rows, { ...range, dateTo: '2024-02-29' });
+  assert.equal(beforeFlight.actualFlightDistance, 0);
+  assert.equal(beforeFlight.actualFlightDistanceTrips, 0);
+  assert.equal(beforeFlight.railMileage, 1318);
+
+  const dom = new JSDOM('<div id="root"></div>');
+  const root = dom.window.document.querySelector('#root');
+  const unmount = mountStatistics(root, rows, { options: { ...range } });
+  const [railMetric, flightMetric] = root.querySelectorAll('.statistics-mileage > div');
+  assert.match(railMetric.textContent, /铁路里程.*1,318 km.*1 \/ 1/);
+  assert.match(flightMetric.textContent, /实际飞行航程.*333\.6 km.*1 \/ 2/);
+  unmount();
+  dom.window.close();
+});
 
 test('statistics default to an unbounded start and today, compare dates only and respect edited bounds', () => {
   assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railPowerSupplies:false, aircraftGrouping:'model' });

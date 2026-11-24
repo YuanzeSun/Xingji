@@ -6,6 +6,7 @@ import {createBoardingCode} from './bcbp.js';
 import {railCompletion,shiftRailDate} from './rail-lookup-model.js';
 import {LOOKUP_FIELDS} from './lookup-values.js';
 import {markFieldSources} from './field-sources.js';
+import {flightTrackRequest} from './flight-track.js';
 
 const localToday=()=>{const date=new Date();return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;};
 const verifiedAt='2026-11-17T00:00:00.000Z';
@@ -75,6 +76,12 @@ export function demoRecords(today=localToday()){
     }else{
       values.arrivalDate=values.actualDepartureDate=values.actualArrivalDate=values.departureDate;
       values.flightStatus='normal';
+      if (row.service === 'CA181') values.flightTrack = {
+        flightStr: flightTrackRequest(values), queriedAt: verifiedAt,
+        segments: [[[116.59, 40.08], [116.76, 40.04], [117.14, 39.97], [118.61, 39.53], [120.21, 39.51],
+          [121.67, 38.66], [123.31, 37.18], [126.1, 35.7], [129.09, 34.68], [132.5, 34.11], [135.1, 34.43],
+          [137.24, 34.65], [138.19, 34.68], [139.35, 34.92], [139.78, 35.55]]]
+      };
       values.boardingCode=createBoardingCode({passenger:values.passenger==='示例旅客' ? 'SHILI/LVKE' : values.passenger,pnr:values.pnr,origin:values.originCode,destination:values.destinationCode,carrier:values.service.slice(0,2),flightNumber:values.service.slice(2),date:values.departureDate,cabin:values.seatClass,seat:values.seat,sequence:String(42+index),status:'1',electronic:''});
       values.boardingCodeSource='generated';values.boardingLegIndex='0';values.fieldSources.boardingCode='generated';
       if (!syntheticFlight) values.sources.push({kind:'reference',label:`航班参考：${values.airline} ${values.service}，${values.origin}—${values.destination}`,at:verifiedAt});

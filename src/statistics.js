@@ -44,9 +44,14 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       const value = options[key] || (key === 'dateTo' ? renderedDay : '不限');
       return `<div class="statistics-range-field"><span>${label}</span><button type="button" class="statistics-date-button" ${attr} data-stat-date="${key}" aria-label="${label}，${e(value)}" aria-haspopup="dialog">${e(value)}</button></div>`;
     };
+    const mileage = [
+      ['铁路里程', data.railMileage, data.railMileageTrips, data.rail, '程已收录里程', 3],
+      ['实际飞行航程', data.actualFlightDistance, data.actualFlightDistanceTrips, data.flight, '程已收录航迹', 1]
+    ];
     container.innerHTML = `<section class="statistics-range" aria-label="统计日期范围"><div>${rangeButton('dateFrom', '起始日期', 'data-stat-from')}<span class="statistics-range-dash">—</span>${rangeButton('dateTo', '截止日期', 'data-stat-to')}<button type="button" class="text-button" data-stat-reset aria-label="恢复默认日期" title="恢复默认日期"><span class="statistics-reset-symbol" aria-hidden="true">↺</span><span class="statistics-reset-label">恢复默认</span></button></div><p class="form-error" role="alert" ${data.error ? '' : 'hidden'}>${e(data.error)}</p></section>${data.error ? '' : `
       <section class="statistics-summary" aria-label="所选日期范围的乘坐记录">${[['火车', data.rail, '次'], ['飞机', data.flight, '次'], ['机场', data.airports.length, '个'], ['火车站', data.stations.length, '个']].map(([label, count, unit]) => `<div><span>${label}</span><strong>${count}<small>${unit}</small></strong></div>`).join('')}</section>
-      <section class="statistics-mileage" aria-label="铁路里程"><span>铁路里程</span><strong>${data.railMileageTrips ? data.railMileage.toLocaleString('zh-CN',{maximumFractionDigits:3}) : '—'} <small>km</small></strong><span>${data.railMileageTrips} / ${data.rail} 程已收录里程</span></section>
+      <section class="statistics-mileage" aria-label="里程统计">${mileage.map(([label, distance, count, total, coverage, maximumFractionDigits]) =>
+        `<div><span>${label}</span><strong>${count ? `${distance.toLocaleString('zh-CN', { maximumFractionDigits })} <small>km</small>` : '—'}</strong><span>${count} / ${total} ${coverage}</span></div>`).join('')}</section>
       <section class="statistics-panel statistics-trend"><header><h2>乘坐次数</h2><div class="statistics-period-controls"><div role="group" aria-label="统计图时间粒度">${[['year', '按年'], ['month', '按月']].map(([value, label]) => `<button data-stat-scale="${value}" aria-pressed="${options.period === value}">${label}</button>`).join('')}</div><label ${options.period === 'month' ? '' : 'hidden'}><span class="visually-hidden">月度图年份</span><select data-stat-year aria-label="月度图年份">${[...yearChoices].reverse().map(year => `<option ${options.year === year ? 'selected' : ''}>${e(year)}</option>`).join('')}</select></label></div></header>${tripChartMarkup(series,{zoom:options.chartZoom,viewportWidth:container.clientWidth || 720})}</section>
       <div class="statistics-columns">${rankingPanel('rail-models')}${rankingPanel('rail-bureaus')}</div>
       <div class="statistics-columns">${rankingPanel('aircraft')}

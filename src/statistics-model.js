@@ -4,6 +4,7 @@ import { aircraftClassification } from './aircraft.js';
 import { dateInterval } from './search.js';
 import { CONTINENT_AIRPORT_CODES } from './data/airport-geography.js';
 import { isJourneyRecord } from './record-kind.js';
+import { flightTrackDistanceKm } from './flight-track.js';
 import { normalizeRailBureau, normalizeRailModel, normalizeRailPowerSupply } from './rail-details.js';
 import { railJourneyMatches, railText, isEmuModel } from './rail-journey.js';
 
@@ -59,6 +60,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   const airports = new Map(), stations = new Map(), countries = new Map(), continents = new Set(), routes = new Map(), aircraft = new Map();
   const railModels = new Map(), railBureaus = new Map();
   let unknownAircraft = 0, unknownPlaces = 0, unknownRoutes = 0;
+  let actualFlightDistance = 0, actualFlightDistanceTrips = 0;
   for (const record of rows) {
     if (record.type === 'rail') {
       for (const model of railModelsForRecord(record,options)) railModels.set(model, (railModels.get(model) || 0) + 1);
@@ -78,6 +80,11 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
       if (place.continent) continents.add(place.continent);
     }
     if (record.type !== 'flight') continue;
+    const trackDistance = flightTrackDistanceKm(record.flightTrack);
+    if (trackDistance > 0) {
+      actualFlightDistance += trackDistance;
+      actualFlightDistanceTrips++;
+    }
     const classification = aircraftClassification(record.aircraft);
     if (classification) {
       const model = options.aircraftGrouping === 'series' ? classification.series : classification.label;
@@ -97,7 +104,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     continents: [...continents].sort().map(code => ({ code, name: CONTINENTS[code] })),
     aircraft: ranked(aircraft),
     railMileage:Math.round(mileageTrips.reduce((sum,row)=>sum+Number(row.railMileage),0)*1000)/1000,
-    railMileageTrips:mileageTrips.length,
+    railMileageTrips: mileageTrips.length, actualFlightDistance, actualFlightDistanceTrips,
     railModels: ranked(railModels), railBureaus: ranked(railBureaus),
     routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)), unknownAircraft, unknownPlaces, unknownRoutes };
 }
