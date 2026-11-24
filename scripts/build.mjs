@@ -7,6 +7,7 @@ import { extensionArchive } from './package-extension.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const out = join(root, 'dist');
+const builtAt = Date.now();
 const { version: packageVersion } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 let revision = process.env.GITHUB_SHA;
 if (!revision) {
@@ -31,8 +32,13 @@ const bundled = await build({ entryPoints: [join(root, 'src/app.js')], bundle: t
 const entry = Object.entries(bundled.metafile.outputs).find(([, metadata]) => metadata.entryPoint && resolve(root, metadata.entryPoint) === join(root, 'src/app.js'));
 if (!entry) throw new Error('Application entry point is missing from the build');
 const appPath = relative(out, resolve(root, entry[0])).replaceAll('\\', '/');
-const html = (await readFile(join(root, 'index.html'), 'utf8')).replace('./src/app.js', './' + appPath).replace('./src/styles.css', './' + cssPath);
+const html = (await readFile(join(root, 'index.html'), 'utf8'))
+  .replace('./src/app.js', './' + appPath)
+  .replace('./src/styles.css', './' + cssPath)
+  .replace('</head>', `  <meta name="xingji-build" content="${builtAt}" />\n  </head>`);
+const shellPage = `./index-${createHash('sha256').update(html).digest('hex').slice(0, 12)}.html`;
 await writeFile(join(out, 'index.html'), html);
+await writeFile(join(out, shellPage), html);
 await mkdir(join(out, 'vendor'), { recursive: true });
 const copyVendorFile = (source, name) => cp(join(root, source), join(out, 'vendor', name));
 await copyVendorFile('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm', 'zxing_reader.wasm');
@@ -84,7 +90,7 @@ async function fingerprint(paths) {
 }
 
 const outputFiles = (await files(out)).sort();
-const shell = outputFiles.filter(p => !p.startsWith('./vendor/') && !p.startsWith('./ocr/') && !p.endsWith('sw.js'));
+const shell = outputFiles.filter(p => p !== './index.html' && !p.startsWith('./vendor/') && !p.startsWith('./ocr/') && !p.endsWith('sw.js'));
 const ocrFiles = outputFiles.filter(p =>
   (p.startsWith('./ocr/') && !p.endsWith('.txt')) ||
   (p.startsWith('./vendor/paddle/') && /\.(?:m?js|wasm)$/.test(p)) ||
@@ -92,7 +98,8 @@ const ocrFiles = outputFiles.filter(p =>
 );
 const [version, ocrVersion] = await Promise.all([fingerprint(shell), fingerprint(ocrFiles)]);
 const sw = (await readFile(join(root, 'src/sw.template.js'), 'utf8'))
-  .replace('__VERSION__', version).replace('__SHELL__', JSON.stringify(shell))
+  .replace('__VERSION__', version).replace('__BUILT_AT__', String(builtAt))
+  .replace('__SHELL_PAGE__', JSON.stringify(shellPage)).replace('__SHELL__', JSON.stringify(shell))
   .replace('__OCR_VERSION__', ocrVersion).replace('__OCR_FILES__', JSON.stringify(ocrFiles));
 await writeFile(join(out, 'sw.js'), sw);
 console.log(`Built ${shell.length} offline app files (${version}). OCR assets are cached when first used.`);

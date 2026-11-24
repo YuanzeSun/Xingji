@@ -6,7 +6,10 @@ import { runInNewContext } from 'node:vm';
 const template = await readFile(new URL('../src/sw.template.js', import.meta.url), 'utf8');
 const model = './ocr/paddle/model.tar';
 const runtime = './vendor/paddle/index.mjs';
+const shell = './index-pinned.html', installedBuild = 20;
+const html = (builtAt, body) => `<meta name="xingji-build" content="${builtAt}" />${body}`;
 const script = (version, ocrVersion) => template.replace('__VERSION__', version)
+  .replace('__BUILT_AT__', installedBuild).replace('__SHELL_PAGE__', JSON.stringify(shell))
   .replace('__SHELL__', '[]').replace('__OCR_VERSION__', ocrVersion)
   .replace('__OCR_FILES__', JSON.stringify([model, runtime]));
 const source = script('test', 'models');
@@ -56,11 +59,22 @@ function worker({ offline = false, version = 'test', ocrVersion = 'models', stor
   };
 }
 
-test('online navigation replaces stale app HTML instead of keeping users on a broken release', async () => {
-  const app = worker(); app.entries.set(app.base, new Response('outdated-page'));
-  assert.equal(await (await app.load('./')).text(), 'latest-page');
+test('an installed worker serves its pinned app when online navigation gets stale CDN HTML', async () => {
+  const app = worker({ response: html(10, 'stale-CDN-page') });
+  const current = html(installedBuild, 'cached-update');
+  app.entries.set(new URL(shell, app.base).href, new Response(current));
+  assert.equal(await (await app.load('./')).text(), current);
+  assert.equal(await (await app.load('./?from=refresh')).text(), current);
+  assert.equal(await (await app.load('./index.html')).text(), current);
   assert.equal(app.requests[0].options.cache, 'no-store');
-  assert.equal(await app.entries.get(app.base).text(), 'latest-page');
+});
+
+test('online navigation accepts newer app HTML without replacing the pinned offline shell', async () => {
+  const newer = html(installedBuild + 1, 'newer-page'), current = html(installedBuild, 'cached-update');
+  const app = worker({ response: newer }), shellUrl = new URL(shell, app.base).href;
+  app.entries.set(shellUrl, new Response(current));
+  assert.equal(await (await app.load('./')).text(), newer);
+  assert.equal(await app.entries.get(shellUrl).text(), current);
 });
 
 test('the worker reports its entry URL so a suspended mobile page can detect an outdated client', () => {
@@ -72,10 +86,11 @@ test('the worker reports its entry URL so a suspended mobile page can detect an 
   handler({ data: { type: 'unrelated' }, source: sender }); assert.equal(reply, undefined);
   handler({ data: { type: 'XINGJI_CHECK_APP_VERSION' }, source: sender });
   assert.equal(reply.type, 'XINGJI_APP_VERSION'); assert.equal(reply.appUrl, 'https://example.com/Xingji/src/app-NEW.js');
+  assert.equal(reply.builtAt, installedBuild);
 });
 
 test('offline navigation with a new query falls back to the precached app shell', async () => {
-  const app = worker({ offline: true }); app.entries.set(app.base + 'index.html', new Response('offline-page'));
+  const app = worker({ offline: true }); app.entries.set(new URL(shell, app.base).href, new Response('offline-page'));
   assert.equal(await (await app.load('?update=login-fix')).text(), 'offline-page');
 });
 

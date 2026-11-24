@@ -4,13 +4,21 @@ export function watchAppUpdates({ canReload = () => true, notify = () => {}, onE
   if (!('serviceWorker' in navigator)) return;
   const worker = navigator.serviceWorker;
   const runningApp = document.querySelector('script[type="module"][src]')?.src;
+  const runningBuild = Number(document.querySelector('meta[name="xingji-build"]')?.content || 0);
   let registration, checking = false, lastCheck = Date.now(), notice;
   const askVersion = () => worker.controller?.postMessage({ type: 'XINGJI_CHECK_APP_VERSION' });
   const receiveVersion = event => {
     if (!runningApp || event.source !== worker.controller || event.data?.type !== 'XINGJI_APP_VERSION' || typeof event.data.appUrl !== 'string') return;
     let latest;
     try { latest = new URL(event.data.appUrl); } catch { return; }
-    if (latest.origin !== location.origin || latest.href === runningApp || notice) return;
+    if (latest.origin !== location.origin) return;
+    const { builtAt } = event.data;
+    if (latest.href === runningApp || !Number.isSafeInteger(builtAt) || builtAt <= runningBuild) {
+      notice?.remove();
+      notice = undefined;
+      return;
+    }
+    if (notice) return;
     notice = document.createElement('div');
     notice.className = 'app-update'; notice.setAttribute('role', 'status');
     const label = document.createElement('span'); label.textContent = '新版本已就绪';
