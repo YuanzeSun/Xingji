@@ -2,12 +2,12 @@ import {FLIGHT_TIME_LABELS} from './flight-times.js';
 import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import { requireCompleteIdentity } from './identity.js';
 const common = ['origin', 'destination', 'service', 'departureDate', 'departureTime', 'passenger', 'identity', 'seat', 'seatClass'];
-export function requiredTicketFields(type, template, flightStatus = 'normal', railStanding = false, maskedIdentity = '') {
+export function requiredTicketFields(type, template, flightStatus = 'normal', railStanding = false, fromRailInvoice = false) {
   if (type === 'flight') return ['open', 'invalid'].includes(flightStatus) ? ['origin', 'destination', 'passenger'] : common;
   const fields = template === 'rail-refund-receipt'
     ? ['origin', 'destination', 'service', 'departureDate', 'passenger', 'identity', 'price']
     : railStanding ? common.filter(key => key !== 'seat') : [...common, 'carriage'];
-  return maskedIdentity ? fields.filter(key => key !== 'identity') : fields;
+  return fromRailInvoice ? fields.filter(key => key !== 'identity') : fields;
 }
 
 export function ticketFieldLabel(key, type, fallback = key) {
@@ -17,7 +17,7 @@ export function ticketFieldLabel(key, type, fallback = key) {
 }
 
 const datePresent=value=>{try{return !!journeyDate(value)?.dayOfYear;}catch{return false;}};
-export const missingTicketFields = record => requiredTicketFields(record.type, record.template, record.flightStatus, record.railStanding, record.railInvoice?.maskedIdentity).filter(key => JOURNEY_DATE_FIELDS.includes(key) ? !datePresent(record[key]) : !record[key]?.trim());
+export const missingTicketFields = record => requiredTicketFields(record.type, record.template, record.flightStatus, record.railStanding, !!record.railInvoice?.electronicTicketNumber).filter(key => JOURNEY_DATE_FIELDS.includes(key) ? !datePresent(record[key]) : !record[key]?.trim());
 
 export function validateTicketForm(record) {
   requireCompleteIdentity(record.identity);
