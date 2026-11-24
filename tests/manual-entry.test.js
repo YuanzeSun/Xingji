@@ -19,7 +19,8 @@ test('manual entry always previews, validates required fields and resolves airpo
   await import('../src/app.js'); await wait(()=>document.querySelector('.manual-panel'));
   assert.equal(document.querySelector('#manual-form'),null);
   click('.manual-panel [data-action="new"]'); await wait(()=>document.querySelector('#editor-preview'));
-  assert.equal(document.querySelector('.editor-fields details:not(.rail-start-override):not(.rail-lookup-result)'),null);
+  assert.equal(document.querySelector('.editor-fields details:not(.rail-start-override):not(.rail-lookup-result):not([data-rail-photo-entry])'),null);
+  assert.equal(document.querySelector('[data-rail-photo-entry]').open,false);
   assert.equal(document.querySelector('[data-code-editor]').tagName,'SECTION');
   assert.equal(document.querySelector('[name="template"]').value,'rail-receipt');
   assert.equal(document.querySelector('[name="departureDateYear"]').type,'number');

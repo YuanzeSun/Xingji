@@ -83,18 +83,20 @@ test('rail lookup refreshes on an explicit click, blocks duplicate requests whil
   }
 });
 
-test('only a complete matching photo triggers one automatic RailGo lookup', async () => {
-  for (const scenario of ['valid', 'noTime', 'noDate', 'noTrain', 'noOrigin', 'noDestination', 'edited', 'conflict', 'manual']) {
+test('a matching photo with a departure time or a complete QR trip triggers one automatic RailGo lookup', async () => {
+  for (const scenario of ['valid', 'noTime', 'noDate', 'noTrain', 'noOrigin', 'noDestination', 'edited', 'conflict', 'manual', 'qrNoTime', 'qrNoDestination']) {
     const ticket = record({ departureTime: '06:30' });
     const scannedRail = scenario === 'manual' ? undefined : structuredClone(ticket);
-    const missing = { noTime:'departureTime', noDate:'departureDate', noTrain:'service', noOrigin:'origin', noDestination:'destination' }[scenario];
+    const missing = { noTime:'departureTime', noDate:'departureDate', noTrain:'service', noOrigin:'origin', noDestination:'destination', qrNoTime:'departureTime', qrNoDestination:'destination' }[scenario];
     if (missing) scannedRail[missing] = '';
     if (scenario === 'edited') ticket.departureTime = '06:31';
+    if (scenario === 'qrNoTime') ticket.departureTime = '';
     const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '<button type="submit">保存</button></form>');
     const form = dom.window.document.querySelector('form');
     let count = 0;
     const dispose = bindRailLookup(form, {
-      getRecord: () => ticket, canQuery: () => true, scannedRail,
+      getRecord: () => ticket, canQuery: () => true,
+      ...(scenario.startsWith('qr') ? { scannedRailQR: scannedRail } : { scannedRail }),
       apply: changes => Object.assign(ticket, changes),
       lookup: async query => {
         count++;
@@ -106,8 +108,8 @@ test('only a complete matching photo triggers one automatic RailGo lookup', asyn
     });
     form.dispatchEvent(new dom.window.Event('input', { bubbles:true }));
     await new Promise(done => setImmediate(done));
-    assert.equal(count, ['valid','conflict'].includes(scenario) ? 1 : 0, scenario);
-    assert.equal(ticket.railModel, scenario === 'valid' ? 'CR400BF-S' : '', scenario);
+    assert.equal(count, ['valid','conflict','qrNoTime'].includes(scenario) ? 1 : 0, scenario);
+    assert.equal(ticket.railModel, ['valid','qrNoTime'].includes(scenario) ? 'CR400BF-S' : '', scenario);
     if (scenario === 'conflict') assert.match(form.querySelector('[data-rail-status]').textContent, /发车时间与票面不同/);
     dispose();
     dom.window.close();

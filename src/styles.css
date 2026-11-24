@@ -623,4 +623,14 @@ select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-w
 .rail-camera p,[data-rail-photo-status]:not(:empty){margin:8px 0;color:#5b6a5f}
 [data-rail-camera], [data-rail-photo-status]{grid-column:1/-1}
 
-.rail-entry-actions{flex-wrap:wrap;gap:8px}.rail-entry-actions>.button{min-height:44px}
+.web-version{white-space:nowrap;color:var(--muted);font:500 12px/1.4 system-ui,sans-serif;letter-spacing:normal;font-variant-numeric:tabular-nums}
+.mobile-brand .web-version{margin-inline-start:4px}
+.rail-qr-entry .code-actions>.button,.rail-photo-entry .code-actions>.button{min-height:44px}
+.rail-qr-entry .boarding-code-controls{flex-basis:9rem}
+.rail-qr-entry .saved-code[hidden]{display:none}
+.rail-code-example{grid-template-columns:1fr}
+.rail-code-example .boarding-code-sample-image{width:112px;height:112px;padding:6px}
+.rail-photo-entry>summary{cursor:pointer;font-weight:600}
+.rail-photo-entry>summary [data-rail-photo-lock]{margin-inline-start:6px}
+.rail-photo-entry fieldset{border:0;padding:0;margin:0;min-inline-size:0}
+.rail-photo-entry [data-rail-photo-status]:empty{display:none}

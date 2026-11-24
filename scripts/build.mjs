@@ -1,11 +1,19 @@
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { cp, mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import { resolve, relative, join } from 'node:path';
 import { extensionArchive } from './package-extension.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const out = join(root, 'dist');
+const { version: packageVersion } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+let revision = process.env.GITHUB_SHA;
+if (!revision) {
+  try { revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+  catch { revision = ''; }
+}
+const webVersion = 'v' + packageVersion + (revision ? ' · ' + revision.slice(0, 7) : '');
 if (relative(root, out) !== 'dist') throw new Error('Refusing to clean outside the build directory');
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
@@ -19,7 +27,7 @@ await mkdir(join(out, 'src'), { recursive: true });
 const styles = await readFile(join(root, 'src/styles.css'));
 const cssPath = `src/styles-${createHash('sha256').update(styles).digest('hex').slice(0, 12)}.css`;
 await writeFile(join(out, cssPath), styles);
-const bundled = await build({ entryPoints: [join(root, 'src/app.js')], bundle: true, splitting: true, format: 'esm', outdir: join(out, 'src'), entryNames: '[name]-[hash]', metafile: true, minify: true, target: 'es2022', chunkNames: 'chunks/[name]-[hash]', logLevel: 'info' });
+const bundled = await build({ entryPoints: [join(root, 'src/app.js')], bundle: true, splitting: true, format: 'esm', outdir: join(out, 'src'), entryNames: '[name]-[hash]', metafile: true, minify: true, target: 'es2022', chunkNames: 'chunks/[name]-[hash]', define: { XINGJI_WEB_VERSION: JSON.stringify(webVersion) }, logLevel: 'info' });
 const entry = Object.entries(bundled.metafile.outputs).find(([, metadata]) => metadata.entryPoint && resolve(root, metadata.entryPoint) === join(root, 'src/app.js'));
 if (!entry) throw new Error('Application entry point is missing from the build');
 const appPath = relative(out, resolve(root, entry[0])).replaceAll('\\', '/');

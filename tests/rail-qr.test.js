@@ -7,11 +7,12 @@ import { prepareZXingModule, writeBarcode } from 'zxing-wasm';
 import { prepareCodeReader } from '../src/code-reader.js';
 import { symbolImage } from '../src/barcode-symbols.js';
 import { calendarDate } from '../src/journey-date.js';
+import { DEMO_RAIL_TICKET_CODE } from '../src/demo-code.js';
 import { readRailTicketCode } from '../src/rail-ticket-qr.js';
 import { prepareCloud } from './helpers/cloud.js';
 
 // Fictional tickets with known station codes, a dummy document number and no live travel credentials.
-const seated = '260012340753503264124121886571861915834461210491219426472660324044800100000000000000001053902918405389762880538976288053897628805389762880815300';
+const seated = atob(DEMO_RAIL_TICKET_CODE.rawBytes);
 const standing = '030012341064623109317508991203631625372805544524257810305361407165728357739203412400109157259042921432129118396822614114445042278628926037766000';
 const qr = payload => ({ format: 'QRCode', rawBytes: btoa(payload) });
 
@@ -29,7 +30,7 @@ test('rail QR decoding recovers both 144-digit variants and rejects unrelated pa
   assert.equal(readRailTicketCode(qr('https://example.test/rail'), 2026), null);
 });
 
-test('the rail camera fills and persists barcode locks while the year and other inputs stay editable', async () => {
+test('rail QR entry queries RailGo once and locks the separate photo scan until the code is removed', async () => {
   await prepareCodeReader({ wasmBinary: await readFile('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm') });
   await prepareZXingModule({ overrides: { wasmBinary: await readFile('node_modules/zxing-wasm/dist/full/zxing_full.wasm') }, fireImmediately: true });
   const fixture = await writeBarcode(seated, { format: 'QRCode', addQuietZones: true });
@@ -69,6 +70,20 @@ test('the rail camera fills and persists barcode locks while the year and other 
   window.HTMLCanvasElement.prototype.toBlob = callback => callback(imageBlob);
 
   const server = await prepareCloud();
+  const archiveFetch = globalThis.fetch, railQueries = [];
+  globalThis.fetch = async (url, options) => {
+    const request = new URL(url);
+    if (request.hostname === 'api.github.com') return archiveFetch(url, options);
+    if (request.pathname !== '/api/v2/getTrainMain') return Response.json({ success: false });
+    railQueries.push([...request.searchParams]);
+    return Response.json({ success: true, data: {
+      numberFull: ['G103'], rundays: ['20251124'], car: 'CR400BF-S',
+      timetable: [
+        { station: '北京南', day: 0, arrive: '', depart: '08:15' },
+        { station: '上海虹桥', day: 0, arrive: '12:45', depart: '' },
+      ],
+    } });
+  };
   const waitFor = async predicate => {
     for (let i = 0; i < 250; i++) {
       if (predicate()) return;
@@ -88,10 +103,16 @@ test('the rail camera fills and persists barcode locks while the year and other 
     await waitFor(() => document.querySelector('.manual-panel [data-action="new"]:not(:disabled)'));
     document.querySelector('.manual-panel [data-action="new"]').click();
     await waitFor(form);
-    const ocr = form().querySelector('[data-rail-photo]'), scan = form().querySelector('[data-code-start]');
-    assert.equal(ocr.textContent, '扫描录入');
-    assert.equal(scan.textContent, '扫码录入');
-    assert.equal(ocr.nextElementSibling, scan);
+    const scanEntry = form().querySelector('[data-rail-qr-entry]');
+    const photoEntry = () => form().querySelector('[data-rail-photo-entry]');
+    assert.equal(scanEntry.nextElementSibling, photoEntry());
+    assert.equal(photoEntry().open, false);
+    assert.equal(scanEntry.querySelector('[data-code-start]').textContent, '相机扫描');
+    assert.equal(scanEntry.querySelector('[data-code-upload]').textContent, '上传图片');
+    assert.ok(scanEntry.querySelector('[data-code-examples]:not([hidden]) svg'));
+    assert.equal(photoEntry().querySelector('[data-rail-photo]').textContent, '相机扫描');
+    assert.equal(photoEntry().querySelector('[data-rail-photo-upload]').textContent, '上传图片');
+    assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);
     fill('service', 'G999');
     fill('departureDate', '2026-01-01');
     form().querySelector('[data-rail-standing]').click();
@@ -99,6 +120,13 @@ test('the rail camera fills and persists barcode locks while the year and other 
     form().querySelector('[data-code-start]').click();
     await waitFor(() => form()?.querySelector('#code-status')?.textContent.includes('二维码字段已锁定'));
     assert.equal(stopped, 1);
+    assert.equal(photoEntry().open, false);
+    assert.equal(photoEntry().querySelector('[data-rail-photo-lock]').hidden, false);
+    assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, true);
+    assert.ok(form().querySelector('[data-code-examples][hidden]'));
+    await waitFor(() => field('railModel').value === 'CR400BF-S');
+    assert.deepEqual(railQueries, [[['trainNum', 'G103'], ['date', '20251124']]]);
+    assert.equal(field('arrivalTime').value, '12:45');
     for (const [name, value] of Object.entries({ service: 'G103', origin: '北京南', destination: '上海虹桥', departureTime: '08:15', passenger: '李', carriage: '03', price: '553.5', ticketNumber: 'A001234' })) {
       assert.equal(field(name).value, value, name);
       assert.equal(field(name).readOnly, true, name);
@@ -134,11 +162,15 @@ test('the rail camera fills and persists barcode locks while the year and other 
     document.querySelector('[data-action="edit"]').click();
     await waitFor(form);
     assert.equal(field('service').readOnly, true);
+    assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, true);
+    assert.equal(railQueries.length, 1);
     form().querySelector('#code-remove').click();
     assert.equal(field('service').readOnly, false);
     assert.equal(field('departureDateDay').disabled, false);
     assert.equal(form().querySelector('[data-seat-number]').readOnly, false);
     assert.equal(form().querySelector('[data-seat-number]').value, '10F');
+    assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);
+    assert.equal(photoEntry().querySelector('[data-rail-photo-lock]').hidden, true);
     fill('service', 'G105');
     submit();
     await waitFor(() => !form() && server.records()[0].service === 'G105');
