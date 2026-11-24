@@ -15,10 +15,13 @@ test('manual entry always previews, validates required fields and resolves airpo
   const click=selector=>{const el=document.querySelector(selector);assert.ok(el,selector);el.click();};
   const fill=(name,value)=>{const input=document.querySelector(`#editor-form [name="${name}"]`);assert.ok(input,name);input.value=value;input.dispatchEvent(new window.Event('input',{bubbles:true}));};
   const submit=()=>document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
+  const requiredHint=()=>document.querySelector('.modal-heading .editor-required-hint');
   const db=await import('../src/db.js'); await prepareCloud();
   await import('../src/app.js'); await wait(()=>document.querySelector('[data-action=new]:not(:disabled)'));
   assert.equal(document.querySelector('#manual-form'),null);
   click('[data-action="new"]'); await wait(()=>document.querySelector('#editor-preview'));
+  assert.deepEqual([...requiredHint().children].map(note=>note.textContent),['* 保存必填','* 生成二维码必填']);
+  assert.equal(requiredHint().querySelector('.barcode-required-mark').getAttribute('aria-label'),'蓝色星号');
   assert.equal(document.querySelector('.editor-fields details:not(.rail-start-override):not(.rail-lookup-result):not([data-rail-photo-entry])'),null);
   assert.equal(document.querySelector('[data-rail-photo-entry]').open,false);
   assert.equal(document.querySelector('[data-rail-photo-entry] > summary').firstChild.textContent.trim(), '扫描票面（alpha）');
@@ -55,6 +58,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   records=await db.get('records',[]);assert.equal(records.length,1);assert.equal(records[0].price,'100');assert.equal(records[0].seat,'08F');
   click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
   fill('type','flight');fill('passenger','示例旅客');fill('identity','P000001');fill('seat','24K');fill('seatClass','Y');fill('departureTime','12:00');assert.match(document.querySelector('[name="seat"]').closest('.field').textContent.trim(),/^座位号\*/);assert.equal(document.querySelector('[data-field-source="seat"]').textContent,'手动输入');
+  assert.deepEqual([...requiredHint().children].map(note=>note.textContent),['* 保存必填','* 生成条码必填']);
   assert.equal(document.querySelector('[name="originCode"]').type,'hidden');
   assert.equal(document.querySelector('[name="departureZone"], [name="arrivalZone"]'),null);
   const origin=document.querySelector('#editor-form [name="origin"]');origin.focus();fill('origin','ｐｅｋ');

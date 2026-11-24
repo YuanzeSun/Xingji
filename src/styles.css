@@ -575,6 +575,8 @@ select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-w
 .editor-fields>.boarding-generator{margin-top:22px;border-top:1px solid var(--line);padding-top:18px}.boarding-generator fieldset{border:0;margin:0;padding:0;min-width:0}.boarding-generator fieldset:disabled{opacity:.55}.form-grid>[data-code-editor]{grid-column:1/-1;min-width:0;margin-bottom:20px}
 @media(max-width:680px){.editor-layout.flight-editor-layout{flex-direction:column}}
 .required-mark.barcode-required-mark{color:#32658d}
+.editor-required-hint{display:flex;flex-wrap:wrap;gap:2px 12px;color:var(--muted)}
+.editor-required-hint .required-mark{margin-left:0}
 
 .field .field-source,.editor-extra h3 .field-source{margin-left:auto;font-size:11px;font-weight:400;line-height:1.5;white-space:nowrap;color:#687b70;background:#edf2ec;border:1px solid #dce5db;border-radius:4px;padding:1px 6px}.editor-extra h3 .field-source{margin-left:8px;vertical-align:middle}.field .field-source[data-source-kind="manual"]{color:#6c715d;background:#f1f0e7}
 .editor-fields .field{justify-content:space-between}.editor-fields .field>span{column-gap:4px}
