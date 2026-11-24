@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {calendarDate,dateLabel} from '../src/journey-date.js';
-import {deduplicateRecords,mergeThreeWay,FIELDS,SCHEMA_VERSION,TEMPLATES} from '../src/model.js';
+import {deduplicateRecords,mergeThreeWay,validateRecord,FIELDS,SCHEMA_VERSION,TEMPLATES} from '../src/model.js';
 import {readBCBP} from '../src/bcbp-reader.js';
 import {railLineFixtures} from './helpers/rail-line-fixtures.js';
 
@@ -21,7 +21,10 @@ for(const row of fixture.dates)test(`shared date fixture ${row.input}`,()=>{
 for(const row of fixture.barcodes)test(`shared BCBP fixture ${row.expected.legCount} legs`,()=>{
   assert.deepEqual(readBCBP(Buffer.from(row.payload,'base64').toString('latin1')),row.expected);
 });
-for(const row of fixture.dedup)test(`shared dedup fixture ${row.name}`,()=>assert.deepEqual(deduplicateRecords(row.input),row.expected));
+for(const row of fixture.dedup)test(`Web archive IDs with shared fixture ${row.name}`,()=>{
+  const distinctIds = new Set(row.input.map(record => record.id)).size === row.input.length;
+  assert.deepEqual(deduplicateRecords(row.input), distinctIds ? row.input.map(validateRecord) : row.expected);
+});
 for(const row of fixture.merges)test(`shared merge fixture ${row.name}`,()=>{
   const result=mergeThreeWay(row.base,row.local,row.remote);
   assert.deepEqual(result.records,row.expectedRecords);

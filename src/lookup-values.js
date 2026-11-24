@@ -1,4 +1,4 @@
-import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
+import {JOURNEY_DATE_FIELDS,journeyDate,storedJourneyDate} from './journey-date.js';
 import {placeIdentity} from './places.js';
 import {markFieldSources,importFieldSource} from './field-sources.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
@@ -11,8 +11,9 @@ export function normalizeLookupValues(input) {
   if(typeof input!=='object' || Array.isArray(input))throw new Error('自动补全来源格式不正确');
   const result={};
   for(const key of Object.keys(input).sort()){
-    if(JOURNEY_DATE_FIELDS.includes(key)){result[key]=journeyDate(input[key]);continue;}
-    if(!LOOKUP_FIELDS.includes(key) || typeof input[key]!=='string' || input[key].length>1000)throw new Error('自动补全来源字段不正确');
+    if(!LOOKUP_FIELDS.includes(key))throw new Error('自动补全来源字段不正确');
+    if(JOURNEY_DATE_FIELDS.includes(key)){result[key]=storedJourneyDate(input[key]);continue;}
+    if(typeof input[key]!=='string' || input[key].length>1000)throw new Error('自动补全来源字段不正确');
     result[key]=input[key];
   }
   return result;

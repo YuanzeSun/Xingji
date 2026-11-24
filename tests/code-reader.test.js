@@ -7,7 +7,8 @@ import { prepareZXingModule, readBarcodes, writeBarcode } from 'zxing-wasm';
 import { prepareCodeReader, rebuildCodeSymbols } from '../src/code-reader.js';
 import { encodeBCBP, readBoardingCode } from '../src/bcbp.js';
 import { readBCBP } from '../src/bcbp-reader.js';
-import { applyImport, createRecord } from '../src/model.js';
+import { createRecord } from '../src/model.js';
+import { applyReviewedTicket } from '../src/ticket-import-review.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from '../src/code-editor.js';
 import { BOARDING_SHARED_FIELDS } from '../src/boarding-code-state.js';
 import { JSDOM } from 'jsdom';
@@ -150,7 +151,7 @@ test('two scans of a connecting boarding pass can save each chosen flight separa
       assert.equal(draft.ticketNumber, leg.ticketNumber);
       assert.equal(draft.actualBoardingTime, leg.time);
       draft.departureDate.year = leg.year;
-      saved = applyImport(saved, [draft]).records;
+      saved = applyReviewedTicket(saved, draft).records;
       assert.equal(saved.length, index + 1);
     } finally { cleanup(); dom.window.close(); }
   }

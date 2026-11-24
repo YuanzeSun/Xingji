@@ -35,7 +35,7 @@ test('field origins round-trip in archive and merge with the values chosen for e
   assert.equal(merged.records[0].seat,'20C');assert.equal(merged.records[0].fieldSources.seat,'manual');assert.equal(merged.records[0].gate,'B2');assert.equal(merged.records[0].fieldSources.gate,'variflight');
   const competing=structuredClone(base);competing.seat='30A';markFieldSources(competing,['seat'],'barcode');
   const conflict=mergeThreeWay([base],[local],[competing]);assert.equal(conflict.conflicts.length,1);resolveRecordConflict(conflict.records[0],conflict.conflicts[0],'remote');assert.equal(conflict.records[0].seat,'30A');assert.equal(conflict.records[0].fieldSources.seat,'barcode');
-  const incoming=flight({id:'incoming',seat:'20C',fieldSources:{seat:'manual'},lockedFields:['seat']});
+  const incoming=flight({id:base.id,seat:'20C',fieldSources:{seat:'manual'},lockedFields:['seat']});
   const joined=deduplicateRecords([base,incoming]);assert.equal(joined.length,1);assert.equal(joined[0].fieldSources.seat,'manual');
 });
 

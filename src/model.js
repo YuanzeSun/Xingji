@@ -1,6 +1,6 @@
 import {BOARDING_METADATA_FIELDS,boardingMetadataValues} from './boarding-metadata.js';
 import {fieldState,takeField,takeBoardingCode,mergeBoardingCode} from './record-merge-metadata.js';
-import {JOURNEY_DATE_FIELDS,journeyDate,storedJourneyDate,calendarDate,fullDate,dateLabel} from './journey-date.js';
+import {JOURNEY_DATE_FIELDS,journeyDate,storedJourneyDate,dateLabel} from './journey-date.js';
 import {readBoardingCode} from './bcbp.js';
 export {resolveRecordConflict} from './record-merge-metadata.js';
 import {LOOKUP_FIELDS,normalizeLookupValues,isLookupValue as isAutomatic} from './lookup-values.js';
@@ -14,8 +14,7 @@ import { normalizeTicketCode } from './ticket-code.js';
 import { normalizeBoardingCode } from './boarding-code.js';
 import { normalizeSeatClass } from './seat-classes.js';
 import { normalizeAircraft } from './aircraft.js';
-import { normalizePlaces, placeIdentity } from './places.js';
-import { isRefundReceipt } from './record-kind.js';
+import { normalizePlaces } from './places.js';
 import { normalizeRailBureau, splitRailModel, normalizeRailPowerSupply } from './rail-details.js';
 import { cityLabel } from './locations.js';
 import { isStoredTimeZone } from './data/time-zone-ids.js';
@@ -151,82 +150,7 @@ export function readArchive(input) {
   if (new Set(records.map(r => r.id)).size !== records.length) throw new Error('备份包含重复ID');
   return records;
 }
-const normalized = value => String(value || '').normalize('NFKC').replace(/[\s·]/g, '').toUpperCase();
 const recordIds = record => [record.id, ...(record.mergedIds || [])];
-const bucketKey = r => fullDate(r.departureDate) && r.service ? `${r.type}:${r.type === 'flight' ? (r.flightStatus || 'normal') + ':' : isRefundReceipt(r) ? 'refund:' : r.template === 'rail-supplement' ? 'supplement:' : ''}${calendarDate(r.departureDate)}:${normalized(r.service)}` : '';
-function sameJourney(a, b, checkTime = true) {
-  if (a.deleted || b.deleted || !bucketKey(a) || bucketKey(a) !== bucketKey(b)) return false;
-  if (a.passenger && b.passenger && normalized(a.passenger) !== normalized(b.passenger)) return false;
-  if (checkTime && a.departureTime && b.departureTime && a.departureTime !== b.departureTime) return false;
-  let endpoints = 0;
-  for (const side of ['origin', 'destination']) {
-    const x = placeIdentity(a, side), y = placeIdentity(b, side);
-    if (a[side] && b[side] && (!x || !y)) return false;
-    if (x && y) { if (x !== y) return false; endpoints++; }
-  }
-  if (endpoints < 2 && !(endpoints && a.ticketNumber && normalized(a.ticketNumber) === normalized(b.ticketNumber))) return false;
-  if (!a.passenger || !b.passenger) {
-    if (a.seat && b.seat && normalized(a.seat) !== normalized(b.seat) && a.lockedFields.includes('seat') === b.lockedFields.includes('seat')) return false;
-    if (a.carriage && b.carriage && normalized(a.carriage) !== normalized(b.carriage) && a.lockedFields.includes('carriage') === b.lockedFields.includes('carriage')) return false;
-    if (a.ticketNumber && b.ticketNumber && normalized(a.ticketNumber) !== normalized(b.ticketNumber)) return false;
-  }
-  return true;
-}
-const railConflictLabels = {
-  ...SUPPLEMENT_FIELDS,
-  departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间',
-  identity: '证件号', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别',
-  price: '金额', ticketNumber: '票号', orderNumber: '订单号', saleCode: '售票码',
-  issuer: '售票站', gate: '检票口', railPlatform: '站台',
-  railBureau: '担当路局', railModel: '车型', railTrainsets: '车组编号', railPowerSupply: '供电制式',
-  railMileage: '铁路里程', railRunner: '担当客运段', railCarOwner: '车辆归属单位'
-};
-function railFieldConflicts(key, left, right) {
-  if (!left || !right) return false;
-  if (key === 'arrivalDate') {
-    return (left.year && right.year && left.year !== right.year) ||
-      (left.dayOfYear && right.dayOfYear && left.dayOfYear !== right.dayOfYear);
-  }
-  const a = normalized(left), b = normalized(right);
-  if (['carriage', 'price', 'railPlatform', 'railMileage', 'railSupplementFee', 'railSupplementSurcharge'].includes(key) && /^\d+(?:\.\d+)?$/.test(a) && /^\d+(?:\.\d+)?$/.test(b)) {
-    return Number(a) !== Number(b);
-  }
-  return a !== b;
-}
-export class DuplicateRailTicketError extends Error {
-  constructor(ticket, fields) {
-    super(`${ticket.service} 疑似重复票据，${fields.map(key => railConflictLabels[key]).join('、')}与已有票据冲突。请核对后再加入。`);
-    this.code = 'DUPLICATE_RAIL_TICKET';
-  }
-}
-export function duplicateOf(records, candidate, rejectConflict = null) {
-  const ids = new Set(recordIds(candidate));
-  const exact = records.find(r => recordIds(r).some(id => ids.has(id)));
-  if (exact) return exact;
-  let matches = records.filter(record => {
-    const checkTime = !rejectConflict || candidate.type !== 'rail' || !candidate.passenger || !record.passenger;
-    return sameJourney(record, candidate, checkTime);
-  });
-  if (candidate.passenger) {
-    const named = matches.filter(r => normalized(r.passenger) === normalized(candidate.passenger));
-    if (named.length) matches = named;
-  }
-  if (candidate.type === 'rail' && !rejectConflict) {
-    matches = matches.filter(record => !railFieldConflicts('ticketNumber', record.ticketNumber, candidate.ticketNumber));
-  }
-  if (candidate.type === 'rail' && rejectConflict) {
-    const conflictingFields = new Set();
-    const compatible = matches.filter(record => {
-      const fields = Object.keys(railConflictLabels).filter(key => railFieldConflicts(key, record[key], candidate[key]));
-      if ((record.railStanding && candidate.seat) || (candidate.railStanding && record.seat)) fields.push('seat');
-      if (fields.length && rejectConflict(record)) for (const key of fields) conflictingFields.add(key);
-      return !fields.length;
-    });
-    if (!compatible.length && conflictingFields.size) throw new DuplicateRailTicketError(candidate, [...conflictingFields]);
-    matches = compatible;
-  }
-  return matches.length === 1 ? matches[0] : undefined;
-}
 function joinRecords(existing, incoming) {
   const empty = value => !value || (Array.isArray(value) && !value.length);
   for (const field of FIELDS) {
@@ -245,41 +169,27 @@ function joinRecords(existing, incoming) {
   existing.updatedAt = [existing.updatedAt, incoming.updatedAt].sort().at(-1);
   return existing;
 }
-export function deduplicateRecords(records, { rejectFrom = Infinity, knownIdsOnly = false } = {}) {
-  const result = [], buckets = new Map(), ids = new Map(), positions = new Map();
-  const strict = Number.isFinite(rejectFrom), checked = new Set();
-  // Known passengers are grouped first so an unnamed scan cannot join two different people.
+export function deduplicateRecords(records) {
+  const ids = new Map(), positions = new Map();
+  // When copies share an ID, prefer the named copy for otherwise unmarked values.
   const ordered = records.map((record, index) => ({ record: validateRecord(record), index })).sort((a, b) => Number(!!b.record.passenger) - Number(!!a.record.passenger) || a.index - b.index);
   for (const { record, index } of ordered) {
-    const bucket = knownIdsOnly ? '' : bucketKey(record);
-    const exact = recordIds(record).map(id => ids.get(id)).find(Boolean);
-    const check = index >= rejectFrom;
-    const rejectConflict = strict ? match => check || checked.has(match) : null;
-    const existing = exact || (bucket ? duplicateOf(buckets.get(bucket) || [], record, rejectConflict) : undefined);
+    const existing = recordIds(record).map(id => ids.get(id)).find(Boolean);
     const target = existing ? joinRecords(existing, record) : record;
-    if (check) checked.add(target);
-    if (!existing) { result.push(target); positions.set(target, index); }
-    else positions.set(target, Math.min(positions.get(target), index));
+    positions.set(target, Math.min(positions.get(target) ?? index, index));
     for (const id of recordIds(target)) ids.set(id, target);
-    const targetBucket = knownIdsOnly ? '' : bucketKey(target);
-    if (targetBucket) {
-      if (!buckets.has(targetBucket)) buckets.set(targetBucket, []);
-      if (!buckets.get(targetBucket).includes(target)) buckets.get(targetBucket).push(target);
-    }
   }
-  return result.sort((a, b) => positions.get(a) - positions.get(b)).map(validateRecord);
+  return [...positions.keys()].sort((a, b) => positions.get(a) - positions.get(b)).map(validateRecord);
 }
-export function applyImport(records, candidates, { knownIdsOnly = false } = {}) {
-  for (const candidate of candidates) requireCompleteIdentity(candidate.identity);
+export function mergeBackupRecords(records, backupRecords) {
+  for (const record of backupRecords) requireCompleteIdentity(record.identity);
   const before = new Map(records.flatMap(r => recordIds(r).map(id => [id, r])));
-  const result = deduplicateRecords([...records, ...candidates], { rejectFrom: records.length, knownIdsOnly });
-  let added = 0, enriched = 0;
-  for (const record of result) {
+  const merged = deduplicateRecords([...records, ...backupRecords]);
+  for (const record of merged) {
     const previous = recordIds(record).map(id => before.get(id)).find(Boolean);
-    if (!previous) added++;
-    else if (JSON.stringify(record) !== JSON.stringify(previous)) { record.updatedAt = now(); enriched++; }
+    if (previous && !equal(record, previous)) record.updatedAt = now();
   }
-  return { records: result, added, enriched };
+  return merged;
 }
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function union(a = [], b = []) { return [...new Map([...a, ...b].map(x => [JSON.stringify(x), x])).values()].sort((x, y) => JSON.stringify(x).localeCompare(JSON.stringify(y))); }

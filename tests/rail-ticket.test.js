@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseScanText, railPhotoChanges } from '../src/scan-engine.js';
-import { archive, createRecord, deduplicateRecords, readArchive } from '../src/model.js';
+import { archive, createRecord, readArchive } from '../src/model.js';
+import { reviewTicketImport } from '../src/ticket-import-review.js';
 import { refineRailService, refineRailTemplate, preferEnhancedRailRead } from '../src/rail-ocr.js';
 import { railPaperFromPixels } from '../src/rail-template.js';
 import { printedRailNumber, railFareFromLine, railSeatFromLine } from '../src/rail-ticket.js';
@@ -70,9 +71,9 @@ T1801000010701A000000 沈阳客运段补`);
   assert.deepEqual([changes.railSupplementReason, changes.railSupplementFee, changes.railSupplementSurcharge], ['客快硬卧', '5.0', '0.0']);
   assert.doesNotThrow(() => validateTicketForm(supplement));
   const ordinary = createRecord({ ...supplement, id:'regular-ticket', template:'rail-red' });
-  const duplicates = deduplicateRecords([ordinary, supplement, { ...supplement, id:'repeated-scan' }]);
-  assert.equal(duplicates.length, 2);
-  assert.equal(readArchive(archive(duplicates)).find(r => r.template === 'rail-supplement').railSupplementFee, '5.0');
+  const matches = reviewTicketImport([ordinary, supplement], { ...supplement, id:'repeated-scan' });
+  assert.deepEqual(matches.map(match => match.record.id), [supplement.id]);
+  assert.equal(readArchive(archive([ordinary, supplement])).find(r => r.template === 'rail-supplement').railSupplementFee, '5.0');
 });
 
 test('rail fares retain cents and reject lookalike years, percentages and additional charges', () => {

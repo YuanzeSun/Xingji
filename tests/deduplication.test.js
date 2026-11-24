@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRecord, applyImport, deduplicateRecords, archive, readArchive } from '../src/model.js';
+import { createRecord, mergeBackupRecords } from '../src/model.js';
 import { synchronize } from '../src/github.js';
 import { createBoardingCode } from '../src/bcbp.js';
 import { applyReviewedTicket, reviewTicketImport, TicketImportReview } from '../src/ticket-import-review.js';
@@ -20,57 +20,8 @@ test('airport variants share canonical names and IATA identities without equatin
   assert.equal(flight('city', { origin: '北京' }).originCode, '', 'a city alone is not a specific airport');
   assert.equal(resolvePlace(flight('conflict', { originCode: 'PKX' }), 'origin').status, 'conflict');
   assert.equal(resolveCity(flight('conflict', { originCode: 'PKX' }), 'origin').city, '');
-  assert.equal(applyImport([], [flight('pek'), flight('pkx', { origin: '北京大兴' })]).records.length, 2);
+  assert.equal(mergeBackupRecords([], [flight('pek'), flight('pkx', { origin: '北京大兴' })]).length, 2);
   assert.deepEqual(searchTickets([flight('pek'), flight('pkx', { origin: '北京大兴' })], { query: '首都国际机场' }).records.map(r => r.id), ['pek']);
-});
-
-test('multi-source rail records merge in storage data, enriching fields and retaining manual corrections and source history', () => {
-  const manual = rail('a', { seat: '08F', lockedFields: ['seat'], sources: [{ kind: 'manual', label: '手动录入' }] });
-  const pdf = rail('b', { origin: 'QIP', destination: 'Shanghaihongqiao', service: 'ｇ１０３', seat: '08F', price: '553.00', sources: [{ kind: 'pdf', label: '电子报销凭证' }] });
-  const scan = rail('c', { origin: '清河站', destination: '上海虹桥站', passenger: '', carriage: '05', sources: [{ kind: 'scan', label: '扫描' }] });
-  const result = applyImport([manual], [pdf, scan]);
-  assert.equal(result.added, 0); assert.equal(result.records.length, 1);
-  const r = result.records[0];
-  assert.equal(r.seat, '08F'); assert.equal(r.carriage, '05'); assert.equal(r.price, '553.00');
-  assert.equal(r.sources.length, 3); assert.deepEqual(r.mergedIds, ['b', 'c']);
-  assert.deepEqual(readArchive(archive(result.records)), result.records);
-  assert.equal(applyImport(result.records, [pdf]).records.length, 1);
-  assert.equal(deduplicateRecords([manual, pdf]).length, 1, 'existing underlying duplicates are also consolidated');
-});
-
-test('rail imports reject known conflicting fields and accept interchangeable formatting and missing fields', () => {
-  const before = rail('before', { ticketNumber: 'A123456', seat: '08F', price: '553.0', carriage: '05', identity: '12345678' });
-  const wrong = rail('wrong', { ticketNumber: 'A123457', seat: '12A', carriage: '09' });
-  assert.throws(() => applyImport([before], [wrong]), /车厢、座位 \/ 铺位、票号.*冲突/);
-  assert.throws(() => applyImport([], [before, wrong]), /票号.*冲突/);
-  assert.equal(deduplicateRecords([before, wrong]).length, 2);
-  const compatible = rail('second', { seat: '08F', carriage: '5', price: '553.00', identity: '12345678', gate: '16A' });
-  const { records } = applyImport([before], [compatible]);
-  assert.equal(records.length, 1);
-  assert.equal(records[0].ticketNumber, 'A123456');
-  assert.equal(records[0].gate, '16A');
-});
-
-test('rail imports reject disagreement on the reported vehicle and mileage', () => {
-  const before = rail('before', { railModel: 'CR400BF-B', railTrainsets: 'CR400BF-B-5099', railMileage: '1023' });
-  const incoming = rail('incoming', { railModel: 'CR400AF', railTrainsets: 'CR400AF-2001', railMileage: '1000' });
-  assert.throws(() => applyImport([before], [incoming]), /车型、车组编号、铁路里程.*冲突/);
-  const compatible = rail('compatible', { railMileage: '1023.000', railPlatform: '13' });
-  const { records } = applyImport([before], [compatible]);
-  assert.equal(records.length, 1);
-  assert.equal(records[0].railPlatform, '13');
-});
-
-test('different passengers, journeys and ambiguous unnamed tickets remain separate', () => {
-  const a = rail('a'), b = rail('b', { passenger: '李四' }), unnamed = rail('u', { passenger: '' });
-  assert.equal(deduplicateRecords([unnamed, a, b]).length, 3, 'an unnamed scan must not bridge two passengers');
-  for (const extra of [{ destination: '上海' }, { origin: '清河城' }, { service: 'G104' }, { departureDate: '2026-11-16' }, { passenger: '李四' }]) {
-    assert.equal(deduplicateRecords([a, rail('other', extra)]).length, 2);
-  }
-  assert.equal(deduplicateRecords([rail('x', { departureTime: '08:00' }), rail('y', { departureTime: '10:00' })]).length, 2);
-  assert.equal(deduplicateRecords([rail('x', { departureDate: '2026' }), rail('y', { departureDate: '2026' })]).length, 2);
-  assert.equal(deduplicateRecords([rail('x', { passenger: '', seat: '01A' }), rail('y', { passenger: '', seat: '02A' })]).length, 2);
-  assert.equal(deduplicateRecords([flight('x', { ticketNumber: '999123' }), flight('y', { origin: '上海虹桥', destination: '广州白云', ticketNumber: '999123' })]).length, 2);
 });
 
 test('synchronization retains a confirmed supplement and its absorbed ID cannot re-create the record', async () => {

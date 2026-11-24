@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRecord, archive, readArchive, applyImport, mergeThreeWay } from '../src/model.js';
+import { createRecord, archive, readArchive, mergeBackupRecords, mergeThreeWay } from '../src/model.js';
 import { resolveCity, cityOverview, placesInCity, sameCity, LOCATION_REFERENCE } from '../src/locations.js';
 import { searchTickets } from '../src/search.js';
 import { STATIONS } from '../src/data/location-reference.js';
@@ -71,7 +71,7 @@ test('derived cities follow the database through edits, imports, backups and ind
   assert.deepEqual(readArchive(JSON.parse(JSON.stringify(archive([r])))),[r]);
   const imported=readArchive(archive([r]))[0];assert.equal(imported.originCity,'北京');assert.equal(imported.destinationCity,'上海');
   assert.equal(record({...r,origin:'清河城',originCode:''}).originCity,'邢台');
-  assert.equal(applyImport([r],[record({originCity:'邢台'})]).records[0].originCity,'北京');
+  assert.equal(mergeBackupRecords([r],[record({originCity:'邢台'})])[0].originCity,'北京');
   const base=record(),merged=mergeThreeWay([base],[r],[{...base,issuer:'北京南站'}]);
   assert.equal(merged.conflicts.length,0);assert.equal(merged.records[0].originCity,'北京');assert.equal(merged.records[0].issuer,'北京南站');
 });

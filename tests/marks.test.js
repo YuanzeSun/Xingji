@@ -2,7 +2,7 @@ import { parseScanText } from '../src/scan-engine.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { createRecord, archive, readArchive, applyImport, mergeThreeWay } from '../src/model.js';
+import { createRecord, archive, readArchive, mergeBackupRecords, mergeThreeWay } from '../src/model.js';
 import { ticketSVG } from '../src/tickets.js';
 import { normalizeMarks, describeMarks, marksFromText } from '../src/ticket-marks.js';
 
@@ -54,10 +54,10 @@ test('JSON roundtrips preserve mark shape and position', () => {
 test('imports respect corrected marks including intentional removal and sync detects mark conflicts', () => {
   const base = sample();
   const marked = sample({ ticketMarks: marks });
-  assert.deepEqual(applyImport([base], [marked]).records[0].ticketMarks, marks);
-  assert.deepEqual(applyImport([{ ...base, lockedFields: ['ticketMarks'] }], [marked]).records[0].ticketMarks, []);
+  assert.deepEqual(mergeBackupRecords([base], [marked])[0].ticketMarks, marks);
+  assert.deepEqual(mergeBackupRecords([{ ...base, lockedFields: ['ticketMarks'] }], [marked])[0].ticketMarks, []);
   const otherMark = sample({ ticketMarks: [{ text: '学' }] });
-  assert.deepEqual(applyImport([marked], [otherMark]).records[0].ticketMarks, marks);
+  assert.deepEqual(mergeBackupRecords([marked], [otherMark])[0].ticketMarks, marks);
   const result = mergeThreeWay([base], [marked], [{ ...base, issuer: '另一台设备的售票站' }]);
   assert.equal(result.conflicts.length, 0); assert.deepEqual(result.records[0].ticketMarks, marks);
   assert.equal(result.records[0].issuer, '另一台设备的售票站');

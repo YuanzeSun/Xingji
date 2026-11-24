@@ -44,6 +44,11 @@ test('provenance round-trips through backups, validates metadata and disappears 
   }
   const deleted=createRecord({...record,deleted:true});assert.equal(deleted.boardingCodeSource,'');assert.equal(deleted.boardingCodeOperatingFlight,'');assert.deepEqual(deleted.lookupValues,{});
   assert.throws(()=>flight({lookupValues:{password:'secret'}}),/自动补全/);
+  const arrivalDate = { year: 2026, dayOfYear: 321 };
+  const stored = archive([flight({ arrivalDate, lookupValues:{ arrivalDate } })]);
+  assert.deepEqual(readArchive(stored)[0].lookupValues.arrivalDate, arrivalDate);
+  stored.records[0].lookupValues.arrivalDate = '2026-11-17';
+  assert.throws(()=>readArchive(stored),/年份/);
   assert.throws(()=>flight({boardingCodeSource:'unexpected'}),/来源/);
 });
 
@@ -52,7 +57,7 @@ test('independent device edits regenerate one combined code instead of conflicti
   assert.deepEqual(merged.conflicts,[]);const read=readBoardingCode(merged.records[0].boardingCode);assert.equal(read.seat,'20C');assert.equal(read.pnr,'XYZ789');
   const removed=createRecord({...base,boardingCode:'',boardingCodeSource:'',lockedFields:['boardingCode']});
   const deletion=mergeThreeWay([base],[removed],[remote]);assert.deepEqual(deletion.conflicts,[]);assert.equal(deletion.records[0].boardingCode,'');
-  const joined=deduplicateRecords([base,createRecord({...base,id:'other',seat:'20C',lockedFields:['seat']})]);assert.equal(joined.length,1);assert.equal(readBoardingCode(joined[0].boardingCode).seat,'20C');
+  const joined=deduplicateRecords([base,createRecord({...base,seat:'20C',lockedFields:['seat']})]);assert.equal(joined.length,1);assert.equal(readBoardingCode(joined[0].boardingCode).seat,'20C');
 });
 
 test('real barcode conflicts preserve each source and operating-flight metadata through explicit cloud resolution',async()=>{
@@ -94,7 +99,7 @@ test('lookup origins follow the selected field during deduplication, independent
   const conflicting=mergeThreeWay([base],[manual],[createRecord({...base,railModel:'CRH380A',lookupValues:{...base.lookupValues,railModel:'CRH380A'}})]);
   assert.equal(conflicting.conflicts.length,1);resolveRecordConflict(conflicting.records[0],conflicting.conflicts[0],'remote');assert.equal(isLookupValue(conflicting.records[0],'railModel'),true);
   const identicalTouch=createRecord({...base,lockedFields:['railModel']});assert.equal(mergeThreeWay([base],[identicalTouch],[local]).conflicts.length,1,'a manual confirmation is not silently replaced by an automatic refresh');
-  const joined=deduplicateRecords([base,createRecord({...base,id:'scan',railModel:'CRH380A',lookupValues:{},lockedFields:['railModel']})]);assert.equal(joined.length,1);assert.equal(joined[0].railModel,'CRH380A');assert.equal(isLookupValue(joined[0],'railModel'),false);
+  const joined=deduplicateRecords([base,createRecord({...base,railModel:'CRH380A',lookupValues:{},lockedFields:['railModel']})]);assert.equal(joined.length,1);assert.equal(joined[0].railModel,'CRH380A');assert.equal(isLookupValue(joined[0],'railModel'),false);
 });
 
 test('railway keywords include models, supply, units and valid trainset IDs without leaking metadata objects into search',()=>{

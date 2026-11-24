@@ -27,6 +27,7 @@ function railExample(record){
     carRemark:'示例车组备注：记录曾乘车组的补充说明。'
   });
   const values=railCompletion(record,reference);
+  if(values.arrivalDate)values.arrivalDate=journeyDate(values.arrivalDate);
   return {...values,railPowerSupply:values.railPowerSupply || (record.service==='Z83' ? 'AC380V' : 'AC25KV'),railMileage:values.railMileage || ({G7602:'256',Z83:'1531'}[record.service]),
     lookupValues:Object.fromEntries(Object.entries(values).filter(([key,value])=>LOOKUP_FIELDS.includes(key)&&value)),
     fieldSources:Object.fromEntries(Object.entries(values).filter(([,value])=>value).map(([key])=>[key,'railgo']))};

@@ -1,5 +1,5 @@
 import * as db from './db.js';
-import { applyImport, clone, deduplicateRecords, mergeThreeWay, now, sameRecords } from './model.js';
+import { clone, deduplicateRecords, mergeBackupRecords, mergeThreeWay, now, sameRecords } from './model.js';
 import { applyReviewedTicket } from './ticket-import-review.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings } from './shared-settings.js';
 
@@ -126,7 +126,7 @@ function stageChange(config, d1, change) {
 function mergedRecords(expected, proposed, current) {
   const { records, conflicts } = mergeThreeWay(expected, proposed, current);
   if (conflicts.length) throw new Error('另一标签页已修改同一处，请保留当前输入并重新打开票据核对');
-  return deduplicateRecords(records, { knownIdsOnly: true });
+  return deduplicateRecords(records);
 }
 function mergedSettings(expected, proposed, current) {
   const { settings, conflicts } = mergeSettings(expected, proposed, current);
@@ -139,10 +139,10 @@ export function stageRecords(expected, proposed, config, d1 = null) {
 export function stageSettings(expected, proposed, config, d1 = null) {
   return stageChange(config, d1, current => ({ settings: mergedSettings(expected, proposed, current.settings) }));
 }
-export function stageImport(candidates, config, d1, expectedSettings, settings) {
+export function stageBackupRestore(records, config, d1, expectedSettings, settings) {
   return stageChange(config, d1, current => ({
-    ...applyImport(current.records, candidates, { knownIdsOnly: true }),
-    settings: settings ? mergedSettings(expectedSettings, { ...settings, connections: expectedSettings.connections }, current.settings) : current.settings
+    records: mergeBackupRecords(current.records, records),
+    settings: mergedSettings(expectedSettings, { ...settings, connections: expectedSettings.connections }, current.settings)
   }));
 }
 export function stageTicket(candidate, config, d1, decision) {
@@ -176,7 +176,7 @@ export async function acknowledgeSync(captured, remote) {
     const merged = mergeThreeWay(captured.records, current.records, remote.records);
     const mergedSettings = mergeSettings(captured.settings, current.settings, remote.settings);
     if (merged.conflicts.length || mergedSettings.conflicts.length) return { result: { ...current, retry: true } };
-    const records = deduplicateRecords(merged.records, { knownIdsOnly: true }), base = clone(remote.records), lastSync = now();
+    const records = deduplicateRecords(merged.records), base = clone(remote.records), lastSync = now();
     const settings = mergedSettings.settings, settingsBase = sharedSettings(remote.settings);
     const pending = !sameRecords(records, base) || !sameSettings(settings, settingsBase);
     const changed = !sameRecords(records, current.records) || !sameRecords(base, current.base) || !sameSettings(settings, current.settings) || !sameSettings(settingsBase, current.settingsBase) || current.meta.head !== remote.head || !current.meta.verified || current.meta.pending !== pending;

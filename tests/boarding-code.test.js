@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { Resvg } from '@resvg/resvg-js';
 import { normalizeBoardingCode, renderBoardingCode } from '../src/boarding-code.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from '../src/code-editor.js';
-import { createRecord, archive, readArchive, applyImport, mergeThreeWay } from '../src/model.js';
+import { createRecord, archive, readArchive, mergeBackupRecords, mergeThreeWay } from '../src/model.js';
 import { ticketSVG, exportSVG } from '../src/tickets.js';
 import { DEMO_BOARDING_CODE as code } from '../src/demo-boarding-code.js';
 const flight = extra => createRecord({ id: 'flight-code', type: 'flight', template: 'air-boarding-pass', origin: '北京首都', destination: '东京羽田', service: 'CA181', departureDate: '2025-01-01', boardingCodeSource: 'original', boardingLegIndex: '0', ...extra });
@@ -26,7 +26,7 @@ test('original boarding codes render without stretching and survive import, back
   const record=flight({ boardingCode:code,lockedFields:['boardingCode'] }); const dom=new JSDOM(ticketSVG(record),{contentType:'image/svg+xml'});
   const image=dom.window.document.querySelector('svg[data-boarding-code]');assert.ok(image.querySelector('path'));assert.equal(image.querySelector('image'),null);assert.match(image.getAttribute('preserveAspectRatio'),/meet/);assert.ok(Number(image.getAttribute('width')) > Number(image.getAttribute('height')));dom.window.close();
   assert.deepEqual(readArchive(archive([record]))[0].boardingCode,code);
-  assert.deepEqual(applyImport([flight()],[record]).records[0].boardingCode,code);
+  assert.deepEqual(mergeBackupRecords([flight()],[record])[0].boardingCode,code);
   const merged=mergeThreeWay([flight()],[record],[flight({seat:'24K'})]);assert.deepEqual(merged.records[0].boardingCode,code);assert.equal(merged.records[0].seat,'24K');
   assert.equal(createRecord({...record,deleted:true}).boardingCode,'');
   globalThis.location={href:'https://example.com/'};globalThis.fetch=async()=>new Response('font fixture');assert.ok((await exportSVG(record)).includes('data-boarding-code'));

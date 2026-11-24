@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { createRecord, deduplicateRecords, archive, readArchive } from '../src/model.js';
+import { createRecord, archive, readArchive } from '../src/model.js';
+import { reviewTicketImport } from '../src/ticket-import-review.js';
 import { parseScanText } from '../src/scan-engine.js';
 import { ticketSVG } from '../src/tickets.js';
 import { layoutFontFiles } from '../src/ticket-layouts.js';
@@ -51,8 +52,9 @@ test('refund fee survives OCR and JSON without merging into the original journey
   assert.equal(refund.template, 'rail-refund-receipt'); assert.equal(refund.price, '41.5');
   const ticket = createRecord({ ...fields, id:'original', template:'rail-receipt' });
   const fee = createRecord({ ...fields, id:'refund', template:'rail-refund-receipt' });
-  const rows = deduplicateRecords([ticket, fee, { ...fee, id:'refund-scan' }]);
-  assert.equal(rows.length, 2); assert.equal(rows.find(row => row.id === 'original').template, 'rail-receipt');
+  const rows = [ticket, fee];
+  const matches = reviewTicketImport(rows, { ...fee, id:'refund-scan' });
+  assert.deepEqual(matches.map(match => match.record.id), [fee.id]);
   assert.equal(readArchive(archive(rows)).find(row => row.id === 'refund').template, fee.template);
   assert.doesNotThrow(() => validateTicketForm({ ...fee, seat:'', carriage:'', seatClass:'', departureTime:'' }));
   assert.throws(() => validateTicketForm({ ...fee, price:'' }), /退票费/);

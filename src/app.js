@@ -16,7 +16,7 @@ import { createRecord, validateRecord, mergeThreeWay, DEFAULT_RAIL_TEMPLATE, FIE
 import { SUPPLEMENT_FIELDS, ticketTemplateChoices } from './rail-template.js';
 import { hasRailQRCode } from './ticket-code.js';
 import * as db from './db.js';
-import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageImport, stageTicket, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, replaceWithRemote } from './sync-state.js';
+import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageBackupRestore, stageTicket, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, replaceWithRemote } from './sync-state.js';
 import { TicketImportReview } from './ticket-import-review.js';
 import { sharedSettings, sameSettings, maskedKey, wasUnlinked } from './shared-settings.js';
 import { watchAppUpdates } from './app-update.js';
@@ -182,7 +182,7 @@ async function verifyBeforeWrite(message) {
   if (state.syncMeta.rejection && canWrite()) return;
   if (!await doSync() || !canWrite()) throw new Error(message);
 }
-async function persist(records, { merge = false, settings, ticket, decision } = {}) {
+async function persist(records, { backupSettings, ticket, decision } = {}) {
   if (!canWrite() || state.saving) throw new Error('当前不能修改票据，请先完成云端核对');
   const expected = { records: clone(state.records), settings: clone(state.settings) };
   const { config, d1 } = state;
@@ -193,7 +193,7 @@ async function persist(records, { merge = false, settings, ticket, decision } = 
     if (!isArchiveContext(context)) throw new Error('票库已变化，请重新打开后核对。');
     const staged = await withCloudLock(() => {
       if (ticket) return stageTicket(ticket, config, d1, decision);
-      if (merge) return stageImport(records, config, d1, expected.settings, settings);
+      if (backupSettings) return stageBackupRestore(records, config, d1, expected.settings, backupSettings);
       return stageRecords(expected.records, records, config, d1);
     });
     useSnapshot(staged);
@@ -1330,7 +1330,7 @@ function reviewFullBackup(backup, context) {
     if (state.saving || !isArchiveContext(context)) return;
     const release = freezeForm(form, '正在恢复…');
     try {
-      await persist(backup.records, { merge: true, settings: backup.settings });
+      await persist(backup.records, { backupSettings: backup.settings });
       if (!isArchiveContext(context)) return;
       imports.backup = null;
       state.profileDraft = null; state.profileBase = null; state.profileDirty = false; state.flightKeyDraft = null;

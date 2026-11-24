@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { createRecord, archive, readArchive, applyImport } from '../src/model.js';
+import { createRecord, archive, readArchive, mergeBackupRecords } from '../src/model.js';
 import { mapFlightResult } from '../src/importers.js';
 import { validateTicketForm } from '../src/ticket-form.js';
 import { ticketSVG } from '../src/tickets.js';
@@ -46,7 +46,7 @@ test('special tickets remain in the archive but never contribute to any journey 
 test('Provider, archive and cloud round trips preserve state, and automatic deduplication cannot change a normal journey into an invalid one',async()=>{
  const invalid=flight({id:'invalid',flightStatus:'invalid'}),normal=flight({id:'normal'});
  for(const r of [readArchive(archive([invalid]))[0],mapFlightResult([{flightStatus:'invalid'}])[0]])assert.equal(r.flightStatus,'invalid');
- assert.equal(applyImport([normal],[invalid]).records.length,2);
+ assert.equal(mergeBackupRecords([normal],[invalid]).length,2);
  const server=new MemoryGitHub([normal,invalid]),store=new GitHubStore({owner:'user',repo:'data',branch:'main',id:77},'fake-key',server.fetch);
  const snapshot=await store.read();assert.equal(snapshot.records.find(r=>r.id==='invalid').flightStatus,'invalid');
  const result=await synchronize(store,snapshot.records,snapshot.records,{}, {baseHead:snapshot.head,baseSettings:snapshot.settings,localSettings:snapshot.settings});

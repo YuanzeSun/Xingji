@@ -151,8 +151,7 @@ export async function synchronize(store, base, local, resolutions = {}, { baseHe
   if (baseHead && snapshot.initialized === false) throw new ArchiveResetError(snapshot);
   if (baseHead && (snapshot.generation || '') !== baseGeneration) throw new ArchiveResetError(snapshot, true);
   if (baseHead && store.assertDescendant) await store.assertDescendant(baseHead, snapshot.head);
-  const collapse = rows => deduplicateRecords(rows, { knownIdsOnly: true });
-  const merge = mergeThreeWay(...alignMergedIds(base, local, snapshot.records).map(collapse));
+  const merge = mergeThreeWay(...alignMergedIds(base, local, snapshot.records).map(deduplicateRecords));
   const settingMerge = mergeSettings(baseSettings, localSettings, snapshot.settings);
   const unresolved = [];
   for (const conflict of [...merge.conflicts, ...settingMerge.conflicts]) {
@@ -162,7 +161,7 @@ export async function synchronize(store, base, local, resolutions = {}, { baseHe
     else resolveRecordConflict(merge.records.find(r=>r.id===conflict.id),conflict,resolution.choice);
   }
   if (unresolved.length) return { ...merge, settings: settingMerge.settings, conflicts: unresolved, snapshot };
-  merge.records = collapse(merge.records);
+  merge.records = deduplicateRecords(merge.records);
   let head = snapshot.head;
   if (snapshot.initialized === false || !sameRecords(merge.records, snapshot.records) || !sameSettings(settingMerge.settings, snapshot.settings)) head = await store.write(merge.records, snapshot, settingMerge.settings) || head;
   return { records: merge.records, settings: settingMerge.settings, conflicts: [], head, generation: snapshot.generation || '' };

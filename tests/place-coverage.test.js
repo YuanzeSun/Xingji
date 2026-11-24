@@ -5,7 +5,8 @@ import { STATIONS, AIRPORTS } from '../src/data/location-reference.js';
 import { AIRPORT_LABELS } from '../src/data/airport-labels.js';
 import { resolvePlace, railwayStop } from '../src/places.js';
 import { resolveCity } from '../src/locations.js';
-import { createRecord, archive, readArchive, deduplicateRecords } from '../src/model.js';
+import { createRecord, archive, readArchive } from '../src/model.js';
+import { reviewTicketImport } from '../src/ticket-import-review.js';
 import { ticketSVG } from '../src/tickets.js';
 
 test('every reference station resolves by name and telecode, independently of initials', () => {
@@ -77,7 +78,7 @@ test('Chinese airport inputs retain their stored language while overseas departu
     assert.equal(r.destinationCode, 'SIN');
     assert.deepEqual(readArchive(archive([r])), [r]);
     const english = AIRPORTS.find(row=>row[0]===code)[3];
-    assert.equal(deduplicateRecords([r,createRecord({ ...r, id:'english-alias', origin:english })]).length, 1);
+    assert.deepEqual(reviewTicketImport([r],createRecord({ ...r, id:'english-alias', origin:english }))[0].conflicts, []);
     const dom = new JSDOM(ticketSVG(r), { contentType:'image/svg+xml' });
     const document = dom.window.document;
     const header = document.querySelector('[data-airport-heading="main"]');

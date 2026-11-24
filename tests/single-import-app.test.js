@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepareCloud } from './helpers/cloud.js';
-import { applyImport, createRecord, mergeThreeWay } from '../src/model.js';
+import { mergeBackupRecords, createRecord, mergeThreeWay } from '../src/model.js';
 import { normalizeRailInvoice, parseRailInvoicePage } from '../src/rail-invoice.js';
 import { browser, until } from './helpers/d1-app.js';
 import { pickReceipt, stubReceiptPDF, receiptBytes, receiptPage } from './helpers/receipt-pdf.js';
@@ -106,7 +106,7 @@ test('ticket entry is in the archive and rail receipts accept one PDF journey pe
 
     const printed = createRecord({ ...saved, id: 'printed-ticket', ticketNumber: 'A000001', railInvoice: undefined,
       fieldSources: {service:'manual',departureTime:'manual'}, lockedFields: ['service','departureTime'] });
-    const { records: merged } = applyImport([printed], [saved]);
+    const merged = mergeBackupRecords([printed], [{ ...saved, id: printed.id }]);
     assert.equal(merged.length, 1);
     assert.equal(merged[0].ticketNumber, 'A000001');
     assert.deepEqual(merged[0].railInvoice, saved.railInvoice);
