@@ -14,7 +14,10 @@ test('the editor fills a flight through the provider, preserves private input an
     if (!String(url).startsWith('https://c-gw.variflight.com/')) return server.fetch(url, options);
     const message = JSON.parse(options.body); providerCalls.push(message);
     if (message.method === 'notifications/initialized') return new Response(null, { status: 202 });
-    const result = message.method === 'initialize' ? { protocolVersion: '2025-03-26' } : { structuredContent: { kind: 'collection', items: [{ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:45:00', FlightArrtimePlanDate: '2026-07-18 12:50:00', FlightDeptimeDate: '2026-07-18 09:15:00', FlightArrtimeDate: '2026-07-18 13:15:00', distance: 2100, FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', BoardGate: 'E12', aircraftType: '空客', miniAirplaneModels: 'A330-343', generic: 'A333' }] } };
+    const result = message.method === 'initialize' ? { protocolVersion: '2025-03-26' } :
+      message.params.name === 'getFlightTrackLine' ? { structuredContent: { kind: 'collection', items: [{
+        fnum: 'CA181', dep: 'PEK', arr: 'HND', date: '2026-07-18_0', coordinates: '40.08,116.59;35.55,139.78',
+      }] }} : { structuredContent: { kind: 'collection', items: [{ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:45:00', FlightArrtimePlanDate: '2026-07-18 12:50:00', FlightDeptimeDate: '2026-07-18 09:15:00', FlightArrtimeDate: '2026-07-18 13:15:00', distance: 2100, FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', BoardGate: 'E12', aircraftType: '空客', miniAirplaneModels: 'A330-343', generic: 'A333' }] } };
     return Response.json({ id: message.id, result }, { headers: { 'Mcp-Session-Id': 'fixture-session' } });
   };
   const wait = async fn => { for (let i = 0; i < 250; i++) { if (await fn()) return; await new Promise(resolve => setTimeout(resolve, 5)); } assert.fail('Flight lookup did not settle'); };
@@ -25,7 +28,7 @@ test('the editor fills a flight through the provider, preserves private input an
     fill('type', 'flight'); assert.ok(document.querySelector('.flight-lookup'));
     fill('service', 'CA181'); fill('departureDate', '2026-07-18'); fill('passenger', 'LI/MING'); fill('identity', 'P000001'); fill('seat', '24K'); fill('seatClass', 'Y'); fill('price', '580'); fill('pnr', 'ABC123'); fill('aircraftRegistration', 'B-0001');
     assert.equal(providerCalls.length, 0);
-    document.querySelector('[data-flight-lookup]').click(); await wait(() => document.querySelector('[data-flight-status]').textContent.includes('已补全'));
+    document.querySelector('[data-flight-lookup]').click(); await wait(() => document.querySelector('[data-flight-status]').textContent.includes('已带入飞行航迹'));
     assert.equal(document.querySelector('[name=originCode]').value, 'PEK'); assert.equal(document.querySelector('[name=destinationCode]').value, 'HND');
     assert.equal(document.querySelector('[name=departureTime]').value, '08:45'); assert.equal(document.querySelector('[name=arrivalDate]').value, '2026-07-18'); assert.equal(document.querySelector('[name=arrivalTime]').value, '12:50');
     assert.equal(document.querySelector('[name=actualDepartureTime]').value,'09:15');assert.equal(document.querySelector('[name=actualArrivalTime]').value,'13:15');assert.equal(document.querySelector('[name=flightDistance]').value,'2100');
@@ -36,7 +39,10 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.equal(document.querySelector('#city-reference'),null);
     assert.match(document.querySelector('#editor-preview').textContent, /A330-343/);
     document.querySelector('[data-flight-lookup]').click(); await wait(() => document.querySelector('[data-flight-status]').textContent.includes('均已填写'));
-    assert.equal(providerCalls.filter(call => call.method === 'tools/call').length, 1);
+    assert.deepEqual(providerCalls.filter(call => call.method === 'tools/call').map(call => call.params), [
+      { name: 'getFlightStatus', arguments: { fnum: 'CA181', date: '2026-07-18' } },
+      { name: 'getFlightTrackLine', arguments: { flightStr: 'CA181_PEK_HND_2026-07-18_0' } },
+    ]);
     document.querySelector('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); await wait(() => !document.querySelector('dialog'));
     const saved = (await db.get('records', []))[0];
     assert.equal(saved.departureZone,'Asia/Shanghai');assert.equal(saved.arrivalZone,'Asia/Tokyo');

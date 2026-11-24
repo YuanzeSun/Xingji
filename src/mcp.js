@@ -47,7 +47,7 @@ export class FlightConnector {
     await this.send('notifications/initialized', {}, true);
   }
   async #callTool(name, args, failure) {
-    await this.connect();
+    if (!this.session) await this.connect();
     const result = await this.send('tools/call', { name, arguments: args });
     if (!result || result.isError) throw new Error(failure);
     return result;

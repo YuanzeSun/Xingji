@@ -46,6 +46,21 @@ export function normalizeFlightTrack(record, value) {
   return segments.length ? { flightStr: value.flightStr, queriedAt: new Date(value.queriedAt).toISOString(), segments } : undefined;
 }
 
+function providerCoordinates(row, flightStr) {
+  const [fnum, dep, arr, date, kind] = flightStr.split('_');
+  if (row.fnum !== fnum || row.dep !== dep || row.arr !== arr || ![date, date + '_' + kind].includes(row.date)) return null;
+  if (!row.coordinates.trim()) return [];
+  const points = row.coordinates.trim().replace(/;$/, '').split(';');
+  if (points.length > MAX_POINTS) return null;
+  const line = [];
+  for (const point of points) {
+    const fields = point.split(',');
+    if (fields.length !== 2) return null;
+    line.push([fields[1], fields[0]]);
+  }
+  return [line];
+}
+
 function structuredTrack(value, flightStr, depth = 0) {
   if (value == null || depth > 8) return null;
   const nested = item => structuredTrack(item, flightStr, depth + 1);
@@ -59,6 +74,7 @@ function structuredTrack(value, flightStr, depth = 0) {
     return lines.length ? lines.flat() : null;
   }
   if (typeof value !== 'object' || (value.flightStr && value.flightStr !== flightStr)) return null;
+  if (typeof value.coordinates === 'string' && Object.hasOwn(value, 'fnum')) return providerCoordinates(value, flightStr);
   if (value.type === 'LineString') return [value.coordinates];
   if (value.type === 'MultiLineString') return value.coordinates;
   if (value.type === 'FeatureCollection') return nested(value.features);

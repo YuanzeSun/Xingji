@@ -75,7 +75,8 @@ test('12306 reads the existing browser session, paginates, and returns trip fiel
 
 test('12306 sends the selected dates and holds results for individual review', async t => {
   const window = browser();
-  const github = await prepareCloud();
+  const identity = '000000200001011234';
+  const github = await prepareCloud([], { profile: { chineseName: ride.passenger, documents: [{ type: 'national-id', number: identity }] } });
   t.after(() => { window.close(); delete globalThis.chrome; });
   Object.defineProperty(window.navigator, 'userAgent', { configurable: true, value: 'Mozilla/5.0 Chrome/142.0' });
   const today = Date.parse(railPointsRange().end);
@@ -110,9 +111,15 @@ test('12306 sends the selected dates and holds results for individual review', a
   query.elements.end.value = range.end;
   query.querySelector('[type="submit"]').click();
   await until(() => reply);
-  reply({ rides: [ride, { ...ride, service: 'G25' }] });
+  reply({ rides: [ride, { ...ride, service: 'G25', passenger: '示例乙' }] });
   await until(() => document.querySelectorAll('[data-action="rail-points-trip"]').length === 2);
   assert.deepEqual(github.records(), []);
+  document.querySelectorAll('[data-action="rail-points-trip"]')[1].click();
+  await until(() => document.querySelector('#editor-form'));
+  assert.equal(document.querySelector('#editor-form').elements.identity.value, '');
+  document.querySelector('dialog [data-action="close-modal"]').click();
+  document.querySelector(action).click();
+  await until(() => document.querySelector('[data-action="rail-points-trip"]'));
   document.querySelector('[data-action="rail-points-trip"]').click();
   await until(() => document.querySelector('#editor-form'));
   const form = document.querySelector('#editor-form');
@@ -120,7 +127,7 @@ test('12306 sends the selected dates and holds results for individual review', a
   assert.equal(form.elements.origin.value, '北京南');
   assert.equal(form.elements.destination.value, '上海虹桥');
   assert.equal(form.elements.departureTime.required, false);
-  assert.equal(form.elements.identity.value, '');
+  assert.equal(form.elements.identity.value, identity);
   form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await until(() => github.records().length === 1 && !document.querySelector('dialog'));
   const [saved] = github.records();
@@ -128,4 +135,6 @@ test('12306 sends the selected dates and holds results for individual review', a
   assert.equal(saved.seat, '');
   assert.equal(saved.price, '');
   assert.equal(saved.fieldSources.service, 'rail-points');
+  assert.equal(saved.fieldSources.passenger, 'rail-points');
+  assert.equal(saved.fieldSources.identity, 'profile');
 });

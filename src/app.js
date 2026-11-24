@@ -56,7 +56,7 @@ import { bindStationPicker } from './station-picker.js';
 import { FLIGHT_STATUSES, normalizeFlightStatus } from './flight-status.js';
 import { isRefundReceipt, isJourneyRecord } from './record-kind.js';
 import { bindUppercaseNames } from './name-case.js';
-import { personalProfile, applyProfileDefaults } from './personal-profile.js';
+import { personalProfile, applyProfileDefaults, profileDefaults } from './personal-profile.js';
 import { personalProfilePanel, collectPersonalProfile, bindPersonalProfileForm, personalProfileSummary } from './personal-profile-form.js';
 import { cityOverview } from './locations.js';
 import { DEFAULT_SEARCH, searchOptions, searchTickets, clearSearchField } from './search.js';
@@ -1037,6 +1037,8 @@ function editRecord(record = newPersonalRecord(), {
   openModal(modalHead(imported ? '核对这张票据' : state.records.some(r => r.id === draft.id) ? '编辑票据' : '添加一张票据', requiredHint) + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${ticketEntry}${basics.filter(key => !(draft.railStanding && key === 'seat')).map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : invoiceDetails + marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ''}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div><div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="close-modal">取消</button><div class="spacer"></div><button class="button primary" type="submit">${icon('check')}保存票据</button></div></form>`, true);
   // openModal replaces the DOM, but keeps the editor state deliberately.
   const form = document.querySelector('#editor-form');
+  form.closest('dialog').classList.add('ticket-editor-modal');
+  let pendingFlightLookup, waitingForFlightLookup = false;
   bindRailReceipt(form, editor);
   bindRailPhoto(form);
   bindIdentityInput(form.elements.identity);
@@ -1171,7 +1173,14 @@ function editRecord(record = newPersonalRecord(), {
   });
   const showError = ticketFormFeedback(form, () => draft);
   form.addEventListener('submit', async event => {
-    event.preventDefault(); if (form.dataset.pending) return;
+    event.preventDefault();
+    if (form.dataset.pending || waitingForFlightLookup) return;
+    if (pendingFlightLookup) {
+      waitingForFlightLookup = true;
+      await pendingFlightLookup;
+      waitingForFlightLookup = false;
+      if (!form.isConnected) return;
+    }
     let release = () => {};
     try {
       if (!isArchiveContext(context)) throw new Error('票库已变化，请保留输入并重新打开票据。');
@@ -1230,7 +1239,12 @@ function editRecord(record = newPersonalRecord(), {
     } finally {lookupApplying=false;}
   }
   if (flight) flightLookupCleanup = bindFlightLookup(form, {
-    getRecord: () => draft, getKey: flightKey, canQuery: canWrite, desktop: supportsDesktopMcp, apply: applyEditorLookup
+    getRecord: () => draft, getKey: flightKey, canQuery: canWrite, desktop: supportsDesktopMcp, apply: applyEditorLookup,
+    applyTrack: track => { draft.flightTrack = track; editor.dirty = true; },
+    onPending: pending => {
+      pendingFlightLookup = pending;
+      void pending.then(() => { if (pendingFlightLookup === pending) pendingFlightLookup = undefined; });
+    }
   });
   else railLookupCleanup = bindRailLookup(form, {
     getRecord: () => draft, canQuery: canWrite, scannedRail, scannedRailQR, apply: applyEditorLookup
@@ -2127,7 +2141,14 @@ async function editRailPointsTrip(button) {
   const record = session?.records.find(item => item.record.id === button.dataset.id)?.record;
   if (!record || !canWrite() || !await currentArchive(session.context) || !button.isConnected || !canWrite()) return;
   const entry = root.querySelector('[data-action="rail-points"]');
-  editRecord(record, { imported: true });
+  const draft = clone(record);
+  const profile = profileDefaults('rail', state.settings.profile);
+  const name = value => value.normalize('NFKC').replace(/\s+/gu, '');
+  if (!draft.identity && profile.identity && draft.passenger && name(draft.passenger) === name(profile.passenger)) {
+    draft.identity = profile.identity;
+    markFieldSources(draft, ['identity'], 'profile');
+  }
+  editRecord(draft, { imported: true });
   modalFocus = entry;
 }
 const actions = {

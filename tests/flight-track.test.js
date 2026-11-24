@@ -17,6 +17,11 @@ const coordinates = [
   [[-151.3, 45.5], [-136.2, 40.1], [-118.41, 33.94]],
 ];
 const payload = { kind: 'collection', items: [{ flightStr, trackLine: { type: 'MultiLineString', coordinates } }] };
+const domesticFlightStr = 'MF8179_PKX_XNN_2026-08-11_0';
+const domesticRow = { fnum: 'MF8179', dep: 'PKX', arr: 'XNN', date: '2026-08-11_0',
+  coordinates: '39.499752,116.406731;38.549,110.092;36.527,102.044' };
+const domesticTrack = { kind: 'collection', items: [domesticRow] };
+const domesticCoordinates = [[[116.40673, 39.49975], [110.092, 38.549], [102.044, 36.527]]];
 
 test('flight tracks are keyed to the dated airport pair and never change the journey map', () => {
   assert.equal(flightTrackRequest(flight), flightStr);
@@ -33,9 +38,11 @@ test('flight tracks are keyed to the dated airport pair and never change the jou
   assert.equal(validateRecord({ ...saved, deleted: true }).flightTrack, undefined);
   const geometry = record => networkGeometry(journeyNetwork([record]));
   assert.equal(geometry(saved).routes[0].path, geometry(flight).routes[0].path);
+  assert.deepEqual(readFlightTrack({ structuredContent: domesticTrack }, domesticFlightStr).segments, domesticCoordinates);
+  assert.throws(() => readFlightTrack({ structuredContent: { items: [{ ...domesticRow, date: '2026-08-12_0' }] } }, domesticFlightStr), /无法识别/);
 });
 
-test('flight details query once, save the chart, then replay it on a phone without using the quota', async () => {
+test('flight tracks save with a lookup in the editor or from details and can replay without another request', async () => {
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', {
     url: 'http://localhost/#archive', pretendToBeVisual: true,
   });
@@ -59,13 +66,24 @@ test('flight details query once, save the chart, then replay it on a phone witho
   };
   const server = await prepareCloud([flight], { flightMcpKey: 'fixture-key' });
   const requests = [];
+  let connections = 0, finishTrack;
   globalThis.fetch = async (url, options = {}) => {
     if (!String(url).startsWith('https://c-gw.variflight.com/')) return server.fetch(url, options);
     const message = JSON.parse(options.body);
     assert.equal(options.headers.Authorization, 'Bearer fixture-key');
+    if (message.method === 'initialize') connections++;
     if (message.method === 'notifications/initialized') return new Response(null, { status: 202 });
     if (message.method === 'tools/call') requests.push(message.params);
-    const result = message.method === 'initialize' ? { protocolVersion: '2025-03-26' } : { structuredContent: payload };
+    let result;
+    if (message.method === 'initialize') result = { protocolVersion: '2025-03-26' };
+    else if (message.params.name === 'getFlightStatus') result = { structuredContent: { kind: 'collection', items: [{
+      FlightNo: 'MF8179', FlightDepcode: 'PKX', FlightArrcode: 'XNN', FlightDeptimePlanDate: '2026-08-11 18:05:00',
+      FlightArrtimePlanDate: '2026-08-11 20:30:00', FlightCompany: '厦门航空',
+    }] }};
+    else if (message.params.arguments.flightStr === domesticFlightStr) {
+      await new Promise(resolve => { finishTrack = resolve; });
+      result = { structuredContent: domesticTrack };
+    } else result = { structuredContent: payload };
     return Response.json({ id: message.id, result }, { headers: { 'Mcp-Session-Id': 'fixture-session' } });
   };
   function element(selector) { return window.document.querySelector(selector); }
@@ -75,7 +93,7 @@ test('flight details query once, save the chart, then replay it on a phone witho
       if (result) return result;
       await new Promise(resolve => setTimeout(resolve, 5));
     }
-    assert.fail('Flight track UI did not settle');
+    assert.fail('Flight track UI did not settle: ' + (element('#editor-error')?.textContent || element('[data-flight-status]')?.textContent || ''));
   }
 
   try {
@@ -108,7 +126,7 @@ test('flight details query once, save the chart, then replay it on a phone witho
     await waitFor(() => !element('dialog'));
     assert.equal(frames.size, 0);
 
-    Object.defineProperty(window.navigator, 'userAgent', { value: 'iPhone' });
+    Object.defineProperty(window.navigator, 'userAgent', { value: 'iPhone', configurable: true });
     window.matchMedia = () => ({ matches: true });
     element('[data-action=view]').click();
     const savedPlay = await waitFor(() => element('[data-flight-track-play]:not([hidden])'));
@@ -116,6 +134,41 @@ test('flight details query once, save the chart, then replay it on a phone witho
     assert.equal(frames.size, 0);
     assert.equal(element('.flight-track-highlight path').style.strokeDashoffset, '0');
     assert.equal(requests.length, 1);
+
+    element('[data-action=close-modal]').click();
+    await waitFor(() => !element('dialog'));
+    Object.defineProperty(window.navigator, 'userAgent', { value: 'Chrome/158' });
+    element('[data-action=new]').click();
+    await waitFor(() => element('#editor-form'));
+    const fill = (name, value) => {
+      const field = element('#editor-form').elements[name];
+      field.value = value;
+      field.dispatchEvent(new window.Event('input', { bubbles: true }));
+    };
+    fill('type', 'flight');
+    await waitFor(() => element('[data-flight-lookup]'));
+    fill('service', 'MF8179');
+    fill('departureDate', '2026-08-11');
+    fill('passenger', 'TEST/PASSENGER');
+    fill('identity', 'P000001');
+    fill('seat', '12A');
+    fill('seatClass', 'Y');
+    element('[data-flight-lookup]').click();
+    await waitFor(() => finishTrack);
+    const editor = element('#editor-form');
+    assert.equal(editor.elements.originCode.value, 'PKX');
+    assert.equal(editor.elements.destinationCode.value, 'XNN');
+    assert.equal(element('[data-flight-track-play]'), null);
+    editor.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(server.records().length, 1);
+    finishTrack();
+    const savedFlight = await waitFor(() => server.records().find(record => record.service === 'MF8179'));
+    assert.deepEqual(savedFlight.flightTrack.segments, domesticCoordinates);
+    assert.deepEqual(requests.slice(1), [
+      { name: 'getFlightStatus', arguments: { fnum: 'MF8179', date: '2026-08-11' } },
+      { name: 'getFlightTrackLine', arguments: { flightStr: domesticFlightStr } },
+    ]);
+    assert.equal(connections, 2);
   } finally {
     window.dispatchEvent(new window.Event('offline'));
     window.close();
