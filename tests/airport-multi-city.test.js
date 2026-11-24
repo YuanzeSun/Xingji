@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {createRecord,archive,readArchive} from '../src/model.js';
-import {resolveCities,cityLabel,cityOverview,placesInCity} from '../src/locations.js';
+import {resolveCities,cityLabel,journeyCities,placesInCity} from '../src/locations.js';
 import {searchAirports,resolvePlace} from '../src/places.js';
 import {searchTickets} from '../src/search.js';
 import {suggestCities} from '../src/reference-suggestions.js';
@@ -44,14 +44,13 @@ test('secondary city spellings and county aliases find the right airport without
   const candidate=searchAirports('XNN')[0];candidate.cities.push('错误城市');assert.deepEqual(searchAirports('XNN')[0].cities,['西宁','海东']);
 });
 
-test('multi-city airport suggestions and common routes show both cities without creating duplicate trips or airport nodes',()=>{
+test('multi-city airport suggestions and filters show both cities without creating duplicate trips or airport nodes',()=>{
   const dom=new JSDOM('<label class="field"><span>出发机场</span><span class="airport-picker"><input><span role="listbox" hidden></span></span></label>'),input=dom.window.document.querySelector('input');
   bindAirportPicker(input,()=>{});input.focus();input.value='海东';input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));
   assert.match(dom.window.document.querySelector('[role="option"] small').textContent,/^西宁 \/ 海东/);dom.window.close();
   const rows=[flight(),flight({id:'back',origin:'SHA',destination:'XNN'}),createRecord({id:'rail',origin:'西宁',destination:'上海虹桥',departureDate:'2026-11-16'})];
-  const overview=cityOverview(rows);assert.deepEqual(overview.cities.find(([city])=>city==='西宁'),['西宁',3]);assert.deepEqual(overview.cities.find(([city])=>city==='海东'),['海东',2]);
-  assert.equal(overview.routes.length,1);assert.equal(overview.routes[0].count,3);
-  const html=searchPanel(rows,{},searchTickets(rows));assert.match(html,/西宁 \/ 海东/);
+  const cities=journeyCities(rows);assert.ok(cities.includes('西宁'));assert.ok(cities.includes('海东'));
+  const html=searchPanel(rows,{},searchTickets(rows),{cities});assert.match(html,/value="西宁"/);assert.match(html,/value="海东"/);
   const stats=journeyStatistics(rows,{dateTo:'2026-11-17'});assert.equal(stats.flight,2);assert.equal(stats.airports.length,2);assert.equal(stats.routes.length,1);assert.equal(stats.routes[0].count,2);
   const network=journeyNetwork(rows,{type:'flight'});assert.equal(network.mapped,2);assert.equal(network.nodes.length,2);assert.equal(network.routes.length,1);assert.equal(network.routes[0].records.length,2);
   assert.equal(mapPoint(rows[0],'origin').id,'airport:XNN');

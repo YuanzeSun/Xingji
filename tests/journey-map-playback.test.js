@@ -26,7 +26,7 @@ test('annual playback reveals each trip in departure order and replays shared ai
     rail('other-year', { departureDate: '2026-01-03' }), rail('rail-early', { departureTime: '08:00' }), flight('outbound', { departureTime: '07:00' }),
     rail('fallback', { service: 'G5', destination: '济南西', departureDate: '2025-01-04' })];
   const from = [116.3794, 39.8641], middle = [117.016, 39.373], to = [117.21, 39.137];
-  const route = { segments: [[from, middle], [middle, to]], stops: [{ name: '北京南', coordinates: from }, { name: '天津', coordinates: to }],
+  const route = { segments: [[from, middle], [middle, to]], stops: [{ name: '北京南', coordinates: from }, { name: '武清', coordinates: middle }, { name: '天津', coordinates: to }],
     lineLabels: [{ name: '京津城际线', coordinates: middle }, { name: '京津城际线', coordinates: [116.77, 39.62] }] };
   const container = window.document.querySelector('#map');
   const options = { layers: ['airway'] };
@@ -52,31 +52,42 @@ test('annual playback reveals each trip in departure order and replays shared ai
   assert.equal(select('.map-route'), null);
   assert.equal(lines(), 0);
   assert.equal(current().dataset.mapPlaybackTrip, 'outbound');
-  assert.equal(currentPath().style.visibility, 'hidden');
+  assert.equal(currentPath().hasAttribute('d'), false);
   assert.match(select('[data-map-playback-status]').textContent, /1 \/ 5.*CA181/);
-  const outbound = currentPath().getAttribute('d').slice(1).split('L');
   frame(0); frame(2000);
-  assert.equal(currentPath().style.strokeDashoffset, '0.5');
+  const half = currentPath().getAttribute('d').slice(1).split('L');
+  assert.ok(half.length > 2 && half.length < 33);
   frame(3999);
   assert.equal(current().dataset.mapPlaybackTrip, 'outbound');
   frame(4000);
   assert.equal(current().dataset.mapPlaybackTrip, 'rail-early');
-  assert.equal(select('[data-map-playback-trip="outbound"] path').hasAttribute('stroke-dasharray'), false);
+  const outbound = select('[data-map-playback-trip="outbound"] path').getAttribute('d').slice(1).split('L');
+  assert.equal(outbound.length, 33);
+  assert.deepEqual(half.slice(0, -1), outbound.slice(0, half.length - 1));
   assert.equal(current().querySelectorAll('path').length, 2);
   frame(5000);
-  assert.equal(current().querySelectorAll('path')[1].style.visibility, 'hidden');
+  const earlyPartial = currentPath().getAttribute('d');
+  assert.equal(current().querySelectorAll('path')[1].hasAttribute('d'), false);
+  const stationReached = () => [...container.querySelectorAll('.map-nodes title')].some(title => title.textContent.includes('武清'));
+  assert.equal(stationReached(), false);
   frame(8000);
   assert.equal(current().dataset.mapPlaybackTrip, 'rail-late');
   assert.equal(lines(), 1);
-  assert.equal(currentPath().getAttribute('d'), select('[data-map-playback-trip="rail-early"] path').getAttribute('d'));
+  assert.equal(stationReached(), true);
+  frame(9000);
+  assert.equal(currentPath().getAttribute('d'), earlyPartial);
   frame(12000);
   assert.equal(current().dataset.mapPlaybackTrip, 'return');
   assert.equal(select('[data-map-playback-trip="rail-late"]'), null);
-  assert.deepEqual(currentPath().getAttribute('d').slice(1).split('L'), outbound.reverse());
+  assert.equal(currentPath().hasAttribute('d'), false);
+  frame(15999);
+  assert.equal(currentPath().getAttribute('d').slice(1).split('L')[0], outbound.at(-1));
   frame(16000);
   assert.equal(current().dataset.mapPlaybackTrip, 'fallback');
   frame(20000);
+  assert.ok(select('[data-map-playing]'));
   assert.equal(current(), null);
+  frame(20450);
   assert.equal(frames.size, 0);
   assert.equal(playback().textContent, '重播年度行程');
   assert.ok(select('.map-route'));

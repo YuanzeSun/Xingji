@@ -137,7 +137,10 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
       const active = route => selected ? route.id === selected.id : node ? node.routes.has(route.id) : true;
       const left = viewport.x - viewWidth / 2, right = viewport.x + viewWidth / 2, top = viewport.y - viewHeight / 2, bottom = viewport.y + viewHeight / 2;
       const visibleRoutes = playback?.running ? [] : routes.filter(route=>route.bounds[2]>=left&&route.bounds[0]<=right&&route.bounds[3]>=top&&route.bounds[1]<=bottom);
-      const candidates = playback?.running ? playbackNodes.filter(node => playback.reached.has(node.id)) : nodes;
+      const candidates = playback?.running ? [
+        ...playbackNodes.filter(node => playback.reached.has(node.id)),
+        ...wrapNodes([...playback.stations.values()].filter(station => !playback.reached.has(station.id)))
+      ] : nodes;
       const visibleNodes=candidates.filter(node=>node.point[0]>=left-15*unit&&node.point[0]<=right+15*unit&&node.point[1]>=top-15*unit&&node.point[1]<=bottom+15*unit);
       svg.querySelector('.map-routes').innerHTML = [...visibleRoutes].sort((a, b) => Number(active(a)) - Number(active(b))).map(route => {
         const description = route.from.name + (route.aggregated ? ' ↔ ' : ' → ') + route.to.name + ' · ' + (route.aggregated ? route.records.length + ' 程' : [route.records[0].service, route.records[0].departureDate].filter(Boolean).join(' '));

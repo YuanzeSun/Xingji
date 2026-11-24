@@ -89,21 +89,12 @@ export function locationWords(record, side) {
   } else words.push(...placeWords(record, side));
   return words.filter(Boolean);
 }
-export function cityOverview(records) {
-  const counts = new Map(), routes = new Map(); let unassigned = 0;
-  for (const r of records.filter(isJourneyRecord)) {
-    const from=resolveCities(r,'origin'),to=resolveCities(r,'destination'),a=from[0],b=to[0];
-    for (const city of new Set([...from, ...to])) counts.set(city, (counts.get(city) || 0) + 1);
-    if (!a || !b) unassigned++;
-    if (a && b) {
-      const pair = [a, b].sort((x, y) => x.localeCompare(y, 'zh-CN')), id = JSON.stringify(pair);
-      if (!routes.has(id)) routes.set(id, { originCity: pair[0], destinationCity: pair[1], originCities:new Set(), destinationCities:new Set(), count: 0 });
-      const route=routes.get(id);route.count++;
-      for(const city of a===pair[0] ? from : to)route.originCities.add(city);
-      for(const city of a===pair[0] ? to : from)route.destinationCities.add(city);
-    }
+export function journeyCities(records) {
+  const cities = new Set();
+  for (const record of records.filter(isJourneyRecord)) {
+    for (const city of [...resolveCities(record, 'origin'), ...resolveCities(record, 'destination')]) cities.add(city);
   }
-  return { cities: [...counts].sort((a, b) => a[0].localeCompare(b[0], 'zh-CN')), routes: [...routes.values()].map(route=>({...route,originCities:[...route.originCities],destinationCities:[...route.destinationCities]})).sort((a, b) => b.count - a.count || a.originCity.localeCompare(b.originCity, 'zh-CN')), unassigned };
+  return [...cities].sort((a, b) => a.localeCompare(b, 'zh-CN'));
 }
 export function placesInCity(records, city) {
   const places = new Set();

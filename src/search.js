@@ -1,11 +1,11 @@
 import {calendarDate} from './journey-date.js';
 import {railTrainsetIds} from './rail-journey.js';
 import { TEMPLATES, validDate } from './model.js';
-import { resolveCities, matchesCity, locationWords } from './locations.js';
+import { matchesCity, locationWords } from './locations.js';
 import { FLIGHT_STATUSES } from './flight-status.js';
 import { SUPPLEMENT_FIELDS } from './rail-template.js';
 
-export const DEFAULT_SEARCH = Object.freeze({ query: '', type: 'all', year: 'all', city: '', originCity: '', destinationCity: '', origin: '', destination: '', bothDirections: false, service: '', passenger: '', dateFrom: '', dateTo: '', seatClass: '', airline: '', template: '', minPrice: '', maxPrice: '', code: '', provenance: '', mark: '', sort: 'newest' });
+export const DEFAULT_SEARCH = Object.freeze({ query: '', type: 'all', year: 'all', originCity: '', destinationCity: '', origin: '', destination: '', bothDirections: false, service: '', passenger: '', dateFrom: '', dateTo: '', seatClass: '', airline: '', template: '', minPrice: '', maxPrice: '', code: '', provenance: '', mark: '', sort: 'newest' });
 export const SORTS = Object.freeze({ newest: '出发日期：由近到远', oldest: '出发日期：由远到近', 'price-asc': '票价：从低到高', 'price-desc': '票价：从高到低' });
 const text = value => String(value ?? '').normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 const compact = value => text(value).replace(/[\s'’·-]/g, '');
@@ -40,7 +40,6 @@ export function activeSearch(input) {
   if (f.query) add('query', `关键词：${f.query}`);
   if (f.type !== 'all') add('type', f.type === 'rail' ? '火车票' : '机票');
   if (f.year !== 'all') add('year', f.year === 'unknown' ? '日期待补充' : `${f.year}年`);
-  if (f.city) add('city', f.city === '__unknown__' ? '城市待补充' : `涉及城市：${f.city}`);
   if (f.originCity || f.destinationCity || f.origin || f.destination) add('route', `${[f.originCity, f.origin].filter(Boolean).join(' · ') || '任意出发地'} ${f.bothDirections ? '↔' : '→'} ${[f.destinationCity, f.destination].filter(Boolean).join(' · ') || '任意目的地'}`);
   if (f.dateFrom || f.dateTo) add('dates', `出发：${f.dateFrom || '不限'} 至 ${f.dateTo || '不限'}`);
   for (const [key, label] of Object.entries({ service: '车次 / 航班', passenger: '旅客', seatClass: '席别 / 舱位', airline: '航空公司', mark: '票面标识' })) if (f[key]) add(key, `${label}：${f[key]}`);
@@ -69,9 +68,6 @@ export function searchTickets(records, input = {}) {
   const routeMatches = (r, reverse = false) => (!f.originCity || matchesCity(r, reverse ? 'destination' : 'origin', f.originCity)) && (!f.destinationCity || matchesCity(r, reverse ? 'origin' : 'destination', f.destinationCity)) && endpointMatches(r, reverse ? 'destination' : 'origin', f.origin) && endpointMatches(r, reverse ? 'origin' : 'destination', f.destination);
   const matched = records.filter(r => {
     if (r.deleted || (f.type !== 'all' && r.type !== f.type) || (f.year !== 'all' && (calendarDate(r.departureDate).slice(0, 4) || 'unknown') !== f.year)) return false;
-    if (f.city) {
-      if (f.city === '__unknown__' ? ['origin','destination'].every(side=>resolveCities(r,side).length) : !['origin','destination'].some(side=>matchesCity(r,side,f.city))) return false;
-    }
     if (!routeMatches(r) && !(f.bothDirections && routeMatches(r, true))) return false;
     if (f.service && !contains(r.service, f.service)) return false;
     if (f.passenger && !contains(r.passenger, f.passenger)) return false;

@@ -3,7 +3,10 @@ import { mapPoint } from './journey-map-model.js';
 import { railMapPoint } from './rail-projection.js';
 
 const TRIP_DURATION = 4000;
+const END_PAUSE = 450;
+const CHUNK_SIZE = 96;
 const SVG_NS = 'http://www.w3.org/2000/svg';
+const pointText = ([x, y]) => `${x.toFixed(6)},${y.toFixed(6)}`;
 const departureKey = record => {
   const date = calendarDate(record.departureDate);
   return (date.length === 10 ? date : `${date}-12-32`) + (record.departureTime || record.actualDepartureTime || '24:00');
@@ -23,25 +26,33 @@ export function annualMapTrips(arcs, railways) {
     a.departure.localeCompare(b.departure) || a.record.id.localeCompare(b.record.id));
 }
 
-function drawTrip(layer, trip, id) {
+function drawTrip(layer, trip, id, visitStation) {
   const group = layer.ownerDocument.createElementNS(SVG_NS, 'g');
   group.id = id;
   const segments = trip.rail ? trip.rail.segments.map(line => line.map(railMapPoint))
     : [trip.reversed ? trip.points.slice().reverse() : trip.points];
+  const stations = new Map((trip.rail?.stops.slice(1, -1) || []).map(stop => {
+    const point = railMapPoint(stop.coordinates);
+    return [pointText(point), { id: 'station:' + stop.name, point, name: stop.name, trips: new Set([trip.record.id]), routes: new Set() }];
+  }));
   let total = 0;
-  const paths = [];
-  for (const points of segments) {
-    let length = 0;
-    for (let i = 1; i < points.length; i++) length += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
-    if (!length) continue;
+  const paths = [], arrivals = [];
+  for (const segment of segments) for (let start = 0; start < segment.length - 1; start += CHUNK_SIZE) {
+    // Keep per-frame SVG updates bounded even for a long, densely sampled track.
+    const points = segment.slice(start, start + CHUNK_SIZE + 1);
+    const coordinates = points.map(pointText), distances = [total];
+    for (const [index, [x, y]] of points.entries()) {
+      if (index) {
+        total += Math.hypot(x - points[index - 1][0], y - points[index - 1][1]);
+        distances.push(total);
+      }
+      const station = stations.get(coordinates[index]);
+      if (station) { arrivals.push({ station, distance: total }); stations.delete(coordinates[index]); }
+    }
+    if (total === distances[0]) continue;
     const path = layer.ownerDocument.createElementNS(SVG_NS, 'path');
-    path.setAttribute('d', 'M' + points.map(point => point.map(value => value.toFixed(6)).join(',')).join('L'));
-    path.setAttribute('pathLength', '1');
-    path.setAttribute('stroke-dasharray', '1 1');
-    path.style.visibility = 'hidden';
-    path.style.strokeDashoffset = '1';
     group.append(path);
-    paths.push({ path, length, end: total += length });
+    paths.push({ path, points, coordinates, distances, end: total });
   }
   const overlay = layer.ownerDocument.createElementNS(SVG_NS, 'g');
   overlay.setAttribute('class', `map-playback-trip ${trip.record.type} is-current`);
@@ -54,28 +65,29 @@ function drawTrip(layer, trip, id) {
     overlay.append(use);
   }
   layer.append(overlay);
-  let cursor = 0;
+  let cursor = 0, arrival = 0;
   return {
     paint(progress) {
       const distance = total * progress;
-      while (cursor < paths.length) {
-        const { path, length, end } = paths[cursor];
-        if (distance <= end - length && progress < 1) break;
-        path.style.visibility = '';
-        if (distance < end && progress < 1) {
-          path.style.strokeDashoffset = String((end - distance) / length);
-          break;
-        }
-        path.style.strokeDashoffset = '0';
-        cursor++;
+      while (cursor < paths.length && distance >= paths[cursor].end) {
+        const { path, coordinates } = paths[cursor++];
+        path.setAttribute('d', 'M' + coordinates.join('L'));
       }
+      const active = paths[cursor];
+      if (active && distance > active.distances[0]) {
+        const { path, points, coordinates, distances } = active;
+        const next = distances.findIndex(value => value > distance);
+        const previous = next - 1, fraction = (distance - distances[previous]) / (distances[next] - distances[previous]);
+        const head = points[previous].map((value, i) => value + (points[next][i] - value) * fraction);
+        path.setAttribute('d', 'M' + coordinates.slice(0, next).join('L') + 'L' + pointText(head));
+      }
+      const firstArrival = arrival;
+      while (arrival < arrivals.length && arrivals[arrival].distance <= distance) visitStation(arrivals[arrival++].station);
+      return arrival > firstArrival;
     },
     finish(keep) {
       if (!keep) overlay.remove();
-      else {
-        overlay.classList.remove('is-current');
-        for (const { path } of paths) path.removeAttribute('stroke-dasharray');
-      }
+      else overlay.classList.remove('is-current');
     }
   };
 }
@@ -85,15 +97,15 @@ let playbackSequence = 0;
 export function bindAnnualMapPlayback(svg, button, status, trips, { requestFrame, cancelFrame, redraw }) {
   const view = svg.ownerDocument.defaultView;
   const layer = svg.querySelector('.map-playback');
-  const reached = new Set(), labels = new Set(), drawn = new Set();
-  const playback = { running: false, reached, labels };
+  const reached = new Set(), labels = new Set(), drawn = new Set(), stations = new Map();
+  const playback = { running: false, reached, labels, stations };
   const id = `journey-playback-${++playbackSequence}`;
-  let frame = 0, tripIndex, started, current, reducedMotion;
+  let frame = 0, tripIndex, started, finishedAt, current, reducedMotion;
 
   function showTrip(index) {
     const trip = trips[index], record = trip.record;
     reached.add(trip.from);
-    current = drawTrip(layer, trip, `${id}-${index}`);
+    current = drawTrip(layer, trip, `${id}-${index}`, station => stations.set(station.id, station));
     status.textContent = `${index + 1} / ${trips.length} · ${calendarDate(record.departureDate)} · ${[record.service, `${record.origin} → ${record.destination}`].filter(Boolean).join(' ')}`;
     if (reducedMotion) current.paint(1);
     redraw();
@@ -104,7 +116,7 @@ export function bindAnnualMapPlayback(svg, button, status, trips, { requestFrame
     cancelFrame(frame);
     playback.running = false;
     layer.replaceChildren();
-    reached.clear(); labels.clear(); drawn.clear();
+    reached.clear(); labels.clear(); drawn.clear(); stations.clear();
     svg.removeAttribute('data-map-playing');
     status.hidden = !finished;
     status.textContent = finished ? `已播放 ${trips.length} 程` : '';
@@ -113,9 +125,14 @@ export function bindAnnualMapPlayback(svg, button, status, trips, { requestFrame
   }
 
   function advance(timestamp) {
+    if (finishedAt !== undefined) {
+      if (timestamp - finishedAt >= END_PAUSE) { stop(true); return; }
+      frame = requestFrame(advance);
+      return;
+    }
     started ??= timestamp;
     const progress = Math.min(1, (timestamp - started) / TRIP_DURATION);
-    if (!reducedMotion) current.paint(progress);
+    const reachedStation = !reducedMotion && current.paint(progress);
     if (progress === 1) {
       const trip = trips[tripIndex];
       current.finish(!drawn.has(trip.key));
@@ -123,10 +140,14 @@ export function bindAnnualMapPlayback(svg, button, status, trips, { requestFrame
       reached.add(trip.to);
       for (const label of trip.rail?.lineLabels || []) labels.add(label);
       tripIndex++;
-      if (tripIndex === trips.length) { stop(true); return; }
-      started = timestamp;
-      showTrip(tripIndex);
-    }
+      if (tripIndex === trips.length) {
+        finishedAt = timestamp;
+        redraw();
+      } else {
+        started = timestamp;
+        showTrip(tripIndex);
+      }
+    } else if (reachedStation) redraw();
     frame = requestFrame(advance);
   }
 
@@ -136,7 +157,7 @@ export function bindAnnualMapPlayback(svg, button, status, trips, { requestFrame
     reducedMotion = view.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     svg.setAttribute('data-map-playing', '');
     tripIndex = 0;
-    started = undefined;
+    started = finishedAt = undefined;
     status.hidden = false;
     button.textContent = '停止播放';
     showTrip(tripIndex);

@@ -54,9 +54,9 @@ import { isRefundReceipt, isJourneyRecord } from './record-kind.js';
 import { bindUppercaseInputs } from './uppercase-input.js';
 import { personalProfile, applyProfileDefaults, applyTicketIdentity } from './personal-profile.js';
 import { personalProfilePanel, collectPersonalProfile, bindPersonalProfileForm, personalProfileSummary } from './personal-profile-form.js';
-import { cityOverview } from './locations.js';
+import { journeyCities } from './locations.js';
 import { DEFAULT_SEARCH, searchOptions, searchTickets, clearSearchField } from './search.js';
-import { searchPanel, searchChips, resultSummary, cityContextHTML } from './search-panel.js';
+import { searchPanel, searchChips, resultSummary, cityContextHTML, bindSearchHelp } from './search-panel.js';
 
 const sameField = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -90,7 +90,7 @@ const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" f
 const labels = { ...BOARDING_METADATA_LABELS, ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightTrack: '飞行航迹', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '条码', boardingCode: '机票条码' };
 const imports = { task: null, backup: null, railPoints: null };
 let importView = 0;
-const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, routesOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null };
+const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null };
 const samples = demoRecords();
 const ticketView=ticketViewOptions();
 const archiveIsSpace=()=>ticketView.mode==='space';
@@ -379,8 +379,7 @@ async function exportSingleTicket(button, format) {
   } finally { button.disabled = false; }
 }
 function archivePage() {
-  const rs = live(), cities = cityOverview(rs).cities;
-  const years = [...new Set(rs.map(r => calendarDate(r.departureDate).slice(0, 4)).filter(Boolean))].sort().reverse();
+  const rs = live(), cities = journeyCities(rs);
   const result = searchTickets(rs, state.filters);
   reconcileSelection(archiveSelected,result.error ? [] : result.records);
   const railCount = rs.filter(r => isJourneyRecord(r) && r.type === 'rail').length, flightCount = rs.filter(r => isJourneyRecord(r) && r.type === 'flight').length;
@@ -388,15 +387,15 @@ function archivePage() {
   const intro = header('我的票据', '', entry, true);
   const demo = guestDemoNotice() || (state.showDemo ? `<div class="demo-banner">${icon('info')}<span><strong>示例数据</strong> · 虚构记录</span><button data-action="exit-demo">${hasCloud() && state.syncMeta.verified ? '返回我的票据' : '退出示例模式'} ${icon('arrow')}</button></div>` : '');
   const stats = `<section class="stats" aria-label="票夹概览"><div><span class="stat-label">${icon('ticket')}票据总数</span><strong>${rs.length}<small>张${state.showDemo ? '示例' : ''}</small></strong></div><div><span class="stat-label">${icon('train')}火车票</span><strong>${railCount}<small>程</small></strong></div><div><span class="stat-label">${icon('plane')}机票</span><strong>${flightCount}<small>程</small></strong></div><div><span class="stat-label">${icon('map')}涉及城市</span><strong>${cities.length}<small>城</small></strong></div></section>`;
-  return intro + demo + stats + searchPanel(rs, state.filters, result, { open: state.filterOpen, routesOpen: state.routesOpen, demo: state.showDemo }) + ticketViewControls(ticketView) + '<div id="archive-selection">' + (archiveIsSpace() ? '' : archiveSelectionMarkup(result, archiveSelected, { canDelete:canWrite() && !state.showDemo && !state.saving })) + '</div><section id="search-results" aria-label="票据总数">' + searchResults(rs, result) + '</section>' + pageFooter('<span id="archive-match-count">' + (state.showDemo ? '示例' : '私人') + '票夹 · ' + result.records.length + ' 张票据</span>');
+  return intro + demo + stats + searchPanel(rs, state.filters, result, { open: state.filterOpen, cities }) + ticketViewControls(ticketView) + '<div id="archive-selection">' + (archiveIsSpace() ? '' : archiveSelectionMarkup(result, archiveSelected, { canDelete:canWrite() && !state.showDemo && !state.saving })) + '</div><section id="search-results" aria-label="票据总数">' + searchResults(rs, result) + '</section>' + pageFooter('<span id="archive-match-count">' + (state.showDemo ? '示例' : '私人') + '票夹 · ' + result.records.length + ' 张票据</span>');
 }
 function searchResults(rs, result) {
   const visible = result.records;
-  if (result.error) return '<div class="empty-state"><h2>请调整筛选条件</h2><p>检查上方日期或票价范围后，结果会自动更新。</p><button class="button secondary" data-action="reset-filters">清除筛选</button></div>';
+  if (result.error) return '<div class="empty-state"><h2>请调整筛选条件</h2><p>检查上方日期或票价范围后，结果会自动更新。</p></div>';
   const view=ticketView,rows=archiveIsSpace() ? visible : visible.slice(0,state.limit);
   const collection=ticketCollection(rows,view,{icon,selected:archiveSelected,sort:state.filters.sort});
   if (visible.length) return collection + (!archiveIsSpace() && visible.length > state.limit ? `<div class="load-more"><button class="button secondary" data-action="load-more">继续翻看 · 已显示 ${state.limit} / ${visible.length} 张</button></div>` : '');
-  const empty = rs.length ? '<h2>还没有匹配的票据</h2><p>试试减少条件，或查找其他路线、旅客与日期。</p><button class="button primary" data-action="reset-filters">' + icon('search') + '清除筛选</button>' : '<h2>暂无票据</h2>';
+  const empty = rs.length ? '<h2>还没有匹配的票据</h2><p>试试减少条件，或查找其他路线、旅客与日期。</p>' : '<h2>暂无票据</h2>';
   return `<div class="empty-state">${icon('ticket')}${empty}</div>`;
 }
 function refreshSearch() {
@@ -755,6 +754,7 @@ function mountCollectionSpace() {
 function bindPage() {
   void refreshConnectorStatus();
   if(state.page==='archive'){
+    bindSearchHelp(root);
     bindTicketViewControls(root,{value:ticketView,change:mode=>{ticketView.mode=mode;render();root.querySelector(`[data-ticket-view="${mode}"]`)?.focus({preventScroll:true});}});
     mountCollectionSpace();
   }
@@ -2184,7 +2184,6 @@ async function editRailPointsTrip(button) {
 }
 const actions = {
   navigate: button => navigate(button.dataset.page),
-  'toggle-routes': button => { state.routesOpen = !state.routesOpen; button.closest('.route-shortcuts-section').dataset.expanded = String(state.routesOpen); button.setAttribute('aria-expanded', String(state.routesOpen)); },
   filter: button => { state.filters.type = button.dataset.type; state.limit = 48; render(); },
   'load-more': loadMoreTickets,
   'reset-archive': () => showArchiveReset(),
@@ -2195,7 +2194,6 @@ const actions = {
   'reset-filters': () => { state.filters = searchOptions(); state.limit = 48; render(); },
   'clear-search-field': button => { state.filters = clearSearchField(state.filters, button.dataset.field); state.limit = 48; render(); },
   'swap-route': () => { const f = state.filters; [f.originCity, f.destinationCity] = [f.destinationCity, f.originCity]; [f.origin, f.destination] = [f.destination, f.origin]; state.limit = 48; render(); },
-  'quick-route': button => { state.filters = searchOptions({ ...state.filters, city: '', originCity: button.dataset.from, destinationCity: button.dataset.to, origin: '', destination: '', bothDirections: true }); state.limit = 48; render(); },
   'export-album': () => exportArchiveSelection('pdf'),
   'export-images': () => exportArchiveSelection('zip'),
   'finish-selection': () => {

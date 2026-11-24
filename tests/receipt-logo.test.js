@@ -11,7 +11,7 @@ import { validateTicketForm } from '../src/ticket-form.js';
 import { journeyStatistics, tripSeries } from '../src/statistics-model.js';
 import { journeyNetwork } from '../src/journey-map-model.js';
 import { loadRailwayNetwork } from '../src/railway-network.js';
-import { cityOverview } from '../src/locations.js';
+import { journeyCities } from '../src/locations.js';
 import { timeline } from '../src/timeline.js';
 import { airlineLogo } from '../src/airline-logo.js';
 import { AIRLINE_LOGOS } from '../src/data/airline-logos.js';
@@ -61,7 +61,7 @@ test('refund fee survives OCR and JSON without merging into the original journey
   assert.throws(() => validateTicketForm({ ...fee, price:'' }), /退票费/);
   assert.equal(journeyStatistics([fee], { dateTo:'2026-11-17' }).rail, 0);
   assert.deepEqual(tripSeries([fee]), []); assert.equal(journeyNetwork([fee]).records.length, 0);
-  assert.equal(cityOverview([fee]).cities.length, 0); assert.match(timeline([fee], () => ''), /退票费凭证/);
+  assert.equal(journeyCities([fee]).length, 0); assert.match(timeline([fee], () => ''), /退票费凭证/);
   const network = await loadRailwayNetwork([fee], { loader:() => assert.fail('A fee is not a travelled railway') });
   assert.equal(network.records.length, 0);
 });

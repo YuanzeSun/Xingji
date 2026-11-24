@@ -8,7 +8,7 @@ import { ticketSVG } from '../src/tickets.js';
 import { journeyStatistics, tripSeries } from '../src/statistics-model.js';
 import { journeyNetwork } from '../src/journey-map-model.js';
 import { timeline } from '../src/timeline.js';
-import { cityOverview } from '../src/locations.js';
+import { journeyCities } from '../src/locations.js';
 import { GitHubStore, synchronize } from '../src/github.js';
 import { MemoryGitHub } from './helpers/cloud.js';
 const flight = extra => createRecord({type:'flight',template:'air-boarding-pass',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2023-11-18',departureTime:'08:00',passenger:'TEST/USER',identity:'P000001',seat:'12A',seatClass:'Y',aircraft:'DHC-8',...extra});
@@ -38,7 +38,7 @@ test('special tickets remain in the archive but never contribute to any journey 
  assert.equal(data.flight,1);assert.equal(data.records.length,1);assert.deepEqual(data.aircraft,[{name:'DHC-8（子型号未确认）',count:1}]);
  assert.deepEqual(data.countries.map(x=>x.code),['CN']);assert.equal(data.airports.length,2);assert.equal(data.routes.length,1);
  assert.equal(journeyNetwork([normal,...special]).records.length,1);
- assert.equal(cityOverview([normal,...special]).cities.length,2);
+ assert.equal(journeyCities([normal,...special]).length,2);
  assert.equal(tripSeries([normal,...special])[0].flight,1);
  assert.match(timeline([normal,...special],()=>''),/data-id="special-0"/);assert.match(timeline([normal,...special],()=>''),/data-id="special-1"/);
  assert.equal(journeyStatistics(special,{dateTo:'2023-12-31'}).omittedDates,0);

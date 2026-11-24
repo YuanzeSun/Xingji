@@ -16,14 +16,14 @@ test('dual-city filters, details and airport edits stay consistent when the save
   const fill=(selector,value,event='input')=>{const input=document.querySelector(selector);input.value=value;input.dispatchEvent(new window.Event(event,{bubbles:true}));};
   const open=async()=>{document.querySelector('[data-action="view"][data-id="flight"]').click();await wait(()=>document.querySelector('.detail-grid'));};
   try{
-    await import('../src/app.js');await wait(()=>document.querySelector('#city-filter'));
-    assert.match(document.querySelector('.route-shortcut').textContent,/西宁 \/ 海东/);
-    fill('#city-filter','海东','change');await wait(()=>document.querySelectorAll('.ticket-card').length===1);
-    assert.equal(document.querySelector('#city-filter').value,'海东');await open();assert.match(document.querySelector('.detail-grid').textContent,/出发城市西宁 \/ 海东/);
+    await import('../src/app.js');await wait(()=>document.querySelector('#search-originCity'));
+    fill('#search-originCity','海东');await wait(()=>document.querySelector('#city-context').textContent.includes('海东'));
+    assert.equal(document.querySelectorAll('.ticket-card').length,1);await open();assert.match(document.querySelector('.detail-grid').textContent,/出发城市西宁 \/ 海东/);
     await wait(()=>document.querySelector('[data-action="edit"]:not(:disabled)'));document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));assert.equal(document.querySelector('[name="type"]').disabled,true);
     fill('[name="origin"]','PKX');assert.equal(document.querySelector('[name="originCode"]').value,'PKX');
     document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>!document.querySelector('#editor-form'));
     assert.equal(server.records()[0].originCode,'PKX');assert.equal(server.records()[0].originCity,'北京 / 廊坊');assert.equal(server.records()[0].departureZone,'Asia/Shanghai');
-    fill('#city-filter','廊坊','change');await wait(()=>document.querySelectorAll('.ticket-card').length===1);await open();assert.match(document.querySelector('.detail-grid').textContent,/出发城市北京 \/ 廊坊/);
+    fill('#search-originCity','廊坊');await wait(()=>document.querySelector('#city-context').textContent.includes('廊坊'));
+    assert.equal(document.querySelectorAll('.ticket-card').length,1);await open();assert.match(document.querySelector('.detail-grid').textContent,/出发城市北京 \/ 廊坊/);
   }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();}
 });

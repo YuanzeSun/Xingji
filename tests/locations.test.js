@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRecord, archive, readArchive, mergeBackupRecords, mergeThreeWay } from '../src/model.js';
-import { resolveCity, cityOverview, placesInCity, sameCity, LOCATION_REFERENCE } from '../src/locations.js';
+import { resolveCity, journeyCities, placesInCity, sameCity, LOCATION_REFERENCE } from '../src/locations.js';
 import { searchTickets } from '../src/search.js';
 import { STATIONS } from '../src/data/location-reference.js';
 import {AIRPORT_SERVICE_CITIES,AIRPORT_CITY_REFERENCE} from '../src/data/airport-cities.js';
@@ -52,17 +52,13 @@ test('airport lookup uses the IATA namespace and groups different airports in th
 test('city searches include same-city stations and airports, keep direction consistent and expose pending cities', () => {
   const rows = [record(), record({ id: 'capital', origin: '北京南' }), record({ id: 'xingtai', origin: '清河城' }), record({ id: 'flight', type: 'flight', template: 'air-boarding-pass', origin: '北京首都', originCode: 'PEK', destination: '上海虹桥', destinationCode: 'SHA' }), record({ id: 'return', origin: '上海虹桥', destination: '清河' }), record({ id: 'unknown', origin: '从未收录的站名' })];
   const ids = filters => searchTickets(rows, filters).records.map(r => r.id).sort();
-  assert.deepEqual(ids({ city: '北京' }), ['capital', 'city-test', 'flight', 'return']);
   assert.deepEqual(ids({ originCity: '北京', destinationCity: '上海' }), ['capital', 'city-test', 'flight']);
   assert.deepEqual(ids({ originCity: '北京', destinationCity: '上海', bothDirections: true }), ['capital', 'city-test', 'flight', 'return']);
   assert.deepEqual(ids({ originCity: '北京', destinationCity: '上海', origin: '上海虹桥', bothDirections: true }), [], 'city and station predicates must share one direction');
-  assert.deepEqual(ids({ city: '__unknown__' }), ['unknown']);
   assert.deepEqual(ids({ query: '北京', origin: 'qinghe' }), ['city-test']);
   assert.deepEqual(ids({ origin: '北京' }), ['capital', 'flight'], 'station keywords do not match a hidden city alias');
   assert.deepEqual(placesInCity(rows, '北京'), ['北京南', '北京首都', '清河']);
-  const overview = cityOverview(rows);
-  assert.equal(overview.cities.find(([city]) => city === '北京')[1], 4);
-  assert.equal(overview.routes.find(r => [r.originCity, r.destinationCity].includes('北京')).count, 4);
+  assert.equal(journeyCities(rows).filter(city => city === '北京').length, 1);
 });
 
 test('derived cities follow the database through edits, imports, backups and independent synchronization edits', () => {
@@ -89,13 +85,13 @@ test('domestic airports use the CAAC named service city across codes, localized 
   assert.equal(resolveCity({type:'flight',origin:'西宁曹家堡',originCode:'LXA'},'origin').status,'conflict');
 });
 
-test('Xining flights are found by city filters and share common city routes with Xining train journeys',()=>{
+test('Xining flights and trains share the city filters on both directions',()=>{
   const out=record({id:'out',type:'flight',template:'air-boarding-pass',origin:'XNN',destination:'PEK',service:'CA1234'});
   const back=record({...out,id:'back',origin:'PEK',originCode:'PEK',destination:'XNN',destinationCode:'XNN'});
   const train=record({id:'train',origin:'西宁',destination:'北京西'}),rows=[out,back,train];
   assert.equal(out.originCity,'西宁 / 海东');assert.equal(back.destinationCity,'西宁 / 海东');
-  for(const filters of [{city:'西宁'},{query:'西宁'},{originCity:'西宁',destinationCity:'北京',bothDirections:true}])assert.equal(searchTickets(rows,filters).records.length,3);
-  assert.equal(searchTickets(rows,{originCity:'西宁'}).records.length,2);assert.equal(searchTickets(rows,{city:'海东'}).records.length,2);
-  const overview=cityOverview(rows);assert.equal(overview.routes.length,1);assert.equal(overview.routes[0].count,3);assert.equal(overview.cities.find(([city])=>city==='海东')[1],2);
+  for(const filters of [{query:'西宁'},{originCity:'西宁',destinationCity:'北京',bothDirections:true}])assert.equal(searchTickets(rows,filters).records.length,3);
+  assert.equal(searchTickets(rows,{originCity:'西宁'}).records.length,2);assert.equal(searchTickets(rows,{originCity:'海东',bothDirections:true}).records.length,2);
+  assert.ok(journeyCities(rows).includes('海东'));
   assert.equal(readArchive(archive([out]))[0].originCity,'西宁 / 海东');
 });

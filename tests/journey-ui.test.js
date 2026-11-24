@@ -5,7 +5,7 @@ import { indexedDB } from 'fake-indexeddb';
 import { createRecord } from '../src/model.js';
 import { prepareCloud } from './helpers/cloud.js';
 
-test('route disclosure, private timeline, interactive map and manual-only flight refresh work in the app', async () => {
+test('private timeline, interactive map and manual-only flight refresh work in the app', async () => {
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost/' });
   const { window } = dom;
   Object.defineProperty(window.navigator, 'userAgent', { value: 'Mozilla/5.0 (Windows NT 10.0) Chrome/142.0' });
@@ -28,8 +28,6 @@ test('route disclosure, private timeline, interactive map and manual-only flight
   };
   await import('../src/app.js'); await wait(() => document.querySelector('[data-action="new"]')?.disabled === false);
   assert.equal(flightRequests.length, 0, 'starting with a valid flight key must not spend quota');
-  assert.equal(document.querySelector('.route-shortcuts-section').dataset.expanded, 'false');
-  click('[data-action="toggle-routes"]'); await wait(() => document.querySelector('.route-shortcuts-toggle').getAttribute('aria-expanded') === 'true');
   click('[data-ticket-view="list"]'); await wait(() => document.querySelector('.timeline'));
   assert.doesNotMatch(document.querySelector('.timeline').textContent, /隐私中文旅客|PRIVATE ENGLISH NAME/);
   click('[data-action="navigate"][data-page="map"]'); await wait(() => document.querySelector('.journey-map-canvas'));
