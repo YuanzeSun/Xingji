@@ -9,10 +9,11 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const pointText = ([x, y]) => `${x.toFixed(6)},${y.toFixed(6)}`;
 const departureKey = record => {
   const date = calendarDate(record.departureDate);
+  if (!date) return '';
   return (date.length === 10 ? date : `${date}-12-32`) + (record.departureTime || record.actualDepartureTime || '24:00');
 };
 
-export function annualMapTrips(arcs, railways) {
+export function mapPlaybackTrips(arcs, railways) {
   const trips = [];
   for (const route of arcs) for (const record of route.records) {
     const reversed = route.aggregated && mapPoint(record, 'origin')?.id !== route.from.id;
@@ -22,7 +23,7 @@ export function annualMapTrips(arcs, railways) {
   for (const { route, records } of railways) for (const record of records) {
     trips.push({ record, key: route, from: 'station:' + route.stops[0].name, to: 'station:' + route.stops.at(-1).name, rail: route });
   }
-  return trips.map(trip => ({ ...trip, departure: departureKey(trip.record) })).sort((a, b) =>
+  return trips.map(trip => ({ ...trip, departure: departureKey(trip.record) })).filter(trip => trip.departure).sort((a, b) =>
     a.departure.localeCompare(b.departure) || a.record.id.localeCompare(b.record.id));
 }
 
@@ -94,7 +95,7 @@ function drawTrip(layer, trip, id, visitStation) {
 
 let playbackSequence = 0;
 
-export function bindAnnualMapPlayback(svg, button, status, trips, { requestFrame, cancelFrame, redraw }) {
+export function bindMapPlayback(svg, button, status, trips, { scope, requestFrame, cancelFrame, redraw }) {
   const view = svg.ownerDocument.defaultView;
   const layer = svg.querySelector('.map-playback');
   const reached = new Set(), labels = new Set(), drawn = new Set(), stations = new Map();
@@ -120,7 +121,7 @@ export function bindAnnualMapPlayback(svg, button, status, trips, { requestFrame
     svg.removeAttribute('data-map-playing');
     status.hidden = !finished;
     status.textContent = finished ? `已播放 ${trips.length} 程` : '';
-    button.textContent = finished ? '重播年度行程' : '播放年度行程';
+    button.textContent = (finished ? '重播' : '播放') + scope;
     redraw();
   }
 

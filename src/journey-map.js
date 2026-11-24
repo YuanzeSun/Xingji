@@ -1,7 +1,7 @@
 import {calendarDate} from './journey-date.js';
 import { escape as e } from './html.js';
 import { journeyNetwork, networkGeometry } from './journey-map-model.js';
-import { annualMapTrips, bindAnnualMapPlayback } from './journey-map-playback.js';
+import { mapPlaybackTrips, bindMapPlayback } from './journey-map-playback.js';
 import { LAND_PATH, PROVINCE_PATH, COUNTRY_PATH } from './data/map-reference.js';
 import { createMapBasemap } from './map-basemap.js';
 import { loadRailwayNetwork, railwayGeometry } from './railway-network.js';
@@ -52,14 +52,26 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
     const railMapped = railway ? railState.data?.routes.reduce((count, row) => count + row.records.length, 0) || 0 : 0;
     const railGeometry = railway ? railState.geometry : null;
     const geometry = networkGeometry(network, railGeometry);
-    const hasYear = years.includes(options.year);
-    const railwayData = hasYear && railway ? railState.data : null;
-    const fallback = railwayData && journeyNetwork([...railwayData.unmatched, ...railwayData.failed], { type: 'rail' });
-    const playbackGeometry = fallback?.routes.length ? networkGeometry({
-      nodes: [...network.nodes, ...fallback.nodes], routes: [...network.routes, ...fallback.routes]
-    }, railGeometry) : geometry;
-    const trips = hasYear && (!railway || railState.status === 'ready')
-      ? annualMapTrips(playbackGeometry.routes, railwayData?.routes || []) : [];
+    const year = options.year || 'all';
+    const playbackScope = year === 'all' ? '全部行程' : years.includes(year) ? '年度行程' : '';
+    let playbackGeometry = geometry, trips = [];
+    if (playbackScope && (!railway || railState.status === 'ready')) {
+      const hasDate = record => Boolean(calendarDate(record.departureDate));
+      const hasDatedTrip = route => route.records.some(hasDate);
+      const arcs = network.routes.filter(hasDatedTrip);
+      const savedRoutes = railway ? railState.data.routes : [];
+      const railRoutes = savedRoutes.filter(hasDatedTrip);
+      const tracks = railRoutes.length === savedRoutes.length ? railGeometry : railwayGeometry({ routes: railRoutes });
+      const fallback = railway ? journeyNetwork([...railState.data.unmatched, ...railState.data.failed].filter(hasDate), { type: 'rail' }) : null;
+      if (arcs.length !== network.routes.length || tracks !== railGeometry || fallback?.routes.length) {
+        const endpoints = new Set(arcs.flatMap(route => [route.from.id, route.to.id]));
+        playbackGeometry = networkGeometry({
+          nodes: [...network.nodes.filter(node => endpoints.has(node.id)), ...(fallback?.nodes || [])],
+          routes: [...arcs, ...(fallback?.routes || [])]
+        }, tracks);
+      }
+      trips = mapPlaybackTrips(playbackGeometry.routes, railRoutes);
+    }
     network.nodes = geometry.nodes;
     network.mapped += railMapped;
     const routeCount = network.routes.length + (railway ? railState.data?.routes.length || 0 : 0);
@@ -70,7 +82,7 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
     const bitmap=typeof window.Path2D==='function';
     const background=()=>`<defs><path id="journey-map-land" d="${LAND_PATH}" vector-effect="non-scaling-stroke" fill-rule="evenodd" /><path id="journey-map-countries" d="${COUNTRY_PATH}" vector-effect="non-scaling-stroke" /><path id="journey-map-provinces" d="${PROVINCE_PATH}" vector-effect="non-scaling-stroke" /></defs><g class="map-land">${[-2000, -1000, 0, 1000, 2000].map(x => `<use href="#journey-map-land" transform="translate(${x},0)"/>`).join('')}</g><g class="map-countries">${[-1000, 0, 1000].map(x => `<use href="#journey-map-countries" transform="translate(${x},0)"/>`).join('')}</g><g class="map-provinces">${[-1000, 0, 1000].map(x => `<use href="#journey-map-provinces" transform="translate(${x},0)"/>`).join('')}</g>`;
     const grid=Array.from({length:73},(_,i)=>`<path d="M${i*1000/12-2000},0v500"/>`).join('')+Array.from({length:5},(_,i)=>`<path d="M-2000,${(i+1)*1000/12}h5000"/>`).join('');
-    container.innerHTML = `<div class="journey-map-layout"><section class="map-card" aria-label="行程地图"><div class="journey-map-toolbar"><div class="map-type-tabs" role="group" aria-label="地图图层">${layers.map(([value, label]) => `<button type="button" data-map-layer="${value}" aria-pressed="${options.layers.includes(value)}" class="${options.layers.includes(value) ? 'active' : ''}"><span class="map-layer-check" aria-hidden="true">${options.layers.includes(value) ? '✓' : ''}</span>${label}</button>`).join('')}</div><div class="map-year-actions"><label class="map-year"><span class="visually-hidden">地图年份</span><select data-map-year aria-label="地图年份"><option value="all">全部年份</option>${years.map(year => `<option ${options.year === year ? 'selected' : ''}>${year}</option>`).join('')}${records.some(r => !r.deleted && !calendarDate(r.departureDate)) ? `<option value="unknown" ${options.year === 'unknown' ? 'selected' : ''}>日期未知</option>` : ''}</select></label>${hasYear ? `<button type="button" class="map-playback-button" data-map-playback-button ${trips.length ? '' : 'disabled'}>播放年度行程</button>` : ''}</div></div><div class="map-frame">${bitmap ? '<canvas class="map-base-canvas" aria-hidden="true"></canvas>' : ''}<svg class="journey-map-canvas" tabindex="0" role="group" aria-label="行程地图，可拖动或使用方向键移动，用加减键缩放">${bitmap ? '' : background()}<g class="map-graticule">${grid}</g><g class="map-real-tracks" aria-hidden="true"></g><g class="map-routes"></g><g class="map-playback" aria-hidden="true"></g><g class="map-nodes"></g><g class="map-labels" aria-hidden="true"></g><g class="map-rail-line-names" aria-hidden="true"></g></svg>${hasYear ? '<p class="map-playback-status" data-map-playback-status role="status" hidden></p>' : ''}<div class="map-controls"><button data-map-zoom="in" aria-label="放大地图" title="放大">＋</button><button data-map-zoom="out" aria-label="缩小地图" title="缩小">−</button><button data-map-fit aria-label="显示全部路线" title="显示全部路线">${icon('map')}</button></div>${!hasRoutes ? '<div class="map-empty"><strong>' + (!options.layers.length ? '请选择要显示的图层' : railway && railState.status === 'loading' ? '正在匹配铁路线路…' : '暂无可绘制的行程') + '</strong></div>' : ''}<div class="map-legend">${layers.filter(([value]) => options.layers.includes(value)).map(([value, label]) => `<span class="${value === 'airway' ? 'flight' : value}">${label}</span>`).join('')}</div></div><div class="map-totals"><span><strong>${network.mapped}</strong>行程</span><span><strong>${routeCount}</strong>路线</span><span><strong>${network.nodes.length}</strong>地点</span></div></section></div>`;
+    container.innerHTML = `<div class="journey-map-layout"><section class="map-card" aria-label="行程地图"><div class="journey-map-toolbar"><div class="map-type-tabs" role="group" aria-label="地图图层">${layers.map(([value, label]) => `<button type="button" data-map-layer="${value}" aria-pressed="${options.layers.includes(value)}" class="${options.layers.includes(value) ? 'active' : ''}"><span class="map-layer-check" aria-hidden="true">${options.layers.includes(value) ? '✓' : ''}</span>${label}</button>`).join('')}</div><div class="map-year-actions"><label class="map-year"><span class="visually-hidden">地图年份</span><select data-map-year aria-label="地图年份"><option value="all">全部年份</option>${years.map(year => `<option ${options.year === year ? 'selected' : ''}>${year}</option>`).join('')}${records.some(r => !r.deleted && !calendarDate(r.departureDate)) ? `<option value="unknown" ${options.year === 'unknown' ? 'selected' : ''}>日期未知</option>` : ''}</select></label>${playbackScope ? `<button type="button" class="map-playback-button" data-map-playback-button ${trips.length ? '' : 'disabled'}>播放${playbackScope}</button>` : ''}</div></div><div class="map-frame">${bitmap ? '<canvas class="map-base-canvas" aria-hidden="true"></canvas>' : ''}<svg class="journey-map-canvas" tabindex="0" role="group" aria-label="行程地图，可拖动或使用方向键移动，用加减键缩放">${bitmap ? '' : background()}<g class="map-graticule">${grid}</g><g class="map-real-tracks" aria-hidden="true"></g><g class="map-routes"></g><g class="map-playback" aria-hidden="true"></g><g class="map-nodes"></g><g class="map-labels" aria-hidden="true"></g><g class="map-rail-line-names" aria-hidden="true"></g></svg>${playbackScope ? '<p class="map-playback-status" data-map-playback-status role="status" hidden></p>' : ''}<div class="map-controls"><button data-map-zoom="in" aria-label="放大地图" title="放大">＋</button><button data-map-zoom="out" aria-label="缩小地图" title="缩小">−</button><button data-map-fit aria-label="显示全部路线" title="显示全部路线">${icon('map')}</button></div>${!hasRoutes ? '<div class="map-empty"><strong>' + (!options.layers.length ? '请选择要显示的图层' : railway && railState.status === 'loading' ? '正在匹配铁路线路…' : '暂无可绘制的行程') + '</strong></div>' : ''}<div class="map-legend">${layers.filter(([value]) => options.layers.includes(value)).map(([value, label]) => `<span class="${value === 'airway' ? 'flight' : value}">${label}</span>`).join('')}</div></div><div class="map-totals"><span><strong>${network.mapped}</strong>行程</span><span><strong>${routeCount}</strong>路线</span><span><strong>${network.nodes.length}</strong>地点</span></div></section></div>`;
     if (railway) {
       container.querySelector('.map-totals').insertAdjacentHTML('afterend', '<div class="map-railway-status"><span>铁路 <strong>' + railMapped + ' / ' + railState.total + '</strong> 已匹配</span><span><strong>' + (railState.data?.unmatched.length || 0) + '</strong>未匹配</span><span><strong>' + (railState.data?.failed.length || 0) + '</strong>加载失败</span></div>');
       container.querySelector('.map-card').classList.add('is-railway');
@@ -91,8 +103,8 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
     const cancelFrame=window.cancelAnimationFrame?.bind(window)||window.clearTimeout.bind(window);
     const playbackButton = container.querySelector('[data-map-playback-button]');
     let beforePlayback;
-    const playback = trips.length ? bindAnnualMapPlayback(svg, playbackButton, container.querySelector('[data-map-playback-status]'), trips, {
-      requestFrame, cancelFrame,
+    const playback = trips.length ? bindMapPlayback(svg, playbackButton, container.querySelector('[data-map-playback-status]'), trips, {
+      scope: playbackScope, requestFrame, cancelFrame,
       redraw() {
         if (playback.running && !beforePlayback) {
           beforePlayback = { viewport, userMoved: options.userMoved };
