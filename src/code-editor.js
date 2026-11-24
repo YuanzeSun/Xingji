@@ -42,7 +42,7 @@ export function ticketCodeEditor(record, { fromScan = false, generator = true } 
   const scan = `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}<p class="fine-print" data-code-guidance ${record[field] ? 'hidden' : ''}>${flight ? '请扫描自己登机牌上的完整码。' : '请对准纸质火车票上的二维码。'}</p></div>${flight ? boardingExamplesMarkup(record[field]) : railExampleMarkup(record[field])}</div>`;
   return `<section data-code-editor class="editor-extra${flight ? '' : ' full-field rail-qr-entry'}" ${flight ? '' : 'data-rail-qr-entry'} id="code-editor"><h3>${flight ? title : '二维码录入'}${fieldSourceBadge(field,record)}</h3>${scan}${codeCameraMarkup()}${flight && generator ? boardingGeneratorMarkup(record) : ''}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
 }
-export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', autoRead = false, profile, preserveGenerator = false, onMultiple, onCameraStart, isCurrent = () => true, loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {} } = {}) {
+export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', autoRead = false, profile, preserveGenerator = false, onCameraStart, isCurrent = () => true, loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {} } = {}) {
   const section = form.querySelector('[data-code-editor]'); if (!section) return () => {};
   const find = id => section.querySelector('#' + id);
   const { field, title, normalize } = configuration(draft), photo = find('code-photo'), status = find('code-status'), error = find('code-error'), choices = find('code-choices'), cancel = find('code-cancel');
@@ -167,12 +167,6 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
       if (disposed || request !== generation || !section.isConnected || !isCurrent()) return;
       loading = false;
       if (!result.codes.length) { status.textContent = ''; if (source === 'manual' || result.issues.length) {  error.textContent = result.issues[0] || '未识别到可重建的码，请选择显示完整二维码或条码的图片'; } return; }
-      const first=flight&&result.codes.length===1 ? readBoardingCode(result.codes[0].data) : null;
-      if (first?.legCount > 1 && onMultiple) {
-        const image = typeof file.toBlob === 'function' ? await new Promise(resolve => file.toBlob(resolve, 'image/png')) : file;
-        if (!disposed && request === generation && section.isConnected && isCurrent()) onMultiple(result.codes[0].data, currentRecord(), image);
-        return true;
-      }
       let available=result.codes.flatMap(code=>{
         const read=flight&&readBoardingCode(code.data);
         return read?.legCount>1 ? read.legs.map((leg,index)=>({...code,legIndex:index,label:`第 ${index+1} 段 · ${leg.service} ${leg.origin} → ${leg.destination}`})) : [code];
@@ -190,7 +184,9 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
         }
       }
       if (available.length === 1 && (source !== 'camera' || !available[0].isLink)) { use(available[0]); return true; }
-      pending = true; status.textContent = '请选择本张票据对应的码'; choices.hidden = false; cancel.hidden = false;
+      pending = true;
+      status.textContent = available.some(code => code.legIndex !== undefined) ? '请选择一个航段录入' : '请选择本张票据对应的码';
+      choices.hidden = false; cancel.hidden = false;
       for (const code of available) {
         const button = form.ownerDocument.createElement('button'); button.type = 'button'; button.className = 'code-choice';
         button.innerHTML = renderCodeData(normalize(code.data));

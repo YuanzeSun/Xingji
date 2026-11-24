@@ -18,17 +18,6 @@ const options = { tryHarder: true, tryRotate: true, tryInvert: true, tryDownscal
 const rawText = result => String.fromCharCode(...result.bytes);
 const isBoardingResult = result => result.bytes.length <= MAX_CODE_BYTES && !!readBCBP(rawText(result));
 
-export async function readBoardingPayloads(image) {
-  await prepareCodeReader();
-  const results = await readBarcodes(image, { ...options, formats: formatsFor('flight') });
-  return [...new Set(results.filter(result => result.isValid && isBoardingResult(result)).map(rawText))];
-}
-
-export async function readBoardingCodes(image) {
-  const {codes}=await rebuildCodeSymbols(image,'flight',{boardingPass:true});
-  return codes.map(code=>code.data).filter(data=>readBCBP(String.fromCharCode(...codeBytes(data.rawBytes))));
-}
-
 export async function rebuildCodeSymbols(image, type = 'rail', { boardingPass = false } = {}) {
   await prepareCodeReader();
   return rebuildResults(await readBarcodes(image, { ...options, formats: formatsFor(type) }), type, boardingPass);

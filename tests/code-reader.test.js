@@ -4,16 +4,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { prepareZXingModule, readBarcodes, writeBarcode } from 'zxing-wasm';
-import { prepareCodeReader, rebuildCodeSymbols, readBoardingPayloads, readBoardingCodes } from '../src/code-reader.js';
+import { prepareCodeReader, rebuildCodeSymbols } from '../src/code-reader.js';
 import { encodeBCBP, readBoardingCode } from '../src/bcbp.js';
 import { readBCBP } from '../src/bcbp-reader.js';
-import { createRecord } from '../src/model.js';
+import { applyImport, createRecord } from '../src/model.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from '../src/code-editor.js';
 import { BOARDING_SHARED_FIELDS } from '../src/boarding-code-state.js';
 import { JSDOM } from 'jsdom';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
+import { multilegCode } from './helpers/multileg-boarding-code.js';
 import {boardingPresentation} from '../src/boarding-language.js';
-import {boardingScanRecords} from '../src/boarding-pass.js';
 import {seatClassField,bindSeatClassFields} from '../src/seat-class-field.js';
 import {barcodeFieldLocked} from '../src/barcode-fields.js';
 import { symbolImage } from '../src/barcode-symbols.js';
@@ -27,14 +27,6 @@ await Promise.all([
   prepareZXingModule({ overrides: { wasmBinary: await readFile('node_modules/zxing-wasm/dist/full/zxing_full.wasm') }, fireImmediately: true })
 ]);
 const payload = new Uint8Array([0, 1, 29, 65, 66, 67, 127, 128, 200, 255, 49, 50, 51]);
-test('scan-field extraction accepts validated BCBP codes and ignores link codes',async()=>{
-  const text=encodeBCBP({passenger:'EXAMPLE/TRAVELER',pnr:'ABC123',origin:'JFK',destination:'LHR',carrier:'BA',flightNumber:'321',date:'2026-05-18',cabin:'Y',seat:'12A',sequence:'42',status:'1'});
-  const made=await writeBarcode(text,{format:'PDF417',scale:4});
-  assert.deepEqual(await readBoardingPayloads(symbolImage(made.symbol,'flight')),[text]);
-  const link=await writeBarcode('https://example.com/advertisement',{format:'QRCode'});
-  assert.deepEqual(await readBoardingPayloads(symbolImage(link.symbol,'flight')),[]);
-});
-
 test('compact and MicroPDF417 boarding passes rebuild into verified standard PDF417', async () => {
   const text = encodeBCBP({ passenger: 'EXAMPLE/TRAVELER', pnr: 'ABC123', origin: 'JFK', destination: 'LHR', carrier: 'BA', flightNumber: '321', date: '2026-05-18', cabin: 'Y', seat: '12A', sequence: '42', status: '1' });
   for (const bcid of ['pdf417compact', 'micropdf417']) {
@@ -42,7 +34,8 @@ test('compact and MicroPDF417 boarding passes rebuild into verified standard PDF
     const width = raw.pixx, height = raw.pixy, rowScale = width * height / raw.pixs.length;
     const image = symbolImage({ width, height, data: Uint8ClampedArray.from({ length: width * height },
       (_, i) => raw.pixs[Math.floor(Math.floor(i / width) / rowScale) * width + i % width] ? 0 : 255) }, 'flight');
-    const [restored] = await readBoardingCodes(image);
+    const { codes: [rebuilt] } = await rebuildCodeSymbols(image, 'flight', { boardingPass: true });
+    const restored = rebuilt?.data;
     assert.equal(restored?.format, 'PDF417', bcid);
     assert.equal(atob(restored.rawBytes), text);
     assert.equal(readBoardingCode(restored).seat, '12A');
@@ -68,8 +61,7 @@ test('boarding QR codes preserve Chinese or binary extensions and autofill field
     assert.equal(code.format,'PDF417');assert.equal(result.codes[0].format,'PDF417');
     const [converted]=await readBarcodes(result.codes[0].image,{formats:['PDF417'],textMode:'Plain'});assert.deepEqual(converted.bytes,expected);
     assert.deepEqual(codeBytes(code.rawBytes),expected);assert.equal(parsed.service,'BA321');assert.equal(parsed.cabin,'Z');assert.equal(parsed.electronic,'');
-    const payloads=await readBoardingPayloads(image);
-    assert.deepEqual(payloads,[String.fromCharCode(...bytes)]);assert.equal(readBCBP(payloads[0]).passenger,'EXAMPLE/TRAVELER');
+    assert.equal(readBCBP(String.fromCharCode(...bytes)).passenger,'EXAMPLE/TRAVELER');
     assert.equal(readBCBP(String.fromCharCode(...bytes.slice(0,60+conditional.length-1))),null,'truncated extensions are still rejected');
 
     const draft=createRecord({type:'flight',template:'air-boarding-pass'});
@@ -99,8 +91,6 @@ test('every supported boarding-code format becomes PDF417 and loses only the ele
     const [before]=await readBarcodes(image,{formats:[format]}),[after]=await readBarcodes(code.image,{formats:['PDF417']});
     const expected=before.bytes.slice();expected[22]=32;
     assert.equal(before.bytes[22],69);assert.deepEqual(after.bytes,expected,format);assert.deepEqual(codeBytes(code.data.rawBytes),expected,format);
-    const boardingCodes=await readBoardingCodes(image),[scanned]=boardingScanRecords('synthetic',{boardingCodes});
-    assert.equal(scanned.boardingCode.format,'PDF417');assert.equal(scanned.boardingCodeSource,'original');assert.equal(scanned.boardingTime,'');assert.equal(scanned.fieldSources.boardingTime,undefined);assert.equal(barcodeFieldLocked(scanned,'seat'),true);assert.equal(barcodeFieldLocked(scanned,'boardingTime'),false);assert.deepEqual(codeBytes(scanned.boardingCode.rawBytes),expected);
   }
 });
 
@@ -121,10 +111,50 @@ test('tagged Chinese names, ticket numbers and gates autofill from QR while reco
     assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'ZHANG/SAN');assert.equal(form.querySelector('[data-bcbp="electronic"]').value,'');assert.equal(form.querySelector('[data-bcbp-fields]').disabled,true);
     for(const origin of ['PEK','LHR']){const presentation=boardingPresentation({...draft,origin,originCode:origin});assert.equal(presentation.language,origin==='PEK'?'zh':'en');assert.equal(presentation.passenger,'张三');}
     const expected=bytes.slice();expected[22]=32;assert.deepEqual(codeBytes(draft.boardingCode.rawBytes),expected);
-    const payloads=await readBoardingPayloads(image),[scanned]=boardingScanRecords('synthetic',{boardingPayloads:payloads});
-    assert.equal(scanned.passenger,'张三');assert.equal(scanned.ticketNumber,'1230000000001');assert.equal(scanned.gate,'A101');assert.equal(scanned.boardingTime,'');
-    assert.equal(scanned.seatClass,'Z');assert.equal(scanned.airline,'中国国际航空');
+    for(const key of ['passenger','service','origin','destination','seat','seatClass','airline','ticketNumber','gate','departureDate'])assert.equal(draft.fieldSources[key],'barcode',key);
+    assert.equal(barcodeFieldLocked(draft,'seat'),true);
+    assert.equal(barcodeFieldLocked(draft,'boardingTime'),false);
   }finally{cleanup();dom.window.close();}
+});
+
+test('two scans of a connecting boarding pass can save each chosen flight separately', async () => {
+  const code = multilegCode();
+  let saved = [];
+  const legs = [
+    { service: 'CA1234', year: 2024, dayOfYear: 366, ticketNumber: '1230000000001', time: '18:21' },
+    { service: 'UA857', year: 2025, dayOfYear: 1, ticketNumber: '1230000000002', time: '' }
+  ];
+  for (const [index, leg] of legs.entries()) {
+    const draft = createRecord({ type: 'flight', template: 'air-boarding-pass' });
+    const dom = new JSDOM('<form>' + ticketCodeEditor(draft) + '</form>');
+    const form = dom.window.document.querySelector('form');
+    let fills = 0;
+    const cleanup = bindTicketCodeEditor(form, draft, () => fills++, {
+      loadRebuilder: async () => async () => ({ codes: [{ format: code.format, data: code }], issues: [] }),
+    });
+    try {
+      const input = form.querySelector('#code-photo');
+      Object.defineProperty(input, 'files', { value: [new Blob(['fixture'])] });
+      input.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+      await new Promise(resolve => setImmediate(resolve));
+      const choices = form.querySelectorAll('.code-choice');
+      assert.equal(choices.length, 2);
+      assert.equal(fills, 0);
+      assert.equal(draft.service, '');
+      assert.ok(choices[index].textContent.includes(leg.service));
+      choices[index].click();
+      assert.equal(fills, 1);
+      assert.equal(draft.service, leg.service);
+      assert.equal(draft.boardingLegIndex, String(index));
+      assert.deepEqual(draft.departureDate, { year: null, dayOfYear: leg.dayOfYear });
+      assert.equal(draft.ticketNumber, leg.ticketNumber);
+      assert.equal(draft.actualBoardingTime, leg.time);
+      draft.departureDate.year = leg.year;
+      saved = applyImport(saved, [draft]).records;
+      assert.equal(saved.length, index + 1);
+    } finally { cleanup(); dom.window.close(); }
+  }
+  assert.deepEqual(saved.map(record => record.service).sort(), ['CA1234', 'UA857']);
 });
 
 function rotate(image) {

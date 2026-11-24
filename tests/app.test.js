@@ -1,4 +1,5 @@
-import { archive, createRecord } from '../src/model.js';
+import { createRecord } from '../src/model.js';
+import { fullBackup } from '../src/archive-backup.js';
 import {answerArithmetic} from './helpers/arithmetic.js';
 import { codeDataFromResult } from '../src/barcode-data.js';
 import test from 'node:test';
@@ -164,14 +165,16 @@ test('app creates, reloads, edits, imports and filters personal records without 
   input.dispatchEvent(new window.Event('change', { bubbles: true }));
   await waitFor(() => document.querySelector('#import-status').textContent.includes('请选择图片'));
   assert.equal(document.querySelector('dialog'), null);
-  const json = JSON.stringify(archive(Array.from({ length: 100 }, (_, i) => createRecord({
+  const json = JSON.stringify(fullBackup(Array.from({ length: 100 }, (_, i) => createRecord({
     service: 'G' + (100 + i), departureDate: '2026-10-01', origin: '测试出发' + i, destination: '测试到达' + i,
     departureTime: '08:00', passenger: '测试旅客', identity: 'TEST123', carriage: '05', seat: '08F', seatClass: '二等座'
   }))));
   Object.defineProperty(input, 'files', { value: [{ name: 'test.json', type: 'application/json', size: json.length, text: async () => json }] });
   input.dispatchEvent(new window.Event('change', { bubbles: true }));
-  await waitFor(() => document.querySelector('[data-action="save-candidates"]'));
-  click('[data-action="save-candidates"]'); await waitFor(() => !document.querySelector('dialog'));
+  await waitFor(() => document.querySelector('[data-backup-restore]'));
+  click('[data-backup-restore] [type="submit"]'); await waitFor(() => !document.querySelector('dialog'));
+  click('[data-action="navigate"][data-page="archive"]');
+  await waitFor(() => document.querySelector('[data-action="filter"][data-type="all"]'));
   click('[data-action="filter"][data-type="all"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 48);
   assert.equal((await get('records', [])).length, 102);
   const firstCard = document.querySelector('.ticket-card');

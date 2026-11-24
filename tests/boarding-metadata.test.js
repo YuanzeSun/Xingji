@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readBCBP} from '../src/bcbp-reader.js';
 import {readBoardingCode} from '../src/bcbp.js';
-import {boardingScanRecords} from '../src/boarding-pass.js';
 import {createRecord,archive,readArchive,applyImport} from '../src/model.js';
 import {barcodeFieldLocked} from '../src/barcode-fields.js';
 import {boardingJourneyMarkup,boardingMetadataDetails} from '../src/boarding-details.js';
+import {boardingMetadataValues} from '../src/boarding-metadata.js';
+import {markFieldSources} from '../src/field-sources.js';
 import {calendarDate} from '../src/journey-date.js';
 import {ticketSVG} from '../src/tickets.js';
 import {multilegCode,multilegPayload} from './helpers/multileg-boarding-code.js';
@@ -20,10 +21,20 @@ test('standard optional sections and up to four legs remain separate with strict
   const payload=multilegPayload();assert.equal(readBCBP(payload.slice(0,-5)),null);assert.equal(readBCBP(payload.replace(/^M2/,'M4')),null);assert.equal(readBCBP(payload.slice(0,58)+'FF'+payload.slice(60)),null);
 });
 
-test('one barcode creates distinct linked records, preserves unknown years and never copies OCR times to another leg',()=>{
-  const code=multilegCode(),rows=boardingScanRecords('fixture',{boardingCodes:[code]});
-  assert.equal(rows.length,2);assert.equal(rows[0].boardingLegIndex,'0');assert.equal(rows[1].boardingLegIndex,'1');assert.equal(rows[1].departureDate.year,null);assert.equal(rows[1].departureDate.dayOfYear,1);assert.equal(rows[1].departureTime,'');assert.equal(rows[1].boardingTime,'');assert.equal(rows[1].actualBoardingTime,'');
-  assert.equal(rows[0].actualBoardingTime,'18:21');assert.equal(rows[0].boardingTime,'');assert.equal(rows[0].departureDate.year,null);assert.equal(rows[0].checkedBaggageCount,'2');assert.equal(rows[0].baggageTagNumbers,'0123456789–0123456790');assert.equal(rows[1].frequentFlyerCarrier,'CA');
+test('individually archived legs retain their barcode metadata and display links to one another',()=>{
+  const code = multilegCode();
+  const rows = readBoardingCode(code).legs.map((leg, index) => {
+    const metadata = boardingMetadataValues(leg);
+    const values = {
+      type: 'flight', template: 'air-boarding-pass', service: leg.service, pnr: leg.pnr,
+      origin: leg.originCode, destination: leg.destinationCode,
+      departureDate: { year: null, dayOfYear: leg.dayOfYear },
+      boardingCode: code, boardingCodeSource: 'original', boardingLegIndex: String(index), ...metadata
+    };
+    markFieldSources(values, Object.keys(metadata), 'barcode');
+    return createRecord(values);
+  });
+  assert.equal(rows[0].actualBoardingTime,'18:21');assert.equal(rows[0].baggageTagNumbers,'0123456789–0123456790');
   for(const key of ['actualBoardingTime','checkedBaggageCount','freeBaggageAllowance','frequentFlyerNumber','marketingCarrier'])assert.equal(barcodeFieldLocked(rows[0],key),true,key);
   const second=createRecord({...rows[1],departureDate:{year:2025,dayOfYear:1}});assert.equal(calendarDate(second.departureDate),'2025-01-01');assert.equal(readBoardingCode(second.boardingCode,second.boardingLegIndex).service,'UA857');
   assert.equal(applyImport(rows,rows).records.length,2);assert.equal(readArchive(archive([second]))[0].frequentFlyerNumber,second.frequentFlyerNumber);
@@ -33,9 +44,4 @@ test('one barcode creates distinct linked records, preserves unknown years and n
   assert.throws(()=>createRecord({type:'flight',template:'air-boarding-pass',checkedBaggageCount:'-1'}),/行李件数/);
   assert.throws(()=>createRecord({type:'flight',template:'air-boarding-pass',checkedBaggageCount:'1.5'}),/行李件数/);
   assert.equal(createRecord({type:'flight',template:'air-boarding-pass',checkedBaggageCount:'2997'}).checkedBaggageCount,'2997');
-});
-
-test('one barcode preserves all distinct flight legs for review',()=>{
-  const candidates=boardingScanRecords('fixture',{boardingCodes:[multilegCode()]});
-  assert.deepEqual(candidates.map(record=>record.service),['CA1234','UA857']);
 });

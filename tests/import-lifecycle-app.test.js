@@ -15,11 +15,7 @@ test('unsaved imports stay with their active review and stale results are discar
     postMessage() {}
   };
   const github = await prepareCloud();
-  const records = [
-    createRecord({ id: 'flight', service: 'G21', origin: '原票据出发站' }),
-    createRecord({ id: 'train', service: 'G23', destination: '原票据到达站' })
-  ];
-  const json = JSON.stringify(archive(records));
+  const json = JSON.stringify(archive([createRecord({ id: 'train', service: 'G21', origin: '原票据出发站' })]));
   let finish;
   const click = selector => document.querySelector(selector).click();
   const go = page => click('[data-page="' + page + '"]');
@@ -57,16 +53,7 @@ test('unsaved imports stay with their active review and stale results are discar
     await until(() => !document.querySelector('dialog'));
 
     assert.equal(document.querySelector('[data-action="review"]'), null);
-    const first = new window.File(['one'], 'first.png', { type: 'image/png' });
-    const second = new window.File(['two'], 'second.png', { type: 'image/png' });
-    pick(first, second);
-    await until(() => document.querySelectorAll('.review-row').length === 2);
-    click('[data-action="edit-candidate"][data-index="0"]');
-    await until(() => document.querySelector('.scan-reference img'));
-    assert.equal(document.querySelector('.scan-reference img').getAttribute('src'), 'blob:fixture-first.png');
-    click('[data-action="back-to-batch"]');
-    await until(() => document.querySelector('[data-action="edit-candidate"][data-index="1"]'));
-    click('[data-action="edit-candidate"][data-index="1"]');
+    pick(new window.File(['two'], 'second.png', { type: 'image/png' }));
     await until(() => document.querySelector('.scan-reference img'));
     assert.equal(document.querySelector('.scan-reference img').getAttribute('src'), 'blob:fixture-second.png');
     click('dialog [data-action="close-modal"]');

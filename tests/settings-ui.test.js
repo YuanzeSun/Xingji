@@ -4,12 +4,15 @@ test('saving or receiving a shared MCP key never consumes quota; explicit refres
  const dom=new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>',{url:'http://localhost/#data'}),{window}=dom;
  for(const key of ['window','document','location','history','sessionStorage','FormData'])Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true});
  Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});window.scrollTo=()=>{};
+ window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+ window.HTMLDialogElement.prototype.close = function () { this.open = false; };
  const server=await prepareCloud([],{flightMcpKey:'initial-key'}),db=await import('../src/db.js');let queries=0;
+ let historyResult = { kind: 'collection', items: [] };
  globalThis.fetch=async(url,options)=>{
   if(!String(url).includes('variflight.com'))return server.fetch(url,options);
   const body=JSON.parse(options.body);if(body.method==='notifications/initialized')return new Response(null,{status:204});
   if(body.method==='tools/call'){queries++;assert.deepEqual(body.params,{name:'queryUserHistoryTrip',arguments:{year:'2024',identityType:0}});}
-  const result=body.method==='tools/call'?{structuredContent:{kind:'collection',items:[]},isError:false}:{};
+  const result=body.method==='tools/call'?{structuredContent:historyResult,isError:false}:{};
   return new Response(JSON.stringify({jsonrpc:'2.0',id:body.id,result}),{headers:{'Content-Type':'application/json',...(body.method==='initialize'?{'Mcp-Session-Id':'test-session'}:{})}});
  };
  const wait=async fn=>{for(let i=0;i<300;i++){if(await fn())return;await new Promise(r=>setTimeout(r,10));}assert.fail('Settings did not settle');};
@@ -23,17 +26,27 @@ test('saving or receiving a shared MCP key never consumes quota; explicit refres
  assert.equal(document.querySelector('#flight-year').value,'2024');assert.equal(document.querySelector('[data-action="flight-refresh"]').textContent,'查询历史行程');
  document.querySelector('[data-action="flight-refresh"]').click();await wait(()=>queries===1&&!document.querySelector('[data-action="flight-refresh"]').disabled);
  assert.ok(document.querySelector('#toast-root').textContent.includes('2024 年未返回历史行程'));
+ historyResult = { flights: [{ flightNumber: 'CA1234' }, { flightNumber: 'UA857' }] };
+ document.querySelector('[data-action="flight-refresh"]').click();
+ await wait(() => queries === 2 && document.querySelector('[data-action="flight-result"]'));
+ assert.equal(document.querySelector('dialog'), null);
+ assert.deepEqual(server.records(), []);
+ document.querySelector('[data-action="flight-result"]').click();
+ await wait(() => document.querySelector('.raw-result'));
+ assert.match(document.querySelector('.raw-result').textContent, /CA1234[\s\S]*UA857/);
+ document.querySelector('dialog [data-action="close-modal"]').click();
+ await wait(() => !document.querySelector('dialog'));
  server.push([],{flightMcpKey:'changed-on-other-device'});document.querySelector('[data-action="sync"]').click();
- await wait(()=>document.querySelector('#flight-form [name="key"]').value==='changed-on-other-device');assert.equal(queries,1);
+ await wait(()=>document.querySelector('#flight-form [name="key"]').value==='changed-on-other-device');assert.equal(queries,2);
  let online=false;Object.defineProperty(navigator,'onLine',{get:()=>online,configurable:true});window.dispatchEvent(new window.Event('offline'));
  assert.equal(document.querySelector('#flight-form [name="key"]').disabled,true);
  form=document.querySelector('#flight-form');form.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await new Promise(r=>setTimeout(r,20));
- assert.equal((await db.get('settings')).flightMcpKey,'changed-on-other-device');assert.equal(queries,1);
+ assert.equal((await db.get('settings')).flightMcpKey,'changed-on-other-device');assert.equal(queries,2);
  Object.defineProperty(navigator,'userAgent',{value:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',configurable:true});
  document.querySelector('[data-action="navigate"][data-page="archive"]').click();await wait(()=>document.querySelector('h1')?.textContent==='我的票据');
  document.querySelector('[data-action="navigate"][data-page="data"]').click();await wait(()=>document.querySelector('.data-layout'));
  const install=document.querySelector('.data-layout').firstElementChild;
  assert.ok(install.classList.contains('install-panel'));assert.match(install.textContent,/随身票夹.*Safari.*共享.*添加到主屏幕.*编辑操作/);
- assert.equal(document.querySelector('#flight-form'),null);assert.equal(document.querySelector('[data-action="flight-refresh"]'),null);assert.equal(queries,1);
+ assert.equal(document.querySelector('#flight-form'),null);assert.equal(document.querySelector('[data-action="flight-refresh"]'),null);assert.equal(queries,2);
  dom.window.close();
 });

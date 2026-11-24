@@ -3,8 +3,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRecord,archive,readArchive,mergeThreeWay,resolveRecordConflict,deduplicateRecords} from '../src/model.js';
 import {parseText} from '../src/importers.js';
-import {boardingScanRecords} from '../src/boarding-pass.js';
-import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
 import {fieldSourceLabel,fieldSourceBadge,markFieldSources} from '../src/field-sources.js';
 import {markManualFields,applyLookupValues,clearLookupValues} from '../src/lookup-values.js';
 import {applyProfileDefaults} from '../src/personal-profile.js';
@@ -20,10 +18,8 @@ test('defaults, profile values and text imports record their actual origins with
   assert.equal(fieldSourceLabel(text,'service'),'文字导入');assert.match(fieldSourceBadge('service',text),/data-source-kind="text"/);
 });
 
-test('mixed barcode and OCR reads keep field-level origins through query fills, manual changes and context clearing',()=>{
-  const [record]=boardingScanRecords('synthetic',{boardingPayloads:[taggedBoardingPayload()]});
-  for(const key of ['passenger','service','origin','destination','seat','seatClass','airline','ticketNumber','gate'])assert.equal(record.fieldSources[key],'barcode',key);
-  assert.equal(record.fieldSources.departureDate,'barcode');assert.equal(record.fieldSources.boardingTime,undefined);
+test('barcode field origins survive query fills, manual changes and context clearing',()=>{
+  const record = flight({ gate: 'A101', fieldSources: { passenger: 'barcode', gate: 'barcode' } });
   applyLookupValues(record,{departureTime:'10:35',aircraft:'A320'},true,{kind:'flight-lookup'});
   assert.equal(record.fieldSources.departureTime,'variflight');assert.equal(record.fieldSources.aircraft,'variflight');assert.equal(record.fieldSources.passenger,'barcode');
   record.gate='A109';markManualFields(record,['gate']);assert.equal(record.fieldSources.gate,'manual');assert.equal(fieldSourceLabel(record,'gate'),'手动输入');
