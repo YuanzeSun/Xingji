@@ -9,6 +9,7 @@ import { ACTUAL_FLIGHT_FIELDS } from './flight-times.js';
 import { FLIGHT_STATUSES } from './flight-status.js';
 import { boardingMetadataDetails } from './boarding-details.js';
 import { railInvoiceDetails } from './rail-invoice.js';
+import { SUPPLEMENT_FIELDS } from './rail-template.js';
 
 const populatedFields = (record, keys) => keys.filter(key => record[key]).map(key => [key, record[key]]);
 
@@ -36,6 +37,7 @@ export function ticketDetails(record) {
       ...populatedFields(record, ['railBureau', 'railModel']),
       ...(trainsets.length ? [['railTrainsets', trainsets.join(' / ')]] : []),
       ...populatedFields(record, ['railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'saleCode', 'issuer']),
+      ...(record.template === 'rail-supplement' ? populatedFields(record, Object.keys(SUPPLEMENT_FIELDS)) : []),
       ['ticketMarks', describeMarks(record.ticketMarks)],
       ['ticketCode', record.ticketCode ? '已收录原码数据' : '未收录'],
       ...railInvoiceDetails(record.railInvoice)

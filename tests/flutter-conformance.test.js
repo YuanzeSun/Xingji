@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {calendarDate,dateLabel} from '../src/journey-date.js';
-import {deduplicateRecords,mergeThreeWay,FIELDS,SCHEMA_VERSION} from '../src/model.js';
+import {deduplicateRecords,mergeThreeWay,FIELDS,SCHEMA_VERSION,TEMPLATES} from '../src/model.js';
 import {readBCBP} from '../src/bcbp-reader.js';
 import {railLineFixtures} from './helpers/rail-line-fixtures.js';
 
@@ -13,6 +13,7 @@ test('shared rail line fixtures track the verified browser geometry matcher',asy
 });
 test('shared Flutter archive fields track the browser protocol',()=>{
   assert.deepEqual(fields.fields,FIELDS);assert.equal(fields.schemaVersion,SCHEMA_VERSION);
+  assert.deepEqual(fields.templates,TEMPLATES);
 });
 for(const row of fixture.dates)test(`shared date fixture ${row.input}`,()=>{
   assert.equal(calendarDate(row.stored),row.calendar);assert.equal(dateLabel(row.stored),row.label);

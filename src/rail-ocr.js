@@ -1,6 +1,6 @@
 import {calendarDate} from './journey-date.js';
 import { railTrainRectangle, railFareRectangle, parsePrintedRailTicket, railStationFromRegion, printedRailNumber, railSeatFromLine, railIssuerFromLine, railFareFromLine } from './rail-ticket.js';
-import { printedRailTemplate } from './rail-template.js';
+import { isOldRedTemplate, printedRailTemplate } from './rail-template.js';
 import { marksFromRailRegion } from './ticket-marks.js';
 
 export async function refineRailFields(worker, image, data, paperColor) {
@@ -30,7 +30,7 @@ export async function refineRailFields(worker, image, data, paperColor) {
       }
     }
     if (record && !record.issuer) {
-      const { text, confidence } = record.template === 'rail-red-classic'
+      const { text, confidence } = isOldRedTemplate(record.template)
         ? await read(.57, .01, .41, .16) : await read(.41, .84, .55, .15);
       const names = new Set(text.split('\n').map(railIssuerFromLine).filter(Boolean));
       if (confidence >= 58 && names.size === 1) fields.issuer = names.values().next().value;

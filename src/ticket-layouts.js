@@ -14,13 +14,18 @@ import { renderBoardingCode, boardingCodeSize } from './boarding-code.js';
 import { airlineLogo } from './airline-logo.js';
 import { isRefundReceipt } from './record-kind.js';
 import { isInactiveFlight } from './flight-status.js';
+import { isAnonymousRedTemplate, isOldRedTemplate } from './rail-template.js';
 import { PINYIN_ADVANCES, PINYIN_TRACKING } from './data/rail-pinyin-metrics.js';
 const text = (x, y, value, size = 30, family = 'TicketSong', attrs = '') => value ? `<text x="${x}" y="${y}" font-size="${size}" font-family="${family},TicketRailFallback,TicketSong,serif" ${attrs}>${esc(value)}</text>` : '';
 const isReceipt = template => ['rail-receipt', 'rail-refund-receipt'].includes(template);
 const railBody = r => isReceipt(r.template) ? 'TicketFang' : 'TicketSong';
+const softPaper = Object.freeze({ width: 900, height: 600 });
 const dim = Object.freeze({
-  'rail-red-classic': Object.freeze({ width: 900, height: 600 }),
-  'rail-red': Object.freeze({ width: 900, height: 600 }),
+  'rail-red-barcode': softPaper,
+  'rail-red-qr': softPaper,
+  'rail-red-classic': softPaper,
+  'rail-red': softPaper,
+  'rail-supplement': softPaper,
   'rail-blue': Object.freeze({ width: 856, height: 540 }),
   'rail-receipt': Object.freeze({ width: 856, height: 540 }),
   'rail-refund-receipt': Object.freeze({ width: 856, height: 540 }),
@@ -145,7 +150,7 @@ function seats(r, x, y, size = 36) {
 }
 function fare(r, x, y, numberFamily = 'TicketOCR') {
   if (!r.price) return '';
-  const classic = r.template === 'rail-red-classic';
+  const classic = isOldRedTemplate(r.template);
   const scale = classic ? 1.35 : 1;
   const numberSize = classic ? 56 : isReceipt(r.template) ? 35 : 40;
   const symbol = `<path d="m3 -31 10 13 10-13m-10 13v19m-11-17h22m-22 7h22" transform="translate(${x} ${y}) scale(${scale})" fill="none" stroke="#172226" stroke-width="1.8"/>`;
@@ -202,13 +207,23 @@ function blue(r) {
   return `<defs>${paperPattern(pattern, false)}<clipPath id="cut-${esc(r.id)}"><rect width="856" height="540" rx="20"/></clipPath></defs><g clip-path="url(#cut-${esc(r.id)})"><rect width="856" height="540" fill="#c6e2e7"/><rect width="856" height="540" fill="url(#${pattern})"/>${trainWatermark()}<rect y="485" width="856" height="55" fill="#67b8d0"/><g fill="#91c5d1" font-family="TicketLatin" font-size="7">${Array.from({ length: 61 }, (_, i) => `<text x="${i * 14}" y="481">CR</text>`).join('')}</g>${printed}</g>`;
 }
 function red(r) {
-  const classic = r.template === 'rail-red-classic';
+  const classic = isOldRedTemplate(r.template);
+  const linear = r.template === 'rail-red-barcode';
+  const anonymous = isAnonymousRedTemplate(r.template);
   const origin = railwayStop(r, 'origin'), destination = railwayStop(r, 'destination');
   const pattern = `fine-${esc(r.id)}`;
+  const oldIssuer = classic && r.issuer ? text(785, 79, r.issuer.replace(/[站售]+$/u, ''), 30, 'TicketRailHei', 'text-anchor="end"')
+    + '<circle cx="811" cy="67" r="17" fill="none" stroke-width="2"/>' + text(811, 76, '售', 24, 'TicketRailHei', 'text-anchor="middle"') : '';
+  const oldGate = r.gate ? text(660, 484, '检票口' + r.gate, 28, 'TicketSong', 'text-anchor="end"') : '';
+  const footerWidth = linear ? 778 : classic ? 590 : 396;
+  const footer = text(57, 552, r.saleCode, Math.min(linear ? 29 : 37, footerWidth / Math.max(1, textUnits(r.saleCode || ''))), 'TicketRailNarrow', 'letter-spacing=".25" stroke="none"');
+  const rider = classic
+    ? text(56, 422, r.passenger, 33) + text(56, 473, maskRailIdentity(r.identity), 32, 'TicketOCR')
+    : passenger(r, 56, 427, 440);
   return `<defs>${paperPattern(pattern, true)}</defs><rect width="900" height="600" fill="#f8f3e6"/><rect x="30" y="30" width="840" height="540" fill="#efd3ce"/><rect x="30" y="30" width="840" height="540" fill="url(#${pattern})"/>
   <g fill="#152022" stroke="#152022" stroke-width=".65" paint-order="stroke" transform="translate(${Number(r.offsetX) || 0} ${Number(r.offsetY) || 0})">
     ${text(59, 83, r.ticketNumber, 46, 'TicketOCR', 'fill="#b83c4d" letter-spacing="3" stroke="none"')}
-    ${text(822, 82, classic ? (r.issuer ? r.issuer.replace(/站$/, '') + '售' : '') : (r.gate ? '检票口' + r.gate : ''), 31, classic ? 'TicketRailHei' : 'TicketSong', 'text-anchor="end"')}
+    ${classic ? oldIssuer : text(822, 82, r.gate ? '检票口' + r.gate : '', 31, 'TicketSong', 'text-anchor="end"')}
     ${station(origin.name, 86, 153, 231, { classic, red: true })}${station(destination.name, 585, 153, 236, { classic, red: true })}
     ${pinyin(origin.pinyin, 197, 195, 270, classic ? 42 : 40)}${pinyin(destination.pinyin, 704, 195, 270, classic ? 42 : 40)}
     ${trainService(r.service, 455, 150, 54, classic)}${arrow(369, 173, 156)}
@@ -216,9 +231,35 @@ function red(r) {
     ${fare(r, 57, 304, classic ? 'TicketRailSerif' : 'TicketOCR')}${text(648, 306, r.seatClass, 35)}
     ${renderMarks(r, { x: 433, y: 289, radius: 17, gap: 48 })}
     ${text(59, 357, '限乘当日当次车', 35)}
-    ${passenger(r, 56, classic ? 438 : 427, 440)}${renderTicketCode(r, 687, 385, 163)}
-    ${classic ? text(603, 493, r.gate ? '检票口' + r.gate : '', 28, 'TicketSong', 'text-anchor="end"') : notice(96, 445, 505)}
-    ${text(57, 552, r.saleCode, 40, 'TicketRailNarrow', 'letter-spacing=".5" stroke="none"')}${!classic ? text(465, 552, r.issuer ? r.issuer.replace(/站$/, '') + '站售' : '', 31) : ''}
+    ${anonymous ? '' : rider}
+    ${linear ? '' : renderTicketCode(r, 669, 374, 181)}
+    ${classic ? (anonymous ? '' : oldGate) : notice(96, 445, 505)}
+    ${footer}${!classic ? text(465, 552, r.issuer ? r.issuer.replace(/站$/, '') + '站售' : '', 31) : ''}
+  </g>`;
+}
+function supplement(r) {
+  const origin = railwayStop(r, 'origin'), destination = railwayStop(r, 'destination');
+  const pattern = `fine-${esc(r.id)}`;
+  const identity = maskRailIdentity(r.identity);
+  const reason = r.railSupplementReason ? '事由:' + r.railSupplementReason : '';
+  const charges = [
+    r.railSupplementFee && '含手续费:' + r.railSupplementFee + '元',
+    r.railSupplementSurcharge && '加收:' + r.railSupplementSurcharge + '元'
+  ].filter(Boolean).join('　');
+  const issuer = r.issuer && (r.issuer.endsWith('补') ? r.issuer : r.issuer + '补');
+  return `<defs>${paperPattern(pattern, true)}</defs><rect width="900" height="600" fill="#f1eee2"/><rect x="34" y="26" width="834" height="548" fill="#e6d8cc"/><rect x="34" y="26" width="834" height="548" fill="url(#${pattern})" opacity=".55"/>
+  <g fill="#242422" stroke="#242422" stroke-width=".25" paint-order="stroke" transform="translate(${Number(r.offsetX) || 0} ${Number(r.offsetY) || 0})">
+    ${text(54, 85, r.ticketNumber, 48, 'TicketOCR', 'fill="#a74c4d" letter-spacing="4" stroke="none"')}
+    ${station(origin.name, 121, 136, 218)}${station(destination.name, 617, 136, 223)}
+    ${trainService(r.service, 455, 132, 50)}<path d="M360 145h190" fill="none" stroke-width="2"/>
+    ${departure({ ...r, departureTime: '' }, 54, 204, .94)}${seats(r, 567, 204, 35)}
+    ${fare(r, 55, 257)}${text(840, 261, r.seatClass, 30, 'TicketSong', 'text-anchor="end"')}
+    ${renderMarks(r, { x: 436, y: 243, radius: 15 })}
+    ${text(54, 313, '限乘当日当次车　中途下车失效', 31)}
+    ${text(54, 365, identity, 36, 'TicketOCR')}${text(840, 365, reason, Math.min(30, 340 / Math.max(1, textUnits(reason))), 'TicketSong', 'text-anchor="end"')}
+    ${text(54, 411, charges, Math.min(29, 630 / Math.max(1, textUnits(charges))), 'TicketSong')}
+    ${text(54, 546, r.saleCode, Math.min(31, 356 / Math.max(1, textUnits(r.saleCode || ''))), 'TicketRailNarrow')}${text(425, 546, issuer, Math.min(31, 294 / Math.max(1, textUnits(issuer || ''))))}
+    ${renderTicketCode(r, 724, 417, 132)}
   </g>`;
 }
 function flight(r) {
@@ -300,6 +341,7 @@ export function renderTicket(record) {
   if (!dim[record.template]) throw new Error('Unsupported ticket layout');
   if (record.template === 'air-boarding-pass') return flight(record);
   if (record.template.startsWith('rail-red')) return red(record);
+  if (record.template === 'rail-supplement') return supplement(record);
   return blue(record);
 }
 export function layoutFontFiles(template) {

@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseScanText, railPhotoChanges } from '../src/scan-engine.js';
-import { createRecord } from '../src/model.js';
+import { archive, createRecord, deduplicateRecords, readArchive } from '../src/model.js';
 import { refineRailService, refineRailTemplate, preferEnhancedRailRead } from '../src/rail-ocr.js';
 import { railPaperFromPixels } from '../src/rail-template.js';
 import { printedRailNumber, railFareFromLine, railSeatFromLine } from '../src/rail-ticket.js';
+import { validateTicketForm } from '../src/ticket-form.js';
 
 const layout = entries => '1\t1\t0\t0\t0\t0\t0\t0\t1000\t630\t-1\t\n' + entries.map(([text,x,y,w,h,confidence=90],i) => `5\t1\t1\t1\t1\t${i+1}\t${x}\t${y}\t${w}\t${h}\t${confidence}\t${text}`).join('\n');
 const picture = (service='D3759') => `X000001\n柳州站 ${service} 来宾北站\nLiuzhou Laibinbei\n2023年05月26日 15:06开 03车15F号\n￥24.0元 二等座\n仅供报销使用\n报销凭证 遗失不补`;
@@ -38,6 +39,40 @@ test('a photographed red ticket switches the draft template when the paper has a
   assert.equal(railPhotoChanges(draft, red).template, 'rail-red');
   assert.equal(railPhotoChanges(draft, unknown).template, undefined);
   assert.equal(railPhotoChanges(draft, parseScanText(picture(), 'photo', { paperColor })[0]).template, 'rail-receipt');
+});
+
+test('historical red stock distinguishes the barcode, anonymous QR and named QR periods', () => {
+  const text = date => `X000001\n北京站 K123 济南站\nBeijing Jinan\n${date} 09:12开 01车08号\n￥53.0元 硬座\n限乘当日当次车`;
+  const parse = raw => parseScanText(raw, 'photo', { paperColor: 'red' })[0];
+  assert.equal(parse(text('2008年10月03日')).template, 'rail-red-barcode');
+  assert.equal(parse(text('2010年10月03日')).template, 'rail-red-qr');
+  assert.equal(parse(text('2011年10月03日') + '\n1101011990****1234 示例旅客').template, 'rail-red-classic');
+  assert.equal(parse(text('2015年03月03日')).template, 'rail-red-classic');
+  assert.equal(parse(text('2015年07月03日') + '\n买票请到12306').template, 'rail-red');
+  assert.equal(parse(text('2015年08月03日')).template, 'rail-red');
+});
+
+test('mobile supplement OCR keeps the printed date, ticket numbers and additional charges', () => {
+  const [supplement] = parseScanText(`7000001
+天津站 K608 张家口南站
+2015年07月01日 加1车19号中铺
+¥99.5元 硬卧
+限乘当日当次车 中途下车失效
+1101011990****1234 事由：客快硬卧
+含手续费：5.0元 加收：0.0元
+T1801000010701A000000 沈阳客运段补`);
+  assert.deepEqual([supplement.template, supplement.origin, supplement.destination, supplement.service],
+    ['rail-supplement', '天津', '张家口南', 'K608']);
+  assert.deepEqual([supplement.departureTime, supplement.identity, supplement.carriage, supplement.seat], ['', '', '加1', '19号中铺']);
+  assert.deepEqual([supplement.price, supplement.ticketNumber, supplement.saleCode, supplement.issuer],
+    ['99.5', '7000001', 'T1801000010701A000000', '沈阳客运段']);
+  const changes = railPhotoChanges(createRecord(), supplement);
+  assert.deepEqual([changes.railSupplementReason, changes.railSupplementFee, changes.railSupplementSurcharge], ['客快硬卧', '5.0', '0.0']);
+  assert.doesNotThrow(() => validateTicketForm(supplement));
+  const ordinary = createRecord({ ...supplement, id:'regular-ticket', template:'rail-red' });
+  const duplicates = deduplicateRecords([ordinary, supplement, { ...supplement, id:'repeated-scan' }]);
+  assert.equal(duplicates.length, 2);
+  assert.equal(readArchive(archive(duplicates)).find(r => r.template === 'rail-supplement').railSupplementFee, '5.0');
 });
 
 test('rail fares retain cents and reject lookalike years, percentages and additional charges', () => {

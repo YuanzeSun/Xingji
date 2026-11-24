@@ -51,6 +51,9 @@
     "railRoute",
     "railJourney",
     "railInvoice",
+    "railSupplementReason",
+    "railSupplementFee",
+    "railSupplementSurcharge",
     "pnr",
     "ticketMarks",
     "ticketCode",
@@ -99,11 +102,14 @@
     "destinationCode"
   ],
   "templates": {
-    "rail-red-classic": "红色软纸票 · 2015年前",
-    "rail-red": "红色软纸票 · 2015版",
-    "rail-blue": "蓝色磁介质票 · 2015版",
-    "rail-receipt": "蓝色报销凭证 · 热敏版",
-    "rail-refund-receipt": "退票费凭证",
+    "rail-receipt": "纸质报销凭证",
+    "rail-blue": "蓝色磁介质票 · 2015 版",
+    "rail-red": "红色软纸票 · 2015 版",
+    "rail-red-classic": "红色软纸票 · 实名旧版",
+    "rail-red-qr": "红色软纸票 · 非实名二维码版",
+    "rail-red-barcode": "红色软纸票 · 一维条码版",
+    "rail-supplement": "列车移动补票",
+    "rail-refund-receipt": "退票费报销凭证",
     "air-boarding-pass": "登机牌"
   },
   "dateFields": [

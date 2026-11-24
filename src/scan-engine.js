@@ -2,7 +2,7 @@ import {calendarDate} from './journey-date.js';
 import { STATIONS } from './data/location-reference.js';
 import { isRailOrderText, parseRailOrder } from './rail-order.js';
 import { parsePrintedRailTicket, printedRailNumber } from './rail-ticket.js';
-import { detectedRailTemplate } from './rail-template.js';
+import { detectedRailTemplate, SUPPLEMENT_FIELDS } from './rail-template.js';
 import { createRecord, validDate } from './model.js';
 import {markFieldSources} from './field-sources.js';
 import { readRailSeatClasses } from './seat-classes.js';
@@ -10,7 +10,7 @@ import { marksFromText } from './ticket-marks.js';
 
 const pinyinStations = new Map();
 const photoFields = ['origin','originCode','destination','destinationCode','service','departureDate',
-  'departureTime','passenger','carriage','seatClass','seat','railStanding','price','gate','ticketNumber','saleCode','issuer','ticketMarks'];
+  'departureTime','passenger','carriage','seatClass','seat','railStanding','price','gate','ticketNumber','saleCode','issuer','ticketMarks', ...Object.keys(SUPPLEMENT_FIELDS)];
 
 export function railPhotoChanges(draft, record) {
   if (!record) return {};

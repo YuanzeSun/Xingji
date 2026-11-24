@@ -1,12 +1,15 @@
 import {FLIGHT_TIME_LABELS} from './flight-times.js';
 import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import { requireCompleteIdentity } from './identity.js';
+import { isAnonymousRedTemplate } from './rail-template.js';
 const common = ['origin', 'destination', 'service', 'departureDate', 'departureTime', 'passenger', 'identity', 'seat', 'seatClass'];
 export function requiredTicketFields(type, template, flightStatus = 'normal', railStanding = false, fromRailInvoice = false) {
   if (type === 'flight') return ['open', 'invalid'].includes(flightStatus) ? ['origin', 'destination', 'passenger'] : common;
+  if (template === 'rail-supplement') return ['origin', 'destination', 'service', 'departureDate'];
   const fields = template === 'rail-refund-receipt'
     ? ['origin', 'destination', 'service', 'departureDate', 'passenger', 'identity', 'price']
     : railStanding ? common.filter(key => key !== 'seat') : [...common, 'carriage'];
+  if (isAnonymousRedTemplate(template)) return fields.filter(key => key !== 'passenger' && key !== 'identity');
   return fromRailInvoice ? fields.filter(key => key !== 'identity') : fields;
 }
 

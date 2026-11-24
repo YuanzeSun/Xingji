@@ -22,17 +22,10 @@ import { normalizeFlightStatus } from './flight-status.js';
 import { normalizeRailJourney, railJourneyMatches, normalizeRailTrainsets } from './rail-journey.js';
 import { requireCompleteIdentity } from './identity.js';
 import { normalizeRailInvoice } from './rail-invoice.js';
+import { DEFAULT_RAIL_TEMPLATE, SUPPLEMENT_FIELDS, TEMPLATES } from './rail-template.js';
+export { DEFAULT_RAIL_TEMPLATE, TEMPLATES };
 export const SCHEMA_VERSION = 2;
-export const DEFAULT_RAIL_TEMPLATE = 'rail-receipt';
-export const TEMPLATES = {
-  'rail-red-classic': '红色软纸票 · 2015年前',
-  'rail-red': '红色软纸票 · 2015版',
-  'rail-blue': '蓝色磁介质票 · 2015版',
-  'rail-receipt': '蓝色报销凭证 · 热敏版',
-  'rail-refund-receipt': '退票费凭证',
-  'air-boarding-pass': '登机牌'
-};
-export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'railInvoice', 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
+export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'railInvoice', ...Object.keys(SUPPLEMENT_FIELDS), 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
 export const now = () => new Date().toISOString();
 export const clone = value => structuredClone(value);
 export const sameRecords = (a, b) => JSON.stringify([...a].sort((x, y) => x.id.localeCompare(y.id))) === JSON.stringify([...b].sort((x, y) => x.id.localeCompare(y.id)));
@@ -62,6 +55,7 @@ export function validateRecord(input) {
   if ((input.type === 'flight') !== input.template.startsWith('air-')) throw new Error('票面与交通方式不匹配');
   const out = { id: input.id };
   for (const field of FIELDS) {
+    if (Object.hasOwn(SUPPLEMENT_FIELDS, field) && (input.template !== 'rail-supplement' || input.deleted)) continue;
     if (field === 'railInvoice') {
       const invoice = input.type === 'rail' && !input.deleted ? normalizeRailInvoice(input.railInvoice) : undefined;
       if (invoice) out.railInvoice = invoice;
@@ -95,6 +89,9 @@ export function validateRecord(input) {
   for (const field of ['departureZone', 'arrivalZone']) if (out[field] && !isStoredTimeZone(out[field])) throw new Error('请填写有效时区，例如 Asia/Shanghai');
   for (const field of ['offsetX', 'offsetY']) if (!Number.isFinite(Number(out[field])) || Math.abs(Number(out[field])) > 30) throw new Error('排版偏移范围为 -30 至 30');
   if (out.price && !/^\d{1,9}(\.\d{1,2})?$/.test(out.price)) throw new Error('票价请填写正数，最多两位小数');
+  for (const key of ['railSupplementFee', 'railSupplementSurcharge']) {
+    if (out[key] && !/^\d{1,9}(\.\d{1,2})?$/.test(out[key])) throw new Error(SUPPLEMENT_FIELDS[key] + '须为非负金额，最多两位小数');
+  }
   out.createdAt = typeof input.createdAt === 'string' ? input.createdAt : now();
   out.updatedAt = typeof input.updatedAt === 'string' ? input.updatedAt : now();
   out.sources = (Array.isArray(input.sources) ? input.sources : []).slice(0, 200).filter(s => s && typeof s === 'object').map(s => ({ kind: String(s.kind || 'manual').slice(0, 80), label: String(s.label || '').slice(0, 300), at: String(s.at || now()).slice(0, 40) }));
@@ -103,7 +100,7 @@ export function validateRecord(input) {
   out.mergedIds = [...new Set((Array.isArray(input.mergedIds) ? input.mergedIds : []).filter(id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id) && id !== out.id))].sort();
   if (out.deleted) {
     // Keep only an ID marker for synchronization; there is no recoverable ticket.
-    for (const field of FIELDS) if (!['type', 'template', 'deleted', 'railInvoice'].includes(field)) out[field] = ['lookupValues','fieldSources'].includes(field) ? {} : field === 'ticketMarks' ? [] : field === 'railStanding' ? false : '';
+    for (const field of FIELDS) if (!['type', 'template', 'deleted', 'railInvoice'].includes(field) && !Object.hasOwn(SUPPLEMENT_FIELDS, field)) out[field] = ['lookupValues','fieldSources'].includes(field) ? {} : field === 'ticketMarks' ? [] : field === 'railStanding' ? false : '';
     out.sources = []; out.lockedFields = [];
     return out;
   }
@@ -152,7 +149,7 @@ export function readArchive(input) {
 }
 const normalized = value => String(value || '').normalize('NFKC').replace(/[\s·]/g, '').toUpperCase();
 const recordIds = record => [record.id, ...(record.mergedIds || [])];
-const bucketKey = r => fullDate(r.departureDate) && r.service ? `${r.type}:${r.type === 'flight' ? (r.flightStatus || 'normal') + ':' : isRefundReceipt(r) ? 'refund:' : ''}${calendarDate(r.departureDate)}:${normalized(r.service)}` : '';
+const bucketKey = r => fullDate(r.departureDate) && r.service ? `${r.type}:${r.type === 'flight' ? (r.flightStatus || 'normal') + ':' : isRefundReceipt(r) ? 'refund:' : r.template === 'rail-supplement' ? 'supplement:' : ''}${calendarDate(r.departureDate)}:${normalized(r.service)}` : '';
 function sameJourney(a, b, checkTime = true) {
   if (a.deleted || b.deleted || !bucketKey(a) || bucketKey(a) !== bucketKey(b)) return false;
   if (a.passenger && b.passenger && normalized(a.passenger) !== normalized(b.passenger)) return false;
@@ -172,6 +169,7 @@ function sameJourney(a, b, checkTime = true) {
   return true;
 }
 const railConflictLabels = {
+  ...SUPPLEMENT_FIELDS,
   departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间',
   identity: '证件号', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别',
   price: '金额', ticketNumber: '票号', orderNumber: '订单号', saleCode: '售票码',
@@ -188,7 +186,7 @@ function railFieldConflicts(key, left, right) {
       (left.dayOfYear && right.dayOfYear && left.dayOfYear !== right.dayOfYear);
   }
   const a = normalized(left), b = normalized(right);
-  if (['carriage', 'price', 'railPlatform', 'railMileage'].includes(key) && /^\d+(?:\.\d+)?$/.test(a) && /^\d+(?:\.\d+)?$/.test(b)) {
+  if (['carriage', 'price', 'railPlatform', 'railMileage', 'railSupplementFee', 'railSupplementSurcharge'].includes(key) && /^\d+(?:\.\d+)?$/.test(a) && /^\d+(?:\.\d+)?$/.test(b)) {
     return Number(a) !== Number(b);
   }
   return a !== b;

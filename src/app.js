@@ -12,7 +12,8 @@ import {markManualFields,applyLookupValues,lookupContext,clearLookupValues} from
 import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } from './arithmetic-confirm.js';
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
 import { renderCodeData } from './barcode-data.js';
-import { createRecord, validateRecord, mergeThreeWay, TEMPLATES, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, formatDate } from './model.js';
+import { createRecord, validateRecord, mergeThreeWay, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, formatDate } from './model.js';
+import { SUPPLEMENT_FIELDS, ticketTemplateChoices } from './rail-template.js';
 import * as db from './db.js';
 import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageImport, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, replaceWithRemote } from './sync-state.js';
 import { sharedSettings, sameSettings, maskedKey, wasUnlinked } from './shared-settings.js';
@@ -27,7 +28,7 @@ import { mapFlightResult, readRailInvoicePDF } from './importers.js';
 import { railInvoiceDetails } from './rail-invoice.js';
 import { ticketSVG, exportSVG, exportPNG } from './tickets.js';
 import { ticketDetails } from './ticket-details.js';
-import { escape as e } from './html.js';
+import { escape as e, selectOptions } from './html.js';
 import { demoRecords } from './demo.js';
 import { MARK_SHAPES, describeMarks } from './ticket-marks.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from './code-editor.js';
@@ -85,7 +86,7 @@ const icons = {
   chart: '<path d="M4 3v17h17M7 14l4-5 4 3 5-7"/>'
 };
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.ticket}</svg>`;
-const labels = { ...BOARDING_METADATA_LABELS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '二维码', boardingCode: '机票条码' };
+const labels = { ...BOARDING_METADATA_LABELS, ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '二维码', boardingCode: '机票条码' };
 const imports = { task: null, backup: null };
 let importView = 0;
 const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, routesOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null };
@@ -830,9 +831,11 @@ function field(key, r, options = {}) {
   const required = requiredTicketFields(r.type, r.template, r.flightStatus, r.railStanding, !!r.railInvoice?.electronicTicketNumber).includes(key) || ['type', 'template'].includes(key);
   const requiredAttrs = required ? 'required aria-required="true"' : '';
   if(JOURNEY_DATE_FIELDS.includes(key))return ticketDateField(key,r,{label:ticketFieldLabel(key,r.type,labels[key]),required});
-  const control = options.options ? `<select name="${key}" ${requiredAttrs}>${options.options.map(([v, label]) => `<option value="${e(v)}" ${r[key] === v ? 'selected' : ''}>${e(label)}</option>`).join('')}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${options.type === 'number' ? 'min="-30" max="30" step="1"' : ''} ${['price','railMileage','flightDistance'].includes(key) ? 'inputmode="decimal"' : ''} ${key === 'identity' ? 'autocomplete="off" spellcheck="false"' : ''} />`;
+  const control = options.options ? `<select name="${key}" ${requiredAttrs}>${selectOptions(options.options, r[key])}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${options.type === 'number' ? 'min="-30" max="30" step="1"' : ''} ${['price','railMileage','flightDistance','railSupplementFee','railSupplementSurcharge'].includes(key) ? 'inputmode="decimal"' : ''} ${key === 'identity' ? 'autocomplete="off" spellcheck="false"' : ''} />`;
   const content = airportField || ['origin','destination','airline'].includes(key) ? `<span class="airport-picker">${control}<span class="airport-suggestions" role="listbox" hidden></span></span>` : control;
-  const label = key === 'price' && isRefundReceipt(r) ? '退票费（元）' : ticketFieldLabel(key, r.type, labels[key]);
+  const label = key === 'price' && isRefundReceipt(r) ? '退票费（元）'
+    : key === 'issuer' && r.template === 'rail-supplement' ? '出票客运段'
+    : ticketFieldLabel(key, r.type, labels[key]);
   return `<label class="field ${options.full ? 'full-field' : ''}"><span>${e(label)}${required ? '<b class="required-mark" aria-label="必填">*</b>' : r.type==='flight' && key==='pnr' ? barcodeRequiredMark : ''}${fieldSourceBadge(key,r)}</span>${content}</label>`;
 }
 function bindPlaceFields(container) {
@@ -868,16 +871,13 @@ function collectMarks(form) {
 }
 function railTicketOptions(draft) {
   const refund = isRefundReceipt(draft);
-  const templates = Object.entries(TEMPLATES)
-    .filter(([id]) => id !== 'rail-refund-receipt' && id.startsWith('rail-'))
-    .sort(([a], [b]) => Number(b === DEFAULT_RAIL_TEMPLATE) - Number(a === DEFAULT_RAIL_TEMPLATE));
   const refundOption = ['rail-receipt', 'rail-refund-receipt'].includes(draft.template)
     ? `<label class="checkbox-row"><input type="checkbox" data-refund-receipt ${refund ? 'checked' : ''} />退票费凭证${fieldSourceBadge('template', draft)}</label>`
     : '';
   const standingOption = refund ? ''
     : `<label class="checkbox-row"><input type="checkbox" data-rail-standing ${draft.railStanding ? 'checked' : ''} />无座${fieldSourceBadge('railStanding', draft)}</label>`;
   return `<div class="rail-ticket-options full-field" role="group" aria-label="票面选项">
-    ${field('template', { ...draft, template: refund ? 'rail-receipt' : draft.template }, { options: templates })}
+    ${field('template', { ...draft, template: refund ? 'rail-receipt' : draft.template }, { options: ticketTemplateChoices() })}
     <div class="rail-ticket-flags">${refundOption}${standingOption}</div>
   </div>`;
 }
@@ -898,6 +898,7 @@ function editRecord(record = newPersonalRecord(), {
   const flight = draft.type === 'flight';
   const basics = flight ? ['origin','destination','service','departureDate','departureTime','arrivalTime','arrivalDate','boardingTime','passenger','identity','airline','seat','seatClass','price','gate'] : ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seatClass','seat','price','gate','railPlatform'];
   const extra = flight ? ['orderNumber', 'terminal', 'aircraft', 'aircraftRegistration', 'pnr', 'ticketNumber', 'flightDistance'] : ['arrivalDate','arrivalTime','railBureau','railRunner','railCarOwner','railModel','railPowerSupply','railMileage','orderNumber','ticketNumber','saleCode','issuer'];
+  if (draft.template === 'rail-supplement') extra.push(...Object.keys(SUPPLEMENT_FIELDS));
   const ticketEntry = field('type', draft, { full: !flight, options: [['rail', '火车票'], ['flight', '机票']] })
     + (flight
       ? '<input type="hidden" name="template" value="air-boarding-pass" />'

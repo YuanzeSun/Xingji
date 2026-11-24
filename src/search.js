@@ -3,6 +3,7 @@ import {railTrainsetIds} from './rail-journey.js';
 import { TEMPLATES, validDate } from './model.js';
 import { resolveCity, resolveCities, matchesCity, locationWords } from './locations.js';
 import { FLIGHT_STATUSES } from './flight-status.js';
+import { SUPPLEMENT_FIELDS } from './rail-template.js';
 
 export const DEFAULT_SEARCH = Object.freeze({ query: '', type: 'all', year: 'all', city: '', originCity: '', destinationCity: '', origin: '', destination: '', bothDirections: false, service: '', passenger: '', dateFrom: '', dateTo: '', seatClass: '', airline: '', template: '', minPrice: '', maxPrice: '', code: '', provenance: '', mark: '', sort: 'newest' });
 export const SORTS = Object.freeze({ newest: '出发日期：由近到远', oldest: '出发日期：由远到近', service: '车次 / 航班号', route: '出发城市与到达城市', 'price-asc': '票价：从低到高', 'price-desc': '票价：从高到低' });
@@ -20,8 +21,8 @@ export function searchTerms(query) {
   return [...text(query).matchAll(/(-?)"([^"]+)"|(-?)([^\s"]+)/g)].map(m => ({ value: m[2] ?? m[4], exclude: !!(m[1] || m[3]), phrase: m[2] !== undefined }));
 }
 function searchable(record) {
-  const fields = ['origin', 'destination', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', 'passenger', 'identity', 'seatClass', 'price', 'ticketNumber', 'saleCode', 'issuer', 'gate', 'terminal', 'boardingTime', 'airline', 'aircraft', 'flightStatus', 'pnr', 'railModel', 'railPowerSupply', 'railBureau', 'railRunner', 'railCarOwner'];
-  const aliases = record.type === 'flight' ? '机票 航空 登机牌 飞机 flight ' + (FLIGHT_STATUSES[record.flightStatus || 'normal'] || '') : '火车票 铁路 rail ' + (record.template.includes('red') ? '红票 软纸票' : '蓝票') + (record.template === 'rail-receipt' ? ' 报销凭证' : '');
+  const fields = ['origin', 'destination', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', 'passenger', 'identity', 'seatClass', 'price', 'ticketNumber', 'saleCode', 'issuer', 'gate', 'terminal', 'boardingTime', 'airline', 'aircraft', 'flightStatus', 'pnr', 'railModel', 'railPowerSupply', 'railBureau', 'railRunner', 'railCarOwner', ...Object.keys(SUPPLEMENT_FIELDS)];
+  const aliases = record.type === 'flight' ? '机票 航空 登机牌 飞机 flight ' + (FLIGHT_STATUSES[record.flightStatus || 'normal'] || '') : '火车票 铁路 rail ' + (record.template.startsWith('rail-red') ? '红票 软纸票' : record.template === 'rail-supplement' ? '车补票 补票' : '蓝票') + (record.template === 'rail-receipt' ? ' 报销凭证' : '');
   const trainsets=railTrainsetIds(record);
   return [...trainsets,...fields.map(k => k.endsWith('Date') ? calendarDate(record[k]) : record[k]), ...locationWords(record, 'origin'), ...locationWords(record, 'destination'), TEMPLATES[record.template], aliases, record.provenance === 'reconstruction' ? '依据原票重建' : '纪念票面', ...(record.ticketMarks || []).map(m => m.text)].filter(Boolean).map(value => ({ text: text(value), compact: compact(value) }));
 }

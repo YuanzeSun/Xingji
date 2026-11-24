@@ -23,6 +23,16 @@ test('the editor saves refund fees with matching validation and restricts transp
     document.querySelector('[data-action="new"]').click();
     await wait(()=>document.querySelector('#editor-form'));
     assert.equal(document.querySelector('[name="template"] option[value="rail-refund-receipt"]'),null);
+    assert.deepEqual([...document.querySelectorAll('[name="template"] optgroup[label="红色软纸票"] option')].map(option => option.value),
+      ['rail-red', 'rail-red-classic', 'rail-red-qr', 'rail-red-barcode']);
+    fill('template', 'rail-supplement');
+    assert.equal(document.querySelector('[name="departureTime"]').required, false);
+    fill('railSupplementReason', '越站');
+    assert.match(document.querySelector('#editor-preview').textContent, /事由:越站/);
+    fill('template', 'rail-red-qr');
+    assert.equal(document.querySelector('[name="identity"]').required, false);
+    assert.equal(document.querySelector('[name="passenger"]').required, false);
+    fill('template', 'rail-receipt');
     document.querySelector('[data-refund-receipt]').click();
     assert.equal(document.querySelector('[name="template"]').value,'rail-receipt');
     assert.match(document.querySelector('#editor-preview').textContent,/退票费/);

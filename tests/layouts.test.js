@@ -5,6 +5,7 @@ import { JSDOM } from 'jsdom';
 import { createRecord } from '../src/model.js';
 import { ticketSVG, ticketDimensions, exportPNG } from '../src/tickets.js';
 import { layoutFontFiles } from '../src/ticket-layouts.js';
+import { DEMO_TICKET_CODE } from '../src/demo-code.js';
 
 const record = (template, extra = {}) => createRecord({ id: 'layout-test', type: template.startsWith('air-') ? 'flight' : 'rail', template, origin: '北京南', destination: '天津', originCode: 'Beijingnan', destinationCode: 'Tianjin', service: 'C2021', departureDate: '2017-09-10', departureTime: '10:35', identity: '110101199001011234', passenger: '示例旅客', seat: '02A', carriage: '01', price: '57.0', ...extra });
 test('airline layout has its own long boarding-pass aspect ratio and side stub', () => {
@@ -82,6 +83,29 @@ test('old red and new reimbursement layouts preserve their distinct label placem
   assert.match(receipt, /退票改签时须交回车站/);
   assert.doesNotMatch(receipt, /fill="#c45766"[^>]*>报销凭证/);
   assert.doesNotMatch(receipt, /ARCHIVE/);
+});
+test('anonymous red versions use the old stock without printing personal details', () => {
+  const values = { issuer: '北京南', ticketCode: DEMO_TICKET_CODE };
+  const linear = ticketSVG(record('rail-red-barcode', values));
+  const qr = ticketSVG(record('rail-red-qr', values));
+  for (const svg of [linear, qr]) {
+    assert.match(svg, /viewBox="0 0 900 600"/);
+    assert.doesNotMatch(svg, /示例旅客|\*\*\*\*1234|买票请到12306/);
+    assert.match(svg, />售<\/text>/);
+  }
+  assert.doesNotMatch(linear, /data-ticket-code/);
+  assert.match(qr, /data-ticket-code/);
+});
+test('the mobile supplement prints date and charges in their own rows', () => {
+  const svg = ticketSVG(record('rail-supplement', {
+    issuer:'沈阳客运段', railSupplementReason:'越站', railSupplementFee:'5.0', railSupplementSurcharge:'0.0', ticketCode:DEMO_TICKET_CODE
+  }));
+  assert.match(svg, /viewBox="0 0 900 600"/);
+  assert.match(svg, /中途下车失效/);
+  assert.match(svg, /事由:越站/);
+  assert.match(svg, /含手续费:5\.0元　加收:0\.0元/);
+  assert.match(svg, /沈阳客运段补/);
+  assert.doesNotMatch(svg, /10:35|data-rail-pinyin|买票请到12306/);
 });
 test('every ticket text face is embedded for standalone export, including receipt station names', () => {
   for (const template of ['rail-red-classic', 'rail-red', 'rail-blue', 'rail-receipt', 'air-boarding-pass']) {
