@@ -6,6 +6,7 @@ import { createRecord, archive, readArchive } from '../src/model.js';
 import { railQuery, railDetails, railCompletion } from '../src/rail-lookup-model.js';
 import { lookupRailDetails } from '../src/rail-data.js';
 import { railLookupMarkup, bindRailLookup } from '../src/rail-lookup.js';
+import { applyLookupValues } from '../src/lookup-values.js';
 import { journeyStatistics } from '../src/statistics-model.js';
 import { mountStatistics } from '../src/statistics.js';
 import { ticketSVG } from '../src/tickets.js';
@@ -45,32 +46,51 @@ test('a boarding day is checked against the first-station date, including an aft
   assert.deepEqual(railCompletion({...ticket,destination:'苏州北'},result,'2026-11-16'),{});
 });
 
-test('RailGo queries the closest returned run day and displays it without saving a different day', async () => {
-  const ticket = record(), calls = [];
+test('RailGo fills from the closest run day, preserves the ticket date, and keeps the reference label after saving', async () => {
+  const ticket = record({ departureTime: '07:10', lockedFields: ['departureTime'] }), calls = [];
+  const timetable = [
+    {station:'北京南',day:0,depart:'23:50'},
+    {station:'上海虹桥',day:1,arrive:'05:30'}
+  ];
   const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '<input name="service"><button type="submit">保存</button></form>');
   const form = dom.window.document.querySelector('form');
   const cleanup = bindRailLookup(form, {
     getRecord: () => ticket, canQuery: () => true,
-    apply: () => assert.fail('Reference data must not be applied to the ticket'),
+    scannedRailQR: structuredClone(ticket),
+    apply: (changes, source) => applyLookupValues(ticket, changes, !!source, source),
     lookup: query => lookupRailDetails(query, { fetcher: async url => {
       const date = new URL(url).searchParams.get('date');
       calls.push(date);
-      return Response.json(payload({ rundays: date === '20261117' ? ['20261118', '20261002', '20261131', '20261116'] : ['20261116'] }));
+      return Response.json(payload({ timetable, rundays: date === '20261117' ? ['20261118', '20261002', '20261131', '20261116'] : ['20261116'] }));
     } })
   });
   try {
-    form.querySelector('[data-rail-lookup]').click();
     await new Promise(done => setImmediate(done));
     assert.deepEqual(calls, ['20261117', '20261116']);
     const reference = form.querySelector('[data-rail-reference]');
     assert.equal(reference.hidden, false);
-    assert.match(reference.textContent, /非乘车当日 · 仅供参考.*查询始发日 2026-11-16.*乘车日 2026-11-17.*北京南 06:30.*上海虹桥 11:24/);
+    assert.match(reference.textContent, /非乘车当日 · 仅供参考.*参考开行日 2026-11-16.*乘车日 2026-11-17/);
     assert.equal(calendarDate(ticket.departureDate), '2026-11-17');
-    assert.equal(ticket.railModel, '');
-    assert.equal(ticket.railJourney, '');
+    assert.equal(ticket.departureTime, '07:10');
+    assert.equal(ticket.arrivalTime, '05:30');
+    assert.equal(calendarDate(ticket.arrivalDate), '2026-11-18');
+    assert.equal(ticket.railModel, 'CR400BF-S');
+    const [saved] = readArchive(archive([ticket]));
+    assert.equal(saved.fieldSources.railModel, 'railgo-reference');
+    assert.equal(calendarDate(saved.railJourney.stops.at(-1).arrivalDate), '2026-11-17');
+    assert.match(railLookupMarkup(saved), /非乘车当日 · 仅供参考/);
+    const confirmed = railDetails(payload({ car: 'CR400AF' }), railQuery(saved));
+    const fresh = railCompletion(saved, confirmed);
+    applyLookupValues(saved, fresh, true, { kind: 'rail-lookup' });
+    assert.equal(saved.fieldSources.railModel, 'railgo');
+    assert.equal(saved.railModel, 'CR400AF');
+    assert.doesNotMatch(railLookupMarkup(saved), /非乘车当日/);
+    assert.deepEqual(railCompletion(saved, {query: railQuery(saved, '2026-11-16'), railJourney: ticket.railJourney}), {});
     ticket.service = 'G2';
     form.elements.service.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     assert.equal(reference.hidden, true);
+    assert.equal(ticket.railModel, '');
+    assert.equal(ticket.arrivalDate, '');
   } finally { cleanup(); dom.window.close(); }
 });
 

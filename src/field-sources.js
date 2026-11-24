@@ -8,11 +8,12 @@ export const railInvoiceFieldLocked = (record, key) => record.type === 'rail' &&
   !!record.railInvoice?.electronicTicketNumber && record.fieldSources?.[key] === 'pdf';
 
 export const RAIL_POINTS_SOURCE = 'rail-points';
-const FIELD_SOURCES=Object.freeze({manual:'手动输入',barcode:'条码',variflight:'飞常准',railgo:'RailGo',profile:'个人资料',ocr:'图片识别',pdf:'PDF 导入',default:'默认值',generated:'自动生成',database:'地点数据库',lookup:'查询补全',[RAIL_POINTS_SOURCE]:'12306 积分'});
+export const RAILGO_REFERENCE_SOURCE = 'railgo-reference';
+const FIELD_SOURCES=Object.freeze({manual:'手动输入',barcode:'条码',variflight:'飞常准',railgo:'RailGo',profile:'个人资料',ocr:'图片识别',pdf:'PDF 导入',default:'默认值',generated:'自动生成',database:'地点数据库',lookup:'查询补全',[RAIL_POINTS_SOURCE]:'12306 积分',[RAILGO_REFERENCE_SOURCE]:'RailGo 参考'});
 const metadata=new Set(['fieldSources','lookupValues','boardingCodeSource','boardingCodeOperatingFlight','deleted']);
 const editorSettings=new Set(['type','template','flightStatus','provenance','offsetX','offsetY']);
 export const hasFieldValue=value=>value!==undefined && value!==null && value!==false && value!=='' && (!Array.isArray(value) || value.length>0);
-const imports={manual:'manual',scan:'ocr',pdf:'pdf','rail-lookup':'railgo','flight-lookup':'variflight',[RAIL_POINTS_SOURCE]:RAIL_POINTS_SOURCE};
+const imports={manual:'manual',scan:'ocr',pdf:'pdf','rail-lookup':'railgo','flight-lookup':'variflight',[RAIL_POINTS_SOURCE]:RAIL_POINTS_SOURCE,[RAILGO_REFERENCE_SOURCE]:RAILGO_REFERENCE_SOURCE};
 export const importFieldSource=kind=>Object.hasOwn(imports,kind) ? imports[kind] : '';
 
 export function normalizeFieldSources(input,fields) {

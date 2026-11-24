@@ -8,6 +8,13 @@ const facts = entries => `<dl class="rail-facts">${entries.filter(([,value])=>va
 const carriageNumber = value => String(Number(String(value || '').match(/\d+/)?.[0] || 0));
 const localToday = () => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`; };
 
+export function railReferenceNotice(record) {
+  if (!railJourneyMatches(record) || !record.railJourney.query.referenceFor) return '';
+  const { startDate, boardingDate, referenceFor } = record.railJourney.query;
+  const referenceBoarding = sameDate(startDate, boardingDate) ? '' : ` · 参考上车日 ${calendarDate(boardingDate)}`;
+  return `<strong>非乘车当日 · 仅供参考</strong><div>参考开行日 ${e(calendarDate(startDate))}${e(referenceBoarding)} · 乘车日 ${e(calendarDate(referenceFor))}</div>`;
+}
+
 function stockMarkup(record, journey, records) {
   const ids=railTrainsetIds(record), stocks=journey.trainsets.filter(stock=>ids.includes(stock.id));
   if (!stocks.length) return ids.length || isEmuModel(record.railModel) ? '<p class="rail-empty">暂未查到该车组的详细资料。</p>' : '';

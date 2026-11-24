@@ -1,10 +1,11 @@
 import {calendarDate,journeyDate} from './journey-date.js';
 import {isLookupValue} from './lookup-values.js';
+import { RAILGO_REFERENCE_SOURCE } from './field-sources.js';
 import { railRouteMatches, railRouteNeedsSave } from './rail-route-snapshot.js';
 import { validDate } from './model.js';
 import { resolvePlace } from './places.js';
 import { bureauFromCode, normalizeRailBureau, parseRailGoModel } from './rail-details.js';
-import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, sameRailTimetable } from './rail-journey.js';
+import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, railJourneyMatches, sameRailTimetable } from './rail-journey.js';
 
 export const shiftRailDate = (date, days) => { const result = new Date(calendarDate(date) + 'T00:00:00Z'); result.setUTCDate(result.getUTCDate() + days); return result.toISOString().slice(0, 10); };
 export const railDepartureDay = (day, arrival, departure) => day + (arrival && departure < arrival ? 1 : 0);
@@ -78,7 +79,8 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
     }
   }
   const railJourney = normalizeRailJourney({
-    query: { trainNum: query.trainNum, startDate: journeyDate(startDate), boardingDate: journeyDate(boardingDate), origin: query.origin, destination: query.destination },
+    query: { trainNum: query.trainNum, startDate: journeyDate(startDate), boardingDate: journeyDate(boardingDate), origin: query.origin, destination: query.destination,
+      ...(boardingDate !== query.boardingDate && { referenceFor: journeyDate(query.boardingDate) }) },
     queriedAt,
     stops: stops.map(stop => ({ ...stop, arrivalDate: journeyDate(stop.arrivalDate), departureDate: journeyDate(stop.departureDate) })),
   });
@@ -87,13 +89,22 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
 }
 
 export function railCompletion(record, result, startDate) {
-  const query = railQuery(record, startDate || result.railJourney?.query.startDate || record.departureDate);
+  const journey = result.railJourney, referenceFor = journey?.query.referenceFor;
+  const query = railQuery(record, (!referenceFor && startDate) || journey?.query.startDate || record.departureDate);
   if (JSON.stringify(query) !== JSON.stringify(result.query)) return {};
-  const values={...result,railTrainsets:(result.railJourney?.trainsets || []).map(stock=>stock.id).join(' / ')};
+  if (referenceFor && railJourneyMatches(record) && !record.railJourney.query.referenceFor) return {};
+  const values={...result,railTrainsets:(journey?.trainsets || []).map(stock=>stock.id).join(' / ')};
+  if (referenceFor) {
+    const overnightDays = (Date.parse(result.arrivalDate) - Date.parse(calendarDate(journey.query.boardingDate))) / 86400000;
+    values.arrivalDate = shiftRailDate(referenceFor, overnightDays);
+  }
   const fields = ['railBureau','railModel','railTrainsets','railPowerSupply','railMileage','railRunner','railCarOwner','gate','railPlatform','departureTime','arrivalDate','arrivalTime'];
   const changes = Object.fromEntries(fields.filter(field => (!record[field] || isLookupValue(record,field)) && !record.lockedFields?.includes(field) && values[field]).map(field => [field, values[field]]));
   const differentTimetable = record.railJourney && result.railJourney
     && !sameRailTimetable(record.railJourney, result.railJourney);
+  for (const field of fields) {
+    if (!values[field] && record.fieldSources?.[field] === RAILGO_REFERENCE_SOURCE && isLookupValue(record,field)) changes[field] = '';
+  }
   if (differentTimetable) {
     for (const field of ['railMileage', 'railTrainsets', 'gate', 'railPlatform']) {
       if (!values[field] && isLookupValue(record, field)) changes[field] = '';

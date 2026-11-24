@@ -28,6 +28,11 @@ export function normalizeRailJourney(value) {
   if (!object(value) || !object(value.query)) throw new Error('铁路行程资料格式不正确');
   const query = { trainNum:railService(value.query.trainNum), startDate:railDate(value.query.startDate), boardingDate:railDate(value.query.boardingDate), origin:railStation(value.query.origin), destination:railStation(value.query.destination) };
   if (!/^(?:[GDCZTKYLS]\d{1,5}|\d{3,5})$/.test(query.trainNum) || !query.startDate || !query.boardingDate || !query.origin || !query.destination || query.origin === query.destination || !timestamp(value.queriedAt)) throw new Error('铁路行程查询条件不完整');
+  if (Object.hasOwn(value.query, 'referenceFor')) {
+    const referenceFor = railDate(value.query.referenceFor);
+    if (!referenceFor || sameDate(referenceFor, query.boardingDate)) throw new Error('铁路参考资料的乘车日期无效');
+    query.referenceFor = referenceFor;
+  }
   if (!Array.isArray(value.stops) || value.stops.length < 2 || value.stops.length > 300) throw new Error('铁路经停站资料格式不正确');
   const stops = value.stops.map(stop => {
     if (!object(stop) || !railStation(stop.station)) throw new Error('铁路经停站资料格式不正确');
@@ -61,7 +66,7 @@ export function normalizeRailJourney(value) {
 export function sameRailTimetable(saved, fresh) {
   if (!saved?.query || !fresh?.query || saved.stops.length !== fresh.stops.length) return false;
   if (!['trainNum', 'origin', 'destination'].every(key => saved.query[key] === fresh.query[key])
-      || !['startDate', 'boardingDate'].every(key => sameDate(saved.query[key], fresh.query[key]))) return false;
+      || !['startDate', 'boardingDate', 'referenceFor'].every(key => sameDate(saved.query[key], fresh.query[key]))) return false;
   return fresh.stops.every((stop, i) => {
     const old = saved.stops[i];
     return ['station', 'trainCode', 'arrivalTime', 'departureTime'].every(key => old[key] === stop[key])
@@ -72,7 +77,7 @@ export function sameRailTimetable(saved, fresh) {
 export function railJourneyMatches(record, journey = record.railJourney) {
   if (record.type !== 'rail' || record.template === 'rail-refund-receipt' || !journey?.query) return false;
   const query = journey.query;
-  return railService(record.service).split('/')[0] === query.trainNum && calendarDate(record.departureDate) === calendarDate(query.boardingDate) && ['origin','destination'].every(side => {
+  return railService(record.service).split('/')[0] === query.trainNum && sameDate(record.departureDate, query.referenceFor || query.boardingDate) && ['origin','destination'].every(side => {
     const place = resolvePlace(record, side);
     return !['ambiguous','conflict'].includes(place.status) && railStation(place.status === 'matched' ? place.name : record[side]) === query[side];
   });

@@ -137,10 +137,9 @@ export async function lookupRailDetails(query, { fetcher = globalThis.fetch, sig
   try { result = await matchingTrip(); }
   catch (error) {
     if (!error.referenceDate) throw error;
-    const reference = await main({ ...query, date: error.referenceDate.replaceAll('-', '') }, true);
-    return { reference };
+    result = await main({ ...query, date: error.referenceDate.replaceAll('-', '') }, true);
   }
-  if (!enrich) return result;
+  if (!enrich || result.railJourney.query.referenceFor) return result;
   const journey = result.railJourney, queriedAt = journey.queriedAt;
   const saved = sameRailTimetable(railJourney, journey) ? railJourney : null;
   const routeRecord = {type:'rail', service:result.query.trainNum, origin:result.query.origin, destination:result.query.destination};

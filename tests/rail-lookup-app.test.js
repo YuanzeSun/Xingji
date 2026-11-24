@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { indexedDB } from 'fake-indexeddb';
 import { createRecord } from '../src/model.js';
+import { calendarDate } from '../src/journey-date.js';
 import { prepareCloud } from './helpers/cloud.js';
 
 test('the rail editor fetches, saves, reopens and counts rail metadata without changing the ticket face', async () => {
@@ -13,12 +14,13 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
   window.scrollTo=()=>{};window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){this.open=false;};
   const ticket=createRecord({id:'rail',origin:'北京南',destination:'上海虹桥',service:'G1',departureDate:'2026-11-17',departureTime:'06:30',passenger:'示例旅客',identity:'P000001',carriage:'03',seat:'08A',seatClass:'二等座'});
   const server=await prepareCloud([ticket]),fetcher=globalThis.fetch,requests=[];let currentModel='CR400BF-S';
+  let runDay='20261117';
   globalThis.fetch=async(url,options)=>{
     if(new URL(url).hostname==='emu.railgo.zenglingkun.cn')return Response.json(new URL(url).pathname==='/api/query' ? {success:true,data:[{runDate:'2026-11-17',trainNum:'G1',trainCode:[currentModel+'-0001'],coupling:false}]} : {success:true,data:{id:currentModel+'-0001',model:currentModel}});
     if(new URL(url).hostname!=='rg-api.zenglingkun.cn')return fetcher(url,options);
     if(new URL(url).pathname!=='/api/v2/getTrainMain')return Response.json({success:false});
-    requests.push(url);assert.deepEqual([...new URL(url).searchParams],[['trainNum','G1'],['date','20261117']]);
-    return Response.json({success:true,data:{bureau:'H',bureauShortName:'上局',car:currentModel,runner:'上海客运段',carOwner:'上海动车段',numberFull:['G1'],rundays:['20261117'],timetable:[{station:'北京南',day:0,arrive:'06:30',depart:'06:30'},{station:'上海虹桥',day:0,arrive:'11:24',depart:'11:24'}]}});
+    requests.push(url);assert.equal(new URL(url).searchParams.get('trainNum'),'G1');
+    return Response.json({success:true,data:{bureau:'H',bureauShortName:'上局',car:currentModel,runner:'上海客运段',carOwner:'上海动车段',numberFull:['G1'],rundays:[runDay],timetable:[{station:'北京南',day:0,arrive:'06:30',depart:'06:30'},{station:'上海虹桥',day:0,arrive:'11:24',depart:'11:24'}]}});
   };
   const wait=async fn=>{for(let i=0;i<300;i++){if(await fn())return;await new Promise(done=>setTimeout(done,5));}assert.fail('Rail editor did not settle');};
   try{
@@ -78,5 +80,28 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     assert.match(document.querySelector('[data-stat-ranking="rail-bureaus"]').textContent,/北京局1 次/);
     assert.match(document.querySelector('[data-stat-ranking="rail-models"]').textContent,/CR400AF1 次/);
     assert.doesNotMatch(document.querySelector('#statistics-root').textContent,/查看图表数据/);
+
+    document.querySelector('[data-action="navigate"][data-page="archive"]').click();
+    await wait(()=>document.querySelector('[data-action="view"][data-id="rail"]'));
+    document.querySelector('[data-action="view"][data-id="rail"]').click();
+    await wait(()=>document.querySelector('[data-action="edit"]:not(:disabled)'));
+    document.querySelector('[data-action="edit"]').click();
+    await wait(()=>document.querySelector('#editor-form'));
+    const boardingDay=document.querySelector('[name=departureDateDay]');
+    boardingDay.value='18';
+    boardingDay.dispatchEvent(new window.Event('input',{bubbles:true}));
+    runDay='20261116'; currentModel='CR400BF-S';
+    document.querySelector('[data-rail-lookup]').click();
+    await wait(()=>document.querySelector('[data-field-source="railModel"]')?.textContent==='RailGo 参考');
+    assert.deepEqual(requests.map(url=>new URL(url).searchParams.get('date')),['20261117','20261117','20261117','20261118','20261116']);
+    document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
+    await wait(()=>!document.querySelector('dialog'));
+    assert.equal(calendarDate(server.records()[0].departureDate),'2026-11-18');
+    assert.equal(calendarDate(server.records()[0].arrivalDate),'2026-11-18');
+    assert.equal(server.records()[0].fieldSources.railModel,'railgo-reference');
+    document.querySelector('[data-action="view"][data-id="rail"]').click();
+    await wait(()=>document.querySelector('.detail-grid'));
+    assert.match(document.querySelector('[data-rail-reference]').textContent,/非乘车当日 · 仅供参考.*2026-11-16.*2026-11-18/);
+    assert.equal(document.querySelector('.detail-grid [data-field-source="railModel"]').textContent,'RailGo 参考');
   }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();}
 });
