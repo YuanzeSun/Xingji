@@ -16,7 +16,7 @@ export function flightTrackLabelRenderer(record, flightStr, center) {
   const cities = FLIGHT_MAP_CITIES.map(([name, lon, lat, rank]) => ({ name, point: projectPoint([lon, lat], center), rank }));
 
   return (viewport, width, height, unit) => {
-    const place = mapLabelPlacer(viewport, width, height), seen = new Set();
+    const place = mapLabelPlacer(viewport, width, height, [[width - 62, 8, width - 8, 144]]), seen = new Set();
     const result = { cities: [], provinces: [] };
     const visible = ({ point: [x, y] }) => Math.abs(x - viewport.x) <= width * unit / 2 && Math.abs(y - viewport.y) <= height * unit / 2;
     function add(row, kind, size) {

@@ -1,7 +1,7 @@
 import { createRecord, validDate } from './model.js';
 import { calendarDate } from './journey-date.js';
 import { resolvePlace } from './places.js';
-import { RAIL_POINTS_SOURCE } from './field-sources.js';
+import { RAIL_POINTS_SOURCE, hasFieldValue } from './field-sources.js';
 import { XINGJI_CONNECTOR_ID } from './browser-connector.js';
 
 export const RAIL_POINTS_PAGE = 'https://cx.12306.cn/tlcx/jfinformation.html';
@@ -62,9 +62,9 @@ export function railPointsRecords(rides, at = new Date().toISOString()) {
       passenger: complete(text(ride.passenger)), orderNumber: complete(text(ride.orderNumber))
     };
     const event = ride.event === 'tg' ? '改签' : ride.event === 'ts' ? '升席' : '';
-    found.set(JSON.stringify([values, event]), {
-      event, record: createRecord({ ...values, sources: [{ kind: RAIL_POINTS_SOURCE, label: '12306 积分乘车明细', at }] })
-    });
+    const lockedFields = Object.keys(values).filter(key => key !== 'type' && hasFieldValue(values[key]));
+    const record = createRecord({ ...values, lockedFields, sources: [{ kind: RAIL_POINTS_SOURCE, label: '12306 积分乘车明细', at }] });
+    found.set(JSON.stringify([values, event]), { event, record });
   }
   return [...found.values()].sort((a, b) => calendarDate(b.record.departureDate).localeCompare(calendarDate(a.record.departureDate)));
 }

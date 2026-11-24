@@ -3,7 +3,7 @@ import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import { requireCompleteIdentity } from './identity.js';
 import { isAnonymousRedTemplate } from './rail-template.js';
 import { railQRNeedsField } from './rail-ticket-qr.js';
-import { RAIL_POINTS_SOURCE } from './field-sources.js';
+import { isRailPointsRecord } from './field-sources.js';
 
 export const barcodeRequiredMark = '<b class="required-mark barcode-required-mark" aria-label="生成条码必填">*</b>';
 
@@ -33,7 +33,7 @@ export function requiredTicketFields(type, template, flightStatus = 'normal', ra
 }
 
 export function requiredRecordFields(record) {
-  if (record.type === 'rail' && record.template !== 'rail-refund-receipt' && record.sources?.some(source => source.kind === RAIL_POINTS_SOURCE)) {
+  if (record.template !== 'rail-refund-receipt' && isRailPointsRecord(record)) {
     return ['origin', 'destination', 'service', 'departureDate'];
   }
   return requiredTicketFields(record.type, record.template, record.flightStatus, record.railStanding, !!record.railInvoice?.electronicTicketNumber);

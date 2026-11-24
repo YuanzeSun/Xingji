@@ -15,13 +15,13 @@ export function railLookupMarkup(record) {
   const reference = railReferenceNotice(record);
   return `<section class="rail-lookup" aria-label="铁路资料补全"><div class="rail-lookup-heading"><a href="${RAIL_DETAILS_SOURCE}" target="_blank" rel="noopener noreferrer">RailGo 行程补全</a><button class="button secondary small" type="button" data-rail-lookup>${journey ? '刷新资料' : '查询并补全'}</button></div><p class="rail-lookup-status" data-rail-status role="status" aria-live="polite"></p><div class="code-consistency" data-rail-reference role="status" aria-live="polite" ${reference ? '' : 'hidden'}>${reference}</div><details class="rail-start-override"><summary>调整列车始发日期</summary><label class="field"><span>列车始发日期</span><input type="date" data-date-control data-rail-start value="${e(startOverride)}" min="1800-01-01" max="2200-12-31"/></label></details><details class="rail-lookup-result" data-rail-result ${journey ? '' : 'hidden'}><summary>查看已取得的经停、车组与车厢示意图</summary><div data-rail-journey-preview>${railJourneyMarkup(record)}</div></details></section>`;
 }
-export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = lookupRailDetails, scannedRail, scannedRailQR }) {
+export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = lookupRailDetails, scannedRail, scannedRailQR, railPointsTrip, onAutomaticPending }) {
   const section = form.querySelector('.rail-lookup');
   if (!section) return () => {};
   const button = section.querySelector('[data-rail-lookup]'), date = section.querySelector('[data-rail-start]'), status = section.querySelector('[data-rail-status]'), preview = section.querySelector('[data-rail-journey-preview]'), resultBox = section.querySelector('[data-rail-result]');
   const referenceBox = section.querySelector('[data-rail-reference]');
   let disposed = false, busy = false, request, appliedStamp = '', applying = false;
-  const scan = scannedRailQR || scannedRail;
+  const automaticRecord = scannedRailQR || scannedRail || railPointsTrip;
   const filled = new Map(Object.entries(getRecord().lookupValues || {}));
   const stamp = () => JSON.stringify([date.value, ...['type','template','service','departureDate','origin','originCode','destination','destinationCode'].map(field => getRecord()[field] || '')]);
   if (filled.size || railJourneyMatches(getRecord())) appliedStamp=stamp();
@@ -51,7 +51,7 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
       if (!canQuery() || form.querySelector('[type="submit"]')?.disabled || original!==stamp() ||
           (automatic && getRecord().departureTime !== initialTime)) { status.textContent='查询条件已改变，本次结果未填入'; return; }
       const reference = result.railJourney.query.referenceFor;
-      if (!reference && automatic && scan.departureTime && result.departureTime !== scan.departureTime) {
+      if (!reference && automatic && automaticRecord?.departureTime && result.departureTime !== automaticRecord.departureTime) {
         status.textContent='RailGo 发车时间与票面不同，请核对后手动查询';
         return;
       }
@@ -87,14 +87,17 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
   };
   const cleanupPreview=bindRailJourney(preview,getRecord);
   button.addEventListener('click',query); form.addEventListener('input',input); form.addEventListener('change',input); refresh();renderResult();
-  const sameTime = scan?.departureTime ? scan.departureTime === getRecord().departureTime : !!scannedRailQR;
+  const sameTime = automaticRecord?.departureTime ? automaticRecord.departureTime === getRecord().departureTime : !!(scannedRailQR || railPointsTrip);
   if (!button.disabled && sameTime) {
     let sameTrip = false;
     try {
       const startDate = date.value || undefined;
-      sameTrip = JSON.stringify(railQuery(scan, startDate)) === JSON.stringify(railQuery(getRecord(), startDate));
-    } catch { /* Leave incomplete scans for review. */ }
-    if (sameTrip) void query({ automatic: true });
+      sameTrip = JSON.stringify(railQuery(automaticRecord, startDate)) === JSON.stringify(railQuery(getRecord(), startDate));
+    } catch { /* Leave incomplete imports for review. */ }
+    if (sameTrip) {
+      const pending = query({ automatic: true });
+      onAutomaticPending?.(pending);
+    }
   }
   return ()=>{disposed=true;request?.abort();cleanupPreview();button.removeEventListener('click',query);form.removeEventListener('input',input);form.removeEventListener('change',input);};
 }

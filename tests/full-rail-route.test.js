@@ -58,20 +58,15 @@ test('G21 detail draws the stored complete route and identifies traveled and oth
 
 test('ticket route playback follows track distance, keeps its progress on zoom, and can be replayed', () => {
   const dom = new JSDOM('<section id="route"></section>');
-  const previous = { window: globalThis.window, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame };
-  const motion = { matches: false };
+  const { window } = dom;
   const frames = new Map();
   let nextFrame = 0;
-  globalThis.window = dom.window;
-  globalThis.window.matchMedia = query => {
-    assert.equal(query, '(prefers-reduced-motion: reduce)');
-    return motion;
-  };
-  globalThis.requestAnimationFrame = callback => {
+  window.matchMedia = () => ({ matches: true });
+  window.requestAnimationFrame = callback => {
     frames.set(++nextFrame, callback);
     return nextFrame;
   };
-  globalThis.cancelAnimationFrame = id => frames.delete(id);
+  window.cancelAnimationFrame = id => frames.delete(id);
   function advance(timestamp) {
     for (const [id, callback] of [...frames]) {
       if (frames.delete(id)) callback(timestamp);
@@ -102,14 +97,14 @@ test('ticket route playback follows track distance, keeps its progress on zoom, 
     advance(10);
     assert.deepEqual(litStops(), ['济南西']);
     const viewBox = svg.getAttribute('viewBox');
-    container.querySelector('[data-rail-zoom="in"]').click();
-    advance(1010);
+    container.querySelector('[data-route-zoom="in"]').click();
+    advance(2010);
     assert.notEqual(svg.getAttribute('viewBox'), viewBox);
     assert.deepEqual(litStops(), ['徐州东', '济南西']);
     assert.equal(first.style.strokeDashoffset, '0');
     assert.ok(Number(second.style.strokeDashoffset) > 0.5 && Number(second.style.strokeDashoffset) < 0.75);
     assert.equal(status.textContent, '');
-    advance(2010);
+    advance(4010);
     assert.deepEqual(litStops(), ['南京南', '徐州东', '济南西']);
     assert.equal(second.style.strokeDashoffset, '0');
     assert.equal(status.textContent, '已点亮济南西至南京南');
@@ -120,23 +115,11 @@ test('ticket route playback follows track distance, keeps its progress on zoom, 
     assert.deepEqual(litStops(), ['济南西']);
     button.click();
     assert.equal(frames.size, 1);
-    motion.matches = true;
-    button.click();
-    assert.equal(frames.size, 0);
-    assert.deepEqual(litStops(), ['南京南', '徐州东', '济南西']);
-
-    motion.matches = false;
-    button.click();
-    assert.equal(frames.size, 1);
     cleanup();
     button.click();
     assert.equal(frames.size, 0);
   } finally {
     cleanup();
     dom.window.close();
-    for (const [key, value] of Object.entries(previous)) {
-      if (value === undefined) delete globalThis[key];
-      else globalThis[key] = value;
-    }
   }
 });

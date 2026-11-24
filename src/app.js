@@ -4,7 +4,7 @@ import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
-import {fieldSourceBadge,hasFieldValue,markFieldSources,railInvoiceFieldLocked,refreshFieldSources,RAILGO_REFERENCE_SOURCE} from './field-sources.js';
+import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railImportFieldLocked,refreshFieldSources,RAILGO_REFERENCE_SOURCE} from './field-sources.js';
 import {readBoardingCode} from './bcbp.js';
 import {flightPassengerName} from './flight-passenger.js';
 import { bindIdentityInput, maskIdentity } from './identity.js';
@@ -445,7 +445,9 @@ function railReceiptControls() {
 function refreshRailReceipt(form, activeEditor) {
   const button = form.querySelector('[data-rail-receipt]');
   if (!button) return;
-  button.disabled = hasRailQRCode(activeEditor.draft) || !!activeEditor.receiptPending || !!activeEditor.railPhotoPending || !canWrite();
+  const locked = hasRailQRCode(activeEditor.draft) || isRailPointsRecord(activeEditor.draft);
+  form.querySelector('[data-rail-receipt-file]').disabled = locked || !canWrite();
+  button.disabled = locked || !!activeEditor.receiptPending || !!activeEditor.railPhotoPending || !canWrite();
 }
 
 function bindRailReceipt(form, activeEditor) {
@@ -455,7 +457,7 @@ function bindRailReceipt(form, activeEditor) {
   const status = form.querySelector('[data-rail-receipt-status]');
   const { draft, context, imported, original } = activeEditor;
   const current = () => form.isConnected && editor === activeEditor && !form.dataset.pending &&
-    canWrite() && isArchiveContext(context) && !hasRailQRCode(draft);
+    canWrite() && isArchiveContext(context) && !hasRailQRCode(draft) && !isRailPointsRecord(draft);
 
   refreshRailReceipt(form, activeEditor);
   button.addEventListener('click', () => { if (current()) file.click(); });
@@ -542,7 +544,7 @@ function stopRailCamera() {
 function refreshRailPhotoLock(form, draft) {
   const entry = form.querySelector('[data-rail-photo-entry]');
   if (!entry) return;
-  const locked = hasRailQRCode(draft);
+  const locked = hasRailQRCode(draft) || isRailPointsRecord(draft);
   entry.querySelector('[data-rail-photo-controls]').disabled = locked;
   entry.querySelector('[data-rail-photo-lock]').hidden = !locked;
   if (locked) entry.open = false;
@@ -558,7 +560,7 @@ function bindRailPhoto(form) {
   const status = form.querySelector('[data-rail-photo-status]');
   const activeEditor = editor;
   const current = () => editor === activeEditor && isArchiveContext(activeEditor.context) && canWrite() &&
-    !form.dataset.pending && !activeEditor.receiptPending && !hasRailQRCode(activeEditor.draft);
+    !form.dataset.pending && !activeEditor.receiptPending && !hasRailQRCode(activeEditor.draft) && !isRailPointsRecord(activeEditor.draft);
   refreshRailPhotoLock(form, activeEditor.draft);
   async function read(photo) {
     if (!current() || activeEditor.railPhotoPending) return;
@@ -1011,7 +1013,7 @@ function railTicketOptions(draft) {
 
 function editRecord(record = newPersonalRecord(), {
   imported = false, preserve = false, original = clone(record), photo = preserve ? editor?.photo : null,
-  scannedRail, scannedRailQR
+  scannedRail, scannedRailQR, railPointsTrip
 } = {}) {
   const context = preserve && editor ? editor.context : archiveContext();
   setImportReference(photo);
@@ -1039,7 +1041,11 @@ function editRecord(record = newPersonalRecord(), {
   // openModal replaces the DOM, but keeps the editor state deliberately.
   const form = document.querySelector('#editor-form');
   form.closest('dialog').classList.add('ticket-editor-modal');
-  let pendingFlightLookup, waitingForFlightLookup = false;
+  let pendingLookup, waitingForLookup = false;
+  function trackLookup(pending) {
+    pendingLookup = pending;
+    void pending.then(() => { if (pendingLookup === pending) pendingLookup = undefined; });
+  }
   bindRailReceipt(form, editor);
   bindRailPhoto(form);
   bindIdentityInput(form.elements.identity);
@@ -1123,7 +1129,7 @@ function editRecord(record = newPersonalRecord(), {
         return;
       }
     }
-    if(!lookupApplying && (ticketFieldLocked(draft,changedKey) || (dateKey && railInvoiceFieldLocked(draft,dateKey)))){
+    if(!lookupApplying && (ticketFieldLocked(draft,changedKey) || (dateKey && railImportFieldLocked(draft,dateKey)))){
       refreshTicketFieldLocks(form,draft);return;
     }
     if (target.matches('[data-rail-standing]')) {
@@ -1176,11 +1182,16 @@ function editRecord(record = newPersonalRecord(), {
   const showError = ticketFormFeedback(form, () => draft);
   form.addEventListener('submit', async event => {
     event.preventDefault();
-    if (form.dataset.pending || waitingForFlightLookup) return;
-    if (pendingFlightLookup) {
-      waitingForFlightLookup = true;
-      await pendingFlightLookup;
-      waitingForFlightLookup = false;
+    if (form.dataset.pending || waitingForLookup) return;
+    if (pendingLookup) {
+      waitingForLookup = true;
+      const submit = form.querySelector('[type="submit"]'), originalLabel = submit.innerHTML;
+      submit.textContent = '正在补全行程…';
+      try { await pendingLookup; }
+      finally {
+        waitingForLookup = false;
+        if (form.isConnected) submit.innerHTML = originalLabel;
+      }
       if (!form.isConnected) return;
     }
     let release = () => {};
@@ -1243,13 +1254,11 @@ function editRecord(record = newPersonalRecord(), {
   if (flight) flightLookupCleanup = bindFlightLookup(form, {
     getRecord: () => draft, getKey: flightKey, canQuery: canWrite, desktop: supportsDesktopMcp, apply: applyEditorLookup,
     applyTrack: track => { draft.flightTrack = track; editor.dirty = true; },
-    onPending: pending => {
-      pendingFlightLookup = pending;
-      void pending.then(() => { if (pendingFlightLookup === pending) pendingFlightLookup = undefined; });
-    }
+    onPending: trackLookup
   });
   else railLookupCleanup = bindRailLookup(form, {
-    getRecord: () => draft, canQuery: canWrite, scannedRail, scannedRailQR, apply: applyEditorLookup
+    getRecord: () => draft, canQuery: canWrite, scannedRail, scannedRailQR, railPointsTrip, apply: applyEditorLookup,
+    onAutomaticPending: railPointsTrip ? trackLookup : undefined
   });
   applyAccessPolicy();
 }
@@ -2150,7 +2159,7 @@ async function editRailPointsTrip(button) {
     draft.identity = profile.identity;
     markFieldSources(draft, ['identity'], 'profile');
   }
-  editRecord(draft, { imported: true });
+  editRecord(draft, { imported: true, railPointsTrip: record });
   modalFocus = entry;
 }
 const actions = {

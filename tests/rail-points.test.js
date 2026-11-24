@@ -62,7 +62,8 @@ test('12306 reads the existing browser session, paginates, and returns trip fiel
   assert.doesNotMatch(JSON.stringify(result), /private|1234|5678/);
   assert.equal(records[1].record.orderNumber, 'E000000001');
   assert.equal(records[1].record.fieldSources.departureDate, 'rail-points');
-  assert.deepEqual(records[1].record.lockedFields, []);
+  assert.deepEqual(records[1].record.lockedFields, ['carriage', 'departureDate', 'destination', 'orderNumber', 'origin', 'passenger', 'seatClass', 'service']);
+  assert.equal(records[0].record.lockedFields.includes('passenger'), false);
   hasTrades = false;
   assert.deepEqual(await readTrips('2025-11-24', '2026-11-24'), { rides: [] });
   listStatus = false;
@@ -77,6 +78,22 @@ test('12306 sends the selected dates and holds results for individual review', a
   const window = browser();
   const identity = '000000200001011234';
   const github = await prepareCloud([], { profile: { chineseName: ride.passenger, documents: [{ type: 'national-id', number: identity }] } });
+  const fetcher = globalThis.fetch, railRequests = [];
+  let finishLookup;
+  globalThis.fetch = async (url, options) => {
+    const { hostname, pathname, searchParams } = new URL(url);
+    if (hostname === 'rg-api.zenglingkun.cn' && pathname === '/api/v2/getTrainMain') {
+      const service = searchParams.get('trainNum');
+      railRequests.push(service);
+      assert.equal(searchParams.get('date'), '20261116');
+      if (service === 'G21') await new Promise(resolve => { finishLookup = resolve; });
+      return Response.json({ success: true, data: { no: service, bureau: 'H', car: 'CR400BF-S', numberFull: [service], rundays: ['20261116'], timetable: [
+        { station: '北京南', day: 0, depart: '09:30' }, { station: '上海虹桥', day: 0, arrive: '13:18' }
+      ] } });
+    }
+    if (hostname.endsWith('.zenglingkun.cn')) return Response.json({ success: false }, { status: 404 });
+    return fetcher(url, options);
+  };
   t.after(() => { window.close(); delete globalThis.chrome; });
   Object.defineProperty(window.navigator, 'userAgent', { configurable: true, value: 'Mozilla/5.0 Chrome/142.0' });
   const today = Date.parse(railPointsRange().end);
@@ -113,6 +130,7 @@ test('12306 sends the selected dates and holds results for individual review', a
   await until(() => reply);
   reply({ rides: [ride, { ...ride, service: 'G25', passenger: '示例乙' }] });
   await until(() => document.querySelectorAll('[data-action="rail-points-trip"]').length === 2);
+  assert.deepEqual(railRequests, []);
   assert.deepEqual(github.records(), []);
   document.querySelectorAll('[data-action="rail-points-trip"]')[1].click();
   await until(() => document.querySelector('#editor-form'));
@@ -128,13 +146,39 @@ test('12306 sends the selected dates and holds results for individual review', a
   assert.equal(form.elements.destination.value, '上海虹桥');
   assert.equal(form.elements.departureTime.required, false);
   assert.equal(form.elements.identity.value, identity);
+  for (const key of ['origin', 'destination', 'service', 'departureDateYear', 'passenger', 'carriage', 'orderNumber']) assert.equal(form.elements[key].readOnly, true, key);
+  for (const selector of ['[name=departureDateMonth]', '[name=departureDateDay]', '[data-seat-preset]', '[data-code-start]', '[data-code-upload]', '#code-photo', '[data-rail-receipt]', '[data-rail-receipt-file]', '[data-rail-photo]', '[data-rail-photo-upload]']) {
+    assert.equal(form.querySelector(selector).matches(':disabled'), true, selector);
+  }
+  assert.equal(form.elements.identity.readOnly, false);
+  assert.equal(form.querySelector('[data-seat-number]').readOnly, false);
+  form.elements.service.value = 'G100';
+  form.elements.service.dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.equal(form.elements.service.value, 'G21');
+  await until(() => finishLookup);
+  assert.deepEqual(railRequests, ['G25', 'G21']);
   form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  assert.deepEqual(github.records(), []);
+  finishLookup();
   await until(() => github.records().length === 1 && !document.querySelector('dialog'));
   const [saved] = github.records();
-  assert.equal(saved.departureTime, '');
+  assert.equal(saved.departureTime, '09:30');
+  assert.equal(saved.fieldSources.departureTime, 'railgo');
   assert.equal(saved.seat, '');
   assert.equal(saved.price, '');
   assert.equal(saved.fieldSources.service, 'rail-points');
   assert.equal(saved.fieldSources.passenger, 'rail-points');
   assert.equal(saved.fieldSources.identity, 'profile');
+  assert.ok(saved.lockedFields.includes('departureDate'));
+  const view = `[data-action="view"][data-id="${saved.id}"]`;
+  await until(() => document.querySelector(view));
+  document.querySelector(view).click();
+  await until(() => document.querySelector('[data-action="edit"]:not(:disabled)'));
+  document.querySelector('[data-action="edit"]').click();
+  await until(() => document.querySelector('#editor-form'));
+  const reopened = document.querySelector('#editor-form');
+  assert.equal(reopened.elements.service.readOnly, true);
+  assert.equal(reopened.elements.departureTime.readOnly, false);
+  assert.equal(reopened.querySelector('[data-code-start]').disabled, true);
+  assert.deepEqual(railRequests, ['G25', 'G21']);
 });

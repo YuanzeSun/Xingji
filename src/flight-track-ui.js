@@ -3,9 +3,9 @@ import { FLIGHT_TRACK_SOURCE, flightTrackRequest, readFlightTrack } from './flig
 import { longitudeCenter, projectPoint, unwrapLongitude } from './journey-map-model.js';
 import { createMapBasemap } from './map-basemap.js';
 import { flightTrackLabelRenderer } from './flight-track-labels.js';
+import { bindDetailMapControls, detailMapControls, ROUTE_PLAYBACK_MS } from './detail-map-controls.js';
 import { AIRPORT_POINTS, LAND_PATH, COUNTRY_PATH, PROVINCE_PATH } from './data/map-reference.js';
 
-const PLAYBACK_MS = 2000;
 const clamp = value => Math.max(0, Math.min(1, value));
 
 function inFlightDirection(track) {
@@ -46,9 +46,7 @@ function mountTrackMap(frame, track, record) {
   const overlay = [...svg.querySelector('.flight-track-highlight').children];
   const labelLayer = svg.querySelector('[data-flight-track-labels]');
   const aircraft = svg.querySelector('[data-flight-track-aircraft]');
-  const motion = view.matchMedia?.('(prefers-reduced-motion: reduce)');
   let unit = 1, animation = 0, started, traveled = 0, edgeIndex = 0, playing = false;
-  let drawnWidth, drawnHeight;
 
   function positionAircraft() {
     if (!playing || !edges.length) return;
@@ -58,18 +56,18 @@ function mountTrackMap(frame, track, record) {
     aircraft.setAttribute('transform', `translate(${from[0] + dx * progress} ${from[1] + dy * progress}) rotate(${angle}) scale(${unit})`);
   }
 
-  function draw() {
-    const rect = frame.getBoundingClientRect(), width = rect.width || 640, height = rect.height || 290;
-    if (width === drawnWidth && height === drawnHeight) return;
-    drawnWidth = width;
-    drawnHeight = height;
+  function fitViewport(width, height) {
     const [left, top, right, bottom] = bounds;
-    unit = Math.max((right - left) / (width * .8), (bottom - top) / (height * .73), .001);
-    const x = (left + right) / 2, y = (top + bottom) / 2;
+    const scale = Math.max((right - left) / (width * .8), (bottom - top) / (height * .73), .001);
+    return { x: (left + right) / 2, y: (top + bottom) / 2, zoom: 1000 / (scale * width) };
+  }
+
+  function draw(viewport, width, height, interactive) {
+    const { x, y, zoom } = viewport;
+    unit = 1000 / (zoom * width);
     svg.setAttribute('viewBox', `${x - width * unit / 2} ${y - height * unit / 2} ${width * unit} ${height * unit}`);
     svg.style.setProperty('--flight-track-stroke', String(unit * 3));
-    const viewport = { x, y, zoom: 1000 / (unit * width) };
-    basemap?.draw(viewport, width, height);
+    basemap?.draw(viewport, width, height, interactive);
     labelLayer.innerHTML = renderLabels(viewport, width, height, unit);
     positionAircraft();
   }
@@ -89,11 +87,11 @@ function mountTrackMap(frame, track, record) {
     started = undefined;
     edgeIndex = 0;
     svg.setAttribute('data-flight-track-played', '');
-    playing = !motion?.matches && distance > 0;
+    playing = distance > 0;
     svg.toggleAttribute('data-flight-track-playing', playing);
     function tick(timestamp) {
       started ??= timestamp;
-      const progress = motion?.matches || !playing ? 1 : clamp((timestamp - started) / PLAYBACK_MS);
+      const progress = playing ? clamp((timestamp - started) / ROUTE_PLAYBACK_MS) : 1;
       paint(progress);
       if (progress < 1) animation = view.requestAnimationFrame(tick);
       else {
@@ -110,14 +108,12 @@ function mountTrackMap(frame, track, record) {
     }
   }
 
-  const observer = typeof view.ResizeObserver === 'function' ? new view.ResizeObserver(draw) : null;
-  observer?.observe(frame);
-  draw();
-  return { play, dispose() { view.cancelAnimationFrame(animation); observer?.disconnect(); } };
+  const unbind = bindDetailMapControls(frame, { fitViewport, draw });
+  return { play, dispose() { view.cancelAnimationFrame(animation); unbind(); } };
 }
 
 export function mountFlightTrack(container, record, { getKey, desktop, canSave, save }) {
-  container.innerHTML = `<div class="rail-route-heading"><h3>飞行航迹</h3><div class="rail-route-actions"><button class="button secondary small" type="button" data-flight-track-query>查询航迹</button><button class="button secondary small" type="button" data-flight-track-play hidden>播放航迹</button></div></div><p class="flight-track-status fine-print" role="status"></p><div class="flight-track-frame rail-route-frame" hidden><canvas aria-hidden="true"></canvas><svg role="img" aria-label="飞行航迹图"></svg></div><p class="rail-route-caption" data-flight-track-source hidden><a href="${FLIGHT_TRACK_SOURCE}" target="_blank" rel="noopener noreferrer">航迹数据：飞常准</a><span></span></p>`;
+  container.innerHTML = `<div class="rail-route-heading"><h3>飞行航迹</h3><div class="rail-route-actions"><button class="button secondary small" type="button" data-flight-track-query>查询航迹</button><button class="button secondary small" type="button" data-flight-track-play hidden>播放航迹</button></div></div><p class="flight-track-status fine-print" role="status"></p><div class="flight-track-frame rail-route-frame" hidden><canvas aria-hidden="true"></canvas><svg tabindex="0" role="group" aria-label="飞行航迹图，可拖动及缩放"></svg>${detailMapControls('飞行航迹')}</div><p class="rail-route-caption" data-flight-track-source hidden><a href="${FLIGHT_TRACK_SOURCE}" target="_blank" rel="noopener noreferrer">航迹数据：飞常准</a><span></span></p>`;
   const queryButton = container.querySelector('[data-flight-track-query]'), playButton = container.querySelector('[data-flight-track-play]');
   const status = container.querySelector('[role=status]'), frame = container.querySelector('.flight-track-frame'), source = container.querySelector('[data-flight-track-source]');
   const controller = new AbortController();
@@ -132,7 +128,7 @@ export function mountFlightTrack(container, record, { getKey, desktop, canSave, 
     playButton.hidden = frame.hidden = source.hidden = false;
     status.classList.add('visually-hidden');
     const [, dep, arr] = track.flightStr.split('_');
-    frame.querySelector('svg').setAttribute('aria-label', `${dep} 至 ${arr}飞行航迹图`);
+    frame.querySelector('svg').setAttribute('aria-label', `${dep} 至 ${arr}飞行航迹图，可拖动及缩放`);
     source.querySelector('span').textContent = ` · ${dep} → ${arr} · 查询于 ${track.queriedAt.slice(0, 10)}`;
     map = mountTrackMap(frame, track, record);
     if (focusPlay) playButton.focus();

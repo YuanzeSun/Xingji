@@ -6,7 +6,7 @@ import {BOARDING_METADATA_FIELDS,boardingMetadataValues} from './boarding-metada
 import {flightPassengerName} from './flight-passenger.js';
 import {normalizePlaces} from './places.js';
 import {markManualFields} from './lookup-values.js';
-import {fieldSourceBadge,markFieldSources,railBarcodeFieldLocked,refreshFieldSources} from './field-sources.js';
+import {fieldSourceBadge,markFieldSources,railBarcodeFieldLocked,railCodeEntryLocked,refreshFieldSources} from './field-sources.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
 import { codeCameraMarkup, bindCodeCamera } from './code-camera.js';
 import { renderCodeData } from './barcode-data.js';
@@ -29,13 +29,13 @@ function railExampleMarkup(record) {
   const linear = record.template === 'rail-red-barcode';
   const example = linear ? (railLinearExample ??= renderCodeData(DEMO_RAIL_LINEAR_CODE))
     : (railQRExample ??= renderCodeData(DEMO_RAIL_TICKET_CODE));
-  return `<figure class="boarding-code-examples rail-code-example${linear ? ' rail-linear-example' : ''}" data-code-examples ${record.ticketCode || record.railInvoice?.electronicTicketNumber ? 'hidden' : ''}><figcaption>扫码示例</figcaption><span class="boarding-code-sample-image" aria-hidden="true">${example}</span></figure>`;
+  return `<figure class="boarding-code-examples rail-code-example${linear ? ' rail-linear-example' : ''}" data-code-examples ${record.ticketCode || railCodeEntryLocked(record) ? 'hidden' : ''}><figcaption>扫码示例</figcaption><span class="boarding-code-sample-image" aria-hidden="true">${example}</span></figure>`;
 }
 export function ticketCodeEditor(record, { fromScan = false, generator = true } = {}) {
   const { field, normalize } = configuration(record);
   const flight = record.type === 'flight';
   const title = flight ? '登机牌条码或电子登机牌二维码' : '扫码录入';
-  const disabled = !flight && record.railInvoice?.electronicTicketNumber ? ' disabled' : '';
+  const disabled = railCodeEntryLocked(record) ? ' disabled' : '';
   const referenceButton = fromScan && !disabled ? `<button type="button" class="button small secondary" id="code-use-scan" ${record[field] ? 'hidden' : ''}>读取本次图片中的码</button>` : '';
   const upload = `<button type="button" class="button small secondary" data-code-upload${disabled}>上传图片</button><input id="code-photo" type="file" accept="image/png,image/jpeg,image/webp" hidden${disabled} />`;
   const saved = normalize(record[field]);
@@ -58,7 +58,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     find('code-remove').hidden = !removable(draft,field);
     const reference = find('code-use-scan');
     if (reference) reference.hidden = !!draft[field];
-    section.querySelector('[data-code-examples]').hidden = !!(draft[field] || draft.railInvoice?.electronicTicketNumber);
+    section.querySelector('[data-code-examples]').hidden = !!draft[field] || railCodeEntryLocked(draft);
   }
   function currentRecord() {
     const record={...draft};
@@ -165,7 +165,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     error.textContent='';changed({filled,previousRecord,codeStatus:status.textContent,railFields:code.railFields});
   }
   async function read(file, source = 'manual', options) {
-    if (!isCurrent() || draft.railInvoice?.electronicTicketNumber) return;
+    if (!isCurrent() || railCodeEntryLocked(draft)) return;
     const explicit = source !== 'camera' || options?.cameraFrame === 0;
     reset(); const request = generation; loading = true;
     if (explicit) { status.textContent = '正在识别条码…'; error.textContent = ''; }
@@ -214,11 +214,13 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     try { const response = await fetch(referenceURL); if (!response.ok) throw new Error('本次图片无法读取'); const file = await response.blob(); if (!disposed && request === generation) await read(file, source); }
     catch (failure) { if (!disposed && request === generation) { loading = false; status.textContent = ''; error.textContent = failure.message;  } }
   }
-  const camera = bindCodeCamera(section, (image, options) => read(image, 'camera', options), { asCanvas: flight, ...cameraOptions, onStart:onCameraStart, onCancel: () => { reset(); status.textContent = ''; error.textContent = ''; } });
-  form.querySelector('[data-rail-photo]')?.addEventListener('click',camera.stop,true);
-  form.querySelector('[data-rail-photo-file]')?.addEventListener('change',camera.stop,true);
-  form.querySelector('[data-rail-receipt-file]')?.addEventListener('change',camera.stop,true);
-  section.querySelector('[data-code-upload]').addEventListener('click', () => photo.click());
+  const camera = railCodeEntryLocked(draft) ? null : bindCodeCamera(section, (image, options) => read(image, 'camera', options), { asCanvas: flight, ...cameraOptions, onStart:onCameraStart, onCancel: () => { reset(); status.textContent = ''; error.textContent = ''; } });
+  if (camera) {
+    form.querySelector('[data-rail-photo]')?.addEventListener('click',camera.stop,true);
+    form.querySelector('[data-rail-photo-file]')?.addEventListener('change',camera.stop,true);
+    form.querySelector('[data-rail-receipt-file]')?.addEventListener('change',camera.stop,true);
+    section.querySelector('[data-code-upload]').addEventListener('click', () => photo.click());
+  }
   photo.addEventListener('change', () => { const file = photo.files?.[0]; if (file) { onCameraStart?.(); camera.stop(); read(file); } });
   find('code-use-scan')?.addEventListener('click', () => readReference());
   find('code-remove').addEventListener('click', () => {
@@ -264,6 +266,6 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     else updateGenerated();
   }
   refreshTicketFieldLocks(form,draft);
-  if (autoRead && referenceURL && !draft[field] && !draft.railInvoice?.electronicTicketNumber && draft.fieldSources?.[field] !== 'manual') readReference('photo');
-  return () => { disposed = true; clearTimeout(updateTimer);form.removeEventListener('input',inputChanged);form.removeEventListener('change',inputChanged);form.removeEventListener('submit',submit,true); camera.dispose(); reset(); };
+  if (autoRead && referenceURL && !draft[field] && !railCodeEntryLocked(draft) && draft.fieldSources?.[field] !== 'manual') readReference('photo');
+  return () => { disposed = true; clearTimeout(updateTimer);form.removeEventListener('input',inputChanged);form.removeEventListener('change',inputChanged);form.removeEventListener('submit',submit,true); camera?.dispose(); reset(); };
 }
