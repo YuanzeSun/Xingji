@@ -55,3 +55,88 @@ test('G21 detail draws the stored complete route and identifies traveled and oth
     assert.ok(container.querySelector('[data-rail-line-name="示例客专"]'));
   }finally{cleanup();dom.window.close();for(const [key,value] of Object.entries(previous))if(value===undefined)delete globalThis[key];else globalThis[key]=value;}
 });
+
+test('ticket route playback follows track distance, keeps its progress on zoom, and can be replayed', () => {
+  const dom = new JSDOM('<section id="route"></section>');
+  const previous = { window: globalThis.window, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame };
+  const motion = { matches: false };
+  const frames = new Map();
+  let nextFrame = 0;
+  globalThis.window = dom.window;
+  globalThis.window.matchMedia = query => {
+    assert.equal(query, '(prefers-reduced-motion: reduce)');
+    return motion;
+  };
+  globalThis.requestAnimationFrame = callback => {
+    frames.set(++nextFrame, callback);
+    return nextFrame;
+  };
+  globalThis.cancelAnimationFrame = id => frames.delete(id);
+  function advance(timestamp) {
+    for (const [id, callback] of [...frames]) {
+      if (frames.delete(id)) callback(timestamp);
+    }
+  }
+
+  const data = payload();
+  data.data.stations.splice(2, 0, { 徐州东: [117.2, 35.8] });
+  data.data.train['南京南-上海虹桥'].index = 3;
+  delete data.data.train['济南西-南京南'];
+  data.data.train['济南西-徐州东'] = { index: 1, line: [[116.891, 36.669], [117.2, 35.8]] };
+  data.data.train['徐州东-南京南'] = { index: 2, line: [[117.2, 35.8], [118.797, 31.969]] };
+  const route = selectRailRoute(record(), data);
+  const container = dom.window.document.querySelector('#route');
+  const cleanup = mountRailRoute(container, record({ railRoute: route }));
+  try {
+    const svg = container.querySelector('svg');
+    const button = container.querySelector('[data-rail-play-route]');
+    const status = container.querySelector('[data-rail-play-status]');
+    const [first, second] = svg.querySelectorAll('.rail-playback-track path');
+    const litStops = () => [...svg.querySelectorAll('[data-rail-stop-lit] title')].map(node => node.textContent).sort();
+    advance(0);
+    assert.equal(button.textContent, '播放行程');
+    assert.equal(svg.hasAttribute('data-rail-playback'), false);
+    assert.deepEqual(litStops(), []);
+
+    button.click();
+    advance(10);
+    assert.deepEqual(litStops(), ['济南西']);
+    const viewBox = svg.getAttribute('viewBox');
+    container.querySelector('[data-rail-zoom="in"]').click();
+    advance(1010);
+    assert.notEqual(svg.getAttribute('viewBox'), viewBox);
+    assert.deepEqual(litStops(), ['徐州东', '济南西']);
+    assert.equal(first.style.strokeDashoffset, '0');
+    assert.ok(Number(second.style.strokeDashoffset) > 0.5 && Number(second.style.strokeDashoffset) < 0.75);
+    assert.equal(status.textContent, '');
+    advance(2010);
+    assert.deepEqual(litStops(), ['南京南', '徐州东', '济南西']);
+    assert.equal(second.style.strokeDashoffset, '0');
+    assert.equal(status.textContent, '已点亮济南西至南京南');
+    assert.equal(button.textContent, '重播行程');
+
+    button.click();
+    assert.equal(first.style.strokeDashoffset, '1');
+    assert.deepEqual(litStops(), ['济南西']);
+    button.click();
+    assert.equal(frames.size, 1);
+    motion.matches = true;
+    button.click();
+    assert.equal(frames.size, 0);
+    assert.deepEqual(litStops(), ['南京南', '徐州东', '济南西']);
+
+    motion.matches = false;
+    button.click();
+    assert.equal(frames.size, 1);
+    cleanup();
+    button.click();
+    assert.equal(frames.size, 0);
+  } finally {
+    cleanup();
+    dom.window.close();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[key];
+      else globalThis[key] = value;
+    }
+  }
+});
