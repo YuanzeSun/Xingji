@@ -45,7 +45,7 @@ export function activeSearch(input) {
   if (f.dateFrom || f.dateTo) add('dates', `出发：${f.dateFrom || '不限'} 至 ${f.dateTo || '不限'}`);
   for (const [key, label] of Object.entries({ service: '车次 / 航班', passenger: '旅客', seatClass: '席别 / 舱位', airline: '航空公司', mark: '票面标识' })) if (f[key]) add(key, `${label}：${f[key]}`);
   if (f.template) add('template', TEMPLATES[f.template] || f.template);
-  if (f.code) add('code', f.code === 'with' ? '火车票：已收录二维码' : '火车票：未收录二维码');
+  if (f.code) add('code', f.code === 'with' ? '火车票：已收录条码' : '火车票：未收录条码');
   if (f.provenance) add('provenance', f.provenance === 'reconstruction' ? '依据原票重建' : '纪念票面');
   if (f.minPrice || f.maxPrice) add('price', `票价：¥${f.minPrice || '0'} 至 ${f.maxPrice || '不限'}`);
   if (f.sort !== 'newest') add('sort', SORTS[f.sort]);

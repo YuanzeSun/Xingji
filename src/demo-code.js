@@ -6,3 +6,7 @@ export const DEMO_RAIL_TICKET_CODE = {
   symbologyIdentifier: ']Q1', gs1: false, eci: [],
   parameters: { symbolVersion: '4', errorCorrectionLevel: 'M', mask: 1 },
 };
+export const DEMO_RAIL_LINEAR_CODE = Object.freeze({
+  version: 1, format: 'Code128', rawBytes: btoa('XINGJI-DEMO-NOT-A-RAILWAY-TICKET'),
+  symbologyIdentifier: ']C0', gs1: false, eci: [], parameters: {}
+});

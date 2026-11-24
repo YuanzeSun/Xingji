@@ -10,24 +10,26 @@ import {fieldSourceBadge,markFieldSources,railBarcodeFieldLocked,refreshFieldSou
 import {barcodeFieldLocked,refreshBarcodeFieldLocks} from './barcode-fields.js';
 import { codeCameraMarkup, bindCodeCamera } from './code-camera.js';
 import { renderCodeData } from './barcode-data.js';
-import { normalizeTicketCode } from './ticket-code.js';
+import { isLinearTicketCode, normalizeTicketCode } from './ticket-code.js';
 import { normalizeBoardingCode } from './boarding-code.js';
 import { DEMO_BOARDING_CODE } from './demo-boarding-code.js';
-import { DEMO_RAIL_TICKET_CODE, DEMO_TICKET_CODE } from './demo-code.js';
+import { DEMO_RAIL_LINEAR_CODE, DEMO_RAIL_TICKET_CODE, DEMO_TICKET_CODE } from './demo-code.js';
 import {boardingGeneratorMarkup,automaticBoardingCode,editBoardingGeneratorField,readBoardingGenerator,refreshBoardingGenerator,setBoardingGeneratorAvailability} from './boarding-code-generator.js';
 
-const configuration = record => record.type === 'flight' ? { field: 'boardingCode', title: '登机牌条码或电子登机牌二维码', normalize: normalizeBoardingCode } : { field: 'ticketCode', title: '二维码', normalize: normalizeTicketCode };
+const configuration = record => record.type === 'flight' ? { field: 'boardingCode', title: '登机牌条码或电子登机牌二维码', normalize: normalizeBoardingCode } : { field: 'ticketCode', title: '条码', normalize: normalizeTicketCode };
 const removable = (record,field) => !!record[field] && record.boardingCodeSource!=='generated';
 const thumbnail = (code, title) => code ? `${renderCodeData(code)}<span>已收录</span>` : `<span class="fine-print">尚未收录${title}</span>`;
-let boardingExamples, railExample;
+let boardingExamples, railQRExample, railLinearExample;
 function boardingExamplesMarkup(hidden) {
   boardingExamples ??= `<div class="boarding-code-sample"><span class="boarding-code-sample-image" aria-hidden="true">${renderCodeData(DEMO_BOARDING_CODE)}</span><span>纸质登机牌 · PDF417</span></div>
     <div class="boarding-code-sample"><span class="boarding-code-sample-image" aria-hidden="true">${renderCodeData(DEMO_TICKET_CODE)}</span><span>电子登机牌 · 二维码</span></div>`;
   return `<figure class="boarding-code-examples" data-code-examples ${hidden ? 'hidden' : ''}><figcaption>扫码示例</figcaption>${boardingExamples}</figure>`;
 }
-function railExampleMarkup(hidden) {
-  railExample ??= renderCodeData(DEMO_RAIL_TICKET_CODE);
-  return `<figure class="boarding-code-examples rail-code-example" data-code-examples ${hidden ? 'hidden' : ''}><figcaption>扫码示例</figcaption><div class="boarding-code-sample"><span class="boarding-code-sample-image" aria-hidden="true">${railExample}</span><span>虚构车票</span></div></figure>`;
+function railExampleMarkup(record) {
+  const linear = record.template === 'rail-red-barcode';
+  const example = linear ? (railLinearExample ??= renderCodeData(DEMO_RAIL_LINEAR_CODE))
+    : (railQRExample ??= renderCodeData(DEMO_RAIL_TICKET_CODE));
+  return `<figure class="boarding-code-examples rail-code-example${linear ? ' rail-linear-example' : ''}" data-code-examples ${record.ticketCode ? 'hidden' : ''}><figcaption>扫码示例</figcaption><div class="boarding-code-sample"><span class="boarding-code-sample-image" aria-hidden="true">${example}</span><span>${linear ? '虚构一维条码' : '虚构车票二维码'}</span></div></figure>`;
 }
 export function ticketCodeEditor(record, { fromScan = false, generator = true } = {}) {
   const { field, title, normalize } = configuration(record);
@@ -39,8 +41,8 @@ export function ticketCodeEditor(record, { fromScan = false, generator = true } 
     : '<button type="button" class="button small secondary" data-code-upload>上传图片</button>' + file;
   const saved = normalize(record[field]);
   const controls = `<div class="saved-code" id="saved-code" ${!flight && !saved ? 'hidden' : ''}>${thumbnail(saved, title)}</div><div class="code-actions">${referenceButton}<button type="button" class="button small secondary" data-code-start>相机扫描</button>${upload}<button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>`;
-  const scan = `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}<p class="fine-print" data-code-guidance ${record[field] ? 'hidden' : ''}>${flight ? '请扫描自己登机牌上的完整码。' : '请对准纸质火车票上的二维码。'}</p></div>${flight ? boardingExamplesMarkup(record[field]) : railExampleMarkup(record[field])}</div>`;
-  return `<section data-code-editor class="editor-extra${flight ? '' : ' full-field rail-qr-entry'}" ${flight ? '' : 'data-rail-qr-entry'} id="code-editor"><h3>${flight ? title : '二维码录入'}${fieldSourceBadge(field,record)}</h3>${scan}${codeCameraMarkup()}${flight && generator ? boardingGeneratorMarkup(record) : ''}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
+  const scan = `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}<p class="fine-print" data-code-guidance ${record[field] ? 'hidden' : ''}>${flight ? '请扫描自己登机牌上的完整码。' : '请对准票面上的二维码或一维条码。'}</p></div>${flight ? boardingExamplesMarkup(record[field]) : railExampleMarkup(record)}</div>`;
+  return `<section data-code-editor class="editor-extra${flight ? '' : ' full-field rail-code-entry'}" ${flight ? '' : 'data-rail-code-entry'} id="code-editor"><h3>${flight ? title : '扫码录入'}${fieldSourceBadge(field,record)}</h3>${scan}${codeCameraMarkup()}${flight && generator ? boardingGeneratorMarkup(record) : ''}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
 }
 export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', autoRead = false, profile, preserveGenerator = false, onCameraStart, isCurrent = () => true, loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {} } = {}) {
   const section = form.querySelector('[data-code-editor]'); if (!section) return () => {};
@@ -104,6 +106,9 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     markManualFields(draft,[field]);
     markFieldSources(draft,[field],'barcode');
     if(!flight){
+      if (isLinearTicketCode(draft[field])) draft.template = 'rail-red-barcode';
+      else if (draft.template === 'rail-red-barcode') draft.template = 'rail-red-qr';
+      if (draft.template !== previousRecord.template) markFieldSources(draft, ['template'], 'barcode');
       const values=code.railFields;
       const previousLocks=draft.lockedFields.filter(key=>railBarcodeFieldLocked(previousRecord,key));
       draft.lockedFields=draft.lockedFields.filter(key=>!previousLocks.includes(key));
@@ -153,8 +158,11 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     }
     refreshFieldSources(form,draft);
     refreshBarcodeFieldLocks(form,draft);
-    reset();showSaved();showDifferences();
-    status.textContent=code.railFields ? '已扫码录入，二维码字段已锁定' : '已读取并重建 '+code.format+'，重新编码后信息已核对';
+    reset();showSaved();
+    if (flight) showDifferences();
+    if (code.railFields) status.textContent = '已扫码录入，二维码字段已锁定';
+    else if (!flight && isLinearTicketCode(draft[field])) status.textContent = '已收录一维条码，可继续录入车票信息';
+    else status.textContent = '已读取并重建 ' + code.format + '，重新编码后信息已核对';
     error.textContent='';changed({filled,previousRecord,codeStatus:status.textContent,railFields:code.railFields});
   }
   async function read(file, source = 'manual', options) {
@@ -162,7 +170,7 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     reset(); const request = generation; loading = true; status.textContent = '正在读取并重建条码…'; error.textContent = '';
     try {
       const rebuild = await loadRebuilder(), result = await rebuild(file, draft.type, options);
-      const readRailTicketCode = !flight && source !== 'photo' && result.codes.length
+      const readRailTicketCode = !flight && source !== 'photo' && result.codes.some(code => !isLinearTicketCode(code.data))
         ? (await import('./rail-ticket-qr.js')).readRailTicketCode : null;
       if (disposed || request !== generation || !section.isConnected || !isCurrent()) return;
       loading = false;
@@ -173,13 +181,14 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
       });
       if(readRailTicketCode){
         const tickets=available.flatMap(code=>{
+          if (isLinearTicketCode(code.data)) return [code];
           const railFields=readRailTicketCode(code.data,journeyDate(draft.departureDate)?.year ?? undefined);
           return railFields ? [{...code,railFields,label:railFields.service+' · '+railFields.ticketNumber}] : [];
         });
         if(tickets.length)available=tickets;
         else if(source==='camera'){
           status.textContent='';
-          error.textContent='未读到支持的火车票二维码，请对准票面上的码';
+          error.textContent='未读到支持的火车票条码，请对准票面上的码';
           return;
         }
       }

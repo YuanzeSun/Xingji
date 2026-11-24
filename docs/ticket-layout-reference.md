@@ -27,9 +27,7 @@ PNG dimensions are twice the native SVG dimensions. The export code obtains dime
 
 ## Fonts and development scope
 
-Chinese station, body, numeral and pinyin fonts have distinct roles. Bundled fonts make the layout independent of whichever Song/Hei fonts happen to be installed on a device. Verified original QR data can be rendered at the template's lower-right coordinates. The linear-barcode layout uses the printed fields from OCR or manual entry and reserves the barcode area. The preview matrix uses fictional demonstration codes that contain only `XINGJI-DEMO-NOT-A-RAILWAY-TICKET`. Backgrounds are independently drawn vector reconstructions.
-
-This is an unreleased development build. Only the current renderers and data structure are maintained; experimental legacy layouts and migration branches have been removed. Historical red/blue ticket styles remain distinct collection options.
+Chinese station, body, numeral and pinyin fonts have distinct roles. Bundled fonts make the layout independent of whichever Song/Hei fonts happen to be installed on a device. Verified original QR data is rendered at the lower right. A scanned Code128 is drawn across the bottom of the linear-barcode layout. The preview matrix uses fictional demonstration codes. Backgrounds are independently drawn vector reconstructions.
 
 ## Checks
 

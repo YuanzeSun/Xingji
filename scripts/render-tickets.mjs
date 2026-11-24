@@ -3,8 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { demoRecords } from '../src/demo.js';
-import { DEMO_TICKET_CODE } from '../src/demo-code.js';
-import { renderCodeData } from '../src/barcode-data.js';
+import { DEMO_RAIL_LINEAR_CODE, DEMO_TICKET_CODE } from '../src/demo-code.js';
 import { createRecord } from '../src/model.js';
 import { ticketSVG } from '../src/tickets.js';
 import { layoutFontFiles } from '../src/ticket-layouts.js';
@@ -14,7 +13,7 @@ execFileSync('python', [resolve(root, 'scripts/prepare-font-previews.py')], { st
 const examples = [
   createRecord({ id:'preview-linear', template:'rail-red-barcode', service:'T41', origin:'北京西', destination:'西安',
     departureDate:'2008-09-12', departureTime:'16:46', carriage:'09', seat:'023号下铺', seatClass:'硬卧',
-    price:'270.00', ticketNumber:'X000010', saleCode:'10000000000000X0000100000000000000000000000', issuer:'北京西' }),
+    price:'270.00', ticketNumber:'X000010', saleCode:'10000000000000X0000100000000000000000000000', issuer:'北京西', ticketCode: DEMO_RAIL_LINEAR_CODE }),
   createRecord({ id:'preview-anonymous', template:'rail-red-qr', service:'T166', origin:'拉萨', destination:'蚌埠',
     departureDate:'2010-01-16', departureTime:'10:00', carriage:'01', seat:'005号中铺', seatClass:'硬卧',
     price:'766.00', ticketNumber:'X000011', saleCode:'10000000000000X000011', issuer:'拉萨', ticketCode: DEMO_TICKET_CODE }),
@@ -28,14 +27,7 @@ const examples = [
 ];
 const records = [...demoRecords('2024-11-20'), ...examples];
 for (const record of records.filter((r, i, rs) => rs.findIndex(x => x.template === r.template) === i)) {
-  let svg = ticketSVG(record);
-  if (record.template === 'rail-red-barcode') {
-    const sample = renderCodeData({
-      version: 1, format: 'Code128', rawBytes: btoa('XINGJI-DEMO-NOT-A-RAILWAY-TICKET'),
-      symbologyIdentifier: ']C0', gs1: false, eci: [], parameters: {}
-    }, { x: 44, y: 434, width: 811, height: 104 }).replace('xMidYMid meet', 'none');
-    svg = svg.slice(0, -6) + sample + '</svg>';
-  }
+  const svg = ticketSVG(record);
   const fontFiles = layoutFontFiles(record.template).map(([family]) => resolve(root, '.preview/font-previews', family + '.otf'));
   const image = new Resvg(svg, { font: { fontFiles, defaultFontFamily: 'TicketSong', loadSystemFonts: false } });
   await writeFile(resolve(root, `.preview/${record.template}.png`), image.render().asPng());

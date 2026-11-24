@@ -2,6 +2,7 @@ import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
 import { symbolImage } from './barcode-symbols.js';
 import { codeDataFromResult, codeBytes, MAX_CODE_BYTES, normalizeCodeData, symbolFromCodeData } from './barcode-data.js';
 import { readBCBP } from './bcbp-reader.js';
+import { RAIL_TICKET_CODE_FORMATS } from './ticket-code.js';
 
 let initialized;
 export function prepareCodeReader(overrides) {
@@ -13,7 +14,8 @@ export function prepareCodeReader(overrides) {
 }
 const sameBytes = (a, b) => a.length === b.length && a.every((value, i) => value === b[i]);
 const pdfFormats = ['PDF417', 'CompactPDF417', 'MicroPDF417'];
-const formatsFor = type => type === 'flight' ? [...pdfFormats, 'Aztec', 'QRCode', 'DataMatrix', 'Code128'] : ['QRCode', 'MicroQRCode'];
+const flightFormats = [...pdfFormats, 'Aztec', 'QRCode', 'DataMatrix', 'Code128'];
+const formatsFor = type => type === 'flight' ? flightFormats : RAIL_TICKET_CODE_FORMATS;
 const options = { tryHarder: true, tryRotate: true, tryInvert: true, tryDownscale: false, maxNumberOfSymbols: 8, textMode: 'Plain' };
 const rawText = result => String.fromCharCode(...result.bytes);
 const isBoardingResult = result => result.bytes.length <= MAX_CODE_BYTES && !!readBCBP(rawText(result));
@@ -137,9 +139,15 @@ async function readFlightImage(source, cameraFrame = 0) {
 
 export async function rebuildCodesFromImage(source, type = 'rail', { cameraFrame } = {}) {
   const result = type === 'flight' ? await readFlightImage(source, cameraFrame) :
-    await withCodeImage(source, image => {
-      if ((image.naturalWidth || image.width) * (image.naturalHeight || image.height) > 24_000_000) throw new Error('图片尺寸过大，请选择原始票据截图');
-      return rebuildCodeSymbols(imagePixels(image), type);
+    await withCodeImage(source, async image => {
+      const width = image.naturalWidth || image.width, height = image.naturalHeight || image.height;
+      if (width * height > 24_000_000) throw new Error('图片尺寸过大，请选择原始票据截图');
+      const first = await rebuildCodeSymbols(imagePixels(image), type);
+      if (first.codes.length || cameraFrame % 4) return first;
+      // A faded thermal strip can be readable after contrast correction and a single scanline.
+      const imageData = imagePixels(image, { edge: 2400, upscale: true, enhance: true });
+      const codes = await readBarcodes(imageData, { ...options, formats: ['Code128'], minLineCount: 1 });
+      return codes.length ? rebuildResults(codes, type, false) : first;
     });
   return { ...result, codes: result.codes.map(({ format, data, byteLength, isLink, verified }) => ({ format, data, byteLength, isLink, verified })) };
 }

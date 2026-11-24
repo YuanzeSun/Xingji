@@ -1,7 +1,8 @@
 import {escape as e} from './html.js';
 import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
+import {hasRailQRCode} from './ticket-code.js';
 export const sourceFieldValue=(record,key)=>key.endsWith('DateYear') ? journeyDate(record[key.slice(0,-4)])?.year : record[key];
-export const railBarcodeFieldLocked=(record,key)=>record.type==='rail' && !!record.ticketCode &&
+export const railBarcodeFieldLocked=(record,key)=>hasRailQRCode(record) &&
   key!=='ticketCode' && record.fieldSources?.[key]==='barcode' && !!record.lockedFields?.includes(key);
 
 export const FIELD_SOURCES=Object.freeze({manual:'手动输入',barcode:'条码',variflight:'飞常准',railgo:'RailGo',profile:'个人资料',ocr:'图片识别',pdf:'PDF 导入',default:'默认值',generated:'自动生成',database:'地点数据库',lookup:'查询补全'});

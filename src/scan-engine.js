@@ -7,6 +7,7 @@ import { createRecord, validDate } from './model.js';
 import {markFieldSources} from './field-sources.js';
 import { readRailSeatClasses } from './seat-classes.js';
 import { marksFromText } from './ticket-marks.js';
+import { isLinearTicketCode } from './ticket-code.js';
 
 const pinyinStations = new Map();
 const photoFields = ['origin','originCode','destination','destinationCode','service','departureDate',
@@ -21,7 +22,7 @@ export function railPhotoChanges(draft, record) {
     return present(record[key]) && editable(key) &&
       (!present(draft[key]) || source === 'profile' || source === 'ocr');
   }).map(key => [key, record[key]]));
-  if (record.template !== draft.template && record.fieldSources.template === 'ocr') changes.template = record.template;
+  if (record.template !== draft.template && record.fieldSources.template === 'ocr' && !isLinearTicketCode(draft.ticketCode)) changes.template = record.template;
   if (changes.origin && !changes.originCode) changes.originCode = '';
   if (changes.destination && !changes.destinationCode) changes.destinationCode = '';
   if (draft.carriage && record.carriage && draft.carriage !== record.carriage && !changes.carriage) {

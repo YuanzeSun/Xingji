@@ -615,11 +615,12 @@ select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-w
 
 .web-version{white-space:nowrap;color:var(--muted);font:500 12px/1.4 system-ui,sans-serif;letter-spacing:normal;font-variant-numeric:tabular-nums}
 .mobile-brand .web-version{margin-inline-start:4px}
-.rail-qr-entry .code-actions>.button,.rail-photo-entry .code-actions>.button{min-height:44px}
-.rail-qr-entry .boarding-code-controls{flex-basis:9rem}
-.rail-qr-entry .saved-code[hidden]{display:none}
+.rail-code-entry .code-actions>.button,.rail-photo-entry .code-actions>.button{min-height:44px}
+.rail-code-entry .boarding-code-controls{flex-basis:9rem}
+.rail-code-entry .saved-code[hidden]{display:none}
 .rail-code-example{grid-template-columns:1fr}
 .rail-code-example .boarding-code-sample-image{width:112px;height:112px;padding:6px}
+.rail-linear-example .boarding-code-sample-image{height:46px}
 .rail-photo-entry>summary{cursor:pointer;font-weight:600}
 .rail-photo-entry>summary [data-rail-photo-lock]{margin-inline-start:6px}
 .rail-receipt-entry [data-rail-receipt]{min-height:44px}

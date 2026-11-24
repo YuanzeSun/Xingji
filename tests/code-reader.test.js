@@ -167,7 +167,7 @@ for (const format of ['QRCode', 'PDF417', 'Aztec', 'Code128', 'DataMatrix', 'Mic
     const input = ['Code128','MicroQRCode'].includes(format) ? 'M1XINGJI12345' : payload;
     const made = await writeBarcode(input, { format, options: format === 'QRCode' ? 'version=5,ecLevel=H' : '', scale: 4 });
     assert.equal(made.error, '');
-    const type = ['QRCode','MicroQRCode'].includes(format) ? 'rail' : 'flight', original = symbolImage(made.symbol, type);
+    const type = ['QRCode','MicroQRCode','Code128'].includes(format) ? 'rail' : 'flight', original = symbolImage(made.symbol, type);
     for (const image of [original, rotate(original)]) {
       const { codes, issues } = await rebuildCodeSymbols(image, type);
       assert.deepEqual(issues, []); assert.equal(codes.length, 1);

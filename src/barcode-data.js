@@ -81,13 +81,14 @@ export function codeSize(value) {
   return { width: symbol.width + quiet * 2, height: symbol.height + quiet * 2, quiet };
 }
 // Only payload and encoding parameters are persisted. Matrices and SVG paths exist in memory at display time.
-export function renderCodeData(value, { x = 0, y = 0, width = '100%', height = '100%', marker = '', className = '' } = {}) {
+export function renderCodeData(value, { x = 0, y = 0, width = '100%', height = '100%', marker = '', className = '', stretch = false } = {}) {
   const code = normalizeCodeData(value); if (!code) return '';
   const symbol = symbolFromCodeData(code), size = codeSize(code), paths = [];
-  for (let row = 0; row < symbol.height; row++) for (let col = 0; col < symbol.width;) {
+  const rowHeight = code.format === 'Code128' ? symbol.height : 1;
+  for (let row = 0; row < symbol.height; row += rowHeight) for (let col = 0; col < symbol.width;) {
     if ((symbol.data[row * symbol.width + col] ?? 255) >= 128) { col++; continue; }
     const start = col; while (col < symbol.width && symbol.data[row * symbol.width + col] < 128) col++;
-    paths.push(`M${start + size.quiet} ${row + size.quiet}h${col - start}v1h-${col - start}z`);
+    paths.push(`M${start + size.quiet} ${row + size.quiet}h${col - start}v${rowHeight}h-${col - start}z`);
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" ${marker ? `data-${marker}="reencoded"` : ''} class="${className}" x="${x}" y="${y}" width="${width}" height="${height}" viewBox="0 0 ${size.width} ${size.height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${code.format} 重建"><path fill="#000" stroke="none" shape-rendering="crispEdges" d="${paths.join('')}"/></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" ${marker ? `data-${marker}="reencoded"` : ''} class="${className}" x="${x}" y="${y}" width="${width}" height="${height}" viewBox="0 0 ${size.width} ${size.height}" preserveAspectRatio="${stretch ? 'none' : 'xMidYMid meet'}" role="img" aria-label="${code.format} 重建"><path fill="#000" stroke="none" shape-rendering="crispEdges" d="${paths.join('')}"/></svg>`;
 }

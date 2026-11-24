@@ -7,7 +7,7 @@ import { prepareZXingModule, writeBarcode } from 'zxing-wasm';
 import { prepareCodeReader } from '../src/code-reader.js';
 import { symbolImage } from '../src/barcode-symbols.js';
 import { calendarDate } from '../src/journey-date.js';
-import { DEMO_RAIL_TICKET_CODE } from '../src/demo-code.js';
+import { DEMO_RAIL_LINEAR_CODE, DEMO_RAIL_TICKET_CODE } from '../src/demo-code.js';
 import { readRailTicketCode } from '../src/rail-ticket-qr.js';
 import { prepareCloud } from './helpers/cloud.js';
 
@@ -30,11 +30,11 @@ test('rail QR decoding recovers both 144-digit variants and rejects unrelated pa
   assert.equal(readRailTicketCode(qr('https://example.test/rail'), 2026), null);
 });
 
-test('rail QR entry queries RailGo once and locks the separate photo scan until the code is removed', async () => {
+test('rail entry locks QR fields and keeps Code128 archival capture separate from field recognition', async () => {
   await prepareCodeReader({ wasmBinary: await readFile('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm') });
   await prepareZXingModule({ overrides: { wasmBinary: await readFile('node_modules/zxing-wasm/dist/full/zxing_full.wasm') }, fireImmediately: true });
   const fixture = await writeBarcode(seated, { format: 'QRCode', addQuietZones: true });
-  const pixels = symbolImage(fixture.symbol);
+  let pixels = symbolImage(fixture.symbol);
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>',
     { url: 'http://localhost:4173/#archive' });
   const { window } = dom;
@@ -66,7 +66,7 @@ test('rail QR entry queries RailGo once and locks the separate photo scan until 
   window.HTMLCanvasElement.prototype.getContext = () => ({
     drawImage() {}, fillRect() {}, getImageData: () => pixels,
   });
-  const imageBlob = new Blob([await fixture.image.arrayBuffer()], { type: 'image/png' });
+  let imageBlob = new Blob([await fixture.image.arrayBuffer()], { type: 'image/png' });
   window.HTMLCanvasElement.prototype.toBlob = callback => callback(imageBlob);
 
   const server = await prepareCloud();
@@ -103,7 +103,7 @@ test('rail QR entry queries RailGo once and locks the separate photo scan until 
     await waitFor(() => document.querySelector('[data-action="new"]:not(:disabled)'));
     document.querySelector('[data-action="new"]').click();
     await waitFor(form);
-    const scanEntry = form().querySelector('[data-rail-qr-entry]');
+    const scanEntry = form().querySelector('[data-rail-code-entry]');
     const photoEntry = () => form().querySelector('[data-rail-photo-entry]');
     const receipt = () => form().querySelector('[data-rail-receipt]');
     assert.equal(scanEntry.nextElementSibling, receipt().closest('[data-rail-receipt-entry]'));
@@ -181,6 +181,35 @@ test('rail QR entry queries RailGo once and locks the separate photo scan until 
     await waitFor(() => !form() && server.records()[0].service === 'G105');
     assert.equal(server.records()[0].ticketCode, '');
     assert.equal(server.records()[0].lockedFields.includes('seat'), false);
+
+    const barcode = await writeBarcode(atob(DEMO_RAIL_LINEAR_CODE.rawBytes), { format: 'Code128', addQuietZones: true });
+    pixels = symbolImage(barcode.symbol);
+    imageBlob = new Blob([await barcode.image.arrayBuffer()], { type: 'image/png' });
+    document.querySelector('[data-action="new"]').click();
+    await waitFor(form);
+    form().querySelector('[data-code-start]').click();
+    await waitFor(() => form()?.querySelector('#code-status')?.textContent.includes('已收录一维条码'));
+    assert.equal(field('template').value, 'rail-red-barcode');
+    assert.equal(field('service').value, '');
+    assert.equal(field('service').readOnly, false);
+    assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);
+    assert.equal(receipt().disabled, false);
+    assert.ok(form().querySelector('#editor-preview [data-ticket-code][aria-label^="Code128"]'));
+    form().querySelector('#code-remove').click();
+    assert.ok(form().querySelector('.rail-linear-example:not([hidden])'));
+    const barcodeFile = form().querySelector('#code-photo');
+    Object.defineProperty(barcodeFile, 'files', { value: [imageBlob] });
+    barcodeFile.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await waitFor(() => form()?.querySelector('#code-status')?.textContent.includes('已收录一维条码'));
+    for (const [name, value] of Object.entries({ service:'T41', origin:'北京西', destination:'西安',
+      departureDate:'2008-09-12', departureTime:'16:46', carriage:'09', seat:'023号下铺', seatClass:'硬卧' })) fill(name, value);
+    submit();
+    await waitFor(() => !form() && server.records().length === 2);
+    const linear = server.records().find(item => item.template === 'rail-red-barcode');
+    assert.equal(linear.ticketCode.rawBytes, DEMO_RAIL_LINEAR_CODE.rawBytes);
+    assert.equal(linear.fieldSources.ticketCode, 'barcode');
+    assert.equal(linear.fieldSources.service, 'manual');
+    assert.equal(railQueries.length, 1);
   } finally {
     window.dispatchEvent(new window.Event('offline'));
     dom.window.close();

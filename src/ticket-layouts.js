@@ -232,7 +232,7 @@ function red(r) {
     ${renderMarks(r, { x: 433, y: 289, radius: 17, gap: 48 })}
     ${text(59, 357, '限乘当日当次车', 35)}
     ${anonymous ? '' : rider}
-    ${linear ? '' : renderTicketCode(r, 669, 374, 181)}
+    ${linear ? renderTicketCode(r, 44, 434, 811, 104) : renderTicketCode(r, 669, 374, 181)}
     ${classic ? (anonymous ? '' : oldGate) : notice(96, 445, 505)}
     ${footer}${!classic ? text(465, 552, r.issuer ? r.issuer.replace(/站$/, '') + '站售' : '', 31) : ''}
   </g>`;

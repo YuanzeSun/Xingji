@@ -14,6 +14,7 @@ import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.
 import { renderCodeData } from './barcode-data.js';
 import { createRecord, validateRecord, mergeThreeWay, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, formatDate } from './model.js';
 import { SUPPLEMENT_FIELDS, ticketTemplateChoices } from './rail-template.js';
+import { hasRailQRCode } from './ticket-code.js';
 import * as db from './db.js';
 import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageImport, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, replaceWithRemote } from './sync-state.js';
 import { sharedSettings, sameSettings, maskedKey, wasUnlinked } from './shared-settings.js';
@@ -86,7 +87,7 @@ const icons = {
   chart: '<path d="M4 3v17h17M7 14l4-5 4 3 5-7"/>'
 };
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.ticket}</svg>`;
-const labels = { ...BOARDING_METADATA_LABELS, ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '二维码', boardingCode: '机票条码' };
+const labels = { ...BOARDING_METADATA_LABELS, ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '条码', boardingCode: '机票条码' };
 const imports = { task: null, backup: null };
 let importView = 0;
 const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, routesOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null };
@@ -434,7 +435,7 @@ function railReceiptControls() {
 function refreshRailReceipt(form, activeEditor) {
   const button = form.querySelector('[data-rail-receipt]');
   if (!button) return;
-  button.disabled = !!activeEditor.draft.ticketCode || !!activeEditor.receiptPending || !!activeEditor.railPhotoPending || !canWrite();
+  button.disabled = hasRailQRCode(activeEditor.draft) || !!activeEditor.receiptPending || !!activeEditor.railPhotoPending || !canWrite();
 }
 
 function bindRailReceipt(form, activeEditor) {
@@ -444,7 +445,7 @@ function bindRailReceipt(form, activeEditor) {
   const status = form.querySelector('[data-rail-receipt-status]');
   const { draft, context, imported, original } = activeEditor;
   const current = () => form.isConnected && editor === activeEditor && !form.dataset.pending &&
-    canWrite() && isArchiveContext(context) && !draft.ticketCode;
+    canWrite() && isArchiveContext(context) && !hasRailQRCode(draft);
 
   refreshRailReceipt(form, activeEditor);
   button.addEventListener('click', () => { if (current()) file.click(); });
@@ -532,7 +533,7 @@ function stopRailCamera() {
 function refreshRailPhotoLock(form, draft) {
   const entry = form.querySelector('[data-rail-photo-entry]');
   if (!entry) return;
-  const locked = !!draft.ticketCode;
+  const locked = hasRailQRCode(draft);
   entry.querySelector('[data-rail-photo-controls]').disabled = locked;
   entry.querySelector('[data-rail-photo-lock]').hidden = !locked;
   entry.querySelector('[data-rail-photo-lock-note]').hidden = !locked;
@@ -549,7 +550,7 @@ function bindRailPhoto(form) {
   const status = form.querySelector('[data-rail-photo-status]');
   const activeEditor = editor;
   const current = () => editor === activeEditor && isArchiveContext(activeEditor.context) && canWrite() &&
-    !form.dataset.pending && !activeEditor.receiptPending && !activeEditor.draft.ticketCode;
+    !form.dataset.pending && !activeEditor.receiptPending && !hasRailQRCode(activeEditor.draft);
   refreshRailPhotoLock(form, activeEditor.draft);
   async function read(photo) {
     if (!current() || activeEditor.railPhotoPending) return;
@@ -951,8 +952,9 @@ function editRecord(record = newPersonalRecord(), {
         else if(form.elements[key])form.elements[key].value='';
       }
     }
-    if(railFields){
-      editRecord(draft, { imported, preserve: true, original, scannedRailQR: { ...railFields, type:'rail' } });
+    if (railFields || draft.template !== previousRecord.template) {
+      const scannedRailQR = railFields ? { ...railFields, type:'rail' } : undefined;
+      editRecord(draft, { imported, preserve: true, original, scannedRailQR });
       document.querySelector('#editor-form #code-status').textContent=codeStatus;
       return;
     }

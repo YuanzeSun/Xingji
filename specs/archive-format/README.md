@@ -10,8 +10,6 @@
 
 铁路电子发票导入可附带 `railInvoice`，包含 `electronicTicketNumber`（电子客票号）、`buyerName`（购买方名称）和 `buyerTaxId`（统一社会信用代码）。电子客票号和纸票的 `ticketNumber` 分别保存。
 
-列车移动补票可保存 `railSupplementReason`（补票事由）、`railSupplementFee`（手续费）和 `railSupplementSurcharge`（加收）。手续费与加收分别保存，金额采用元的十进制字符串。补票与同一行程的普通车票分别归档。
-
 ## GitHub 文件
 
 - `archive/2026.json` 等按出发年份分组；年份未知写入 `archive/unknown.json`。
