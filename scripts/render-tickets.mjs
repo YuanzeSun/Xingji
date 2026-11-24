@@ -16,7 +16,7 @@ const examples = [
     price:'270.00', ticketNumber:'X000010', saleCode:'10000000000000X0000100000000000000000000000', issuer:'北京西', ticketCode: DEMO_RAIL_LINEAR_CODE }),
   createRecord({ id:'preview-anonymous', template:'rail-red-qr', service:'T166', origin:'拉萨', destination:'蚌埠',
     departureDate:'2010-01-16', departureTime:'10:00', carriage:'01', seat:'005号中铺', seatClass:'硬卧',
-    price:'766.00', ticketNumber:'X000011', saleCode:'10000000000000X000011', issuer:'拉萨', ticketCode: DEMO_TICKET_CODE }),
+    price:'766.00', ticketNumber:'X000011', saleCode:'10000000000110X000011', issuer:'拉萨' }),
   createRecord({ id:'preview-supplement', template:'rail-supplement', service:'K608', origin:'天津', destination:'张家口南',
     departureDate:'2015-07-04', carriage:'加1', seat:'19号中铺', seatClass:'硬卧', price:'99.5',
     ticketNumber:'7000001', saleCode:'T1000000000000A000001', issuer:'沈阳客运段',

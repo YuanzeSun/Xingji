@@ -11,6 +11,8 @@ import {barcodeFieldLocked,refreshBarcodeFieldLocks} from './barcode-fields.js';
 import { codeCameraMarkup, bindCodeCamera } from './code-camera.js';
 import { renderCodeData } from './barcode-data.js';
 import { isLinearTicketCode, normalizeTicketCode } from './ticket-code.js';
+import { supportsGeneratedRailQR } from './rail-ticket-qr.js';
+import { isAnonymousRedTemplate } from './rail-template.js';
 import { normalizeBoardingCode } from './boarding-code.js';
 import { DEMO_BOARDING_CODE } from './demo-boarding-code.js';
 import { DEMO_RAIL_LINEAR_CODE, DEMO_RAIL_TICKET_CODE, DEMO_TICKET_CODE } from './demo-code.js';
@@ -41,7 +43,12 @@ export function ticketCodeEditor(record, { fromScan = false, generator = true } 
     : '<button type="button" class="button small secondary" data-code-upload>上传图片</button>' + file;
   const saved = normalize(record[field]);
   const controls = `<div class="saved-code" id="saved-code" ${!flight && !saved ? 'hidden' : ''}>${thumbnail(saved, title)}</div><div class="code-actions">${referenceButton}<button type="button" class="button small secondary" data-code-start>相机扫描</button>${upload}<button type="button" class="button small secondary" id="code-remove" ${removable(record,field) ? '' : 'hidden'}>移除</button></div>`;
-  const scan = `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}<p class="fine-print" data-code-guidance ${record[field] ? 'hidden' : ''}>${flight ? '请扫描自己登机牌上的完整码。' : '请对准票面上的二维码或一维条码。'}</p></div>${flight ? boardingExamplesMarkup(record[field]) : railExampleMarkup(record)}</div>`;
+  let guidance = flight ? '请扫描自己登机牌上的完整码。' : '请对准票面上的二维码或一维条码。';
+  if (!flight && supportsGeneratedRailQR(record.template)) {
+    const required = isAnonymousRedTemplate(record.template) ? '行程和底部售票码' : '行程、底部售票码及实名信息';
+    guidance = `可扫描票面原码。填齐${required}后可自动生成。`;
+  }
+  const scan = `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}<p class="fine-print" data-code-guidance ${record[field] ? 'hidden' : ''}>${guidance}</p></div>${flight ? boardingExamplesMarkup(record[field]) : railExampleMarkup(record)}</div>`;
   return `<section data-code-editor class="editor-extra${flight ? '' : ' full-field rail-code-entry'}" ${flight ? '' : 'data-rail-code-entry'} id="code-editor"><h3>${flight ? title : '扫码录入'}${fieldSourceBadge(field,record)}</h3>${scan}${codeCameraMarkup()}${flight && generator ? boardingGeneratorMarkup(record) : ''}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
 }
 export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', autoRead = false, profile, preserveGenerator = false, onCameraStart, isCurrent = () => true, loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {} } = {}) {

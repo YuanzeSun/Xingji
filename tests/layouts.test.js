@@ -6,6 +6,7 @@ import { createRecord } from '../src/model.js';
 import { ticketSVG, ticketDimensions, exportPNG } from '../src/tickets.js';
 import { layoutFontFiles } from '../src/ticket-layouts.js';
 import { DEMO_RAIL_LINEAR_CODE, DEMO_TICKET_CODE } from '../src/demo-code.js';
+import { codeSize } from '../src/barcode-data.js';
 
 const record = (template, extra = {}) => createRecord({ id: 'layout-test', type: template.startsWith('air-') ? 'flight' : 'rail', template, origin: '北京南', destination: '天津', originCode: 'Beijingnan', destinationCode: 'Tianjin', service: 'C2021', departureDate: '2017-09-10', departureTime: '10:35', identity: '110101199001011234', passenger: '示例旅客', seat: '02A', carriage: '01', price: '57.0', ...extra });
 test('airline layout has its own long boarding-pass aspect ratio and side stub', () => {
@@ -95,8 +96,19 @@ test('anonymous red versions use the old stock without printing personal details
   }
   assert.doesNotMatch(linear, /data-ticket-code/);
   assert.match(qr, /data-ticket-code/);
-  const original = ticketSVG(record('rail-red-barcode', { ticketCode: DEMO_RAIL_LINEAR_CODE }));
+  const saleCode = '10000000000000X0000100000000000000000000000';
+  const original = ticketSVG(record('rail-red-barcode', { ticketCode: DEMO_RAIL_LINEAR_CODE, saleCode }));
   assert.match(original, /data-ticket-code="reencoded"[^>]*width="811"[^>]*preserveAspectRatio="none"[^>]*aria-label="Code128/);
+  const dom = new JSDOM(original, { contentType: 'image/svg+xml' });
+  const barcode = dom.window.document.querySelector('[data-ticket-code]');
+  const caption = [...dom.window.document.querySelectorAll('text')].find(node => node.textContent === saleCode);
+  const { width, quiet } = codeSize(DEMO_RAIL_LINEAR_CODE);
+  const barcodeWidth = Number(barcode.getAttribute('width'));
+  const quietWidth = quiet * barcodeWidth / width;
+  assert.equal(Number(caption.getAttribute('x')), Number(barcode.getAttribute('x')) + quietWidth);
+  assert.equal(Number(caption.getAttribute('textLength')), barcodeWidth - quietWidth * 2);
+  assert.equal(caption.getAttribute('lengthAdjust'), 'spacing');
+  dom.window.close();
   assert.doesNotMatch(ticketSVG(record('rail-red-qr', { ticketCode: DEMO_RAIL_LINEAR_CODE })), /data-ticket-code/);
 });
 test('the mobile supplement prints date and charges in their own rows', () => {

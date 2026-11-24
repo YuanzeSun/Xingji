@@ -10,6 +10,7 @@ import { FLIGHT_STATUSES } from './flight-status.js';
 import { boardingMetadataDetails } from './boarding-details.js';
 import { railInvoiceDetails } from './rail-invoice.js';
 import { SUPPLEMENT_FIELDS } from './rail-template.js';
+import { createRailTicketQR } from './rail-ticket-qr.js';
 
 const populatedFields = (record, keys) => keys.filter(key => record[key]).map(key => [key, record[key]]);
 
@@ -39,7 +40,7 @@ export function ticketDetails(record) {
       ...populatedFields(record, ['railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'saleCode', 'issuer']),
       ...(record.template === 'rail-supplement' ? populatedFields(record, Object.keys(SUPPLEMENT_FIELDS)) : []),
       ['ticketMarks', describeMarks(record.ticketMarks)],
-      ['ticketCode', record.ticketCode ? '已收录原码数据' : '未收录'],
+      ['ticketCode', record.ticketCode ? '已收录原码数据' : createRailTicketQR(record) ? '自动生成的二维码' : '未收录'],
       ...railInvoiceDetails(record.railInvoice)
     );
   }

@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
+import { Resvg } from '@resvg/resvg-js';
 import { indexedDB } from 'fake-indexeddb';
 import { prepareZXingModule, writeBarcode } from 'zxing-wasm';
-import { prepareCodeReader } from '../src/code-reader.js';
+import { prepareCodeReader, rebuildCodeSymbols } from '../src/code-reader.js';
 import { symbolImage } from '../src/barcode-symbols.js';
 import { calendarDate } from '../src/journey-date.js';
 import { DEMO_RAIL_LINEAR_CODE, DEMO_RAIL_TICKET_CODE } from '../src/demo-code.js';
-import { readRailTicketCode } from '../src/rail-ticket-qr.js';
+import { createRailTicketQR, readRailTicketCode } from '../src/rail-ticket-qr.js';
+import { createRecord } from '../src/model.js';
+import { ticketSVG } from '../src/tickets.js';
 import { prepareCloud } from './helpers/cloud.js';
 
 // Fictional tickets with known station codes, a dummy document number and no live travel credentials.
@@ -28,6 +31,36 @@ test('rail QR decoding recovers both 144-digit variants and rejects unrelated pa
   assert.equal(readRailTicketCode(qr('A1234567890B123456'), 2026), null);
   assert.equal(readRailTicketCode(qr('0'.repeat(144)), 2026), null);
   assert.equal(readRailTicketCode(qr('https://example.test/rail'), 2026), null);
+});
+
+test('a reconstructed railway QR round-trips the original fields through the printed ticket', async () => {
+  const printed = readRailTicketCode(qr(seated), 2025);
+  const record = createRecord({ ...printed, identity: '11010119900101001X', passenger: '欧阳𠮷' });
+  const generated = createRailTicketQR(record);
+  assert.match(atob(generated.rawBytes), /^\d{144}$/);
+  assert.deepEqual(readRailTicketCode(generated, 2025), { ...printed, identity: record.identity, passenger: record.passenger });
+  assert.equal(record.ticketCode, '');
+  assert.doesNotMatch(ticketSVG({ ...record, ticketCode: DEMO_RAIL_TICKET_CODE }), /data-generated-rail-qr/);
+  assert.doesNotMatch(ticketSVG({ ...record, saleCode: '' }), /data-ticket-code/);
+  for (const changes of [{ identity: '1101011990****001X' }, { identity: 'E12345678' }, { ticketNumber: 'B000001' },
+    { price: '553.25' }, { template: 'rail-red-barcode' }, { template: 'rail-refund-receipt' }]) {
+    assert.equal(createRailTicketQR({ ...record, ...changes }), '');
+  }
+  const standing = { ...record, railStanding: true, seat: '' };
+  assert.equal(readRailTicketCode(createRailTicketQR(standing), 2025).railStanding, true);
+  const anonymous = { ...record, template: 'rail-red-qr', identity: '', passenger: '' };
+  assert.equal(readRailTicketCode(createRailTicketQR(anonymous), 2025).identity, undefined);
+  const newYear = { ...record, departureDate: '2026-01-02', saleCode: '12345670001230A001234' };
+  assert.equal(calendarDate(readRailTicketCode(createRailTicketQR(newYear), 2026).departureDate), '2026-01-02');
+
+  const svg = ticketSVG(record);
+  assert.match(svg, /data-generated-rail-qr/);
+  await prepareCodeReader({ wasmBinary: await readFile('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm') });
+  const image = new Resvg(svg, { fitTo: { mode: 'zoom', value: 2 }, font: { loadSystemFonts: false } }).render();
+  const { codes, issues } = await rebuildCodeSymbols({ width: image.width, height: image.height, data: new Uint8ClampedArray(image.pixels) });
+  assert.deepEqual(issues, []);
+  assert.equal(codes.length, 1);
+  assert.equal(codes[0].data.rawBytes, generated.rawBytes);
 });
 
 test('rail entry locks QR fields and keeps Code128 archival capture separate from field recognition', async () => {
@@ -176,7 +209,10 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);
     assert.equal(photoEntry().querySelector('[data-rail-photo-lock]').hidden, true);
     assert.equal(receipt().disabled, false);
+    assert.ok(form().querySelector('#editor-preview [data-generated-rail-qr]'));
+    const beforeEdit = form().querySelector('#editor-preview [data-generated-rail-qr] path').getAttribute('d');
     fill('service', 'G105');
+    assert.notEqual(form().querySelector('#editor-preview [data-generated-rail-qr] path').getAttribute('d'), beforeEdit);
     submit();
     await waitFor(() => !form() && server.records()[0].service === 'G105');
     assert.equal(server.records()[0].ticketCode, '');

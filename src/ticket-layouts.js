@@ -8,7 +8,8 @@ import { escape as esc } from './html.js';
 // Coordinates follow the 12306 ticket specimens published on 2015-06-24.
 // Each historical ticket stock has its own layout and dimensions.
 import { renderMarks } from './ticket-marks.js';
-import { renderTicketCode } from './ticket-code.js';
+import { isLinearTicketCode, renderTicketCode } from './ticket-code.js';
+import { codeSize } from './barcode-data.js';
 import { uppercaseName } from './name-case.js';
 import { renderBoardingCode, boardingCodeSize } from './boarding-code.js';
 import { airlineLogo } from './airline-logo.js';
@@ -215,8 +216,17 @@ function red(r) {
   const oldIssuer = classic && r.issuer ? text(785, 79, r.issuer.replace(/[站售]+$/u, ''), 30, 'TicketRailHei', 'text-anchor="end"')
     + '<circle cx="811" cy="67" r="17" fill="none" stroke-width="2"/>' + text(811, 76, '售', 24, 'TicketRailHei', 'text-anchor="middle"') : '';
   const oldGate = r.gate ? text(660, 484, '检票口' + r.gate, 28, 'TicketSong', 'text-anchor="end"') : '';
-  const footerWidth = linear ? 778 : classic ? 590 : 396;
-  const footer = text(57, 552, r.saleCode, Math.min(linear ? 29 : 37, footerWidth / Math.max(1, textUnits(r.saleCode || ''))), 'TicketRailNarrow', 'letter-spacing=".25" stroke="none"');
+  const barcode = { x: 44, y: 434, width: 811, height: 104 };
+  let footerX = 57, footerWidth = linear ? 778 : classic ? 590 : 396;
+  let footerSpacing = 'letter-spacing=".25"';
+  if (linear && r.saleCode && isLinearTicketCode(r.ticketCode)) {
+    const { width, quiet } = codeSize(r.ticketCode);
+    const inset = barcode.width * quiet / width;
+    footerX = barcode.x + inset;
+    footerWidth = barcode.width - inset * 2;
+    footerSpacing = `textLength="${footerWidth}" lengthAdjust="spacing"`;
+  }
+  const footer = text(footerX, 552, r.saleCode, Math.min(linear ? 29 : 37, footerWidth / Math.max(1, textUnits(r.saleCode || ''))), 'TicketRailNarrow', `${footerSpacing} stroke="none"`);
   const rider = classic
     ? text(56, 422, r.passenger, 33) + text(56, 473, maskRailIdentity(r.identity), 32, 'TicketOCR')
     : passenger(r, 56, 427, 440);
@@ -232,7 +242,7 @@ function red(r) {
     ${renderMarks(r, { x: 433, y: 289, radius: 17, gap: 48 })}
     ${text(59, 357, '限乘当日当次车', 35)}
     ${anonymous ? '' : rider}
-    ${linear ? renderTicketCode(r, 44, 434, 811, 104) : renderTicketCode(r, 669, 374, 181)}
+    ${linear ? renderTicketCode(r, barcode.x, barcode.y, barcode.width, barcode.height) : renderTicketCode(r, 669, 374, 181)}
     ${classic ? (anonymous ? '' : oldGate) : notice(96, 445, 505)}
     ${footer}${!classic ? text(465, 552, r.issuer ? r.issuer.replace(/站$/, '') + '站售' : '', 31) : ''}
   </g>`;
