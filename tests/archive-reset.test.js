@@ -64,12 +64,14 @@ test('accepting a reset clears local records and settings atomically and retains
 
 test('reset retains known settings despite incompatible ticket files and unknown settings, and confirms a lost upload reply',async()=>{
   const connections = { github: { owner: 'user', repo: 'data', id: 77, branch: 'main', token: 'keep-token' } };
-  const server=new MemoryGitHub([ticket(2025)],{profile:{chineseName:'保留'},flightMcpKey:'keep-key',connections}),store=new GitHubStore(config(),'test',server.fetch);
+  const memberships = [{ id: 'test-plan', program: '示例会员计划', number: '0000123456', tier: '' }];
+  const server=new MemoryGitHub([ticket(2025)],{profile:{chineseName:'保留',memberships},flightMcpKey:'keep-key',connections}),store=new GitHubStore(config(),'test',server.fetch);
   const files=server.trees.get(server.commits.get(server.head).tree),index=JSON.parse(server.blobs.get(files['archive/index.json']));
   index.settings.obsoleteVersionField={old:true};server.corrupt('archive/index.json',JSON.stringify(index));server.corrupt('archive/2025.json','invalid old data');server.corrupt('old-route-cache.json','old cache');
   const before=server.head;server.loseAcknowledgement=true;
   const reset=await store.resetRepository(before);
   assert.equal(reset.settings.profile.chineseName,'保留');assert.equal(reset.settings.flightMcpKey,'keep-key');
+  assert.deepEqual(reset.settings.profile.memberships,memberships);
   assert.deepEqual(reset.settings.connections, connections);
   assert.equal(Object.hasOwn(reset.settings,'obsoleteVersionField'),false);
   assert.deepEqual(Object.keys(server.trees.get(server.commits.get(server.head).tree)),['archive/index.json']);

@@ -11,6 +11,7 @@ export const PROFILE_FIELDS = [
 ];
 export const GENDER_OPTIONS = [['','未设置'],['男','男'],['女','女']];
 export const DOCUMENT_TYPES = { 'national-id':'居民身份证', passport:'护照', 'hk-macau-permit':'港澳通行证', 'taiwan-permit':'台湾通行证', 'residence-permit':'居留证', other:'其他证件' };
+export const MAX_MEMBERSHIPS = 20;
 const text = (value, label, max = 100) => {
   if (value === undefined) return '';
   if (typeof value !== 'string' || value.length > max) throw new Error(`${label}格式无效或过长`);
@@ -22,6 +23,25 @@ const fullDate = (value, label) => {
   if (!date || !Number.isFinite(date.getTime()) || date.toISOString().slice(0,10) !== value || Number(value.slice(0,4)) < 1800 || Number(value.slice(0,4)) > 2200) throw new Error(`${label}请填写有效的年月日`);
   return value;
 };
+function normalizeMemberships(value = []) {
+  if (!Array.isArray(value) || value.length > MAX_MEMBERSHIPS) throw new Error(`最多保存 ${MAX_MEMBERSHIPS} 个常旅客计划`);
+  const ids = new Set();
+  const entries = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('常旅客资料格式无效');
+    const program = text(entry.program, '计划名称', 80);
+    const number = text(entry.number, '会员号', 64).normalize('NFKC').replace(/\s+/gu, '').toUpperCase();
+    const tier = text(entry.tier, '会员等级', 40);
+    if (!program && !number && !tier) continue;
+    if (!program || !number) throw new Error('常旅客计划请填写计划名称和会员号');
+    if (!/^[A-Z0-9][A-Z0-9-]{0,63}$/.test(number)) throw new Error('会员号请填写完整号码，可包含字母、数字和连字符');
+    const id = text(entry.id, '常旅客资料编号');
+    if (!/^[A-Za-z0-9_-]{1,100}$/.test(id) || ids.has(id)) throw new Error('常旅客资料编号无效或重复');
+    ids.add(id);
+    entries.push({ id, program, number, tier });
+  }
+  return entries;
+}
 export function personalProfile(value = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('个人资料格式无效');
   if (value.autoFill !== undefined && typeof value.autoFill !== 'boolean') throw new Error('预填设置格式无效');
@@ -42,6 +62,8 @@ export function personalProfile(value = {}) {
     requireCompleteIdentity(number);
     return { id, type, label:text(doc.label,'证件名称',80), number, expiry:fullDate(text(doc.expiry,'有效期',10),'有效期') };
   }).filter(doc=>doc.label || doc.number || doc.expiry);
+  const memberships = normalizeMemberships(value.memberships);
+  if (memberships.length) profile.memberships = memberships;
   return profile;
 }
 export const hasPersonalProfile = value => JSON.stringify(personalProfile(value)) !== JSON.stringify(personalProfile());

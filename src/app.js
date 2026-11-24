@@ -799,7 +799,7 @@ function bindPage() {
     state.profileDraft = profile; state.profileDirty = true;
   };
   bindPersonalProfileForm(root.querySelector('#profile-form'), {
-    documents: (state.profileDraft || state.settings.profile)?.documents,
+    profile: state.profileDraft || state.settings.profile,
     change: updateProfileDraft, restructure: profile => { updateProfileDraft(profile); render(); }, submit: savePersonalProfile
   });
   const picker = root.querySelector('#import-json-file');

@@ -28,6 +28,18 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   await save(()=>server.settings().profile?.chineseName==='示例旅客');
   assert.equal(server.settings().profile.firstName,''); assert.equal(server.settings().profile.lastName,''); assert.equal(server.settings().profile.documents.length,0);
   assert.equal(server.settings().flightMcpKey,'keep-this-key'); assert.deepEqual(server.records(),[old]);
+  click('[data-membership-add]');
+  const membership = field => document.querySelector(`[data-membership-field="${field}"]`);
+  assert.equal(document.activeElement,membership('program'));
+  fill('[data-membership-field=program]','凤凰知音');
+  fill('[data-membership-field=number]','0000ab1234');
+  fill('[data-membership-field=tier]','金卡');
+  await save(()=>server.settings().profile?.memberships?.[0]?.number==='0000AB1234');
+  assert.equal(membership('number').getAttribute('value'),'00******34');
+  membership('number').focus();
+  assert.equal(membership('number').value,'0000AB1234');
+  membership('number').blur();
+  assert.equal(membership('number').value,'00******34');
   await go('archive'); click('[data-action=new]'); await wait(()=>document.querySelector('#editor-form'));
   assert.equal(document.querySelector('#editor-form [name=passenger]').value,'示例旅客');
   assert.equal(document.querySelector('#editor-form [name=identity]').value,'');
@@ -95,6 +107,7 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   assert.deepEqual(server.settings().profile,before);
   for(const key of ['chineseName','firstName','lastName','gender'])fill(`#profile-form [name=${key}]`,'');
   click('[data-profile-remove]');
+  click('[data-membership-remove]');
   await save(()=>!server.settings().profile);
   await go('archive');click('[data-action=new]');await wait(()=>document.querySelector('#editor-form'));assert.equal(document.querySelector('#editor-form [name=passenger]').value,'');assert.equal(document.querySelector('#editor-form [name=identity]').value,'');
   dom.window.close();

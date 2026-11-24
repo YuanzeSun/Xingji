@@ -46,6 +46,38 @@ test('rail mileage and flown distance share the date filter and show independent
   dom.window.close();
 });
 
+test('cumulative travel time adds complete trips across dates, airport time zones and clock changes', () => {
+  const overnight = rail({ departureTime: '23:30', arrivalDate: '2024-03-01', arrivalTime: '01:10' });
+  const actual = flight({ origin: 'JFK', destination: 'LHR', departureTime: '20:00', arrivalDate: '2024-03-02', arrivalTime: '09:00',
+    actualDepartureDate: '2024-03-01', actualDepartureTime: '19:00', actualArrivalDate: '2024-03-02', actualArrivalTime: '07:15' });
+  const planned = flight({ origin: 'HND', destination: 'PEK', departureDate: '2024-04-15', departureTime: '10:00', arrivalDate: '2024-04-15', arrivalTime: '13:00',
+    actualDepartureDate: '2024-04-15', actualDepartureTime: '11:00' });
+  const dateLine = flight({ origin: 'NRT', destination: 'LAX', departureDate: '2024-06-08', departureTime: '17:00', arrivalDate: '2024-06-08', arrivalTime: '10:00' });
+  const clockChange = flight({ origin: 'JFK', destination: 'BOS', departureDate: '2024-03-10', departureTime: '01:30', arrivalDate: '2024-03-10', arrivalTime: '03:30' });
+  const rows = [overnight, actual, planned, dateLine, clockChange,
+    createRecord({ ...clockChange, departureTime: '02:30' }),
+    createRecord({ ...clockChange, departureDate: '2024-11-03', arrivalDate: '2024-11-03' }),
+    createRecord({ ...overnight, arrivalDate: '', arrivalTime: '01:10' }),
+    createRecord({ ...overnight, arrivalDate: '2024-02-29' }),
+    createRecord({ ...overnight, template: 'rail-refund-receipt' }),
+    createRecord({ ...actual, flightStatus: 'invalid' }),
+    createRecord({ ...planned, deleted: true })];
+  const all = journeyStatistics(rows, range);
+  assert.equal(all.travelMinutes, 1375);
+  assert.equal(all.travelTimeTrips, 5);
+  assert.equal(all.records.length, 9);
+  const before = journeyStatistics(rows, { ...range, dateTo: '2024-03-01' });
+  assert.equal(before.travelMinutes, 535);
+  assert.equal(before.travelTimeTrips, 2);
+
+  const dom = new JSDOM('<div id="root"></div>');
+  const root = dom.window.document.querySelector('#root');
+  const unmount = mountStatistics(root, rows, { options: { ...range } });
+  assert.match(root.querySelector('.statistics-duration').textContent, /累计在途时间.*22 小时 55 分.*5 \/ 9 程可计算/);
+  unmount();
+  dom.window.close();
+});
+
 test('statistics default to an unbounded start and today, compare dates only and respect edited bounds', () => {
   assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railPowerSupplies:false, aircraftSubtypes:true, marketingAirlines:false });
   const rows = [rail({ id: 'past' }), flight({ id: 'today', departureDate: '2026-11-16', departureTime: '23:59' }), rail({ id: 'future', departureDate: '2026-11-17' }), rail({ id: 'deleted', deleted: true }), rail({ id: 'undated', departureDate: '' })];

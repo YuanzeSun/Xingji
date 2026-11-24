@@ -10,7 +10,8 @@ import { answerArithmetic } from './helpers/arithmetic.js';
 test('a paired reset waits after reload, recognizes a lost D1 response, and keeps the confirmed provider', async () => {
   let window = browser();
   const github = new MemoryGitHub([]);
-  const d1 = memoryD1([createRecord({ id: 'ticket', service: 'G21' })], { flightMcpKey: 'reset-setting' });
+  const memberships = [{ id: 'test-plan', program: '示例会员计划', number: '0000123456', tier: '示例等级' }];
+  const d1 = memoryD1([createRecord({ id: 'ticket', service: 'G21' })], { flightMcpKey: 'reset-setting', profile: { memberships } });
   useServers(github, d1);
   const writes = () => d1.calls.filter(call => call.method === 'POST').length;
   const resume = () => document.querySelector('[data-action="resume-archive-reset"]');
@@ -71,6 +72,8 @@ test('a paired reset waits after reload, recognizes a lost D1 response, and keep
     assert.equal((await db.get('github')).id, 77);
     assert.deepEqual(github.records(), []);
     assert.equal(github.settings().flightMcpKey, 'reset-setting');
+    assert.deepEqual(github.settings().profile.memberships, memberships);
+    assert.deepEqual(JSON.parse(d1.sqlite.prepare('SELECT settings FROM archive_state').get().settings).profile.memberships, memberships);
     assert.deepEqual(github.settings().connections, { unlinked: true });
   } finally { window.close(); }
 });

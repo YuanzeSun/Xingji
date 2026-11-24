@@ -423,11 +423,12 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 .statistics-summary>div>span{font-size:12px;color:#6b796b;white-space:nowrap}
 .statistics-summary strong{display:inline-flex;align-items:baseline;gap:4px;font-size:20px;font-weight:600;line-height:1.3;color:var(--green);font-variant-numeric:tabular-nums;white-space:nowrap}
 .statistics-summary small{font-size:12px;font-weight:400;color:#7a8573}
-.statistics-mileage{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.statistics-mileage{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line);border-radius:10px;background:var(--surface)}
 .statistics-mileage>div{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:4px;padding:12px 16px}
 .statistics-mileage>div+div{border-inline-start:1px solid var(--line)}
 .statistics-mileage strong{font-size:clamp(18px,4.8vw,25px);line-height:1.2;font-weight:600;color:var(--green);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .statistics-mileage small,.statistics-mileage>div>span:last-child{font-size:13px;font-weight:400;color:var(--muted)}
+@media(max-width:680px){.statistics-mileage{grid-template-columns:repeat(2,minmax(0,1fr))}.statistics-mileage>.statistics-duration{grid-column:1/-1;border-inline-start:0;border-top:1px solid var(--line)}}
 .statistics-panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:24px;min-width:0}
 .statistics-panel>header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:22px}
 .statistics-panel h2{font-size:18px;font-weight:600;line-height:1.4;margin:0}
@@ -582,6 +583,8 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;line-height:1.5;padding-right:32px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23788371' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:12px 8px;text-overflow:ellipsis}
 .field select{display:block;min-height:var(--control-height);height:var(--control-height);max-height:var(--control-height)}
 .personal-profile .field select{padding-right:32px}
+.profile-membership .profile-document-fields{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:680px){.profile-membership .profile-document-fields{grid-template-columns:minmax(0,1fr)}}
 /* 16px avoids iOS enlarging the page when a form control receives focus. */
 @media(max-width:680px){.field input,.field select,.field textarea,.editor-fields .field input,.editor-fields .field select,.personal-profile .field input,.personal-profile .field select,.archive-search .filter-inputs select,.search-result-actions select,.statistics-period-controls select,.statistics-range input,.map-year select{font-size:16px}}
 
