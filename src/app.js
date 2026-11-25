@@ -1139,7 +1139,7 @@ function editRecord(record, {
     autoRead:draft.type==='rail' && !!localFileURL && !draft.ticketCode
   });
   form.addEventListener('input', event => {
-    if (event.target.matches('[data-rail-start]') || event.target.closest('[data-code-editor]')) return;
+    if (event.target.matches('[data-rail-query-date]') || event.target.closest('[data-code-editor]')) return;
     const target=event.target;
     const dateKey=target.closest('[data-journey-date]')?.dataset.journeyDate;
     const changedKey=target.name || (target.matches('[data-seat-preset]') ? 'seatClass'

@@ -99,6 +99,14 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     boardingDay.dispatchEvent(new window.Event('input',{bubbles:true}));
     runDay='20261116'; currentModel='CR400BF-S';
     document.querySelector('[data-rail-lookup]').click();
+    await wait(()=>document.querySelector('[data-rail-status]').textContent.includes('未确认查询日期开行'));
+    assert.equal(document.querySelector('[name=railModel]').value, '');
+    assert.equal(requests.length, 4);
+    const queryDate = document.querySelector('[data-rail-query-date]');
+    queryDate.value = '2026-11-16';
+    queryDate.dispatchEvent(new window.Event('change', { bubbles: true }));
+    assert.match(document.querySelector('[data-rail-diagnostics]').textContent, /rundays/);
+    document.querySelector('[data-rail-lookup]').click();
     await wait(()=>document.querySelector('[data-field-source="railModel"]')?.textContent==='RailGo 参考');
     assert.deepEqual(requests.map(url=>new URL(url).searchParams.get('date')),['20261117','20261117','20261117','20261118','20261116']);
     document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));

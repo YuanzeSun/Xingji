@@ -36,10 +36,10 @@ test('RailGo requests send only public train and start-day identifiers and rejec
 test('a boarding day is checked against the first-station date, including an after-midnight station departure', () => {
   const ticket=record({origin:'南京南'}), wrong=railQuery(ticket);
   const data=payload({timetable:[{station:'北京南',day:0,arrive:'19:00',depart:'19:00'},{station:'南京南',day:0,arrive:'23:58',depart:'00:05'},{station:'上海虹桥',day:1,arrive:'02:00',depart:'02:00'}]});
-  assert.throws(()=>railDetails(data,wrong),/始发次日.*乘车日是 2026-11-18.*选择 2026-11-16/);
+  assert.throws(()=>railDetails(data,wrong),/上车日为 2026-11-18，未填入/);
   const sameDay = railQuery(record({ departureDate: '2025-09-30' }), '2025-10-01');
   assert.throws(() => railDetails(payload({ rundays: ['20251001'] }), sameDay),
-    /始发当天.*乘车日是 2025-10-01.*选择 2025-09-30/);
+    /上车日为 2025-10-01，未填入/);
   const query=railQuery(ticket,'2026-11-16'), result=railDetails(data,query);
   const completion=railCompletion(ticket,result,'2026-11-16');
   assert.equal(completion.departureTime,'00:05');assert.equal(calendarDate(completion.arrivalDate),'2026-11-17');assert.equal(completion.arrivalTime,'02:00');
@@ -70,26 +70,28 @@ test('new prefixes pass the lookup and snapshot checks, including combined numbe
   }
 });
 
-test('a train that left before renumbering keeps its number and references stay on the same side of the cutoff', async () => {
-  const ticket = record({ service: 'T109', departureDate: '2026-11-25' });
+test('a train that left before renumbering can be queried on its manually selected start date', async () => {
+  const ticket = record({ service: 'T109', origin: '南京南', departureDate: '2026-11-25' });
   const oldRun = payload({ numberFull: ['T109'], rundays: ['20261124'], timetable: [
     { station: '北京南', day: 0, depart: '23:55' },
     { station: '南京南', day: 1, arrive: '00:00', depart: '00:00' },
     { station: '上海虹桥', day: 1, arrive: '05:00' },
   ] });
-  const fetcher = async () => Response.json(oldRun);
-  await assert.rejects(lookupRailDetails(railQuery(ticket), { enrich: false, fetcher }), /未确认所查日期/);
-  const overnight = { ...ticket, origin: '南京南' };
-  const result = await lookupRailDetails(railQuery(overnight), { enrich: false, fetcher });
+  const calls = [];
+  const fetcher = async url => {
+    calls.push(new URL(url).searchParams.get('date'));
+    return Response.json(oldRun);
+  };
+  await assert.rejects(lookupRailDetails(railQuery(ticket), { enrich: false, fetcher }), /未确认查询日期开行/);
+  assert.deepEqual(calls, ['20261125']);
+  const result = await lookupRailDetails(railQuery(ticket, '2026-11-24'), { enrich: false, fetcher, allowReference: true });
+  assert.deepEqual(calls, ['20261125', '20261124']);
   assert.equal(calendarDate(result.railJourney.query.startDate), '2026-11-24');
   assert.equal(result.railJourney.query.referenceFor, undefined);
   assert.equal(result.departureTime, '00:00');
-  const reused = railQuery({ ...ticket, service: 'Z3' });
-  const dates = payload({ numberFull: ['Z3'], rundays: ['20261124', '20261128'] });
-  assert.throws(() => railDetails(dates, reused), { referenceDate: '2026-11-28' });
 });
 
-test('RailGo fills from the closest run day, preserves the ticket date, and keeps the reference label after saving', async () => {
+test('an automatic RailGo miss leaves fields blank until the user selects an available query date', async () => {
   const ticket = record({ departureTime: '07:10', lockedFields: ['departureTime'] }), calls = [];
   const timetable = [
     {station:'北京南',day:0,depart:'23:50'},
@@ -109,19 +111,34 @@ test('RailGo fills from the closest run day, preserves the ticket date, and keep
   });
   try {
     await new Promise(done => setImmediate(done));
-    assert.deepEqual(calls, ['20261117', '20261116']);
+    assert.deepEqual(calls, ['20261117']);
     const results = form.querySelector('[data-rail-result]');
     const diagnostics = form.querySelector('[data-rail-diagnostics]');
-    assert.equal(results.hidden, false);
-    assert.equal(results.open, false);
+    assert.equal(results.hidden, true);
     assert.equal(results.contains(diagnostics), false);
     assert.equal(diagnostics.hidden, false);
     assert.equal(diagnostics.open, false);
-    assert.match(diagnostics.textContent, /首次查询 · G1 · 2026-11-17 · HTTP 200/);
-    assert.match(diagnostics.textContent, /参考日期复查 · G1 · 2026-11-16 · HTTP 200/);
-    const [initial, fallback] = diagnostics.querySelectorAll('pre');
-    assert.ok(initial.textContent.includes('rundays: ["20261118","20261002","20261131","20261116"]'));
-    assert.ok(fallback.textContent.includes('rundays: ["20261116"]'));
+    assert.match(diagnostics.textContent, /G1 · 查询日期 2026-11-17 · HTTP 200/);
+    assert.ok(diagnostics.querySelector('pre').textContent.includes('rundays: ["20261118","20261002","20261131","20261116"]'));
+    assert.equal(ticket.railModel, '');
+    assert.equal(ticket.arrivalDate, '');
+    assert.equal(ticket.railJourney, '');
+    const date = form.querySelector('[data-rail-query-date]');
+    assert.match(form.querySelector('.rail-query-hint').textContent, /原始返回.*开行日期/);
+    diagnostics.open = true;
+    date.value = '2026-11-16';
+    date.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    assert.equal(diagnostics.hidden, false);
+    assert.equal(diagnostics.open, true);
+    assert.deepEqual(calls, ['20261117']);
+    form.querySelector('[data-rail-lookup]').click();
+    await new Promise(done => setImmediate(done));
+    assert.deepEqual(calls, ['20261117', '20261116']);
+    assert.equal(results.hidden, false);
+    assert.equal(results.open, false);
+    assert.match(diagnostics.textContent, /G1 · 查询日期 2026-11-16 · HTTP 200/);
+    assert.ok(diagnostics.querySelector('pre').textContent.includes('rundays: ["20261116"]'));
+    assert.equal(diagnostics.querySelectorAll('pre').length, 1);
     const reference = form.querySelector('[data-rail-reference]');
     assert.equal(reference.hidden, false);
     assert.match(reference.textContent, /非乘车当日 · 仅供参考.*参考开行日 2026-11-16.*乘车日 2026-11-17/);
@@ -167,7 +184,7 @@ test('an explicitly selected RailGo start date can fill reference data without a
   });
   t.after(() => { cleanup(); dom.window.close(); });
 
-  const start = form.querySelector('[data-rail-start]');
+  const start = form.querySelector('[data-rail-query-date]');
   start.value = '2025-10-01';
   start.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
   form.querySelector('[data-rail-lookup]').click();

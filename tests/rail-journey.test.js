@@ -12,6 +12,7 @@ import { railLookupMarkup, bindRailLookup } from '../src/rail-lookup.js';
 import { ticketSVG } from '../src/tickets.js';
 
 const at='2026-11-17T02:00:00.000Z';
+const startDate = '2026-11-16';
 const ticket=extra=>createRecord({type:'rail',service:'G1',origin:'南京南',destination:'上海虹桥',departureDate:'2026-11-17',carriage:'03',...extra});
 const main=(extra={})=>({success:true,data:{bureau:'H',bureauShortName:'上局',car:'CR400BF-S',carOwner:'上海动车段',runner:'上海客运段',numberFull:['G1'],rundays:['20261116','20261117'],timetable:[{station:'北京南',day:0,arrive:'19:00',depart:'19:00',stopTime:0},{station:'南京南',day:1,arrive:'00:03',depart:'00:05',stopTime:2},{station:'苏州北',day:1,arrive:'01:00',depart:'01:02',stopTime:2},{station:'上海虹桥',day:1,arrive:'02:00',depart:'02:00',stopTime:0}],...extra}});
 const runs=rows=>({success:true,data:rows});
@@ -28,14 +29,18 @@ function fetcher(calls,runData=runs([{runDate:'2026-11-16',trainNum:'G1',trainCo
     throw new Error('Unexpected '+url);
   };
 }
-async function completed() { const record=ticket(),result=await lookupRailDetails(railQuery(record),{fetcher:fetcher([])});return createRecord({...record,...railCompletion(record,result)}); }
+async function completed() {
+  const record = ticket();
+  const result = await lookupRailDetails(railQuery(record, startDate), { fetcher: fetcher([]) });
+  return createRecord({ ...record, ...railCompletion(record, result, startDate) });
+}
 
 test('refresh keeps compatible RailGo details and discards only stale automatic values for a changed timetable',async()=>{
   const record = ticket(), first = main();
   const names = first.data.timetable.map(stop => stop.station);
   const points = [[116.38, 39.86], [118.8, 32], [120.6, 31.4], [121.3, 31.2]];
   const ids = ['CR400BF-5033', 'CR400BF-5034'];
-  const query = railQuery(record, '2026-11-16');
+  const query = railQuery(record, startDate);
   const response = phase => async url => {
     const path = new URL(url).pathname;
     if (path.endsWith('getTrainMain')) {
@@ -80,7 +85,7 @@ test('refresh keeps compatible RailGo details and discards only stale automatic 
     return new Response('', {status:503});
   };
   const initial = await lookupRailDetails(query,{fetcher:response('full')});
-  applyLookupValues(record,railCompletion(record,initial));
+  applyLookupValues(record,railCompletion(record,initial,startDate));
   assert.equal(record.railMileage,'279');
   assert.ok(record.railRoute.fullRoute);
   const saved = {railJourney:record.railJourney,railRoute:record.railRoute};
@@ -103,7 +108,7 @@ test('refresh keeps compatible RailGo details and discards only stale automatic 
   record.railPlatform = '手填';
   markManualFields(record,['railPlatform']);
   const changed = await lookupRailDetails(query,{...saved,fetcher:response('changed')});
-  const changes = railCompletion(record,changed);
+  const changes = railCompletion(record,changed,startDate);
   assert.deepEqual(changes.railJourney.trainsets,[]);
   assert.equal(changes.railJourney.coaches,'');
   assert.equal(changes.railJourney.distanceQueriedAt,'');
@@ -113,14 +118,14 @@ test('refresh keeps compatible RailGo details and discards only stale automatic 
 
 test('explicit metadata refresh fetches route coordinates even when the ticket already has a saved route',async()=>{
   const saved=await completed(),calls=[];
-  const result=await lookupRailDetails(railQuery(saved),{fetcher:fetcher(calls),railRoute:saved.railRoute});
+  const result=await lookupRailDetails(railQuery(saved,startDate),{fetcher:fetcher(calls),railRoute:saved.railRoute});
   assert.ok(saved.railRoute);assert.deepEqual(result.railRoute.segments,saved.railRoute.segments);
   assert.equal(calls.filter(call=>call.url.pathname.endsWith('mapLine')).length,1);
 });
 
-test('middle-station boarding automatically retries the inferred first-station date and fills only the selected interval',async()=>{
-  const record=ticket(),calls=[],result=await lookupRailDetails(railQuery(record),{fetcher:fetcher(calls)});
-  assert.deepEqual(calls.filter(c=>c.url.pathname.endsWith('getTrainMain')).map(c=>c.url.searchParams.get('date')),['20261117','20261116']);
+test('a selected first-station date fills only the actual overnight boarding interval',async()=>{
+  const record=ticket(),calls=[],result=await lookupRailDetails(railQuery(record,startDate),{fetcher:fetcher(calls)});
+  assert.deepEqual(calls.filter(c=>c.url.pathname.endsWith('getTrainMain')).map(c=>c.url.searchParams.get('date')),['20261116']);
   assert.equal(calendarDate(result.railJourney.query.startDate),'2026-11-16');
   assert.deepEqual(result.railJourney.stops.map(stop=>stop.station),['北京南','南京南','苏州北','上海虹桥']);
   assert.equal(result.departureTime,'00:05');assert.equal(result.arrivalTime,'02:00');assert.equal(calendarDate(result.arrivalDate),'2026-11-17');
@@ -128,7 +133,7 @@ test('middle-station boarding automatically retries the inferred first-station d
   assert.equal(result.railJourney.trainsets[0].id,'CR400BF-5033');assert.equal(result.railJourney.trainsets[0].manufactureMonth,'2018-04');
   assert.equal(result.railJourney.coaches.cars[1].number,'03');
   for(const call of calls){assert.equal(call.options.credentials,'omit');assert.equal(call.options.referrerPolicy,'no-referrer');assert.ok([...call.url.searchParams.keys()].every(key=>['trainNum','date','keyword','id','train','stationTelecode','kind'].includes(key)));}
-  const changes=railCompletion({...record,departureTime:'00:06',railRunner:'手动担当段',lockedFields:['railCarOwner']},result);
+  const changes=railCompletion({...record,departureTime:'00:06',railRunner:'手动担当段',lockedFields:['railCarOwner']},result,startDate);
   assert.equal(changes.departureTime,undefined);assert.equal(changes.railRunner,undefined);assert.equal(changes.railCarOwner,undefined);assert.equal(changes.arrivalTime,'02:00');
 });
 
@@ -149,11 +154,11 @@ test('conventional trains preserve passenger and rolling-stock depots without in
 });
 
 test('missing historical trainsets and failed optional requests do not replace them with current identities or lose timetable data',async()=>{
-  const calls=[],result=await lookupRailDetails(railQuery(ticket()),{fetcher:fetcher(calls,runs([{runDate:'2026-11-17',trainNum:'G1',trainCode:['CR400BF-A-5053']}]))});
+  const calls=[],result=await lookupRailDetails(railQuery(ticket(),startDate),{fetcher:fetcher(calls,runs([{runDate:'2026-11-17',trainNum:'G1',trainCode:['CR400BF-A-5053']}]))});
   assert.deepEqual(result.railJourney.trainsets,[]);assert.equal(result.railJourney.coaches.code,'CR400BF-A-5053');
-  const markup=railJourneyMarkup({...ticket(),...railCompletion(ticket(),result)});
+  const markup=railJourneyMarkup({...ticket(),...railCompletion(ticket(),result,startDate)});
   assert.doesNotMatch(markup,/乘坐的车组/);assert.match(markup,/当前编组参考/);
-  const partial=await lookupRailDetails(railQuery(ticket()),{fetcher:async(url)=>{if(new URL(url).pathname.endsWith('getTrainMain'))return Response.json(main());throw new Error('Unavailable');}});
+  const partial=await lookupRailDetails(railQuery(ticket(),startDate),{fetcher:async(url)=>{if(new URL(url).pathname.endsWith('getTrainMain'))return Response.json(main());throw new Error('Unavailable');}});
   assert.equal(partial.departureTime,'00:05');assert.equal(partial.partial,true);
 });
 
@@ -171,14 +176,14 @@ test('rail snapshots survive JSON and independent cloud edits; a changed journey
 });
 
 test('manually entered trainset IDs normalize, round-trip and remain protected when cleared or refreshed',async()=>{
-  const record=await completed(),result=await lookupRailDetails(railQuery(record),{fetcher:fetcher([])});
+  const record=await completed(),result=await lookupRailDetails(railQuery(record,startDate),{fetcher:fetcher([])});
   record.railTrainsets=' cr400af-0001，CR400AF-0002 / cr400af-0001';markManualFields(record,['railTrainsets']);
   const saved=createRecord(record);assert.equal(saved.railTrainsets,'CR400AF-0001 / CR400AF-0002');
-  assert.equal(railCompletion(saved,result).railTrainsets,undefined);
+  assert.equal(railCompletion(saved,result,startDate).railTrainsets,undefined);
   assert.equal(readArchive(archive([saved]))[0].railTrainsets,saved.railTrainsets);
   assert.equal(ticketSVG(saved),ticketSVG({...saved,railTrainsets:''}));
-  saved.railTrainsets='';markManualFields(saved,['railTrainsets']);assert.equal(railCompletion(saved,result).railTrainsets,undefined);
-  const automatic=ticket();applyLookupValues(automatic,railCompletion(automatic,result),true,{kind:'rail-lookup'});
+  saved.railTrainsets='';markManualFields(saved,['railTrainsets']);assert.equal(railCompletion(saved,result,startDate).railTrainsets,undefined);
+  const automatic=ticket();applyLookupValues(automatic,railCompletion(automatic,result,startDate),true,{kind:'rail-lookup'});
   assert.equal(automatic.fieldSources.railTrainsets,'railgo');assert.equal(automatic.lookupValues.railTrainsets,'CR400BF-5033');
 });
 
@@ -238,7 +243,7 @@ test('lookup becomes available after the four necessary fields are complete with
   const cleanup=bindRailLookup(form,{getRecord:()=>record,canQuery:()=>true,apply:()=>{},lookup:()=>{calls++;}});
   assert.equal(form.querySelector('[data-rail-lookup]').disabled,true);
   record=ticket();form.dispatchEvent(new dom.window.Event('input',{bubbles:true}));
-  assert.equal(form.querySelector('[data-rail-lookup]').disabled,false);assert.equal(calls,0);assert.equal(form.querySelector('[data-rail-start]').value,'');
+  assert.equal(form.querySelector('[data-rail-lookup]').disabled,false);assert.equal(calls,0);assert.equal(form.querySelector('[data-rail-query-date]').value,'');
   cleanup();dom.window.close();
 });
 
@@ -254,18 +259,18 @@ test('changing query conditions clears untouched automatic completions while kee
 });
 
 test('a date-confirmed specific trainset model takes priority over the less specific timetable model snapshot',async()=>{
-  const result=await lookupRailDetails(railQuery(ticket()),{fetcher:fetcher([])});
+  const result=await lookupRailDetails(railQuery(ticket(),startDate),{fetcher:fetcher([])});
   assert.equal(result.railModel,'CR400BF');
   assert.equal(result.railJourney.trainsets[0].model,'CR400BF');
 });
 
 test('a temporary line-name source outage retains saved names only for identical route geometry',async()=>{
   const saved=await completed();saved.railRoute.lineLabels=[{name:'京沪高速线',coordinates:[120,31.6]}];
-  const result=await lookupRailDetails(railQuery(saved),{fetcher:fetcher([]),railRoute:saved.railRoute});
+  const result=await lookupRailDetails(railQuery(saved,startDate),{fetcher:fetcher([]),railRoute:saved.railRoute});
   assert.equal(result.railRoute.fullRoute, undefined);
   assert.deepEqual(result.railRoute.lineLabels,saved.railRoute.lineLabels);
   assert.notEqual(result.railRoute.lineLabels,saved.railRoute.lineLabels);
   const changed=structuredClone(saved.railRoute);changed.segments[0][0][0]+=.001;
-  const fresh=await lookupRailDetails(railQuery(saved),{fetcher:fetcher([]),railRoute:changed});
+  const fresh=await lookupRailDetails(railQuery(saved,startDate),{fetcher:fetcher([]),railRoute:changed});
   assert.equal(fresh.railRoute.lineLabels,undefined);
 });

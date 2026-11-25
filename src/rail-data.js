@@ -11,7 +11,7 @@ async function requestJSON(url, { fetcher, signal }, onResponse) {
   const response = await fetcher.call(globalThis, url.href, { credentials:'omit', referrerPolicy:'no-referrer', signal:signal ? AbortSignal.any([signal, AbortSignal.timeout(12000)]) : AbortSignal.timeout(12000) });
   let payload;
   try {
-    if (response.status === 400 || response.status === 404) throw new Error('未查到该始发日期的列车资料，可手动填写');
+    if (response.status === 400 || response.status === 404) throw new Error('未查到该日期的列车资料');
     if (response.status === 429) throw new Error('RailGo 请求较频繁，请稍后再试');
     if (!response.ok) throw new Error('RailGo 暂时无法查询，请稍后重试或手动填写');
     const text = await response.text();
@@ -124,30 +124,14 @@ function retainFullRoute(route, saved, stops) {
   return route;
 }
 
-export async function lookupRailDetails(query, { fetcher = globalThis.fetch, signal, enrich = true, railRoute = '', railJourney = '', explicitStartDate = false, onTimetableResponse } = {}) {
+export async function lookupRailDetails(query, { fetcher = globalThis.fetch, signal, enrich = true, railRoute = '', railJourney = '', allowReference = false, onTimetableResponse } = {}) {
   const options = { fetcher, signal };
-  const main = async (input, dateMode = explicitStartDate ? 'selected' : 'automatic') => {
-    const url = new URL('https://rg-api.zenglingkun.cn/api/v2/getTrainMain');
-    url.searchParams.set('trainNum',input.trainNum); url.searchParams.set('date',input.date);
-    const payload = await requestJSON(url, options, response => {
-      onTimetableResponse?.({ ...response, trainNum: input.trainNum, date: input.date, reference: dateMode === 'reference' });
-    });
-    return railDetails(payload, input, undefined, { dateMode });
-  };
-  async function matchingTrip() {
-    try { return await main(query); }
-    catch (error) {
-      // Only infer an earlier first-station date from a validated matching timetable.
-      if (!error.startDate || query.date !== query.boardingDate.replaceAll('-','')) throw error;
-      return main({ ...query, date:error.startDate.replaceAll('-','') });
-    }
-  }
-  let result;
-  try { result = await matchingTrip(); }
-  catch (error) {
-    if (!error.referenceDate) throw error;
-    result = await main({ ...query, date: error.referenceDate.replaceAll('-', '') }, 'reference');
-  }
+  const url = new URL('https://rg-api.zenglingkun.cn/api/v2/getTrainMain');
+  url.search = new URLSearchParams({ trainNum: query.trainNum, date: query.date });
+  const payload = await requestJSON(url, options, response => {
+    onTimetableResponse?.({ ...response, trainNum: query.trainNum, date: query.date });
+  });
+  const result = railDetails(payload, query, undefined, { allowReference });
   if (!enrich || result.railJourney.query.referenceFor) return result;
   const journey = result.railJourney, queriedAt = journey.queriedAt;
   const saved = sameRailTimetable(railJourney, journey) ? railJourney : null;
