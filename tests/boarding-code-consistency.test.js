@@ -67,6 +67,10 @@ test('rescan rejects another flight, allows cancellation, and persists individua
     await page.scan(createBoardingCode({...values, flightNumber:'5678', date:'2026-11-18'}));
     assert.match(page.form.querySelector('#code-error').textContent, /已拒绝录入.*航班号.*出发日期/);
     assert.deepEqual(draft, before);
+    await page.scan(createBoardingCode({...values, flightNumber:'5678'}));
+    assert.match(page.form.querySelector('#code-error').textContent, /已拒绝录入.*航班号/);
+    assert.equal(page.form.querySelector('[data-scan-conflict="service"]'), null);
+    assert.deepEqual(draft, before);
     const newer = createBoardingCode({...values, date:'2026-11-18', seat:'20C'});
     await page.scan(newer);
     for (const field of ['departureDate', 'seat']) assert.ok(page.form.querySelector(`[data-scan-conflict="${field}"]`));

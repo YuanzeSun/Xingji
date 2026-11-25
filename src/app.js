@@ -4,7 +4,7 @@ import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
-import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railImportFieldLocked,refreshFieldSources} from './field-sources.js';
+import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railFieldFullyLocked,refreshFieldSources} from './field-sources.js';
 import { bindIdentityInput, maskIdentity, printedIdentityHint } from './identity.js';
 import {markManualFields,applyLookupValues,lookupContext,clearLookupValues} from './lookup-values.js';
 import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } from './arithmetic-confirm.js';
@@ -42,7 +42,7 @@ import { flightLookupMarkup, bindFlightLookup } from './flight-lookup.js';
 import { railLookupMarkup, bindRailLookup, railTrainsetField } from './rail-lookup.js';
 import { RAIL_POINTS_PAGE, railPointsRange, readRailPoints, railPointsRecords } from './rail-points.js';
 import { railJourneyMarkup, railReferenceNotice } from './rail-journey-ui.js';
-import { railJourneyMatches } from './rail-journey.js';
+import { railJourneyMatches, railService } from './rail-journey.js';
 import { openRailCamera } from './rail-camera.js';
 import { parseScanText, railPhotoChanges } from './scan-engine.js';
 import { normalizePlaces, resolvePlace } from './places.js';
@@ -486,6 +486,10 @@ function bindRailReceipt(form, activeEditor) {
       const changes = Object.fromEntries(Object.entries(record.fieldSources).filter(([key, kind]) =>
         kind === 'pdf' && FIELDS.includes(key) && !['type', 'template', 'provenance'].includes(key) && hasFieldValue(record[key])
       ).map(([key]) => [key, record[key]]));
+      if (activeEditor.serviceFixed && changes.service) {
+        if (railService(changes.service) !== railService(draft.service)) throw new Error('凭证车次与已保存车次不符，未填入');
+        changes.service = draft.service;
+      }
       for (const side of ['origin', 'destination']) {
         if (changes[side] && !Object.hasOwn(changes, side + 'Code')) changes[side + 'Code'] = '';
       }
@@ -589,7 +593,12 @@ function bindRailPhoto(form) {
     }
     if (!current()) return;
     const { draft, original, imported } = activeEditor;
+    if (activeEditor.serviceFixed && record?.service && railService(record.service) !== railService(draft.service)) {
+      status.textContent = '票面车次与已保存车次不符，未填入';
+      return;
+    }
     const changes = railPhotoChanges(draft, record);
+    if (activeEditor.serviceFixed) delete changes.service;
     const next = { ...draft, ...changes, sources: record ? [...draft.sources, ...record.sources] : draft.sources };
     if (changes.template) next.lockedFields = draft.lockedFields.filter(key => key !== 'template');
     markFieldSources(next, Object.keys(changes), 'ocr');
@@ -1048,8 +1057,9 @@ function editRecord(record, {
   const passengerEdited = preserve ? !!editor?.passengerEdited : !!record.lockedFields?.includes('passenger');
   const editingSaved = state.records.some(record => record.id === draft.id);
   const typeFixed = imported || editingSaved;
+  const serviceFixed = editingSaved && Boolean(original.service);
   if (preserve && !typeFixed) Object.assign(draft, applyProfileDefaults(draft, state.settings.profile, { passengerEdited }));
-  editor = { original, draft, imported, editingSaved, context, dirty: preserve, passengerEdited, photo };
+  editor = { original, draft, imported, editingSaved, serviceFixed, context, dirty: preserve, passengerEdited, photo };
   const flight = draft.type === 'flight';
   const basics = flight ? ['origin','destination','service','departureDate','departureTime','arrivalTime','arrivalDate','boardingTime','passenger','identity','airline','seat','seatClass','price','gate'] : ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seatClass','seat','price','gate','railPlatform'];
   const extra = flight ? ['orderNumber', 'terminal', 'aircraft', 'aircraftRegistration', 'pnr', 'ticketNumber', 'flightDistance'] : ['arrivalDate','arrivalTime','railBureau','railRunner','railCarOwner','railModel','railPowerSupply','railMileage','orderNumber','ticketNumber','saleCode','issuer'];
@@ -1078,6 +1088,7 @@ function editRecord(record, {
   bindTicketDates(form,()=>draft);
   form.elements.type.toggleAttribute('data-transport-fixed', typeFixed);
   form.elements.type.disabled = typeFixed;
+  form.elements.service.toggleAttribute('data-service-fixed', serviceFixed);
   let lookupApplying=false;
   function updatePersonalFields(previousRecord) {
     if(!imported && !editingSaved)Object.assign(draft,applyProfileDefaults(draft,state.settings.profile,{passengerEdited:editor.passengerEdited,previousRecord}));
@@ -1135,6 +1146,7 @@ function editRecord(record, {
   }, {
     onCameraStart:stopRailCamera,
     profile:state.settings.profile, preserveGenerator:!!generatorSettings, referenceURL:localFileURL, editingSaved,
+    savedService: serviceFixed ? original.service : '',
     isCurrent:() => form.isConnected && !form.dataset.pending && canWrite() && isArchiveContext(context),
     autoRead:draft.type==='rail' && !!localFileURL && !draft.ticketCode
   });
@@ -1153,7 +1165,8 @@ function editRecord(record, {
         return;
       }
     }
-    if(!lookupApplying && (ticketFieldLocked(draft,changedKey) || (dateKey && railImportFieldLocked(draft,dateKey)))){
+    if (!lookupApplying && ((serviceFixed && changedKey === 'service') || ticketFieldLocked(draft, changedKey) ||
+        (dateKey && railFieldFullyLocked(draft, dateKey)))) {
       refreshTicketFieldLocks(form,draft);return;
     }
     if (target.matches('[data-rail-standing]')) {
@@ -1166,7 +1179,11 @@ function editRecord(record, {
     }
     const previousRecord={...draft}, previousQuery=lookupContext(draft);
     if (!lookupApplying && event.target.name === 'passenger') editor.passengerEdited = true;
-    const data = new FormData(form); for (const [key, value] of data) if (FIELDS.includes(key) && !JOURNEY_DATE_FIELDS.includes(key) && !ticketFieldLocked(draft,key)) draft[key] = value;
+    const data = new FormData(form);
+    for (const [key, value] of data) {
+      if ((serviceFixed && key === 'service') || !FIELDS.includes(key) || JOURNEY_DATE_FIELDS.includes(key) || ticketFieldLocked(draft, key)) continue;
+      draft[key] = value;
+    }
     for(const key of JOURNEY_DATE_FIELDS)if(form.elements[key+'Year'])draft[key]=readTicketDate(form,key,draft);
     if (!flight) {
       if(!ticketFieldLocked(draft,'railStanding') && !ticketFieldLocked(draft,'seat'))draft.railStanding = form.querySelector('[data-rail-standing]').checked;
@@ -1223,6 +1240,9 @@ function editRecord(record, {
     let release = () => {};
     try {
       if (!isArchiveContext(context)) throw new Error('票库已变化，请保留输入并重新打开票据。');
+      if (serviceFixed && draft.service !== original.service) {
+        throw new Error(flight ? '已保存的机票不能更改航班号' : '已保存的火车票不能更改车次');
+      }
       for(const key of JOURNEY_DATE_FIELDS)if(form.elements[key+'Year']){
         try{draft[key]=readTicketDate(form,key,draft,{strict:true});}catch(error){error.fields=[key];throw error;}
       }

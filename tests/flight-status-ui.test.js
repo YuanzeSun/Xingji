@@ -20,6 +20,13 @@ test('an OPEN ticket can be saved without a flight or date, edited to invalid an
   await import('../src/app.js');await wait(()=>document.querySelector('.ticket-card')&&document.querySelector('.sync-button').textContent.includes('已同步'));
   document.querySelector('.ticket-preview[data-id="normal-flight"]').click();await wait(()=>document.querySelector('.ticket-detail-groups'));
   assert.doesNotMatch(document.querySelector('.ticket-detail-groups').textContent,/铺位|05车/);assert.match(document.querySelector('.ticket-detail-groups').textContent,/机票状态正常/);
+  await wait(()=>document.querySelector('[data-action="edit"]:not(:disabled)'));
+  document.querySelector('[data-action="edit"]').click();
+  await wait(()=>document.querySelector('#editor-form'));
+  const flightNumber=document.querySelector('#editor-form [name="service"]');
+  assert.equal(flightNumber.readOnly,true);
+  fill('service','CA5678');
+  assert.equal(flightNumber.value,'CA1234');
   document.querySelector('[data-action="close-modal"]').click();
   document.querySelector('[data-action="new"]').click();await wait(()=>document.querySelector('#editor-form'));fill('type','flight');
   const originInput=document.querySelector('#editor-form [name="origin"]');fill('origin','PEK');
@@ -41,5 +48,6 @@ test('an OPEN ticket can be saved without a flight or date, edited to invalid an
   document.querySelector(`.ticket-preview[data-id="${special.id}"]`).click();await wait(()=>document.querySelector('[data-action="edit"]'));document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));fill('flightStatus','normal');
   assert.equal(document.querySelector('[name="service"]').required,true);submit();await wait(()=>document.querySelector('#editor-error').textContent.includes('航班号'));
   assert.equal(server.records().find(r=>r.id===special.id).flightStatus,'invalid');
+  assert.equal(document.querySelector('[name="service"]').readOnly,false);
  }finally{dom.window.close();}
 });

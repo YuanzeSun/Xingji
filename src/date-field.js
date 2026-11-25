@@ -1,17 +1,17 @@
 import { escape as e } from './html.js';
 import {journeyDate,calendarDate,monthDay,dateFromMonthDay} from './journey-date.js';
-import {fieldSourceBadge,railBarcodeFieldLocked,railImportFieldLocked} from './field-sources.js';
+import {fieldSourceBadge,railBarcodeFieldLocked,railFieldFullyLocked} from './field-sources.js';
 import {ticketRequiredMark} from './ticket-form.js';
 
 export const barcodeDateDay=(record,key)=>key==='departureDate'&&record.type==='flight'&&record.boardingCodeSource==='original' &&
   record.fieldSources?.departureDate === 'barcode' ? journeyDate(record.departureDate)?.dayOfYear : null;
 const options=(count,current,unit)=>'<option value="">'+unit+'</option>'+Array.from({length:count},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}" ${Number(current)===i+1?'selected':''}>${i+1}${unit}</option>`).join('');
 export function ticketDateField(key,record,{label,required=false}={}) {
-  const date=journeyDate(record[key]),md=monthDay(date),ordinal=barcodeDateDay(record,key),locked=!!ordinal||railBarcodeFieldLocked(record,key)||railImportFieldLocked(record,key);
+  const date=journeyDate(record[key]),md=monthDay(date),ordinal=barcodeDateDay(record,key),locked=!!ordinal||railBarcodeFieldLocked(record,key)||railFieldFullyLocked(record,key);
   return `<fieldset class="field journey-date-field" data-journey-date="${key}"><legend>${e(label)}${ticketRequiredMark(record, key, required)}</legend><input type="hidden" name="${key}" ${required?'required':''} value="${e(calendarDate(date))}"/><div class="ticket-date-parts"><label><span>年份${fieldSourceBadge(key+'Year',record)}</span><input name="${key}Year" type="number" inputmode="numeric" min="1800" max="2200" step="1" placeholder="年份" value="${date?.year??''}" aria-label="${e(label)}年份"/></label><div class="month-day-part"><span>月日${fieldSourceBadge(key,record)}</span><div class="month-day-selects"><select name="${key}Month" aria-label="${e(label)}月份" ${locked?'disabled':''}>${options(12,md.slice(0,2),'月')}</select><select name="${key}Day" aria-label="${e(label)}日" ${locked?'disabled':''}>${options(31,md.slice(3),'日')}</select></div></div></div><small class="date-ordinal-note" data-date-note ${ordinal&&!date?.year?'':'hidden'}>${ordinal?`条码日期：第 ${ordinal} 天，待补充年份`:''}</small></fieldset>`;
 }
 export function readTicketDate(form,key,record,{strict=false}={}) {
-  if(railImportFieldLocked(record,key))return record[key];
+  if(railFieldFullyLocked(record,key))return record[key];
   const year=form.elements[key+'Year'],month=form.elements[key+'Month'],day=form.elements[key+'Day'];
   if(!year)return journeyDate(form.elements[key] ? form.elements[key].value : record[key]);
   const railLocked=railBarcodeFieldLocked(record,key);
@@ -34,12 +34,12 @@ export function writeTicketDate(root,key,value) {
 export function refreshTicketDateLocks(root,record) {
   for(const wrapper of root.querySelectorAll('[data-journey-date]')){
     const key=wrapper.dataset.journeyDate,ordinal=barcodeDateDay(record,key);
-    const importLocked=railImportFieldLocked(record,key),railLocked=railBarcodeFieldLocked(record,key),locked=!!ordinal||railLocked||importLocked;
+    const fullyLocked=railFieldFullyLocked(record,key),railLocked=railBarcodeFieldLocked(record,key),locked=!!ordinal||railLocked||fullyLocked;
     const year=wrapper.querySelector('input[type="number"]');
-    year.readOnly=importLocked;
-    year.closest('.field').toggleAttribute('data-barcode-locked',importLocked);
-    year.parentElement.querySelector('[data-field-source]')?.toggleAttribute('data-source-locked',importLocked);
-    if(importLocked)writeTicketDate(root,key,record[key]);
+    year.readOnly=fullyLocked;
+    year.closest('.field').toggleAttribute('data-barcode-locked',fullyLocked);
+    year.parentElement.querySelector('[data-field-source]')?.toggleAttribute('data-source-locked',fullyLocked);
+    if(fullyLocked)writeTicketDate(root,key,record[key]);
     else if(railLocked){
       const md=monthDay(record[key]);
       wrapper.querySelector('select[name$="Month"]').value=md.slice(0,2);
@@ -56,7 +56,7 @@ export function bindTicketDates(form,getRecord) {
   form.addEventListener('input',event=>{
     const wrapper=event.target.closest('[data-journey-date]');if(!wrapper)return;
     const key=wrapper.dataset.journeyDate,record=getRecord(),year=form.elements[key+'Year'],month=form.elements[key+'Month'],day=form.elements[key+'Day'],ordinal=barcodeDateDay(record,key);
-    if(railImportFieldLocked(record,key)){writeTicketDate(form,key,record[key]);return;}
+    if(railFieldFullyLocked(record,key)){writeTicketDate(form,key,record[key]);return;}
     if(event.target.name===key){try{writeTicketDate(form,key,event.target.value);}catch{year.value='';month.value='';day.value='';}}
     if(railBarcodeFieldLocked(record,key)){
       try{readTicketDate(form,key,record,{strict:true});year.setCustomValidity('');}

@@ -1,6 +1,7 @@
 import {escape as e} from './html.js';
 import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import {hasRailQRCode} from './ticket-code.js';
+import {hasConfirmedRailJourney} from './rail-journey.js';
 export const sourceFieldValue=(record,key)=>key.endsWith('DateYear') ? journeyDate(record[key.slice(0,-4)])?.year : record[key];
 export const railBarcodeFieldLocked=(record,key)=>hasRailQRCode(record) &&
   key!=='ticketCode' && record.fieldSources?.[key]==='barcode' && !!record.lockedFields?.includes(key);
@@ -13,6 +14,9 @@ export const isRailPointsRecord = record => record.type === 'rail' && !!record.s
 export const railPointsFieldLocked = (record, key) => record.type === 'rail' &&
   record.fieldSources?.[key] === RAIL_POINTS_SOURCE && !!record.lockedFields?.includes(key);
 export const railImportFieldLocked = (record, key) => railInvoiceFieldLocked(record, key) || railPointsFieldLocked(record, key);
+export const railGoFieldLocked = (record, key) => record.fieldSources?.[key] === 'railgo' &&
+  hasFieldValue(sourceFieldValue(record, key)) && hasConfirmedRailJourney(record);
+export const railFieldFullyLocked = (record, key) => railImportFieldLocked(record, key) || railGoFieldLocked(record, key);
 export const matchedIdentityLocked = (record, key) => key === 'identity' &&
   record.fieldSources?.identity === 'profile-match' && !!record.lockedFields?.includes(key);
 export const railCodeEntryLocked = record => record.type === 'rail' &&

@@ -86,6 +86,8 @@ export function railJourneyMatches(record, journey = record.railJourney) {
   });
 }
 
+export const hasConfirmedRailJourney = record => railJourneyMatches(record) && !record.railJourney.query.referenceFor;
+
 export const normalizeRailTrainsets=value=>[...new Set(railText(value).normalize('NFKC').toUpperCase().split(/[/、,，;；+\n]+/).map(id=>id.replace(/\s/g,'')).filter(Boolean))].join(' / ');
 export const railTrainsetIds=record=>record.type==='rail' ? normalizeRailTrainsets(record.railTrainsets).split(' / ').filter(Boolean) : [];
 

@@ -260,6 +260,12 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(railQueries.length, 1);
     assert.equal(form().querySelector('#code-remove'), null);
     assert.equal(receipt().disabled, true);
+    const otherCode = createRailTicketQR(createRecord({ ...readRailTicketCode(originalCode, 2025), service: 'G105' }));
+    const otherQR = await writeBarcode(atob(otherCode.rawBytes), { format: 'QRCode', addQuietZones: true });
+    pixels = symbolImage(otherQR.symbol);
+    form().querySelector('[data-code-start]').click();
+    await waitFor(() => form()?.querySelector('#code-error')?.textContent === '二维码车次与已保存车次不符，未填入');
+    assert.equal(field('service').value, 'G103');
     const barcode = await writeBarcode(atob(DEMO_RAIL_LINEAR_CODE.rawBytes), { format: 'Code128', addQuietZones: true });
     pixels = symbolImage(barcode.symbol);
     imageBlob = new Blob([await barcode.image.arrayBuffer()], { type: 'image/png' });

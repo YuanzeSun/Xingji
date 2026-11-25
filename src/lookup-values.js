@@ -1,6 +1,6 @@
 import {JOURNEY_DATE_FIELDS,journeyDate,storedJourneyDate} from './journey-date.js';
 import {placeIdentity} from './places.js';
-import {markFieldSources,importFieldSource} from './field-sources.js';
+import {markFieldSources,importFieldSource,railGoFieldLocked} from './field-sources.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {ticketFieldLocked} from './barcode-fields.js';
 
@@ -28,7 +28,7 @@ export function markManualFields(record,fields) {
 }
 export function applyLookupValues(record,changes,automatic=true,source) {
   changes=Object.fromEntries(Object.entries(changes)
-    .filter(([key])=>!ticketFieldLocked(record,key))
+    .filter(([key]) => !ticketFieldLocked(record, key) || (source?.kind === 'rail-lookup' && railGoFieldLocked(record, key)))
     .map(([key,value])=>[key,JOURNEY_DATE_FIELDS.includes(key) ? journeyDate(value) : value]));
   record.lookupValues={...record.lookupValues};
   Object.assign(record,changes);

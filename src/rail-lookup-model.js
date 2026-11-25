@@ -5,7 +5,7 @@ import { railRouteNeedsSave } from './rail-route-snapshot.js';
 import { validDate } from './model.js';
 import { resolvePlace } from './places.js';
 import { bureauFromCode, normalizeRailBureau, parseRailGoModel } from './rail-details.js';
-import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, railJourneyMatches, sameRailTimetable } from './rail-journey.js';
+import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, hasConfirmedRailJourney, sameRailTimetable } from './rail-journey.js';
 import { isRailService } from './rail-service.js';
 
 export const shiftRailDate = (date, days) => { const result = new Date(calendarDate(date) + 'T00:00:00Z'); result.setUTCDate(result.getUTCDate() + days); return result.toISOString().slice(0, 10); };
@@ -79,7 +79,7 @@ export function railCompletion(record, result, startDate) {
   const journey = result.railJourney, referenceFor = journey?.query.referenceFor;
   const query = railQuery(record, startDate);
   if (JSON.stringify(query) !== JSON.stringify(result.query)) return {};
-  if (referenceFor && railJourneyMatches(record) && !record.railJourney.query.referenceFor) return {};
+  if (referenceFor && hasConfirmedRailJourney(record)) return {};
   const values={...result,railTrainsets:(journey?.trainsets || []).map(stock=>stock.id).join(' / ')};
   if (referenceFor) {
     const overnightDays = (Date.parse(result.arrivalDate) - Date.parse(calendarDate(journey.query.boardingDate))) / 86400000;

@@ -4,6 +4,7 @@ import {readTicketDate,writeTicketDate} from './date-field.js';
 import {readBoardingCode} from './bcbp.js';
 import {boardingScanReview} from './boarding-rescan.js';
 import {normalizePlaces} from './places.js';
+import {railService} from './rail-journey.js';
 import {markManualFields} from './lookup-values.js';
 import {fieldSourceBadge,markFieldSources,railBarcodeFieldLocked,railCodeEntryLocked,refreshFieldSources} from './field-sources.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
@@ -46,7 +47,11 @@ export function ticketCodeEditor(record, { fromScan = false, editingSaved = fals
   const scan = `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}</div>${flight ? boardingExamplesMarkup(record[field]) : railExampleMarkup(record)}</div>`;
   return `<section data-code-editor class="editor-extra${flight ? '' : ' full-field rail-code-entry'}" ${flight ? '' : 'data-rail-code-entry'} id="code-editor"><h3>${title}${fieldSourceBadge(field,record)}</h3>${scan}${codeCameraMarkup()}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
 }
-export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', autoRead = false, editingSaved = false, profile, preserveGenerator = false, onCameraStart, isCurrent = () => true, loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {} } = {}) {
+export function bindTicketCodeEditor(form, draft, changed, {
+  referenceURL = '', autoRead = false, editingSaved = false, savedService = editingSaved ? draft.service : '',
+  profile, preserveGenerator = false, onCameraStart, isCurrent = () => true,
+  loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {}
+} = {}) {
   const section = form.querySelector('[data-code-editor]'); if (!section) return () => {};
   const find = id => section.querySelector('#' + id);
   const { field, normalize } = configuration(draft), photo = find('code-photo'), status = find('code-status'), error = find('code-error'), choices = find('code-choices'), cancel = find('code-cancel');
@@ -66,7 +71,11 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
   }
   function currentRecord() {
     const record={...draft};
-    for(const key of BOARDING_SHARED_FIELDS)if(form.elements[key] && !ticketFieldLocked(draft,key))record[key]=JOURNEY_DATE_FIELDS.includes(key)?readTicketDate(form,key,draft):form.elements[key].value;
+    for (const key of BOARDING_SHARED_FIELDS) {
+      const input = form.elements[key];
+      if (!input || (key === 'service' && savedService) || ticketFieldLocked(draft, key)) continue;
+      record[key] = JOURNEY_DATE_FIELDS.includes(key) ? readTicketDate(form, key, draft) : input.value;
+    }
     return normalizePlaces(record);
   }
   function showDifferences(record=currentRecord()) {
@@ -109,7 +118,8 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     const rescan = editingSaved || original;
     const previousRecord = currentRecord();
     const review = read ? boardingScanReview(previousRecord, read, rescan) : null;
-    if (rescan && (!review || review.rejected)) {
+    const mismatchedService = savedService && review?.conflicts.some(({ key }) => key === 'service');
+    if (rescan && (!review || review.rejected || mismatchedService)) {
       reset();
       status.textContent = '';
       error.textContent = !review ? '无法从新码确认航班信息，已拒绝录入。' :
@@ -183,6 +193,13 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
       error.textContent = '已收录的二维码只能用二维码替换';
       return;
     }
+    const values = code.railFields || (code.issuer ? { issuer: code.issuer } : null);
+    if (savedService && values?.service && railService(values.service) !== railService(savedService)) {
+      reset();
+      status.textContent = '';
+      error.textContent = '二维码车次与已保存车次不符，未填入';
+      return;
+    }
     const previousRecord={...draft};
     draft[field] = normalize(code.data);
     markManualFields(draft,[field]);
@@ -190,15 +207,15 @@ export function bindTicketCodeEditor(form, draft, changed, { referenceURL = '', 
     if (isLinearTicketCode(draft[field])) draft.template = 'rail-red-barcode';
     else if (draft.template === 'rail-red-barcode') draft.template = 'rail-red-qr';
     if (draft.template !== previousRecord.template) markFieldSources(draft, ['template'], 'barcode');
-    const values=code.railFields || (code.issuer ? { issuer: code.issuer } : null);
     const previousLocks=draft.lockedFields.filter(key=>railBarcodeFieldLocked(previousRecord,key));
     draft.lockedFields=draft.lockedFields.filter(key=>!previousLocks.includes(key));
     if(values){
-      for(const key of previousLocks)if(!Object.hasOwn(values,key)){
+      for(const key of previousLocks)if(!Object.hasOwn(values,key) && !(key === 'service' && savedService)){
         draft[key]=key==='railStanding' ? false : '';
         delete draft.fieldSources[key];
       }
       const { identity, ...fields } = values;
+      if (savedService && fields.service) fields.service = savedService;
       Object.assign(draft,fields);
       const keys = Object.keys(fields);
       markFieldSources(draft,keys,'barcode');
