@@ -959,7 +959,7 @@ function viewRecord(id) {
     </div>
     <div class="modal-footer">
       <button class="button secondary" data-action="export-png" data-id="${e(id)}">${icon('download')}导出图片</button>
-      <button class="button secondary" data-action="export-svg" data-id="${e(id)}">SVG</button>
+      <button class="button secondary" data-action="export-svg" data-id="${e(id)}">${icon('download')}SVG</button>
       <div class="spacer"></div>
       ${demo ? '' : `<button class="icon-button danger" data-action="delete" data-id="${e(id)}" aria-label="删除票据">${icon('trash')}</button>
         <button class="button primary" data-action="edit" data-id="${e(id)}">${icon('edit')}编辑票据</button>`}
