@@ -1,4 +1,4 @@
-import { normalizeRailRoute, railRouteMatches, railStationKey, isRailCoordinate } from './rail-route-snapshot.js';
+import { normalizeRailRoute, savedRailRoute, railStationKey, isRailCoordinate } from './rail-route-snapshot.js';
 import { resolvePlace } from './places.js';
 
 export const RAIL_ROUTE_SOURCE = 'https://api.railgo.dev/479769351e0';
@@ -61,7 +61,7 @@ export function selectRailRoute(record, payload) {
 }
 
 export async function loadRailRoute(record, { fetcher = globalThis.fetch, refresh=false } = {}) {
-  const saved=railRouteMatches(record) ? normalizeRailRoute(record.railRoute) : null;
+  const saved = savedRailRoute(record);
   if(saved && !refresh)return saved;
   const service = String(record.service || '').trim().toUpperCase();
   if (record.type !== 'rail' || !/^[A-Z]?\d{1,5}(?:\/(?:[A-Z]?\d{1,5}))*$/.test(service)) return null;

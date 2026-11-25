@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {demoRecords} from '../src/demo.js';
 import {railJourneyMatches,railJourneyRange} from '../src/rail-journey.js';
 import {railRouteMatches} from '../src/rail-route-snapshot.js';
-import {loadRailwayNetwork} from '../src/railway-network.js';
+import {savedRailwayNetwork} from '../src/railway-network.js';
 import {railJourneyMarkup} from '../src/rail-journey-ui.js';
 import {readBoardingCode} from '../src/bcbp.js';
 import {validateTicketForm} from '../src/ticket-form.js';
@@ -20,7 +20,7 @@ test('four sample journeys stay recent across month and year boundaries while hi
   }
 });
 
-test('every sample train has an offline route with line names, a complete timetable and applicable rolling-stock fields',async()=>{
+test('every sample train has an offline route with line names, a complete timetable and applicable rolling-stock fields',()=>{
   const rows=demoRecords('2026-11-17').filter(record=>record.type==='rail');
   assert.deepEqual(rows.map(record=>record.service),['G21','G7602','Z83','G6203','C2021']);
   for(const record of rows){
@@ -36,7 +36,7 @@ test('every sample train has an offline route with line names, a complete timeta
     }
   }
   const before=globalThis.fetch;globalThis.fetch=()=>{throw new Error('Demo must not call an API');};
-  try{const network=await loadRailwayNetwork(rows);assert.equal(network.routes.length,5);assert.deepEqual(network.unmatched,[]);assert.deepEqual(network.failed,[]);}
+  try{const network=savedRailwayNetwork(rows);assert.equal(network.routes.length,5);assert.deepEqual(network.unmatched,[]);assert.deepEqual(network.failed,[]);}
   finally{globalThis.fetch=before;}
   const beijing=rows.find(record=>record.service==='G21');assert.ok(beijing.railRoute.fullRoute.stops.length>beijing.railRoute.stops.length);assert.ok(beijing.railRoute.lineLabels.some(label=>/京沪/.test(label.name)));
   const overnight=rows.find(record=>record.service==='Z83');assert.equal(calendarDate(overnight.arrivalDate),'2014-07-13');

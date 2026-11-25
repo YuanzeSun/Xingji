@@ -10,7 +10,7 @@ import { layoutFontFiles } from '../src/ticket-layouts.js';
 import { validateTicketForm } from '../src/ticket-form.js';
 import { journeyStatistics, tripSeries } from '../src/statistics-model.js';
 import { journeyNetwork } from '../src/journey-map-model.js';
-import { loadRailwayNetwork } from '../src/railway-network.js';
+import { savedRailwayNetwork } from '../src/railway-network.js';
 import { journeyCities } from '../src/locations.js';
 import { timeline } from '../src/timeline.js';
 import { airlineLogo } from '../src/airline-logo.js';
@@ -47,7 +47,7 @@ test('receipt and refund-fee layouts never print travel restrictions; refund amo
   assert.match(ticketSVG(createRecord({ ...fields, template:'rail-blue' })), /限乘当日当次车/);
 });
 
-test('refund fee survives OCR and JSON without merging into the original journey', async () => {
+test('refund fee survives OCR and JSON without merging into the original journey', () => {
   const text = 'R063196\n上海虹桥站 G104 济南西站\nShanghaihongqiao Jinanxi\n2024年06月18日 07:13开 08车08A号\n￥41.5元 二等座\n退票费\n仅供报销使用\n报销凭证 遗失不补\n退票改签时须交回车站';
   const refund = parseScanText(text)[0];
   assert.equal(refund.template, 'rail-refund-receipt'); assert.equal(refund.price, '41.5');
@@ -62,7 +62,7 @@ test('refund fee survives OCR and JSON without merging into the original journey
   assert.equal(journeyStatistics([fee], { dateTo:'2026-11-17' }).rail, 0);
   assert.deepEqual(tripSeries([fee]), []); assert.equal(journeyNetwork([fee]).records.length, 0);
   assert.equal(journeyCities([fee]).length, 0); assert.match(timeline([fee], () => ''), /退票费凭证/);
-  const network = await loadRailwayNetwork([fee], { loader:() => assert.fail('A fee is not a travelled railway') });
+  const network = savedRailwayNetwork([fee]);
   assert.equal(network.records.length, 0);
 });
 

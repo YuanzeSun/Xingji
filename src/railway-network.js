@@ -1,43 +1,30 @@
-import { railRouteMatches, savedRailRoute } from './rail-route-snapshot.js';
-import { resolvePlace } from './places.js';
+import { normalizeRailRoute, railRouteMatches } from './rail-route-snapshot.js';
 import { railMapPoint, railWgs84Point } from './rail-projection.js';
 import { isJourneyRecord } from './record-kind.js';
 
-const endpoint = (record, side) => {
-  const place = resolvePlace(record, side);
-  return place.status === 'matched' ? place.name : String(record[side] || '').trim().replace(/站$/, '');
-};
-const railJourneyKey = record => JSON.stringify([record.service.trim().toUpperCase().split('/')[0], endpoint(record, 'origin'), endpoint(record, 'destination')]);
-
-export async function loadRailwayNetwork(records, { loader = savedRailRoute, onProgress = () => {}, signal, concurrency = 4 } = {}) {
-  const rows = records.filter(record => isJourneyRecord(record) && record.type === 'rail'), groups = new Map();
+export function savedRailwayNetwork(records) {
+  const rows = records.filter(record => record.type === 'rail' && isJourneyRecord(record));
+  const groups = new Map();
   const routes = [], unmatched = [], failed = [];
   for (const record of rows) {
-    if (loader === savedRailRoute && !railRouteMatches(record)) { unmatched.push(record); continue; }
-    const key = railJourneyKey(record);
+    if (!railRouteMatches(record)) {
+      unmatched.push(record);
+      continue;
+    }
+    const { origin, destination } = record.railRoute;
+    const service = record.service.trim().toUpperCase().split('/')[0];
+    const key = JSON.stringify([service, origin, destination]);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(record);
   }
-  const queue = [...groups.values()];
-  let cursor = 0, completed = unmatched.length;
-  if (completed && !signal?.aborted) onProgress({ completed, total: rows.length });
-  async function worker() {
-    while (cursor < queue.length && !signal?.aborted) {
-      const group = queue[cursor++];
-      try {
-        const route = await loader(group.find(record => railRouteMatches(record)) || group[0]);
-        if (signal?.aborted) break;
-        if (route) routes.push({ route, records: group }); else unmatched.push(...group);
-      } catch {
-        if (signal?.aborted) break;
-        failed.push(...group);
-      }
-      completed += group.length;
-      onProgress({ completed, total: rows.length });
+  for (const group of groups.values()) {
+    try {
+      routes.push({ route: normalizeRailRoute(group[0].railRoute), records: group });
+    } catch {
+      failed.push(...group);
     }
   }
-  await Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), 4, queue.length) }, worker));
-  return { records: rows, routes, unmatched, failed, cancelled: !!signal?.aborted };
+  return { records: rows, routes, unmatched, failed };
 }
 
 // A sub-metre identity grid joins coincident track vertices. Collinear interval
@@ -79,11 +66,11 @@ export function railwayGeometry(data) {
   for(const {route}of data.routes)for(const label of route.lineLabels||[]){const key=label.name+':'+label.coordinates.map(value=>value.toFixed(2)).join(',');if(lineLabels.size<10000)lineLabels.set(key,label);}
   for (const { route, records } of data.routes) for (const stop of [route.stops[0], route.stops.at(-1)]) {
     const id = 'station:' + stop.name;
-    if (!nodes.has(id)) nodes.set(id, { id, name: stop.name, code: '', coordinates: railWgs84Point(stop.coordinates), point: railMapPoint(stop.coordinates), trips: new Set(), routes: new Set() });
+    if (!nodes.has(id)) nodes.set(id, { id, name: stop.name, code: '', coordinates: railWgs84Point(stop.coordinates), trips: new Set(), routes: new Set() });
     for (const record of records) nodes.get(id).trips.add(record.id);
   }
   const projected = edges.map(edge => edge.map(railMapPoint));
   const bounds = projected.length ? projected.flat().reduce((box, [x, y]) => [Math.min(box[0], x), Math.min(box[1], y), Math.max(box[2], x), Math.max(box[3], y)], [Infinity, Infinity, -Infinity, -Infinity]) : [700, 98, 885, 215];
   const path = projected.map(([a, b]) => `M${a.map(value => value.toFixed(6)).join(',')}L${b.map(value => value.toFixed(6)).join(',')}`).join('');
-  return { center: 0, bounds, nodes: [...nodes.values()], routes: [], trackPath: path, edgeCount: edges.length,lineLabels:[...lineLabels.values()] };
+  return { bounds, nodes: [...nodes.values()], trackPath: path, lineLabels: [...lineLabels.values()] };
 }

@@ -1,7 +1,7 @@
 import {calendarDate,journeyDate} from './journey-date.js';
 import {isLookupValue} from './lookup-values.js';
 import { RAILGO_REFERENCE_SOURCE } from './field-sources.js';
-import { railRouteMatches, railRouteNeedsSave } from './rail-route-snapshot.js';
+import { railRouteNeedsSave } from './rail-route-snapshot.js';
 import { validDate } from './model.js';
 import { resolvePlace } from './places.js';
 import { bureauFromCode, normalizeRailBureau, parseRailGoModel } from './rail-details.js';
@@ -16,15 +16,16 @@ function endpoint(record, side) {
   return stationName(place.status === 'matched' ? place.name : record[side]);
 }
 export function railQuery(record, startDate = record.departureDate) {
-  startDate=calendarDate(startDate);
   if (record.type !== 'rail' || record.template === 'rail-refund-receipt') throw new Error('此查询用于火车行程');
   const number = service(record.service), trainNum = number.split('/')[0];
   if (!isRailService(number, { combined: true })) throw new Error('车次无效');
-  if (calendarDate(record.departureDate).length !== 10 || !validDate(calendarDate(record.departureDate))) throw new Error('请先选择完整的乘车日期');
-  if (startDate?.length !== 10 || !validDate(startDate)) throw new Error('请选择完整的列车始发日期');
+  const boardingDate = calendarDate(record.departureDate);
+  if (boardingDate.length !== 10 || !validDate(boardingDate)) throw new Error('请先选择完整的乘车日期');
+  startDate = calendarDate(startDate);
+  if (startDate.length !== 10 || !validDate(startDate)) throw new Error('请选择完整的列车始发日期');
   const origin = endpoint(record, 'origin'), destination = endpoint(record, 'destination');
   if (!origin || !destination || origin === destination) throw new Error('请先填写不同的出发站和到达站');
-  return { trainNum, date:startDate.replaceAll('-', ''), boardingDate:calendarDate(record.departureDate), origin, destination };
+  return { trainNum, date:startDate.replaceAll('-', ''), boardingDate, origin, destination };
 }
 
 const runDateLabel = value => `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6)}`;
@@ -121,9 +122,7 @@ export function railCompletion(record, result, startDate) {
     }
   }
   const route = result.railRoute || '';
-  if (railRouteNeedsSave(record, route) ||
-      (record.railJourney && railRouteMatches(record, route)
-        && JSON.stringify(record.railRoute) !== JSON.stringify(route))) changes.railRoute = route;
+  if (railRouteNeedsSave(record, route)) changes.railRoute = route;
   else if (differentTimetable && record.railRoute && !route) changes.railRoute = '';
   if (result.railJourney && JSON.stringify(record.railJourney) !== JSON.stringify(result.railJourney)) changes.railJourney = result.railJourney;
   return changes;

@@ -27,7 +27,14 @@ export function normalizeRailRoute(value) {
 }
 
 export const savedRailRoute = record => railRouteMatches(record) ? normalizeRailRoute(record.railRoute) : null;
-export const railRouteNeedsSave = (record,route) => railRouteMatches(record,route) && (!railRouteMatches(record) || ((!record.railRoute.fullRoute || !!route.fullRoute) && JSON.stringify(record.railRoute)!==JSON.stringify(route)));
+
+export function railRouteNeedsSave(record, route) {
+  if (!railRouteMatches(record, route)) return false;
+  if (!railRouteMatches(record)) return true;
+  // With a saved timetable, the lookup has already checked whether it can retain the full route.
+  if (!record.railJourney && record.railRoute.fullRoute && !route.fullRoute) return false;
+  return JSON.stringify(record.railRoute) !== JSON.stringify(route);
+}
 
 export function railRouteMatches(record, route = record.railRoute) {
   if (record.type !== 'rail' || record.template === 'rail-refund-receipt' || !route || service(record.service).split('/')[0] !== service(route.service).split('/')[0]) return false;

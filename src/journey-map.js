@@ -4,7 +4,7 @@ import { journeyNetwork, networkGeometry } from './journey-map-model.js';
 import { mapPlaybackTrips, bindMapPlayback } from './journey-map-playback.js';
 import { LAND_PATH, PROVINCE_PATH, COUNTRY_PATH } from './data/map-reference.js';
 import { createMapBasemap } from './map-basemap.js';
-import { loadRailwayNetwork, railwayGeometry } from './railway-network.js';
+import { savedRailwayNetwork, railwayGeometry } from './railway-network.js';
 import { RAIL_ROUTE_SOURCE } from './rail-route.js';
 import { isJourneyRecord } from './record-kind.js';
 import {railLineAnnotations} from './rail-line-names.js';
@@ -12,34 +12,12 @@ import {railLineAnnotations} from './rail-line-names.js';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const layers = [['rail', '火车'], ['flight', '飞机'], ['airway', '航线'], ['railway', '铁路线']];
 const exclusiveLayer = { rail: 'railway', railway: 'rail', flight: 'airway', airway: 'flight' };
-export function mountJourneyMap(container, records, { icon, options = {}, railLoader }) {
+export function mountJourneyMap(container, records, { icon, options = {} }) {
   records = records.filter(isJourneyRecord);
   options.layers ??= ['airway', 'railway'];
-  let disposed = false, observer, cleanupCanvas, railRequest;
-  let railState = { key: '', status: 'idle', data: null, geometry: null, completed: 0, total: 0 };
+  let disposed = false, observer, cleanupCanvas, railState;
   const departureYears = new Set(records.map(record => calendarDate(record.departureDate).slice(0, 4)));
   const years = [...departureYears].filter(Boolean).sort().reverse();
-  function requestRailways(key, visibleRecords) {
-    if (railState.key === key && railState.status !== 'idle') return;
-    railRequest?.abort();
-    const controller = railRequest = new AbortController();
-    const rows = visibleRecords.filter(record => record.type === 'rail');
-    railState = { key, status: 'loading', data: null, geometry: null, completed: 0, total: rows.length };
-    loadRailwayNetwork(rows, { signal: controller.signal, loader: railLoader, onProgress: progress => {
-      if (disposed || controller.signal.aborted) return;
-      Object.assign(railState, progress);
-      const label = container.querySelector('[data-railway-progress]');
-      if (label) label.textContent = '正在匹配铁路线 ' + progress.completed + ' / ' + progress.total;
-    } }).then(data => {
-      if (disposed || controller.signal.aborted) return;
-      railState.status = 'ready'; railState.data = data; railState.geometry = railwayGeometry(data);
-      if (!options.userMoved) options.viewport = null;
-      render();
-    }).catch(() => {
-      if (disposed || controller.signal.aborted) return;
-      railState.status = 'ready'; railState.data = { routes: [], failed: rows, unmatched: [] }; railState.geometry = null; render();
-    });
-  }
   function render() {
     cleanupCanvas?.();
     const year = options.year || 'all';
@@ -48,19 +26,22 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
       return year === 'unknown' ? !date : date.startsWith(year);
     });
     const railway = options.layers.includes('railway');
-    if (railway) requestRailways(year, visibleRecords);
-    else if (railState.status === 'loading') { railRequest?.abort(); railState.status = 'idle'; }
+    if (railway && railState?.year !== year) {
+      const data = savedRailwayNetwork(visibleRecords);
+      railState = { year, data, geometry: railwayGeometry(data) };
+      if (!options.userMoved) options.viewport = null;
+    }
     const networks = [];
     if (options.layers.includes('rail')) networks.push(journeyNetwork(visibleRecords, { type: 'rail', deduplicate: false }));
     if (options.layers.includes('flight') || options.layers.includes('airway')) networks.push(journeyNetwork(visibleRecords, { type: 'flight', deduplicate: options.layers.includes('airway') }));
     const network = { nodes: networks.flatMap(part => part.nodes), routes: networks.flatMap(part => part.routes) };
-    const savedRoutes = railway ? railState.data?.routes || [] : [];
+    const savedRoutes = railway ? railState.data.routes : [];
     const railMapped = savedRoutes.reduce((count, row) => count + row.records.length, 0);
     const railGeometry = railway ? railState.geometry : null;
     const geometry = networkGeometry(network, railGeometry);
     const playbackScope = year === 'all' ? '全部行程' : years.includes(year) ? '年度行程' : '';
     let playbackGeometry = geometry, trips = [];
-    if (playbackScope && (!railway || railState.status === 'ready')) {
+    if (playbackScope) {
       const hasDate = record => Boolean(calendarDate(record.departureDate));
       const hasDatedTrip = route => route.records.some(hasDate);
       const arcs = network.routes.filter(hasDatedTrip);
@@ -83,12 +64,12 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
     const bitmap=typeof window.Path2D==='function';
     const background=()=>`<defs><path id="journey-map-land" d="${LAND_PATH}" vector-effect="non-scaling-stroke" fill-rule="evenodd" /><path id="journey-map-countries" d="${COUNTRY_PATH}" vector-effect="non-scaling-stroke" /><path id="journey-map-provinces" d="${PROVINCE_PATH}" vector-effect="non-scaling-stroke" /></defs><g class="map-land">${[-2000, -1000, 0, 1000, 2000].map(x => `<use href="#journey-map-land" transform="translate(${x},0)"/>`).join('')}</g><g class="map-countries">${[-1000, 0, 1000].map(x => `<use href="#journey-map-countries" transform="translate(${x},0)"/>`).join('')}</g><g class="map-provinces">${[-1000, 0, 1000].map(x => `<use href="#journey-map-provinces" transform="translate(${x},0)"/>`).join('')}</g>`;
     const grid=Array.from({length:73},(_,i)=>`<path d="M${i*1000/12-2000},0v500"/>`).join('')+Array.from({length:5},(_,i)=>`<path d="M-2000,${(i+1)*1000/12}h5000"/>`).join('');
-    container.innerHTML = `<div class="journey-map-layout"><section class="map-card" aria-label="行程地图"><div class="journey-map-toolbar"><div class="map-type-tabs" role="group" aria-label="地图图层">${layers.map(([value, label]) => `<button type="button" data-map-layer="${value}" aria-pressed="${options.layers.includes(value)}" class="${options.layers.includes(value) ? 'active' : ''}"><span class="map-layer-check" aria-hidden="true">${options.layers.includes(value) ? '✓' : ''}</span>${label}</button>`).join('')}</div><div class="map-year-actions"><label class="map-year"><span class="visually-hidden">地图年份</span><select data-map-year aria-label="地图年份"><option value="all">全部年份</option>${years.map(year => `<option ${options.year === year ? 'selected' : ''}>${year}</option>`).join('')}${departureYears.has('') ? `<option value="unknown" ${options.year === 'unknown' ? 'selected' : ''}>日期未知</option>` : ''}</select></label>${playbackScope ? `<button type="button" class="map-playback-button" data-map-playback-button ${trips.length ? '' : 'disabled'}>播放${playbackScope}</button>` : ''}</div></div><div class="map-frame">${bitmap ? '<canvas class="map-base-canvas" aria-hidden="true"></canvas>' : ''}<svg class="journey-map-canvas" tabindex="0" role="group" aria-label="行程地图，可拖动或使用方向键移动，用加减键缩放">${bitmap ? '' : background()}<g class="map-graticule">${grid}</g><g class="map-real-tracks" aria-hidden="true"></g><g class="map-routes"></g><g class="map-playback" aria-hidden="true"></g><g class="map-nodes"></g><g class="map-labels" aria-hidden="true"></g><g class="map-rail-line-names" aria-hidden="true"></g></svg>${playbackScope ? '<p class="map-playback-status" data-map-playback-status role="status" hidden></p>' : ''}<div class="map-controls"><button data-map-zoom="in" aria-label="放大地图" title="放大">＋</button><button data-map-zoom="out" aria-label="缩小地图" title="缩小">−</button><button data-map-fit aria-label="显示全部路线" title="显示全部路线">${icon('map')}</button></div>${!hasGeometry ? '<div class="map-empty"><strong>' + (!options.layers.length ? '请选择要显示的图层' : railway && railState.status === 'loading' ? '正在匹配铁路线路…' : '暂无可绘制的行程') + '</strong></div>' : ''}<div class="map-legend">${layers.filter(([value]) => options.layers.includes(value)).map(([value, label]) => `<span class="${value === 'airway' ? 'flight' : value}">${label}</span>`).join('')}</div></div><div class="map-totals"><span><strong>${mapped}</strong>行程</span><span><strong>${routeCount}</strong>路线</span><span><strong>${geometry.nodes.length}</strong>地点</span></div></section></div>`;
+    container.innerHTML = `<div class="journey-map-layout"><section class="map-card" aria-label="行程地图"><div class="journey-map-toolbar"><div class="map-type-tabs" role="group" aria-label="地图图层">${layers.map(([value, label]) => `<button type="button" data-map-layer="${value}" aria-pressed="${options.layers.includes(value)}" class="${options.layers.includes(value) ? 'active' : ''}"><span class="map-layer-check" aria-hidden="true">${options.layers.includes(value) ? '✓' : ''}</span>${label}</button>`).join('')}</div><div class="map-year-actions"><label class="map-year"><span class="visually-hidden">地图年份</span><select data-map-year aria-label="地图年份"><option value="all">全部年份</option>${years.map(year => `<option ${options.year === year ? 'selected' : ''}>${year}</option>`).join('')}${departureYears.has('') ? `<option value="unknown" ${options.year === 'unknown' ? 'selected' : ''}>日期未知</option>` : ''}</select></label>${playbackScope ? `<button type="button" class="map-playback-button" data-map-playback-button ${trips.length ? '' : 'disabled'}>播放${playbackScope}</button>` : ''}</div></div><div class="map-frame">${bitmap ? '<canvas class="map-base-canvas" aria-hidden="true"></canvas>' : ''}<svg class="journey-map-canvas" tabindex="0" role="group" aria-label="行程地图，可拖动或使用方向键移动，用加减键缩放">${bitmap ? '' : background()}<g class="map-graticule">${grid}</g><g class="map-real-tracks" aria-hidden="true"></g><g class="map-routes"></g><g class="map-playback" aria-hidden="true"></g><g class="map-nodes"></g><g class="map-labels" aria-hidden="true"></g><g class="map-rail-line-names" aria-hidden="true"></g></svg>${playbackScope ? '<p class="map-playback-status" data-map-playback-status role="status" hidden></p>' : ''}<div class="map-controls"><button data-map-zoom="in" aria-label="放大地图" title="放大">＋</button><button data-map-zoom="out" aria-label="缩小地图" title="缩小">−</button><button data-map-fit aria-label="显示全部路线" title="显示全部路线">${icon('map')}</button></div>${!hasGeometry ? '<div class="map-empty"><strong>' + (!options.layers.length ? '请选择要显示的图层' : '暂无可绘制的行程') + '</strong></div>' : ''}<div class="map-legend">${layers.filter(([value]) => options.layers.includes(value)).map(([value, label]) => `<span class="${value === 'airway' ? 'flight' : value}">${label}</span>`).join('')}</div></div><div class="map-totals"><span><strong>${mapped}</strong>行程</span><span><strong>${routeCount}</strong>路线</span><span><strong>${geometry.nodes.length}</strong>地点</span></div></section></div>`;
     if (railway) {
-      container.querySelector('.map-totals').insertAdjacentHTML('afterend', '<div class="map-railway-status"><span>铁路 <strong>' + railMapped + ' / ' + railState.total + '</strong> 已匹配</span><span><strong>' + (railState.data?.unmatched.length || 0) + '</strong>未匹配</span><span><strong>' + (railState.data?.failed.length || 0) + '</strong>加载失败</span></div>');
+      const { records, unmatched, failed } = railState.data;
+      container.querySelector('.map-totals').insertAdjacentHTML('afterend', `<div class="map-railway-status"><span>铁路 <strong>${railMapped} / ${records.length}</strong> 已匹配</span><span><strong>${unmatched.length}</strong>未匹配</span><span><strong>${failed.length}</strong>加载失败</span></div>`);
       container.querySelector('.map-card').classList.add('is-railway');
       container.querySelector('.map-frame').insertAdjacentHTML('beforeend','<a class="railgo-map-credit" href="' + RAIL_ROUTE_SOURCE + '" target="_blank" rel="noopener noreferrer">RailGo</a>');
-      if (railState.status === 'loading' || railState.data?.failed.length) container.querySelector('.map-card').insertAdjacentHTML('beforeend', '<div class="map-railway-caption"><span data-railway-progress role="status">' + (railState.status === 'loading' ? '正在匹配铁路线 ' + railState.completed + ' / ' + railState.total : '') + '</span>' + (railState.status === 'ready' && railState.data.failed.length ? '<button class="text-button" data-railway-retry>重试加载</button>' : '') + '</div>');
     }
     const svg = container.querySelector('.journey-map-canvas'), frame = container.querySelector('.map-frame');
     if (railway && geometry.trackPath) svg.querySelector('.map-real-tracks').innerHTML = [-1000, 0, 1000].map(offset => '<path class="map-track" d="' + geometry.trackPath + '" transform="translate(' + offset + ',0)"/>').join('');
@@ -241,12 +222,11 @@ export function mountJourneyMap(container, records, { icon, options = {}, railLo
   function resetView() { options.viewport = null; options.userMoved = false; options.selected = ''; options.node = ''; render(); }
   const change = event => { if (event.target.matches('[data-map-year]')) { options.year = event.target.value; resetView(); } };
   const click = event => {
-    if (event.target.closest('[data-railway-retry]')) { railState.key = ''; render(); return; }
     const target = event.target.closest('[data-map-layer]'); if (!target) return;
     const layer = target.dataset.mapLayer;
     options.layers = options.layers.includes(layer) ? options.layers.filter(value => value !== layer) : [...options.layers.filter(value => value !== exclusiveLayer[layer]), layer];
     resetView();
   };
   container.addEventListener('change', change); container.addEventListener('click', click); render();
-  return () => { disposed = true; railRequest?.abort(); cleanupCanvas?.(); container.removeEventListener('change', change); container.removeEventListener('click', click); };
+  return () => { disposed = true; cleanupCanvas?.(); container.removeEventListener('change', change); container.removeEventListener('click', click); };
 }

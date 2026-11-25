@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { createRecord } from '../src/model.js';
 import { mountJourneyMap } from '../src/journey-map.js';
 
-test('map playback reveals trips in departure order for one year or the whole archive', async t => {
+test('map playback reveals trips in departure order for one year or the whole archive', t => {
   const dom = new JSDOM('<div id="map"></div>');
   const { window } = dom, previous = globalThis.window;
   globalThis.window = window;
@@ -24,7 +24,7 @@ test('map playback reveals trips in departure order for one year or the whole ar
     origin: '北京首都', destination: '东京羽田', departureDate: '2025-01-03', ...changes });
   const records = [rail('rail-late', { departureTime: '10:00' }), flight('return', { origin: '东京羽田', destination: '北京首都', departureTime: '12:00' }),
     rail('other-year', { departureDate: '2026-01-03' }), rail('rail-early', { departureTime: '08:00' }), flight('outbound', { departureTime: '07:00' }),
-    rail('failed-rail', { service: 'G5', destination: '济南西', departureDate: '2025-01-04' }),
+    rail('unmatched-rail', { service: 'G5', destination: '济南西', departureDate: '2025-01-04' }),
     rail('same-city', { service: 'D8882', origin: '武威东', destination: '古浪北', departureDate: '2026-02-01' }),
     flight('unknown-date', { origin: 'JFK', destination: 'LHR', departureDate: '' }), flight('unknown-shared', { departureDate: '' }),
     rail('unknown-rail', { service: 'G10', origin: '哈尔滨', destination: '大连', departureDate: '' })];
@@ -35,10 +35,13 @@ test('map playback reveals trips in departure order for one year or the whole ar
   const undatedRoute = { segments: [[harbin, dalian]], stops: [{ name: '哈尔滨', coordinates: harbin }, { name: '大连', coordinates: dalian }] };
   const container = window.document.querySelector('#map');
   const options = { layers: ['airway'] };
-  const cleanup = mountJourneyMap(container, records, { icon: () => '', options, railLoader: record => {
-    if (record.service === 'G5') throw new Error('No railway response');
-    return ({ G1: route, G10: undatedRoute })[record.service] || null;
-  } });
+  const trips = records.map(record => {
+    const track = { G1: route, G10: undatedRoute }[record.service];
+    return track ? createRecord({ ...record, railRoute: {
+      ...track, service: record.service, origin: record.origin, destination: record.destination, queriedAt: '2026-11-25T00:00:00Z'
+    } }) : record;
+  });
+  const cleanup = mountJourneyMap(container, trips, { icon: () => '', options });
   t.after(() => { cleanup(); dom.window.close(); globalThis.window = previous; });
   const select = selector => container.querySelector(selector);
   const playback = () => select('[data-map-playback-button]');
@@ -54,8 +57,6 @@ test('map playback reveals trips in departure order for one year or the whole ar
   assert.equal(playback().disabled, false);
   select('[data-map-layer="railway"]').click();
   year('2025');
-  assert.equal(playback().disabled, true);
-  await new Promise(resolve => setImmediate(resolve));
   assert.equal(playback().disabled, false);
   playback().click();
   assert.equal(select('.map-route'), null);
@@ -97,7 +98,7 @@ test('map playback reveals trips in departure order for one year or the whole ar
   assert.equal(currentPath().getAttribute('d').slice(1).split('L')[0], outbound.at(-1));
   frame(18400);
   assert.ok(select('[data-map-playing]'));
-  assert.equal(select('[data-map-playback-trip="failed-rail"]'), null);
+  assert.equal(select('[data-map-playback-trip="unmatched-rail"]'), null);
   frame(18850);
   assert.equal(current(), null);
   assert.equal(frames.size, 0);
@@ -114,8 +115,6 @@ test('map playback reveals trips in departure order for one year or the whole ar
   assert.equal(frames.size, 0);
   assert.equal(current(), null);
   assert.equal(playback().textContent, '播放全部行程');
-  assert.equal(playback().disabled, true);
-  await new Promise(resolve => setImmediate(resolve));
   assert.equal(playback().disabled, false);
   const allRoutesView = select('.journey-map-canvas').getAttribute('viewBox');
   playback().click();

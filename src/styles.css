@@ -528,9 +528,6 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 .statistics-route-arrow{color:#a8b19b;text-align:center;line-height:1;white-space:nowrap}
 .map-real-tracks{pointer-events:none}
 .map-track{fill:none;stroke:#ffc077;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-.map-railway-caption{background:#10263a;color:#a2bacb;font-size:12px;line-height:1.8;padding:15px 18px;border-top:1px solid #2a4459}
-.map-railway-caption p{margin:8px 0 0;color:#809bae}.map-railway-caption a{color:#a5c3d5;text-underline-offset:3px}
-.map-railway-caption .text-button{color:#d3e6f0;margin-left:14px;font-size:12px}
 .map-railway-status{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 18px;padding:6px 12px;background:#10263a;color:#a2bacb;border-top:1px solid #2a4459;font-size:11px}.map-railway-status strong{font-weight:500;color:#d4e3ec}.map-legend:empty{display:none}
 .flight-lookup{grid-column:1/-1;padding:15px 16px;margin:0 0 20px;background:#eff3e9;border:1px solid #dce5d4;border-radius:8px;min-width:0}
 .flight-lookup-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;font-size:13px;color:#59714f}

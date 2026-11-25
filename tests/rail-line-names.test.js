@@ -4,7 +4,7 @@ import {candidateRailLines,matchRailLineNames,loadRailLineNames,railLineAnnotati
 import {railWgs84Point,railMapPoint} from '../src/rail-projection.js';
 import {normalizeRailRoute} from '../src/rail-route-snapshot.js';
 import {createRecord,archive,readArchive} from '../src/model.js';
-import {loadRailwayNetwork,railwayGeometry} from '../src/railway-network.js';
+import {savedRailwayNetwork,railwayGeometry} from '../src/railway-network.js';
 
 const a=[116,39],b=[116.2,39],c=[116.4,39];
 const geometry=()=>({segments:[[a,b,c]],stops:[{name:'甲站',coordinates:a},{name:'乙站',coordinates:b},{name:'丙站',coordinates:c}]});
@@ -29,12 +29,12 @@ test('catalog directions are deduplicated, source downloads are bounded and cach
   const offline=async()=>{throw Error('offline');};assert.equal(await loadRailLineNames(shape,{fetcher:offline}),shape);
 });
 
-test('names persist through backups and the offline journey map only uses labels in the traveled geometry',async()=>{
+test('names persist through backups and the offline journey map only uses labels in the traveled geometry',()=>{
   const shape=geometry(),route=normalizeRailRoute({service:'G123',origin:'乙',destination:'丙',queriedAt:'2026-11-17T01:00:00Z',segments:[[b,c]],stops:shape.stops.slice(1),lineLabels:[{name:'乙线',coordinates:[116.3,39]}],fullRoute:{...shape,segments:[[a,b],[b,c]],lineLabels:[{name:'甲客专',coordinates:[116.1,39]},{name:'乙线',coordinates:[116.3,39]}]}});
   // Stop labels are normalized with the same trailing 站 rule used by normal routes.
   const record=createRecord({service:'G123',origin:'乙',destination:'丙',departureDate:'2026-11-17',railRoute:route});
   assert.deepEqual(readArchive(archive([record]))[0].railRoute.lineLabels,route.lineLabels);
-  const network=await loadRailwayNetwork([record]),map=railwayGeometry(network);
+  const network=savedRailwayNetwork([record]),map=railwayGeometry(network);
   assert.deepEqual(map.lineLabels.map(row=>row.name),['乙线']);
   const point=railMapPoint([116.3,39]),viewport={x:point[0],y:point[1],zoom:100};
   const annotations=railLineAnnotations([...map.lineLabels,...map.lineLabels],viewport,600,400);

@@ -4,19 +4,19 @@ import {JSDOM} from 'jsdom';
 import {createRecord,archive,readArchive} from '../src/model.js';
 import {selectRailRoute,loadRailRoute} from '../src/rail-route.js';
 import {normalizeRailRoute,railRouteNeedsSave} from '../src/rail-route-snapshot.js';
-import {loadRailwayNetwork,uniqueRailEdges} from '../src/railway-network.js';
+import {savedRailwayNetwork,uniqueRailEdges} from '../src/railway-network.js';
 import {mountRailRoute} from '../src/rail-route-map.js';
 
 const record=extra=>createRecord({service:'G21',origin:'济南西',destination:'南京南',departureDate:'2026-11-17',...extra});
 const payload=()=>({success:true,data:{stations:[{'北京南':[116.378,39.865]},{'济南西':[116.891,36.669]},{'南京南':[118.797,31.969]},{'上海虹桥':[121.327,31.200]}],train:{'北京南-济南西':{index:0,line:[[116.378,39.865],[116.891,36.669]]},'济南西-南京南':{index:1,line:[[116.891,36.669],[118.797,31.969]]},'南京南-上海虹桥':{index:2,line:[[118.797,31.969],[121.327,31.200]]}}}});
 const wait=async fn=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(done=>setTimeout(done,5));}assert.fail('Full railway map did not settle');};
 
-test('full route context persists independently of the traveled segments and stays outside the journey network',async()=>{
+test('full route context persists independently of the traveled segments and stays outside the journey network',()=>{
   const route=selectRailRoute(record(),payload());
   assert.deepEqual(route.stops.map(stop=>stop.name),['济南西','南京南']);assert.deepEqual(route.fullRoute.stops.map(stop=>stop.name),['北京南','济南西','南京南','上海虹桥']);
   const saved=record({railRoute:route});
   assert.deepEqual(readArchive(archive([saved]))[0].railRoute.fullRoute,route.fullRoute);
-  const network=await loadRailwayNetwork([saved]);assert.equal(uniqueRailEdges(network.routes).length,1);
+  const network=savedRailwayNetwork([saved]);assert.equal(uniqueRailEdges(network.routes).length,1);
   const invalid=structuredClone(route);invalid.fullRoute.segments.splice(1,1);assert.throws(()=>normalizeRailRoute(invalid),/乘坐区间/);
   const partial=structuredClone(route);delete partial.fullRoute;assert.equal(railRouteNeedsSave(record({railRoute:partial}),route),true);assert.equal(railRouteNeedsSave(saved,partial),false);
 });
@@ -30,13 +30,13 @@ test('only an explicit route refresh queries the API; the stored complete route 
   await assert.rejects(loadRailRoute(saved,{fetcher:offline,refresh:true}),/offline/);
 });
 
-test('viewing a missing route does not query the provider or attempt to repair saved data',async()=>{
+test('viewing a missing route does not query the provider or attempt to repair saved data',()=>{
   const previous=globalThis.fetch,dom=new JSDOM('<section id="route"></section>');let calls=0;
   globalThis.fetch=()=>{calls++;throw Error('No lookup on viewing');};
   try{
     const missing = record();
     const saved = record({id:'saved', railRoute:selectRailRoute(record(),payload())});
-    const data=await loadRailwayNetwork([missing,saved]);
+    const data=savedRailwayNetwork([missing,saved]);
     assert.deepEqual(data.routes.map(group=>group.records.map(ticket=>ticket.id)),[['saved']]);
     assert.deepEqual(data.unmatched,[missing]);
     const container=dom.window.document.querySelector('#route'),cleanup=mountRailRoute(container,record());assert.equal(container.innerHTML,'');cleanup();assert.equal(calls,0);
