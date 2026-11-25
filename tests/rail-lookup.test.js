@@ -98,7 +98,7 @@ test('RailGo fills from the closest run day, preserves the ticket date, and keep
     getRecord: () => ticket, canQuery: () => true,
     scannedRailQR: structuredClone(ticket),
     apply: (changes, source) => applyLookupValues(ticket, changes, !!source, source),
-    lookup: query => lookupRailDetails(query, { fetcher: async url => {
+    lookup: (query, options) => lookupRailDetails(query, { ...options, fetcher: async url => {
       const date = new URL(url).searchParams.get('date');
       calls.push(date);
       return Response.json(payload({ timetable, rundays: date === '20261117' ? ['20261118', '20261002', '20261131', '20261116'] : ['20261116'] }));
@@ -107,6 +107,15 @@ test('RailGo fills from the closest run day, preserves the ticket date, and keep
   try {
     await new Promise(done => setImmediate(done));
     assert.deepEqual(calls, ['20261117', '20261116']);
+    const results = form.querySelector('[data-rail-result]');
+    const diagnostics = results.querySelector('[data-rail-diagnostics]');
+    assert.equal(results.hidden, false);
+    assert.equal(results.open, false);
+    assert.match(diagnostics.textContent, /首次查询 · G1 · 2026-11-17 · HTTP 200/);
+    assert.match(diagnostics.textContent, /参考日期复查 · G1 · 2026-11-16 · HTTP 200/);
+    const [initial, fallback] = diagnostics.querySelectorAll('pre');
+    assert.ok(initial.textContent.includes('rundays: ["20261118","20261002","20261131","20261116"]'));
+    assert.ok(fallback.textContent.includes('rundays: ["20261116"]'));
     const reference = form.querySelector('[data-rail-reference]');
     assert.equal(reference.hidden, false);
     assert.match(reference.textContent, /非乘车当日 · 仅供参考.*参考开行日 2026-11-16.*乘车日 2026-11-17/);
@@ -115,7 +124,9 @@ test('RailGo fills from the closest run day, preserves the ticket date, and keep
     assert.equal(ticket.arrivalTime, '05:30');
     assert.equal(calendarDate(ticket.arrivalDate), '2026-11-18');
     assert.equal(ticket.railModel, 'CR400BF-S');
-    const [saved] = readArchive(archive([ticket]));
+    const backup = archive([ticket]);
+    const [saved] = readArchive(backup);
+    assert.doesNotMatch(JSON.stringify(backup), /rundays|20261131/);
     assert.equal(saved.fieldSources.railModel, 'railgo-reference');
     assert.equal(calendarDate(saved.railJourney.stops.at(-1).arrivalDate), '2026-11-17');
     assert.match(railLookupMarkup(saved), /非乘车当日 · 仅供参考/);
@@ -129,9 +140,46 @@ test('RailGo fills from the closest run day, preserves the ticket date, and keep
     ticket.service = 'G2';
     form.elements.service.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     assert.equal(reference.hidden, true);
+    assert.equal(diagnostics.hidden, true);
+    assert.equal(results.hidden, true);
     assert.equal(ticket.railModel, '');
     assert.equal(ticket.arrivalDate, '');
   } finally { cleanup(); dom.window.close(); }
+});
+
+test('RailGo diagnostics remain available when a response is rejected and reset on the next lookup', async t => {
+  const ticket = record({ origin: '深圳北' });
+  const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '</form>');
+  const form = dom.window.document.querySelector('form');
+  let fetchCount = 0;
+  const cleanup = bindRailLookup(form, {
+    getRecord: () => ticket, canQuery: () => true, apply: () => assert.fail('Rejected data must stay out of the ticket'),
+    lookup: (query, options) => lookupRailDetails(query, { ...options, enrich: false, fetcher: async () => {
+      if (++fetchCount === 2) return new Response(null, { status: 429 });
+      return Response.json({ ...payload(), msg: '<b>example</b>' });
+    } })
+  });
+  t.after(() => { cleanup(); dom.window.close(); });
+
+  const button = form.querySelector('[data-rail-lookup]');
+  const result = form.querySelector('[data-rail-result]');
+  const status = form.querySelector('[data-rail-status]');
+  assert.equal(result.hidden, true);
+  button.click();
+  await new Promise(done => setImmediate(done));
+  assert.match(status.textContent, /缺少「深圳北」/);
+  assert.equal(result.hidden, false);
+  assert.match(result.querySelector('pre').textContent, /numberFull: \["G1"\]/);
+  assert.ok(result.querySelector('pre').textContent.includes('timetable[].station: ["北京南","南京南","上海虹桥"]'));
+  assert.ok(result.querySelector('pre').textContent.includes('msg: "<b>example</b>"'));
+  assert.equal(result.querySelector('pre b'), null);
+
+  button.click();
+  await new Promise(done => setImmediate(done));
+  assert.match(status.textContent, /请求较频繁/);
+  assert.equal(result.hidden, false);
+  assert.match(result.textContent, /HTTP 429/);
+  assert.equal(result.querySelector('pre'), null);
 });
 
 test('rail metadata persists through backups, is absent from printed tickets, and aggregates only included rail journeys', () => {

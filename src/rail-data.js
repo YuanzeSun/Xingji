@@ -7,14 +7,20 @@ import {resolvePlace} from './places.js';
 import { railText as clean, railService, railTime, railStation, isEmuModel, normalizeRailJourney, railJourneyRange, sameRailTimetable } from './rail-journey.js';
 export const RAIL_DETAILS_SOURCE = 'https://api.railgo.dev/479755220e0';
 
-async function requestJSON(url, { fetcher, signal }) {
+async function requestJSON(url, { fetcher, signal }, onResponse) {
   const response = await fetcher.call(globalThis, url.href, { credentials:'omit', referrerPolicy:'no-referrer', signal:signal ? AbortSignal.any([signal, AbortSignal.timeout(12000)]) : AbortSignal.timeout(12000) });
-  if (response.status === 400 || response.status === 404) throw new Error('未查到该始发日期的列车资料，可手动填写');
-  if (response.status === 429) throw new Error('RailGo 请求较频繁，请稍后再试');
-  if (!response.ok) throw new Error('RailGo 暂时无法查询，请稍后重试或手动填写');
-  const text = await response.text();
-  if (text.length > 1000000) throw new Error('列车资料过大，未填入');
-  try { return JSON.parse(text); } catch { throw new Error('未识别 RailGo 返回内容，未填入'); }
+  let payload;
+  try {
+    if (response.status === 400 || response.status === 404) throw new Error('未查到该始发日期的列车资料，可手动填写');
+    if (response.status === 429) throw new Error('RailGo 请求较频繁，请稍后再试');
+    if (!response.ok) throw new Error('RailGo 暂时无法查询，请稍后重试或手动填写');
+    const text = await response.text();
+    if (text.length > 1000000) throw new Error('列车资料过大，未填入');
+    try { payload = JSON.parse(text); } catch { throw new Error('未识别 RailGo 返回内容，未填入'); }
+    return payload;
+  } finally {
+    onResponse?.({ httpStatus: response.status, payload });
+  }
 }
 
 export function matchingRailTrainsets(payload, query) {
@@ -118,12 +124,15 @@ function retainFullRoute(route, saved, stops) {
   return route;
 }
 
-export async function lookupRailDetails(query, { fetcher = globalThis.fetch, signal, enrich = true, railRoute = '', railJourney = '' } = {}) {
+export async function lookupRailDetails(query, { fetcher = globalThis.fetch, signal, enrich = true, railRoute = '', railJourney = '', onTimetableResponse } = {}) {
   const options = { fetcher, signal };
   const main = async (input, reference = false) => {
     const url = new URL('https://rg-api.zenglingkun.cn/api/v2/getTrainMain');
     url.searchParams.set('trainNum',input.trainNum); url.searchParams.set('date',input.date);
-    return railDetails(await requestJSON(url,options), input, undefined, { reference });
+    const payload = await requestJSON(url, options, response => {
+      onTimetableResponse?.({ ...response, trainNum: input.trainNum, date: input.date, reference });
+    });
+    return railDetails(payload, input, undefined, { reference });
   };
   async function matchingTrip() {
     try { return await main(query); }

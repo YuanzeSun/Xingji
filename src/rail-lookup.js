@@ -8,25 +8,53 @@ import {fieldSourceBadge,RAILGO_REFERENCE_SOURCE} from './field-sources.js';
 
 export const railTrainsetField=record=>`<label class="field"><span>车组编号${fieldSourceBadge('railTrainsets',record)}</span><input name="railTrainsets" data-rail-trainsets value="${e(record.railTrainsets || '')}" placeholder="如 CR400BF-B-5099，多组用 / 分隔" /></label>`;
 
+function railResponseMarkup({ trainNum, date, reference, httpStatus, payload }, initialDate) {
+  const day = date.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
+  const attempt = reference ? '参考日期复查' : date === initialDate ? '首次查询' : '推算始发日复查';
+  const row = payload?.data;
+  const fields = {
+    success: payload?.success, code: payload?.code, msg: payload?.msg, message: payload?.message,
+    number: row?.number, numberFull: row?.numberFull, rundays: row?.rundays,
+    'timetable[].station': Array.isArray(row?.timetable) ? row.timetable.map(stop => stop?.station) : undefined
+  };
+  const raw = Object.entries(fields).filter(([, value]) => value !== undefined)
+    .map(([key, value]) => key + ': ' + JSON.stringify(value)).join('\n');
+  const title = e([attempt, trainNum, day, 'HTTP ' + httpStatus].join(' · '));
+  return '<p>' + title + '</p>' +
+    (raw ? '<pre tabindex="0" aria-label="' + title + '">' + e(raw) + '</pre>' : '');
+}
+
 export function railLookupMarkup(record) {
   const journey = railJourneyMatches(record) ? record.railJourney : null;
   const savedStart = journey && !journey.query.referenceFor ? calendarDate(journey.query.startDate) : '';
   const startOverride = savedStart === calendarDate(record.departureDate) ? '' : savedStart;
   const reference = railReferenceNotice(record);
-  return `<section class="rail-lookup" aria-label="铁路资料补全"><div class="rail-lookup-heading"><a href="${RAIL_DETAILS_SOURCE}" target="_blank" rel="noopener noreferrer">RailGo 行程补全</a><button class="button secondary small" type="button" data-rail-lookup>${journey ? '刷新资料' : '查询并补全'}</button></div><p class="rail-lookup-status" data-rail-status role="status" aria-live="polite"></p><div class="code-consistency" data-rail-reference role="status" aria-live="polite" ${reference ? '' : 'hidden'}>${reference}</div><details class="rail-start-override"><summary>调整列车始发日期</summary><label class="field"><span>列车始发日期</span><input type="date" data-date-control data-rail-start value="${e(startOverride)}" min="1800-01-01" max="2200-12-31"/></label></details><details class="rail-lookup-result" data-rail-result ${journey ? '' : 'hidden'}><summary>查看已取得的经停、车组与车厢示意图</summary><div data-rail-journey-preview>${railJourneyMarkup(record)}</div></details></section>`;
+  return `<section class="rail-lookup" aria-label="铁路资料补全"><div class="rail-lookup-heading"><a href="${RAIL_DETAILS_SOURCE}" target="_blank" rel="noopener noreferrer">RailGo 行程补全</a><button class="button secondary small" type="button" data-rail-lookup>${journey ? '刷新资料' : '查询并补全'}</button></div><p class="rail-lookup-status" data-rail-status role="status" aria-live="polite"></p><div class="code-consistency" data-rail-reference role="status" aria-live="polite" ${reference ? '' : 'hidden'}>${reference}</div><details class="rail-start-override"><summary>调整列车始发日期</summary><label class="field"><span>列车始发日期</span><input type="date" data-date-control data-rail-start value="${e(startOverride)}" min="1800-01-01" max="2200-12-31"/></label></details><details class="rail-lookup-result" data-rail-result ${journey ? '' : 'hidden'}><summary>查看 RailGo 查询结果</summary><section class="rail-lookup-diagnostics" data-rail-diagnostics hidden><h3>接口原始数据</h3><div data-rail-responses></div></section><div data-rail-journey-preview>${railJourneyMarkup(record)}</div></details></section>`;
 }
 export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = lookupRailDetails, scannedRail, scannedRailQR, railPointsTrip, onAutomaticPending }) {
   const section = form.querySelector('.rail-lookup');
   if (!section) return () => {};
   const button = section.querySelector('[data-rail-lookup]'), date = section.querySelector('[data-rail-start]'), status = section.querySelector('[data-rail-status]'), preview = section.querySelector('[data-rail-journey-preview]'), resultBox = section.querySelector('[data-rail-result]');
   const referenceBox = section.querySelector('[data-rail-reference]');
+  const diagnostics = section.querySelector('[data-rail-diagnostics]'), responses = section.querySelector('[data-rail-responses]');
   let disposed = false, busy = false, request, appliedStamp = '', applying = false;
+  let diagnosticsStamp = '';
   const automaticRecord = scannedRailQR || scannedRail || railPointsTrip;
   const filled = new Map(Object.entries(getRecord().lookupValues || {}));
-  const stamp = () => JSON.stringify([date.value, ...['type','template','service','departureDate','origin','originCode','destination','destinationCode'].map(field => getRecord()[field] || '')]);
+  const stamp = () => {
+    const record = getRecord();
+    return JSON.stringify([date.value, ...['type','template','service','departureDate','origin','originCode','destination','destinationCode'].map(field => record[field] || '')]);
+  };
   if (filled.size || railJourneyMatches(getRecord())) appliedStamp=stamp();
+  const showResult = () => { resultBox.hidden = diagnostics.hidden && !railJourneyMatches(getRecord()); };
+  const clearDiagnostics = () => {
+    diagnosticsStamp = '';
+    diagnostics.hidden = true;
+    responses.replaceChildren();
+    showResult();
+  };
   const renderResult = () => {
-    const record=getRecord();preview.innerHTML=railJourneyMarkup(record);resultBox.hidden=!railJourneyMatches(record);
+    const record=getRecord();preview.innerHTML=railJourneyMarkup(record);showResult();
     const reference=railReferenceNotice(record);
     if (referenceBox.innerHTML!==reference) referenceBox.innerHTML=reference;
     referenceBox.hidden=!reference;
@@ -44,9 +72,19 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
     try {
       const input = railQuery(getRecord(),date.value || undefined), original=stamp();
       const initialTime = getRecord().departureTime;
+      clearDiagnostics();
       busy=true; button.disabled=true; button.textContent='正在查询…'; status.textContent='正在查询时刻、担当单位与列车资料…';
       request=new AbortController();
-      const result=await lookup(input,{railRoute:getRecord().railRoute,railJourney:getRecord().railJourney,signal:AbortSignal.any([request.signal,AbortSignal.timeout(40000)])});
+      const result=await lookup(input,{
+        railRoute:getRecord().railRoute, railJourney:getRecord().railJourney, signal:AbortSignal.any([request.signal,AbortSignal.timeout(40000)]),
+        onTimetableResponse(response) {
+          if (disposed || !form.isConnected || original !== stamp()) return;
+          diagnosticsStamp = original;
+          responses.insertAdjacentHTML('beforeend', railResponseMarkup(response, input.date));
+          diagnostics.hidden = false;
+          showResult();
+        }
+      });
       if (disposed || !form.isConnected) return;
       if (!canQuery() || form.querySelector('[type="submit"]')?.disabled || original!==stamp() ||
           (automatic && getRecord().departureTime !== initialTime)) { status.textContent='查询条件已改变，本次结果未填入'; return; }
@@ -76,7 +114,9 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
       const dateField=event.target.closest('[data-journey-date]')?.dataset.journeyDate;
       if (dateField==='departureDate') date.value='';
       filled.delete(dateField || event.target.name);
-      if (appliedStamp && appliedStamp!==stamp()) {
+      const current = stamp();
+      if (diagnosticsStamp && diagnosticsStamp !== current) clearDiagnostics();
+      if (appliedStamp && appliedStamp!==current) {
         const changes={railJourney:'',railRoute:''};
         for (const [field,value] of filled) if (JSON.stringify(getRecord()[field])===JSON.stringify(value)) changes[field]='';
         filled.clear(); appliedStamp=''; applying=true;
