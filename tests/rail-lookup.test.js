@@ -28,7 +28,7 @@ test('RailGo requests send only public train and start-day identifiers and rejec
   assert.throws(()=>railDetails(payload({rundays:['20261118']}),query),/未确认/);
   assert.throws(()=>railDetails(payload({numberFull:['G2']}),query),/未确认/);
   assert.throws(()=>railDetails(payload({bureauShortName:'京局'}),query),/不一致/);
-  assert.throws(()=>railDetails(payload(),{...query,origin:'深圳北'}),/乘车区间/);
+  assert.throws(()=>railDetails(payload(),{...query,origin:'深圳北'}),/已返回时刻表.*缺少「深圳北」/);
   await assert.rejects(lookupRailDetails(query,{fetcher:async()=>Response.json({success:false},{status:400})}),/未查到/);
   await assert.rejects(lookupRailDetails(query,{fetcher:async()=>new Response('',{status:429})}),/较频繁/);
 });
@@ -63,7 +63,7 @@ test('new prefixes pass the lookup and snapshot checks, including combined numbe
     wrongRoute.data.timetable[0].station = '杭州东';
     await assert.rejects(lookupRailDetails(railQuery(ticket), {
       enrich: false, fetcher: async () => Response.json(wrongRoute),
-    }), /不符合已填写的乘车区间/);
+    }), /已返回时刻表.*缺少「北京南」/);
   }
 });
 

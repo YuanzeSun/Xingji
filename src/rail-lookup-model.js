@@ -47,8 +47,10 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
   const runDays = Array.isArray(row.rundays) ? row.rundays : [];
   if (!Array.isArray(row.timetable) || row.timetable.length > 300) throw new Error('返回时刻表格式异常，未填入');
   const from = row.timetable.findIndex(stop => stationName(stop?.station) === query.origin), to = row.timetable.findIndex(stop => stationName(stop?.station) === query.destination);
-  if (from < 0 || to <= from) throw new Error('返回列车不符合已填写的乘车区间，未填入');
-  if (row.timetable.filter(stop => stationName(stop?.station) === query.origin).length !== 1 || row.timetable.filter(stop => stationName(stop?.station) === query.destination).length !== 1) throw new Error('乘车站点存在多个匹配，未填入');
+  if (from < 0 || to < 0) {
+    const missing = [from < 0 && query.origin, to < 0 && query.destination].filter(Boolean).join('、');
+    throw new Error(`RailGo 已返回时刻表，但乘车区间缺少「${missing}」，未填入`);
+  }
   const stop = row.timetable[from];
   if (!Number.isInteger(stop.day) || stop.day < 0 || stop.day > 7 || !railTime(stop.depart)) throw new Error('无法确认该站的发车日期，未填入');
   const offset = railDepartureDay(stop.day, railTime(stop.arrive), railTime(stop.depart));
