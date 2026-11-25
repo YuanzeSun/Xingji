@@ -46,6 +46,46 @@ test('a boarding day is checked against the first-station date, including an aft
   assert.deepEqual(railCompletion({...ticket,destination:'苏州北'},result,'2026-11-16'),{});
 });
 
+test('new prefixes pass the lookup and snapshot checks, including combined numbers', async () => {
+  for (const [service, trainNum] of [['N3', 'N3'], ['V1066/7', 'V1066']]) {
+    const ticket = record({ service, departureDate: '2026-11-25' });
+    const day = { numberFull: [trainNum], rundays: ['20261125'] };
+    const result = await lookupRailDetails(railQuery(ticket), { enrich: false, fetcher: async url => {
+      const params = new URL(url).searchParams;
+      assert.equal(params.get('trainNum'), trainNum);
+      assert.equal(params.get('date'), '20261125');
+      return Response.json(payload(day));
+    } });
+    const [saved] = readArchive(archive([createRecord({ ...ticket, ...railCompletion(ticket, result) })]));
+    assert.equal(saved.railJourney.query.trainNum, trainNum);
+    assert.equal(saved.service, service);
+    const wrongRoute = payload(day);
+    wrongRoute.data.timetable[0].station = '杭州东';
+    await assert.rejects(lookupRailDetails(railQuery(ticket), {
+      enrich: false, fetcher: async () => Response.json(wrongRoute),
+    }), /不符合已填写的乘车区间/);
+  }
+});
+
+test('a train that left before renumbering keeps its number and references stay on the same side of the cutoff', async () => {
+  const ticket = record({ service: 'T109', departureDate: '2026-11-25' });
+  const oldRun = payload({ numberFull: ['T109'], rundays: ['20261124'], timetable: [
+    { station: '北京南', day: 0, depart: '23:55' },
+    { station: '南京南', day: 1, arrive: '00:00', depart: '00:00' },
+    { station: '上海虹桥', day: 1, arrive: '05:00' },
+  ] });
+  const fetcher = async () => Response.json(oldRun);
+  await assert.rejects(lookupRailDetails(railQuery(ticket), { enrich: false, fetcher }), /未确认所查日期/);
+  const overnight = { ...ticket, origin: '南京南' };
+  const result = await lookupRailDetails(railQuery(overnight), { enrich: false, fetcher });
+  assert.equal(calendarDate(result.railJourney.query.startDate), '2026-11-24');
+  assert.equal(result.railJourney.query.referenceFor, undefined);
+  assert.equal(result.departureTime, '00:00');
+  const reused = railQuery({ ...ticket, service: 'Z3' });
+  const dates = payload({ numberFull: ['Z3'], rundays: ['20261124', '20261128'] });
+  assert.throws(() => railDetails(dates, reused), { referenceDate: '2026-11-28' });
+});
+
 test('RailGo fills from the closest run day, preserves the ticket date, and keeps the reference label after saving', async () => {
   const ticket = record({ departureTime: '07:10', lockedFields: ['departureTime'] }), calls = [];
   const timetable = [

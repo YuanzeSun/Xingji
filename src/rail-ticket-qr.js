@@ -3,6 +3,7 @@ import { calendarDate, journeyDate } from './journey-date.js';
 import { resolvePlace } from './places.js';
 import { isAnonymousRedTemplate } from './rail-template.js';
 import { decodeRailQR, encodeRailQR } from './rail-qr-codec.js';
+import { RAIL_SERVICE_PREFIXES } from './rail-service.js';
 
 const SEAT_CLASSES = [
   '棚车', '硬座', '软座', '硬卧', '软卧', '包厢硬卧', '高级软卧', '一等软座', '二等软座', '商务座',
@@ -11,6 +12,7 @@ const SEAT_CLASSES = [
 ];
 const supportsGeneratedRailQR = record => record.type === 'rail' && !record.deleted &&
   !['rail-red-barcode', 'rail-refund-receipt', 'rail-supplement'].includes(record.template);
+const partialQRPrefix = new RegExp(`^[${RAIL_SERVICE_PREFIXES}P]?$`);
 const requiredQRFields = new Set(['origin', 'destination', 'service', 'departureDate', 'departureTime', 'price', 'seatClass', 'saleCode']);
 export const railQRNeedsField = (record, key) => supportsGeneratedRailQR(record) &&
   (requiredQRFields.has(key) || (!isAnonymousRedTemplate(record.template) && ['identity', 'passenger'].includes(key)));
@@ -60,7 +62,7 @@ export function readRailTicketCode(code, referenceYear = new Date().getFullYear(
   station(values, 'origin', text.slice(7, 10));
   station(values, 'destination', text.slice(10, 13));
   const completeRoute = !!values.origin && !!values.destination;
-  if (!completeRoute && (!(values.origin || values.destination) || !/^[GDCZTKYLSPX]?$/.test(prefix))) return null;
+  if (!completeRoute && (!(values.origin || values.destination) || !partialQRPrefix.test(prefix))) return null;
 
   const fare = text.slice(33, 38);
   values.price = Number(fare.slice(0, 4)) + '.' + fare[4];

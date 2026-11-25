@@ -8,8 +8,10 @@ import {markFieldSources} from './field-sources.js';
 import { readRailSeatClasses } from './seat-classes.js';
 import { marksFromText } from './ticket-marks.js';
 import { isLinearTicketCode } from './ticket-code.js';
+import { RAIL_SERVICE_PREFIXES } from './rail-service.js';
 
 const pinyinStations = new Map();
+const photoService = new RegExp(`(?<![A-Z0-9])([${RAIL_SERVICE_PREFIXES}]\\d{1,5})(?![A-Z0-9])`, 'i');
 const photoFields = ['origin','originCode','destination','destinationCode','service','departureDate',
   'departureTime','passenger','carriage','seatClass','seat','railStanding','price','gate','ticketNumber','saleCode','issuer','ticketMarks', ...Object.keys(SUPPLEMENT_FIELDS)];
 
@@ -51,7 +53,7 @@ export function isFlightPhotoText(raw) {
 
 function readRailPhotoFields(text, label) {
   const capture = pattern => text.match(pattern)?.[1]?.trim() || '';
-  const service = (capture(/(?<![A-Z0-9])([GDCZTKYL]\d{1,5})(?![A-Z0-9])/i) || capture(/(?:车次|列车)\s*[:：]?\s*(\d{1,5})/)).toUpperCase();
+  const service = (capture(photoService) || capture(/(?:车次|列车)\s*[:：]?\s*(\d{1,5})/)).toUpperCase();
   const date = text.match(/((?:19|20)\d{2})\s*[年\-/.]\s*(\d{1,2})\s*[月\-/.]\s*(\d{1,2})日?/);
   const departureDate = date ? date[1] + '-' + date[2].padStart(2, '0') + '-' + date[3].padStart(2, '0') : '';
   const departureTime = capture(/(?:开车|出发时间|发车时间|时间|出发)\s*[:：]?\s*(\d{1,2}:\d{2})/) || capture(/(\d{2}:\d{2})/);

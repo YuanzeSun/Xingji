@@ -7,9 +7,24 @@ import { refineRailService, refineRailTemplate, preferEnhancedRailRead } from '.
 import { railPaperFromPixels } from '../src/rail-template.js';
 import { printedRailNumber, railFareFromLine, railSeatFromLine } from '../src/rail-ticket.js';
 import { validateTicketForm } from '../src/ticket-form.js';
+import { railPointsRecords } from '../src/rail-points.js';
+import { parseRailInvoicePage } from '../src/rail-invoice.js';
+import { receiptPage } from './helpers/receipt-pdf.js';
 
 const layout = entries => '1\t1\t0\t0\t0\t0\t0\t0\t1000\t630\t-1\t\n' + entries.map(([text,x,y,w,h,confidence=90],i) => `5\t1\t1\t1\t1\t${i+1}\t${x}\t${y}\t${w}\t${h}\t${confidence}\t${text}`).join('\n');
 const picture = (service='D3759') => `X000001\n柳州站 ${service} 来宾北站\nLiuzhou Laibinbei\n2023年05月26日 15:06开 03车15F号\n￥24.0元 二等座\n仅供报销使用\n报销凭证 遗失不补`;
+
+test('new passenger service prefixes survive photo, order screenshot, receipt and points import', () => {
+  for (const service of ['N3', 'V587', 'V6061', 'V7777', 'X11']) {
+    const date = '2026-11-25';
+    const order = `订单详情\n订单号:E000000001\n柳州 ${service} 经停站 来宾北\n发车时间:2026年11月25日\n示例旅客 中国居民身份证 二等座 05车 08F号`;
+    assert.equal(parseScanText(picture(service), 'photo')[0].service, service);
+    assert.equal(parseScanText(order, 'order')[0].service, service);
+    assert.equal(parseRailInvoicePage(receiptPage({ service })).service, service);
+    assert.equal(railPointsRecords([{ service, date, origin: '柳州', destination: '来宾北' }])[0].record.service, service);
+  }
+  assert.equal(railPointsRecords([{ service: 'V1066/7', date: '2026-11-25', origin: '威海', destination: '武昌' }])[0].record.service, 'V1066/7');
+});
 
 test('rail paper colour distinguishes red and blue, while the printed reimbursement notice takes priority', async () => {
   const paper = color => railPaperFromPixels(Uint8Array.from(Array.from({ length: 32 }, () => color).flat()));

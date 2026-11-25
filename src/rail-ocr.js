@@ -2,6 +2,9 @@ import {calendarDate} from './journey-date.js';
 import { railTrainRectangle, railFareRectangle, parsePrintedRailTicket, railStationFromRegion, printedRailNumber, railSeatFromLine, railFareFromLine } from './rail-ticket.js';
 import { printedRailTemplate } from './rail-template.js';
 import { marksFromRailRegion } from './ticket-marks.js';
+import { RAIL_SERVICE_PREFIXES } from './rail-service.js';
+
+const regionalService = new RegExp(`^(?:[${RAIL_SERVICE_PREFIXES}]\\d{1,5}|\\d{3,4})$`);
 
 export async function refineRailFields(worker, image, data, paperColor) {
   const { width, height } = image;
@@ -95,10 +98,10 @@ export async function refineRailService(worker, image, data) {
   if (!region.text && record?.service) return;
   if (region.code && region.confidence >= 65) { data.text = `车次：${region.code}\n` + data.text; return; }
   try {
-    await worker.setParameters({ tessedit_char_whitelist: 'GDCZTKYLS0123456789', tessedit_pageseg_mode: '7' });
+    await worker.setParameters({ tessedit_char_whitelist: RAIL_SERVICE_PREFIXES + '0123456789', tessedit_pageseg_mode: '7' });
     const refined = await worker.recognize(image, { rectangle: region.rectangle });
     const service = refined.data.text.replace(/\s/g, '');
-    if (refined.data.confidence >= Math.max(65, region.confidence + 10) && /^(?:[GDCZTKYLS]\d{1,5}|\d{3,4})$/.test(service) && /[1-9]/.test(service)) data.text = `车次：${service}\n` + data.text;
+    if (refined.data.confidence >= Math.max(65, region.confidence + 10) && regionalService.test(service) && /[1-9]/.test(service)) data.text = `车次：${service}\n` + data.text;
   } catch { /* Keep uncertain characters available for manual review. */ }
   finally { await worker.setParameters({ tessedit_char_whitelist: '', tessedit_pageseg_mode: '3' }); }
 }

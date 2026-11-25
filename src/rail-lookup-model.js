@@ -6,6 +6,7 @@ import { validDate } from './model.js';
 import { resolvePlace } from './places.js';
 import { bureauFromCode, normalizeRailBureau, parseRailGoModel } from './rail-details.js';
 import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, railJourneyMatches, sameRailTimetable } from './rail-journey.js';
+import { isRailService } from './rail-service.js';
 
 export const shiftRailDate = (date, days) => { const result = new Date(calendarDate(date) + 'T00:00:00Z'); result.setUTCDate(result.getUTCDate() + days); return result.toISOString().slice(0, 10); };
 export const railDepartureDay = (day, arrival, departure) => day + (arrival && departure < arrival ? 1 : 0);
@@ -18,7 +19,7 @@ export function railQuery(record, startDate = record.departureDate) {
   startDate=calendarDate(startDate);
   if (record.type !== 'rail' || record.template === 'rail-refund-receipt') throw new Error('此查询用于火车行程');
   const number = service(record.service), trainNum = number.split('/')[0];
-  if (!/^(?:[GDCZTKYLS]\d{1,5}|\d{3,5})(?:\/(?:[GDCZTKYLS]?\d{1,5}))*$/.test(number)) throw new Error('车次无效');
+  if (!isRailService(number, { combined: true })) throw new Error('车次无效');
   if (calendarDate(record.departureDate).length !== 10 || !validDate(calendarDate(record.departureDate))) throw new Error('请先选择完整的乘车日期');
   if (startDate?.length !== 10 || !validDate(startDate)) throw new Error('请选择完整的列车始发日期');
   const origin = endpoint(record, 'origin'), destination = endpoint(record, 'destination');
@@ -27,11 +28,14 @@ export function railQuery(record, startDate = record.departureDate) {
 }
 
 const runDateLabel = value => `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6)}`;
-function nearestRunDate(runDays, boardingDate) {
+const conventionalRenumberingDay = '2026-11-25';
+function nearestRunDate(runDays, boardingDate, conventionalStart) {
   const boardingTime = Date.parse(boardingDate);
   const distance = date => Math.abs(Date.parse(date) - boardingTime);
   return runDays.filter(value => typeof value === 'string' && /^\d{8}$/.test(value))
-    .map(runDateLabel).filter(validDate).sort((a, b) => distance(a) - distance(b) || a.localeCompare(b))[0];
+    .map(runDateLabel).filter(validDate)
+    .filter(date => !conventionalStart || (date < conventionalRenumberingDay) === (conventionalStart < conventionalRenumberingDay))
+    .sort((a, b) => distance(a) - distance(b) || a.localeCompare(b))[0];
 }
 
 export function railDetails(payload, query, queriedAt = new Date().toISOString(), { reference = false } = {}) {
@@ -54,8 +58,12 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
     const error = new Error('RailGo 未确认所查日期的开行资料');
     if (!reference) {
       const actualStart = shiftRailDate(query.boardingDate, -offset);
-      if (query.date === query.boardingDate.replaceAll('-', '') && runDays.includes(actualStart.replaceAll('-', ''))) error.startDate = actualStart;
-      else error.referenceDate = nearestRunDate(runDays, query.boardingDate);
+      const inferred = startDate === query.boardingDate;
+      if (inferred && runDays.includes(actualStart.replaceAll('-', ''))) error.startDate = actualStart;
+      else {
+        const conventionalStart = /^[ZNTKVY\d]/.test(query.trainNum) ? (inferred ? actualStart : startDate) : '';
+        error.referenceDate = nearestRunDate(runDays, query.boardingDate, conventionalStart);
+      }
     }
     throw error;
   }

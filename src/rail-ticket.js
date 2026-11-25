@@ -5,6 +5,7 @@ import { marksFromText } from './ticket-marks.js';
 import { detectedRailTemplate, printedRailTemplate } from './rail-template.js';
 import { readRailDateRow } from './scan-date.js';
 import { readRailSeatClasses, stripRailSeatClassSuffix } from './seat-classes.js';
+import { RAIL_OCR_SERVICE, RAIL_SERVICE_PREFIXES } from './rail-service.js';
 
 const key = value => value.toLowerCase().replace(/['’\s]/g, '');
 const stations = new Map();
@@ -112,9 +113,11 @@ function uniqueField(values) {
   const unique = new Set(values.filter(Boolean));
   return unique.size === 1 ? unique.values().next().value : '';
 }
+const printedService = new RegExp(`^([${RAIL_SERVICE_PREFIXES}])([0-9OIL]{1,5})$`);
+const printedRouteService = new RegExp(`^([${RAIL_SERVICE_PREFIXES}P]?)([0-9OIL]{1,5})$`);
 export const trainCode = (value, route = false) => {
   const code = value.normalize('NFKC').replace(/\s/g, '').replace(/次$/, '').toUpperCase();
-  const match = code.match(route ? /^([GDCZTKYLSP]?)([0-9OIL]{1,5})$/ : /^([GDCZTKYLS])([0-9OIL]{1,5})$/);
+  const match = code.match(route ? printedRouteService : printedService);
   if (!match || !Number(match[2].replace(/O/g, '0').replace(/[IL]/g, '1')) ||
       (!match[1] && (!/\d/.test(match[2]) || match[2].length < 3 || /^[0O]/.test(match[2])))) return '';
   const digits = match[2].replace(/O/g, '0').replace(/[IL]/g, '1');
@@ -186,7 +189,7 @@ export function parsePrintedRailTicket(raw, label, { layout = '', paperColor = '
   const anchors = pair.map(anchorFor);
   const serviceText = raw.split('\n').filter(line => !splitRailTicketHeader(line)).join('\n');
   let service = route?.service || trainCode(raw.match(/车次\s*[:：]\s*([A-Z]?\d{1,5})/)?.[1] || '', true);
-  service ||= [...serviceText.matchAll(/\b[GDCZTKYLS]\s*[0-9OIl]{1,5}(?:次)?\b/g)].map(match => trainCode(match[0])).find(Boolean) || '';
+  service ||= [...serviceText.matchAll(RAIL_OCR_SERVICE)].map(match => trainCode(match[1])).find(Boolean) || '';
   if (anchors.length === 2 && anchors.every(Boolean)) {
     const [from, to] = anchors;
     const candidates = words.filter(word => word.left > from.left + from.width * .5 && word.left + word.width < to.left + to.width * .5 && word.top + word.height * .5 < Math.max(from.top, to.top) + Math.max(from.height, to.height) * .3 && word.top > Math.min(from.top, to.top) - Math.max(from.height, to.height) * 4)

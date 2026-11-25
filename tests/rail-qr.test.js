@@ -11,6 +11,7 @@ import { bindTicketCodeEditor, ticketCodeEditor } from '../src/code-editor.js';
 import { calendarDate } from '../src/journey-date.js';
 import { DEMO_RAIL_LINEAR_CODE, DEMO_RAIL_TICKET_CODE } from '../src/demo-code.js';
 import { createRailTicketQR, readRailTicketCode } from '../src/rail-ticket-qr.js';
+import { decodeRailQR, encodeRailQR } from '../src/rail-qr-codec.js';
 import { readRailTicketScan } from '../src/rail-ticket-scan.js';
 import { createRecord } from '../src/model.js';
 import { renderTicketCode } from '../src/ticket-code.js';
@@ -38,6 +39,12 @@ test('rail QR decoding recovers both 144-digit variants and rejects unrelated pa
   assert.equal(readRailTicketCode(qr('A1234567890B123456'), 2026), null);
   assert.equal(readRailTicketCode(qr('0'.repeat(144)), 2026), null);
   assert.equal(readRailTicketCode(qr('https://example.test/rail'), 2026), null);
+  const header = decodeRailQR(seated, 2026).slice(0, 68);
+  const partial = header.slice(0, 10) + 'ZZZ' + header.slice(13, 16) + '  V00587' + header.slice(24);
+  const recovered = readRailTicketCode(qr(encodeRailQR(partial, { identity: seat.identity, idType: 1, name: seat.passenger, time: seat.departureTime })), 2026);
+  assert.equal(recovered?.service, 'V587');
+  assert.equal(recovered.origin, '北京南');
+  assert.equal(recovered.destination, undefined);
 });
 
 test('a reconstructed railway QR round-trips the original fields through the printed ticket', async () => {

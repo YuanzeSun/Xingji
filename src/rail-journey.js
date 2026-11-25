@@ -1,5 +1,6 @@
 import {calendarDate,storedJourneyDate,sameDate} from './journey-date.js';
 import { resolvePlace } from './places.js';
+import { isRailService } from './rail-service.js';
 
 export const railText = value => typeof value === 'string' && !/^(?:-+|null|undefined|未知|暂无|无|n\/?a)$/i.test(value.trim()) ? value.trim().slice(0, 1000) : '';
 export const railService = value => railText(value).normalize('NFKC').replace(/\s/g, '').toUpperCase();
@@ -27,7 +28,7 @@ export function normalizeRailJourney(value) {
   if (!value) return '';
   if (!object(value) || !object(value.query)) throw new Error('铁路行程资料格式不正确');
   const query = { trainNum:railService(value.query.trainNum), startDate:railDate(value.query.startDate), boardingDate:railDate(value.query.boardingDate), origin:railStation(value.query.origin), destination:railStation(value.query.destination) };
-  if (!/^(?:[GDCZTKYLS]\d{1,5}|\d{3,5})$/.test(query.trainNum) || !query.startDate || !query.boardingDate || !query.origin || !query.destination || query.origin === query.destination || !timestamp(value.queriedAt)) throw new Error('铁路行程查询条件不完整');
+  if (!isRailService(query.trainNum) || !query.startDate || !query.boardingDate || !query.origin || !query.destination || query.origin === query.destination || !timestamp(value.queriedAt)) throw new Error('铁路行程查询条件不完整');
   if (Object.hasOwn(value.query, 'referenceFor')) {
     const referenceFor = railDate(value.query.referenceFor);
     if (!referenceFor || sameDate(referenceFor, query.boardingDate)) throw new Error('铁路参考资料的乘车日期无效');

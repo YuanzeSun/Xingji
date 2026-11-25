@@ -4,11 +4,11 @@ import { railTimeWords, railRouteAreas } from './ocr-layout.js';
 import { marksFromText } from './ticket-marks.js';
 import { printedRailTemplate } from './rail-template.js';
 import { readRailSeatClasses } from './seat-classes.js';
+import { RAIL_OCR_SERVICE as trainPattern } from './rail-service.js';
 
 const stationNames = new Set(STATIONS.map(row => row[0]));
 const stationPattern = new RegExp([...stationNames].sort((a, b) => b.length - a.length).join('|'), 'g');
 const datePattern = /((?:19|20)\d{2})\s*[年./-]\s*(\d{1,2})\s*[月./-]\s*(\d{1,2})日?/g;
-const trainPattern = /(?<![A-Z0-9])([GDCZTKYL]\s*[0-9OIl]{1,5})(?![A-Z0-9])/gi;
 const timePattern = /(?<!\d)([0-2]?\d:[0-5]\d)(?!\d)/g;
 const normal = text => String(text || '').normalize('NFKC').replace(/\r/g, '').replace(/[：﹕]/g, ':').replace(/(?<=[\u3400-\u9fff])[ \t]+(?=[\u3400-\u9fff])/g, '').replace(/([0-2]?\d)[ \t]*:[ \t]*(\d{2})/g, '$1:$2');
 const trainCode = value => { const code = value.replace(/\s/g, '').toUpperCase(); return code[0] + code.slice(1).replace(/O/g, '0').replace(/[IL]/g, '1'); };

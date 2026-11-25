@@ -3,6 +3,7 @@ import { calendarDate } from './journey-date.js';
 import { resolvePlace } from './places.js';
 import { RAIL_POINTS_SOURCE, hasFieldValue } from './field-sources.js';
 import { XINGJI_CONNECTOR_ID } from './browser-connector.js';
+import { isRailService } from './rail-service.js';
 
 export const RAIL_POINTS_PAGE = 'https://cx.12306.cn/tlcx/jfinformation.html';
 
@@ -49,7 +50,7 @@ export function railPointsRecords(rides, at = new Date().toISOString()) {
     if (!ride || ['fc', 'fr'].includes(ride.event)) continue;
     const service = text(ride.service).toUpperCase();
     const departureDate = text(ride.date).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
-    if (!/^(?:[GDCZTKYLS]\d{1,5}|\d{3,5})(?:\/[GDCZTKYLS]?\d{1,5})*$/.test(service)
+    if (!isRailService(service, { combined: true })
       || departureDate.length !== 10 || !validDate(departureDate)) continue;
     const origin = stationName(ride.origin, ride.originCode), destination = stationName(ride.destination, ride.destinationCode);
     if (!origin || !destination || origin === destination) continue;
