@@ -222,7 +222,9 @@ function littleEndianWords(words) {
 const fixed = (value, width) => String(value).padStart(width, '0').slice(0, width);
 
 function encryptedTail(serial, tail, prefix) {
-  const input = tail.slice(0, 80).match(/.{10}/g).flatMap(value => bits(BigInt(value), 32));
+  const blocks = tail.slice(0, 80).match(/.{10}/g).map(Number);
+  if (blocks.some(value => value > 0xffffffff)) return null;
+  const input = blocks.flatMap(value => bits(BigInt(value), 32));
   const keys = roundKeys(serial, TAIL_MASKS[prefix], 128, TAIL_STARTS, TAIL_STEPS);
   const values = decodeBits(input, keys, 8, tailSubstitute);
   const words = Array.from({ length: 8 }, (_, i) => number(values.slice(i * 32, i * 32 + 32)));
@@ -244,12 +246,15 @@ function decimalTail(tail) {
 export function decodeRailQR(payload, referenceYear) {
   if (!/^[0-9]{144}$/.test(payload) || !Number.isInteger(referenceYear)) return '';
   const prefix = Number(payload.slice(0, 2)), serial = payload.slice(2, 8), index = prefix % 26;
-  const data = bits(BigInt(payload.slice(8, 63)), 180);
+  const packedTicket = BigInt(payload.slice(8, 63));
+  if (packedTicket >= 1n << 180n) return '';
+  const data = bits(packedTicket, 180);
   const keys = roundKeys(serial, TICKET_MASKS[index], 90, TICKET_STARTS, TICKET_STEPS);
   const ticket = ticketText(decodeBits(data, keys, 6, ticketSubstitute), referenceYear);
   const tail = payload.slice(63);
-  const [idType, idLength, id, hasX, name, suffix] =
-    prefix < 26 ? encryptedTail(serial, tail, prefix) : decimalTail(tail);
+  const details = prefix < 26 ? encryptedTail(serial, tail, prefix) : decimalTail(tail);
+  if (!details) return '';
+  const [idType, idLength, id, hasX, name, suffix] = details;
   const end = name.indexOf(0);
   const tailText = fixed(idType, 2) + fixed(idLength, 2) + (hasX ? id.slice(0, -1) + 'X' : id)
     + gb18030.decode(end < 0 ? name : name.subarray(0, end)) + (end < 0 ? suffix : '');

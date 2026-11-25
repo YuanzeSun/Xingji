@@ -40,8 +40,14 @@ test('rail QR decoding recovers both 144-digit variants and rejects unrelated pa
   assert.equal(readRailTicketCode(qr('0'.repeat(144)), 2026), null);
   assert.equal(readRailTicketCode(qr('https://example.test/rail'), 2026), null);
   const header = decodeRailQR(seated, 2026).slice(0, 68);
+  const identityFields = { identity: seat.identity, idType: 1, name: seat.passenger, time: seat.departureTime };
+  const invalidService = header.slice(0, 16) + 'QQQ' + header.slice(19);
+  assert.equal(readRailTicketCode(qr(encodeRailQR(invalidService, identityFields)), 2026), null);
+  assert.equal(readRailTicketCode(qr(seated.slice(0, 8) + '9'.repeat(55) + seated.slice(63)), 2026), null);
+  const encrypted = encodeRailQR(header, identityFields);
+  assert.equal(readRailTicketCode(qr(encrypted.slice(0, 63) + '9'.repeat(10) + encrypted.slice(73)), 2026), null);
   const partial = header.slice(0, 10) + 'ZZZ' + header.slice(13, 16) + '  V00587' + header.slice(24);
-  const recovered = readRailTicketCode(qr(encodeRailQR(partial, { identity: seat.identity, idType: 1, name: seat.passenger, time: seat.departureTime })), 2026);
+  const recovered = readRailTicketCode(qr(encodeRailQR(partial, identityFields)), 2026);
   assert.equal(recovered?.service, 'V587');
   assert.equal(recovered.origin, '北京南');
   assert.equal(recovered.destination, undefined);
@@ -85,7 +91,7 @@ test('the rail scanner resolves a known issuing office without guessing from the
   assert.equal(readRailTicketScan(withOffice('00000'), 2025).issuer, undefined);
 });
 
-test('a scanned rail photo fills the issuer from its QR without replacing the OCR itinerary', { timeout: 3000 }, async t => {
+test('a scanned rail photo skips unrelated QRs and fills the issuer without replacing the OCR itinerary', { timeout: 3000 }, async t => {
   const record = createRecord({ service: 'C2021', origin: '北京南', destination: '天津', departureDate: '2025-11-24' });
   const dom = new JSDOM(`<form>${ticketCodeEditor(record, { fromScan: true })}<input name="issuer"></form>`);
   t.after(() => dom.window.close());
@@ -93,7 +99,10 @@ test('a scanned rail photo fills the issuer from its QR without replacing the OC
   const added = await new Promise(resolve => {
     const dispose = bindTicketCodeEditor(form, record, resolve, {
       referenceURL: 'data:image/png;base64,AA==', autoRead: true,
-      loadRebuilder: async () => async () => ({ codes: [{ format: 'QRCode', data: withOffice('23693') }], issues: [] })
+      loadRebuilder: async () => async () => ({
+        codes: [qr('https://example.test/receipt'), withOffice('23693')].map(data => ({ format: 'QRCode', data })),
+        issues: []
+      })
     });
     t.after(dispose);
   });
@@ -205,7 +214,24 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     fill('departureDate', '2026-01-01');
     form().querySelector('[data-rail-standing]').click();
 
+    const unrelated = await writeBarcode('https://example.test/receipt', { format: 'QRCode', addQuietZones: true });
+    pixels = symbolImage(unrelated.symbol);
+    const invalidFile = form().querySelector('#code-photo');
+    Object.defineProperty(invalidFile, 'files', { value: [new Blob([await unrelated.image.arrayBuffer()], { type: 'image/png' })] });
+    invalidFile.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const rejectedQR = () => form()?.querySelector('#code-error')?.textContent === '未识别到可录入的火车票二维码';
+    await waitFor(rejectedQR);
+    assert.equal(field('service').value, 'G999');
+    assert.equal(form().querySelector('#saved-code').hidden, true);
+    assert.equal(form().querySelector('#code-choices').hidden, true);
+    assert.equal(receipt().disabled, false);
+    assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);
+
     form().querySelector('[data-code-start]').click();
+    await waitFor(rejectedQR);
+    assert.equal(form().querySelector('[data-code-camera]').hidden, false);
+    assert.equal(railQueries.length, 0);
+    pixels = symbolImage(fixture.symbol);
     await waitFor(() => form()?.querySelector('#code-status')?.textContent.includes('二维码字段已锁定'));
     assert.equal(stopped, 1);
     assert.equal(photoEntry().open, false);

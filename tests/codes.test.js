@@ -6,8 +6,9 @@ import { Resvg } from '@resvg/resvg-js';
 import { createRecord, archive, readArchive, mergeBackupRecords, mergeThreeWay } from '../src/model.js';
 import { ticketSVG, exportSVG, exportPNG } from '../src/tickets.js';
 import { normalizeTicketCode } from '../src/ticket-code.js';
+import { createRailTicketQR, readRailTicketCode } from '../src/rail-ticket-qr.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from '../src/code-editor.js';
-import { DEMO_TICKET_CODE as code } from '../src/demo-code.js';
+import { DEMO_RAIL_TICKET_CODE as code, DEMO_TICKET_CODE as unrelated } from '../src/demo-code.js';
 
 const sample = (values = {}) => createRecord({ id: 'code-test', origin: '北京南', destination: '天津', service: 'C2021', departureDate: '2017-09-10', ...values });
 const png = (width = 16, height = width) => 'data:image/png;base64,' + new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="white"/></svg>`).render().asPng().toString('base64');
@@ -64,33 +65,38 @@ test('code editor rebuilds automatically, blocks pending saves and preserves exi
   assert.equal(form.querySelector('#code-cropper'), null); assert.equal(form.querySelector('[type="range"]:not([data-code-zoom-slider])'), null);
   const blocked = new dom.window.Event('submit', { bubbles: true, cancelable: true }); form.dispatchEvent(blocked); assert.equal(blocked.defaultPrevented, true);
   finish({ codes: [{ format: 'QRCode', data: code, verified: true }], issues: [] }); await new Promise(r => setTimeout(r, 0));
-  assert.deepEqual(record.ticketCode, code); assert.equal(changed, 1); assert.equal(form.querySelector('#code-status').textContent, '已读取并重建 QRCode');
+  assert.deepEqual(record.ticketCode, code); assert.equal(changed, 1); assert.match(form.querySelector('#code-status').textContent, /二维码字段已锁定/);
+  await choose(); finish({ codes: [{ format: 'QRCode', data: unrelated }], issues: [] }); await new Promise(r => setTimeout(r, 0));
+  assert.deepEqual(record.ticketCode, code); assert.equal(changed, 1);
+  assert.match(form.querySelector('#code-error').textContent, /未识别到可录入的火车票二维码/);
   await choose(); finish({ codes: [], issues: ['未能确认原码格'] }); await new Promise(r => setTimeout(r, 0));
   assert.deepEqual(record.ticketCode, code); assert.match(form.querySelector('#code-error').textContent, /原码格/);
   await choose(); const late = finish; dispose(); late({ codes: [{ format: 'QRCode', data: code, verified: true }], issues: [] }); await new Promise(r => setTimeout(r, 0));
   assert.deepEqual(record.ticketCode, code); assert.equal(changed, 1); dom.window.close();
 });
 
-test('multiple detected codes require a choice before the draft changes', async () => {
-  const record = sample(), dom = new JSDOM(`<form>${ticketCodeEditor(record)}</form>`), form = dom.window.document.querySelector('form'), other = {...code,rawBytes:btoa('OTHER PAYLOAD')};
+test('multiple railway codes require a choice before the draft changes', async () => {
+  const record = sample(), dom = new JSDOM(`<form>${ticketCodeEditor(record)}</form>`), form = dom.window.document.querySelector('form');
+  const other = createRailTicketQR(createRecord({ ...readRailTicketCode(code, 2025), service: 'G105' }));
   const dispose = bindTicketCodeEditor(form, record, () => {}, { loadRebuilder: async () => async () => ({ codes: [{ format: 'QRCode', data: code, verified: true }, { format: 'QRCode', data: other, verified: true }], issues: [] }) });
   Object.defineProperty(form.querySelector('#code-photo'), 'files', { value: [{}] }); form.querySelector('#code-photo').dispatchEvent(new dom.window.Event('change')); await new Promise(r => setTimeout(r, 0));
   assert.equal(record.ticketCode, ''); assert.equal(form.querySelectorAll('.code-choice').length, 2);
   const blocked = new dom.window.Event('submit', { bubbles: true, cancelable: true }); form.dispatchEvent(blocked); assert.equal(blocked.defaultPrevented, true);
-  form.querySelectorAll('.code-choice')[1].click(); assert.deepEqual(record.ticketCode, other);
+  form.querySelectorAll('.code-choice')[1].click();
+  assert.deepEqual(record.ticketCode, normalizeTicketCode(other)); assert.equal(record.service, 'G105');
   form.querySelector('#code-remove').click(); assert.equal(record.ticketCode, ''); dispose(); dom.window.close();
 });
 
-test('a single verified QR from the rail photo is attached even when it contains a URL', { timeout: 3000 }, async t => {
+test('the rail photo rejects a URL QR and respects removal of a valid ticket code', { timeout: 3000 }, async t => {
   const record = sample(), dom = new JSDOM();
   t.after(() => dom.window.close());
   const domainCode = { ...code, rawBytes: btoa('https://example.invalid/t') };
-  let reads = 0;
+  let reads = 0, candidate = { format: 'QRCode', data: domainCode, isLink: true };
   const options = {
     referenceURL: 'data:image/png;base64,AA==', autoRead: true,
     loadRebuilder: async () => async () => {
       reads++;
-      return { codes: [{ format: 'QRCode', data: domainCode, verified: true, isLink: true }], issues: [] };
+      return { codes: [candidate], issues: [] };
     }
   };
   const bind = changed => {
@@ -98,11 +104,22 @@ test('a single verified QR from the rail photo is attached even when it contains
     const form = dom.window.document.querySelector('form');
     return { form, dispose: bindTicketCodeEditor(form, record, changed, options) };
   };
-  let resolve;
-  const codeAdded = new Promise(done => { resolve = done; });
-  const { form, dispose } = bind(resolve);
-  await codeAdded;
-  assert.deepEqual(record.ticketCode, domainCode);
+  const rejected = bind(() => assert.fail('A URL must not update the ticket'));
+  await new Promise(resolve => {
+    const error = rejected.form.querySelector('#code-error');
+    const observer = new dom.window.MutationObserver(() => { observer.disconnect(); resolve(); });
+    observer.observe(error, { childList: true });
+  });
+  assert.equal(record.ticketCode, '');
+  assert.match(rejected.form.querySelector('#code-error').textContent, /未识别到可录入的火车票二维码/);
+  assert.equal(rejected.form.querySelector('#code-use-scan').hidden, false);
+  rejected.dispose();
+
+  candidate = { format: 'QRCode', data: code };
+  let page;
+  await new Promise(resolve => { page = bind(resolve); });
+  const { form, dispose } = page;
+  assert.deepEqual(record.ticketCode, code);
   assert.equal(record.fieldSources.ticketCode, 'barcode');
   assert.equal(form.querySelector('#code-use-scan').hidden, true);
   assert.equal(form.querySelector('#code-choices').hidden, true);
@@ -113,5 +130,5 @@ test('a single verified QR from the rail photo is attached even when it contains
   t.after(reopened.dispose);
   await new Promise(done => setImmediate(done));
   assert.equal(record.ticketCode, '');
-  assert.equal(reads, 1);
+  assert.equal(reads, 2);
 });

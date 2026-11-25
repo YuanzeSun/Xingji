@@ -12,7 +12,7 @@ import { prepareCodeReader } from '../src/code-reader.js';
 import { symbolImage } from '../src/barcode-symbols.js';
 await prepareCodeReader({ wasmBinary: await readFile('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm') });
 await prepareZXingModule({ overrides: { wasmBinary: await readFile('node_modules/zxing-wasm/dist/full/zxing_full.wasm') }, fireImmediately: true });
-const fixtureCode = await writeBarcode('XINGJI APPLICATION TEST', { format: 'QRCode', addQuietZones: true });
+const fixtureCode = await writeBarcode('XINGJI APPLICATION TEST', { format: 'Code128', addQuietZones: true });
 const fixturePixels = symbolImage(fixtureCode.symbol);
 const rebuiltCode = codeDataFromResult((await readBarcodes(fixtureCode.image))[0]);
 const fixturePNG = Buffer.from(await fixtureCode.image.arrayBuffer());
@@ -74,7 +74,7 @@ test('ticket edits, duplicate review and backup restore work across the archive'
     window.HTMLCanvasElement.prototype.toDataURL = () => { throw new Error('Code images must never be saved'); };
     const photo = document.querySelector('#code-photo'); Object.defineProperty(photo, 'files', { value: [new Blob([fixturePNG], { type: 'image/png' })] });
     photo.dispatchEvent(new window.Event('change', { bubbles: true }));
-    await waitFor(() => document.querySelector('#code-status').textContent.includes('已读取并重建'));
+    await waitFor(() => document.querySelector('#code-status').textContent === '已收录一维条码');
     assert.equal(document.querySelector('#code-cropper'), null); assert.ok(document.querySelector('#editor-preview svg[data-ticket-code] path')); assert.equal(document.querySelector('#editor-preview image[data-ticket-code]'), null);
   } finally { Object.defineProperty(globalThis, 'Image', { value: originalImage, configurable: true }); Object.defineProperty(globalThis, 'ImageData', { value: originalImageData, configurable: true }); URL.createObjectURL = originalCreate; URL.revokeObjectURL = originalRevoke; }
   document.querySelector('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
@@ -93,7 +93,7 @@ test('ticket edits, duplicate review and backup restore work across the archive'
   click('[data-mark-remove="0"]');
   document.querySelector('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await waitFor(() => !document.querySelector('dialog'));
-  records = await get('records', []); assert.equal(records[0].type, 'rail'); assert.equal(records[0].template, 'rail-receipt');
+  records = await get('records', []); assert.equal(records[0].type, 'rail'); assert.equal(records[0].template, 'rail-red-barcode');
   assert.deepEqual(records[0].ticketMarks, []);
   const startDuplicateEntry = async seat => {
     click('[data-action="new"]'); await waitFor(() => document.querySelector('#editor-form'));

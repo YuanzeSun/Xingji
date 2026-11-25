@@ -12,7 +12,7 @@ const SEAT_CLASSES = [
 ];
 const supportsGeneratedRailQR = record => record.type === 'rail' && !record.deleted &&
   !['rail-red-barcode', 'rail-refund-receipt', 'rail-supplement'].includes(record.template);
-const partialQRPrefix = new RegExp(`^[${RAIL_SERVICE_PREFIXES}P]?$`);
+const ticketQRPrefix = new RegExp(`^[${RAIL_SERVICE_PREFIXES}P]?$`);
 const requiredQRFields = new Set(['origin', 'destination', 'service', 'departureDate', 'departureTime', 'price', 'seatClass', 'saleCode']);
 export const railQRNeedsField = (record, key) => supportsGeneratedRailQR(record) &&
   (requiredQRFields.has(key) || (!isAnonymousRedTemplate(record.template) && ['identity', 'passenger'].includes(key)));
@@ -57,12 +57,11 @@ export function readRailTicketCode(code, referenceYear = new Date().getFullYear(
   let departureDate;
   try { departureDate = journeyDate(date.slice(0, 4) + '-' + date.slice(4, 6) + '-' + date.slice(6)); }
   catch { return null; }
-  if (!train || !departureDate) return null;
+  if (!ticketQRPrefix.test(prefix) || !train || !departureDate) return null;
   const values = { ticketNumber: text.slice(0, 7), service: prefix + train, departureDate };
   station(values, 'origin', text.slice(7, 10));
   station(values, 'destination', text.slice(10, 13));
-  const completeRoute = !!values.origin && !!values.destination;
-  if (!completeRoute && (!(values.origin || values.destination) || !partialQRPrefix.test(prefix))) return null;
+  if (!values.origin && !values.destination) return null;
 
   const fare = text.slice(33, 38);
   values.price = Number(fare.slice(0, 4)) + '.' + fare[4];

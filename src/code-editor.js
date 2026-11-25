@@ -187,7 +187,8 @@ export function bindTicketCodeEditor(form, draft, changed, {
   function use(code) {
     if (!isCurrent()) return;
     if (flight) { useFlight(code); return; }
-    if (codeRemovalLocked(draft, editingSaved) && isLinearTicketCode(code.data)) {
+    const linear = isLinearTicketCode(code.data);
+    if (codeRemovalLocked(draft, editingSaved) && linear) {
       reset();
       status.textContent = '';
       error.textContent = '已收录的二维码只能用二维码替换';
@@ -204,7 +205,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
     draft[field] = normalize(code.data);
     markManualFields(draft,[field]);
     markFieldSources(draft,[field],'barcode');
-    if (isLinearTicketCode(draft[field])) draft.template = 'rail-red-barcode';
+    if (linear) draft.template = 'rail-red-barcode';
     else if (draft.template === 'rail-red-barcode') draft.template = 'rail-red-qr';
     if (draft.template !== previousRecord.template) markFieldSources(draft, ['template'], 'barcode');
     const previousLocks=draft.lockedFields.filter(key=>railBarcodeFieldLocked(previousRecord,key));
@@ -234,8 +235,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
     refreshTicketFieldLocks(form,draft);
     reset();showSaved();
     if (code.railFields) status.textContent = '已扫码录入，二维码字段已锁定';
-    else if (isLinearTicketCode(draft[field])) status.textContent = '已收录一维条码';
-    else status.textContent = '已读取并重建 ' + code.format;
+    else status.textContent = linear ? '已收录一维条码' : '已收录火车票二维码';
     error.textContent='';changed({previousRecord,codeStatus:status.textContent,railFields:code.railFields});
   }
   async function read(file, source = 'manual', options) {
@@ -258,17 +258,21 @@ export function bindTicketCodeEditor(form, draft, changed, {
         const read=flight&&readBoardingCode(code.data);
         return read?.legCount>1 ? read.legs.map((leg,index)=>({...code,legIndex:index,label:`第 ${index+1} 段 · ${leg.service} ${leg.origin} → ${leg.destination}`})) : [code];
       });
-      if(readRailTicketScan){
-        const tickets=available.flatMap(code=>{
+      if (readRailTicketScan) {
+        const year = journeyDate(draft.departureDate)?.year ?? undefined;
+        available = available.flatMap(code => {
           if (isLinearTicketCode(code.data)) return [code];
-          const railFields=readRailTicketScan(code.data,journeyDate(draft.departureDate)?.year ?? undefined);
-          if (source === 'photo') return [{ ...code, issuer: draft.template !== 'rail-supplement' && railFields?.issuer }];
-          return railFields ? [{...code,railFields,label:railFields.service+' · '+railFields.ticketNumber}] : [];
+          const railFields = readRailTicketScan(code.data, year);
+          if (!railFields) return [];
+          const label = railFields.service + ' · ' + railFields.ticketNumber;
+          return [source === 'photo'
+            ? { ...code, label, issuer: draft.template !== 'rail-supplement' && railFields.issuer }
+            : { ...code, label, railFields }];
         });
-        if(tickets.length)available=tickets;
-        else if(source==='camera'){
+        if (!available.length) {
           status.textContent='';
-          if (explicit) error.textContent = '未识别到火车票条码';
+          const message = '未识别到可录入的火车票二维码';
+          if (error.textContent !== message) error.textContent = message;
           return;
         }
       }
@@ -289,7 +293,10 @@ export function bindTicketCodeEditor(form, draft, changed, {
     try { const response = await fetch(referenceURL); if (!response.ok) throw new Error('本次图片无法读取'); const file = await response.blob(); if (!disposed && request === generation) await read(file, source); }
     catch (failure) { if (!disposed && request === generation) { loading = false; status.textContent = ''; error.textContent = failure.message;  } }
   }
-  const camera = railCodeEntryLocked(draft) ? null : bindCodeCamera(section, (image, options) => read(image, 'camera', options), { asCanvas: flight, ...cameraOptions, onStart:onCameraStart, onCancel: () => { reset(); status.textContent = ''; error.textContent = ''; } });
+  const clearFeedback = () => { reset(); status.textContent = ''; error.textContent = ''; };
+  const camera = railCodeEntryLocked(draft) ? null : bindCodeCamera(section, (image, options) => read(image, 'camera', options), {
+    asCanvas: flight, ...cameraOptions, onStart: () => { clearFeedback(); onCameraStart?.(); }, onCancel: clearFeedback
+  });
   if (camera) {
     form.querySelector('[data-rail-photo]')?.addEventListener('click',camera.stop,true);
     form.querySelector('[data-rail-photo-file]')?.addEventListener('change',camera.stop,true);
@@ -312,7 +319,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
     refreshFieldSources(form,draft);refreshTicketFieldLocks(form,draft);
     status.textContent='';error.textContent='';showSaved();changed();
   });
-  cancel.addEventListener('click', () => { reset(); status.textContent = ''; error.textContent = ''; updateGenerated(); });
+  cancel.addEventListener('click', () => { clearFeedback(); updateGenerated(); });
   const inputChanged=event=>{
     const input=event.target, extra=input.matches('[data-bcbp]');
     if(extra){
