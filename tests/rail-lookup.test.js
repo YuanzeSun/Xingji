@@ -36,7 +36,10 @@ test('RailGo requests send only public train and start-day identifiers and rejec
 test('a boarding day is checked against the first-station date, including an after-midnight station departure', () => {
   const ticket=record({origin:'南京南'}), wrong=railQuery(ticket);
   const data=payload({timetable:[{station:'北京南',day:0,arrive:'19:00',depart:'19:00'},{station:'南京南',day:0,arrive:'23:58',depart:'00:05'},{station:'上海虹桥',day:1,arrive:'02:00',depart:'02:00'}]});
-  assert.throws(()=>railDetails(data,wrong),/2026-11-16/);
+  assert.throws(()=>railDetails(data,wrong),/始发次日.*乘车日是 2026-11-18.*选择 2026-11-16/);
+  const sameDay = railQuery(record({ departureDate: '2025-09-30' }), '2025-10-01');
+  assert.throws(() => railDetails(payload({ rundays: ['20251001'] }), sameDay),
+    /始发当天.*乘车日是 2025-10-01.*选择 2025-09-30/);
   const query=railQuery(ticket,'2026-11-16'), result=railDetails(data,query);
   const completion=railCompletion(ticket,result,'2026-11-16');
   assert.equal(completion.departureTime,'00:05');assert.equal(calendarDate(completion.arrivalDate),'2026-11-17');assert.equal(completion.arrivalTime,'02:00');
@@ -108,9 +111,12 @@ test('RailGo fills from the closest run day, preserves the ticket date, and keep
     await new Promise(done => setImmediate(done));
     assert.deepEqual(calls, ['20261117', '20261116']);
     const results = form.querySelector('[data-rail-result]');
-    const diagnostics = results.querySelector('[data-rail-diagnostics]');
+    const diagnostics = form.querySelector('[data-rail-diagnostics]');
     assert.equal(results.hidden, false);
     assert.equal(results.open, false);
+    assert.equal(results.contains(diagnostics), false);
+    assert.equal(diagnostics.hidden, false);
+    assert.equal(diagnostics.open, false);
     assert.match(diagnostics.textContent, /首次查询 · G1 · 2026-11-17 · HTTP 200/);
     assert.match(diagnostics.textContent, /参考日期复查 · G1 · 2026-11-16 · HTTP 200/);
     const [initial, fallback] = diagnostics.querySelectorAll('pre');
@@ -163,23 +169,33 @@ test('RailGo diagnostics remain available when a response is rejected and reset 
 
   const button = form.querySelector('[data-rail-lookup]');
   const result = form.querySelector('[data-rail-result]');
+  const diagnostics = form.querySelector('[data-rail-diagnostics]');
   const status = form.querySelector('[data-rail-status]');
   assert.equal(result.hidden, true);
+  assert.equal(diagnostics.hidden, true);
   button.click();
   await new Promise(done => setImmediate(done));
   assert.match(status.textContent, /缺少「深圳北」/);
-  assert.equal(result.hidden, false);
-  assert.match(result.querySelector('pre').textContent, /numberFull: \["G1"\]/);
-  assert.ok(result.querySelector('pre').textContent.includes('timetable[].station: ["北京南","南京南","上海虹桥"]'));
-  assert.ok(result.querySelector('pre').textContent.includes('msg: "<b>example</b>"'));
-  assert.equal(result.querySelector('pre b'), null);
+  assert.equal(result.hidden, true);
+  assert.equal(diagnostics.hidden, false);
+  const raw = diagnostics.querySelector('pre');
+  assert.match(raw.textContent, /numberFull: \["G1"\]/);
+  assert.ok(raw.textContent.includes('timetable[].station: ["北京南","南京南","上海虹桥"]'));
+  assert.ok(raw.textContent.includes('msg: "<b>example</b>"'));
+  assert.equal(raw.querySelector('b'), null);
 
   button.click();
   await new Promise(done => setImmediate(done));
   assert.match(status.textContent, /请求较频繁/);
-  assert.equal(result.hidden, false);
-  assert.match(result.textContent, /HTTP 429/);
-  assert.equal(result.querySelector('pre'), null);
+  assert.equal(result.hidden, true);
+  assert.equal(diagnostics.hidden, false);
+  assert.match(diagnostics.textContent, /HTTP 429/);
+  assert.equal(diagnostics.querySelector('pre'), null);
+  diagnostics.open = true;
+  cleanup();
+  assert.equal(diagnostics.hidden, true);
+  assert.equal(diagnostics.open, false);
+  assert.equal(diagnostics.querySelector('[data-rail-responses]').textContent, '');
 });
 
 test('rail metadata persists through backups, is absent from printed tickets, and aggregates only included rail journeys', () => {
@@ -202,9 +218,16 @@ test('rail lookup refreshes on an explicit click, blocks duplicate requests whil
     const dom=new JSDOM(`<form>${railLookupMarkup(record())}<button type="submit">保存</button></form>`),form=dom.window.document.querySelector('form');
     let ticket=record(),count=0,resolve,allowed=true,signal;
     const apply=changes=>Object.assign(ticket,changes);
-    const cleanup=bindRailLookup(form,{getRecord:()=>ticket,canQuery:()=>allowed,apply,lookup:async(query,options)=>{count++;signal=options.signal;return new Promise(done=>resolve=()=>done(railDetails(payload(),query)));}});
+    const cleanup = bindRailLookup(form, { getRecord: () => ticket, canQuery: () => allowed, apply, lookup: (query, options) => {
+      count++;
+      signal = options.signal;
+      options.onTimetableResponse({ trainNum: query.trainNum, date: query.date, httpStatus: 200, payload: payload() });
+      return new Promise(done => resolve = () => done(railDetails(payload(), query)));
+    } });
+    const diagnostics = form.querySelector('[data-rail-diagnostics]');
     form.dispatchEvent(new dom.window.Event('input',{bubbles:true}));assert.equal(count,0);
     form.querySelector('[data-rail-lookup]').click();assert.equal(count,1);
+    assert.equal(diagnostics.hidden, true);
     form.querySelector('[data-rail-lookup]').click();assert.equal(count,1);
     if(invalidation==='changed')ticket.service='G2';
     if(invalidation==='closed')cleanup();
@@ -212,6 +235,7 @@ test('rail lookup refreshes on an explicit click, blocks duplicate requests whil
     if(invalidation==='offline')allowed=false;
     resolve();await new Promise(done=>setTimeout(done,0));
     assert.equal(ticket.railModel,invalidation?'':'CR400BF-S');
+    assert.equal(diagnostics.hidden, ['closed', 'changed'].includes(invalidation));
     if(!invalidation){form.querySelector('[data-rail-lookup]').click();assert.equal(count,2);resolve();await new Promise(done=>setTimeout(done,0));}
     if(invalidation==='closed')assert.equal(signal.aborted,true);
     cleanup();dom.window.close();

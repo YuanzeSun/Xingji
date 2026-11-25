@@ -47,7 +47,12 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     service.value='G1';service.dispatchEvent(new window.Event('input',{bubbles:true}));document.querySelector('[data-rail-lookup]').click();
     await wait(()=>document.querySelector('[name=railModel]').value==='CR400BF-S');
     assert.equal(requests.length,2);
+    const diagnostics = document.querySelector('[data-rail-diagnostics]');
+    assert.equal(diagnostics.hidden, false);
+    assert.match(diagnostics.textContent, /rundays/);
     document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>!document.querySelector('dialog'));
+    assert.equal(diagnostics.hidden, true);
+    assert.equal(diagnostics.querySelector('[data-rail-responses]').textContent, '');
     assert.equal(server.records()[0].railModel,'CR400BF-S');
     assert.equal(server.records()[0].lockedFields.includes('railModel'),false);assert.equal(server.records()[0].lookupValues.railModel,'CR400BF-S');
     assert.equal(server.records()[0].railRunner,'上海客运段');assert.equal(server.records()[0].railCarOwner,'上海动车段');
@@ -60,6 +65,8 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     assert.match(document.querySelector('[data-ticket-detail=train] .detail-grid').textContent,/担当路局上海局.*车型CR400BF-S.*担当客运段上海客运段.*车辆归属单位上海动车段/);
     assert.match(document.querySelector('[data-ticket-detail=train] .detail-grid').textContent,/车组编号CR400BF-S-0001/);
     document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('[name="railModel"]'));
+    assert.equal(document.querySelector('[data-rail-result]').hidden, false);
+    assert.equal(document.querySelector('[data-rail-diagnostics]').hidden, true);
     assert.equal(document.querySelector('[data-rail-trainsets]').value,'CR400BF-S-0001');
     currentModel='CR400AF';
     const bureau=document.querySelector('[name="railBureau"]');bureau.value='京局';bureau.dispatchEvent(new window.Event('input',{bubbles:true}));

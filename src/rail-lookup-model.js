@@ -71,8 +71,11 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
     throw error;
   }
   if (!reference && boardingDate !== query.boardingDate) {
-    const suggested = shiftRailDate(query.boardingDate, -offset), error = new Error(`该站为始发后第 ${offset + 1} 天发车，请将列车始发日期改为 ${suggested} 后重查`);
-    error.startDate = suggested; throw error;
+    const suggested = shiftRailDate(query.boardingDate, -offset);
+    const departureDay = offset === 0 ? '始发当天' : offset === 1 ? '始发次日' : `始发 ${offset} 天后`;
+    const error = new Error(`RailGo 显示，列车在${departureDay}从「${query.origin}」发车。本次查询对应的乘车日是 ${boardingDate}，请在「调整列车始发日期」中选择 ${suggested} 后重查`);
+    error.startDate = suggested;
+    throw error;
   }
   const codeBureau = bureauFromCode(clean(row.bureau)), shortBureau = normalizeRailBureau(clean(row.bureauShortName));
   if (codeBureau && shortBureau && codeBureau !== shortBureau) throw new Error('返回路局信息不一致，未填入');
