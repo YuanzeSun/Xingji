@@ -1,11 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { isBrowserConnectorInstalled, supportsBrowserConnector } from '../src/browser-connector.js';
+import { unzipSync } from 'fflate';
+import { extensionArchive } from '../scripts/package-extension.mjs';
+import { XINGJI_CONNECTOR_ID, isBrowserConnectorInstalled, supportsBrowserConnector } from '../src/browser-connector.js';
 
-test('the shared extension exposes the 12306 reader and scopes flight header changes to the Xingji origin', async () => {
+test('the shared extension keeps its messaging ID, bundles both services and scopes flight headers to Xingji', async () => {
   const manifest = JSON.parse(await readFile(new URL('../extensions/xingji-connector/manifest.json', import.meta.url), 'utf8'));
   const rules = JSON.parse(await readFile(new URL('../extensions/xingji-connector/rules.json', import.meta.url), 'utf8'));
+  const digest = createHash('sha256').update(Buffer.from(manifest.key, 'base64')).digest('hex').slice(0, 32);
+  const id = [...digest].map(digit => String.fromCharCode(97 + parseInt(digit, 16))).join('');
+  assert.equal(id, XINGJI_CONNECTOR_ID);
+  const files = ['manifest.json', 'background.js', 'read-trips.js', 'rules.json', 'INSTALL.txt', 'LICENSE'];
+  assert.deepEqual(Object.keys(unzipSync(await extensionArchive(process.cwd()))), files.map(file => 'xingji-connector/' + file));
   assert.equal(manifest.manifest_version, 3);
   assert.deepEqual(manifest.background, { service_worker: 'background.js', type: 'module' });
   assert.equal(manifest.content_scripts, undefined);

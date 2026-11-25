@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord } from '../src/model.js';
 import { journeyDate } from '../src/journey-date.js';
-import { statisticsOptions, statisticsRange, todayDate, journeyStatistics, tripSeries } from '../src/statistics-model.js';
+import { statisticsOptions, todayDate, journeyStatistics, tripSeries } from '../src/statistics-model.js';
 import { mountStatistics } from '../src/statistics.js';
 import { flightTrackRequest } from '../src/flight-track.js';
 import { createBoardingCode } from '../src/bcbp.js';
@@ -90,10 +90,10 @@ test('rail and flight travel times are totaled independently across dates, time 
 test('statistics default to an unbounded start and today, compare dates only and respect edited bounds', () => {
   assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railSubtypes:true, aircraftSubtypes:true, marketingAirlines:false });
   const rows = [rail({ id: 'past' }), flight({ id: 'today', departureDate: '2026-11-16', departureTime: '23:59' }), rail({ id: 'future', departureDate: '2026-11-17' }), rail({ id: 'deleted', deleted: true }), rail({ id: 'undated', departureDate: '' })];
-  const result = statisticsRange(rows, range);
+  const result = journeyStatistics(rows, range);
   assert.deepEqual(result.records.map(row => row.id), ['past', 'today']); assert.equal(result.omittedDates, 1);
-  assert.equal(statisticsRange(rows, { dateFrom: '2026-11-16', dateTo: '2026-11-17' }).records.length, 2);
-  assert.equal(statisticsRange(rows, { dateFrom: '', dateTo: '' }).records.length, 3);
+  assert.equal(journeyStatistics(rows, { dateFrom: '2026-11-16', dateTo: '2026-11-17' }).records.length, 2);
+  assert.equal(journeyStatistics(rows, { dateFrom: '', dateTo: '' }).records.length, 3);
   const today = todayDate();
   const tomorrow = new Date(today + 'T00:00:00Z');
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
@@ -101,16 +101,16 @@ test('statistics default to an unbounded start and today, compare dates only and
   const nowRows = [rail({ id: 'today-limit', departureDate: today }), rail({ id: 'future-limit', departureDate: future })];
   assert.equal(statisticsOptions({ dateTo: future }).dateTo, today);
   assert.equal(statisticsOptions({ dateTo: '' }).dateTo, today);
-  assert.deepEqual(statisticsRange(nowRows, { dateTo: future }).records.map(row => row.id), ['today-limit']);
-  assert.match(statisticsRange(rows, { dateFrom: '2025-01-01', dateTo: '2024-12-31' }).error, /起始日期/);
-  assert.ok(statisticsRange(rows, { dateTo: '2025-02-30' }).error);
+  assert.deepEqual(journeyStatistics(nowRows, { dateTo: future }).records.map(row => row.id), ['today-limit']);
+  assert.match(journeyStatistics(rows, { dateFrom: '2025-01-01', dateTo: '2024-12-31' }).error, /起始日期/);
+  assert.ok(journeyStatistics(rows, { dateTo: '2025-02-30' }).error);
 });
 
 test('imprecise dates count only when their whole known interval fits, without invented months', () => {
   const rows = [rail({ departureDate: '2023' }), flight({ departureDate: '2024-02-01' }), rail({ departureDate: '2026' })];
-  const result = statisticsRange(rows, range);
+  const result = journeyStatistics(rows, range);
   assert.equal(result.records.length, 2); assert.equal(result.omittedDates, 1);
-  assert.equal(statisticsRange(rows, { dateFrom: '2023-02-01', dateTo: '2023-12-31' }).records.length, 0);
+  assert.equal(journeyStatistics(rows, { dateFrom: '2023-02-01', dateTo: '2023-12-31' }).records.length, 0);
   const annual = tripSeries(result.records);
   assert.deepEqual(annual.map(row => [row.key, row.rail, row.flight]), [['2023', 1, 0], ['2024', 0, 1]]);
   const monthly = tripSeries(result.records, { period: 'month' });

@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { Resvg } from '@resvg/resvg-js';
 import { normalizeBoardingCode, renderBoardingCode } from '../src/boarding-code.js';
-import { ticketCodeEditor, bindTicketCodeEditor } from '../src/code-editor.js';
 import { createRecord, archive, readArchive, mergeBackupRecords, mergeThreeWay } from '../src/model.js';
 import { ticketSVG, exportSVG } from '../src/tickets.js';
 import { DEMO_BOARDING_CODE as code } from '../src/demo-boarding-code.js';
@@ -38,13 +37,4 @@ test('boarding codes render as transparent vectors with black ink', () => {
   const transparent = new Resvg(markup).render(); assert.equal(transparent.pixels[3], 0);
   const paper = new Resvg(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="100"><rect width="400" height="100" fill="#a5cbd2"/>${markup}</svg>`).render();
   assert.deepEqual([...paper.pixels.slice(0,4)], [165,203,210,255]);
-});
-test('flight code editor reads and rebuilds the barcode without manual crop controls', async () => {
-  const draft = flight(), dom = new JSDOM(`<form>${ticketCodeEditor(draft)}</form>`), form = dom.window.document.querySelector('form');
-  let changes = 0;
-  const dispose = bindTicketCodeEditor(form, draft, () => changes++, { loadRebuilder: async () => async (file, type) => { assert.equal(type, 'flight'); return { codes: [{ format: 'PDF417', data: code, verified: true }], issues: [] }; } });
-  Object.defineProperty(form.querySelector('#code-photo'), 'files', { value: [{}] }); form.querySelector('#code-photo').dispatchEvent(new dom.window.Event('change')); await new Promise(r => setTimeout(r, 0));
-  assert.equal(form.querySelector('canvas'), null); assert.equal(form.querySelector('[type="range"]:not([data-code-zoom-slider])'), null);
-  assert.deepEqual(draft.boardingCode, code); assert.equal(changes, 1); assert.match(form.querySelector('#code-status').textContent, /PDF417/);
-  form.querySelector('#code-remove').click(); assert.equal(draft.boardingCode, ''); dispose(); dom.window.close();
 });

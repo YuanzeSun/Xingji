@@ -25,6 +25,7 @@ const examples = [
   ['C208', 'Cessna 208'], ['LET410', 'L-410'], ['SU95', 'SSJ100'], ['新舟60', 'MA60'],
   ['BAe 146-200', 'BAe 146-200'], ['RJ85', 'Avro RJ85'], ['TU-154', 'TU-154'],
   ['Airbus A330-343', 'A330-343'], ['空客320', 'A320'], ['Airbus330-300', 'A330-300'], ['A20N', 'A320neo'], ['BCS3', 'A220-300'],
+  ['空中客车A330-300', 'A330-300'], ['波音 737-85C(WL)', '737-85C(WL)'],
   ['Boeing 737-85C(WL)', '737-85C(WL)'], ['Boeing 737-8Q8(WL)', '737-8Q8(WL)'], ['B738', '737-800'], ['B737', '737'],
   ['737 MAX 8', '737 MAX 8'], ['Boeing 737-8 MAX', '737 MAX 8'], ['B77W', '777-300ER']
 ];
@@ -54,13 +55,15 @@ test('regional, turboprop and mainline aircraft share canonical names without lo
 });
 
 test('provider history, backups and rendered boarding passes retain canonical aircraft', () => {
-  for (const input of ['737-8Q8', 'A321-253NY', 'DHC-8', 'Q400', 'ATR 72-600', 'Embraer E195-E2', 'CRJ900']) {
+  for (const input of ['737-8Q8', 'Airbus A321-253NY', 'DHC-8', 'Q400', 'ATR 72-600', 'Embraer E195-E2', 'CRJ900']) {
     const record = createRecord({ type: 'flight', template: 'air-boarding-pass', service: 'CA1234', origin: 'PEK', destination: 'SHA', aircraft: input });
     const expected = normalizeAircraft(input);
+    assert.equal(record.aircraft, expected);
     for (const imported of [readArchive(archive([record]))[0], mapFlightResult([{ aircraft: input }])[0]]) assert.equal(imported.aircraft, expected);
     for (const origin of ['PEK', 'LHR']) {
       const dom = new JSDOM(ticketSVG({ ...record, origin, originCode: origin }), { contentType: 'image/svg+xml' });
-      assert.ok(dom.window.document.querySelector('[data-boarding-aircraft]').textContent.includes(expected)); dom.window.close();
+      assert.equal(dom.window.document.querySelector('[data-boarding-aircraft]').lastElementChild.textContent, expected);
+      dom.window.close();
     }
   }
 });

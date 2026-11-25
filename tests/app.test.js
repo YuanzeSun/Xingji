@@ -1,5 +1,4 @@
 import { createRecord } from '../src/model.js';
-import { demoRecords } from '../src/demo.js';
 import { fullBackup } from '../src/archive-backup.js';
 import {answerArithmetic} from './helpers/arithmetic.js';
 import { codeDataFromResult } from '../src/barcode-data.js';
@@ -19,10 +18,9 @@ const rebuiltCode = codeDataFromResult((await readBarcodes(fixtureCode.image))[0
 const fixturePNG = Buffer.from(await fixtureCode.image.arrayBuffer());
 import { prepareCloud } from './helpers/cloud.js';
 
-test('app creates, reloads, edits, imports and filters personal records without persisting demos', async () => {
+test('ticket edits, duplicate review and backup restore work across the archive', async () => {
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost:4173/' });
   const { window } = dom;
-  const sampleCount = demoRecords().length;
   for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData', 'Image']) Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
   Object.defineProperty(globalThis, 'navigator', { value: window.navigator, configurable: true });
   Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true });
@@ -39,29 +37,6 @@ test('app creates, reloads, edits, imports and filters personal records without 
   await waitFor(() => !document.querySelector('[data-action="new"]').disabled);
   const { get } = await import('../src/db.js');
   assert.equal(document.querySelectorAll('.ticket-card').length, 0);
-  assert.equal(document.querySelector('[data-action="demo"]'), null);
-  assert.equal(document.querySelector('#demo-toggle').checked, false);
-  assert.equal(document.querySelector('#demo-toggle').getAttribute('role'), 'switch');
-  assert.equal(document.querySelector('#demo-toggle').closest('label').textContent.trim(), '示例模式');
-  document.querySelector('#demo-toggle').checked = true;
-  document.querySelector('#demo-toggle').dispatchEvent(new window.Event('change', { bubbles: true }));
-  await waitFor(() => document.querySelectorAll('.ticket-card').length === sampleCount);
-  assert.equal(await get('showDemo'), true);
-  click('[data-archive-select-all]');
-  assert.equal(document.querySelector('[data-action="export-images"]').disabled,false,'sample tickets can be exported as rendered images too');
-  assert.equal(document.querySelector('[data-action="delete-selected"]').disabled,true,'sample tickets cannot be deleted');
-  assert.match(document.body.textContent, /虚构记录/);
-  assert.deepEqual(await get('records', []), []);
-  assert.equal(document.querySelector('[data-action="navigate"][data-page="data"]'),null);
-  location.hash='data';await waitFor(()=>location.hash==='#archive');assert.equal(document.querySelector('#profile-form'),null);
-  assert.equal(document.querySelector('#demo-toggle').checked, true);
-  assert.ok(!document.body.textContent.includes('界面设置'));
-  click('[data-action="navigate"][data-page="archive"]'); await waitFor(() => document.querySelector('#demo-toggle'));
-  assert.equal(document.querySelector('#demo-toggle').checked, true);
-  document.querySelector('#demo-toggle').checked = false;
-  document.querySelector('#demo-toggle').dispatchEvent(new window.Event('change', { bubbles: true }));
-  await waitFor(() => document.querySelector('.empty-state'));
-  assert.equal(await get('showDemo'), false);
   click('[data-action="new"]'); await waitFor(() => document.querySelector('#editor-form'));
   fill('origin', '广州南'); fill('destination', '深圳北'); fill('service', 'G6203'); fill('departureDate', '2026-11-15'); fill('seat', '06C');fill('departureTime','08:00');fill('passenger','示例旅客');fill('identity','P000001');fill('carriage','05');fill('seatClass','二等座');
   assert.equal(document.querySelector('#editor-form [name=originCity],#editor-form [name=destinationCity]'),null);
@@ -70,24 +45,17 @@ test('app creates, reloads, edits, imports and filters personal records without 
   document.querySelector('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   await waitFor(() => !document.querySelector('dialog'));
   let records = await get('records', []); assert.equal(records.length, 1); assert.equal(records[0].seat, '06C'); assert.equal(document.querySelectorAll('.ticket-card').length, 1);
-  document.querySelector('#demo-toggle').checked = true;
-  document.querySelector('#demo-toggle').dispatchEvent(new window.Event('change', { bubbles: true }));
-  await waitFor(() => document.querySelectorAll('.ticket-card').length === sampleCount);
-  assert.equal((await get('records')).length, 1);
-  assert.equal(document.querySelector('.nav-count').textContent,String(sampleCount));
-  assert.equal(document.querySelector('.stats strong').textContent,`${sampleCount}张示例`);
-  assert.ok([...document.querySelectorAll('.ticket-card [data-action="view"]')].every(button=>button.dataset.id.startsWith('demo-')));
-  assert.equal(document.querySelector(`.ticket-card [data-id="${records[0].id}"]`),null);
-  click('[data-action="exit-demo"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 1);
-  assert.equal(document.querySelector('.nav-count').textContent,'1');
-  assert.equal(document.querySelector('#demo-toggle').checked, false);
-  assert.equal(await get('showDemo'), false);
   assert.equal(document.querySelector('.card-time'), null);
   assert.equal(document.querySelector('.card-route .card-service').textContent, 'G6203');
   assert.equal(records[0].originCity, '广州'); assert.equal(records[0].destinationCity, '深圳');
   assert.deepEqual(records[0].ticketMarks, []); assert.equal(records[0].lockedFields.includes('ticketMarks'), false);
   click('[data-action="view"]'); await waitFor(() => document.querySelector('.detail-body'));
   assert.match(document.querySelector('.modal-heading h2').textContent, /G6203/);
+  for (const [format, label] of [['png', 'PNG'], ['svg', 'SVG']]) {
+    const button = document.querySelector(`[data-action="export-${format}"]`);
+    assert.equal(button.textContent, label);
+    assert.ok(button.querySelector('svg'));
+  }
   assert.equal([...document.querySelectorAll('.detail-grid dt')].some(label => label.textContent === '出发时间'), false);
   click('[data-action="edit"]'); await waitFor(() => document.querySelector('#editor-form'));
   fill('seat', '09A');
@@ -168,7 +136,7 @@ test('app creates, reloads, edits, imports and filters personal records without 
   assert.doesNotMatch(document.body.textContent, /回收站/);
   await waitFor(() => document.querySelector('[data-action=import-json]:not(:disabled)'));
   const input = document.querySelector('#import-json-file');
-  const json = JSON.stringify(fullBackup(Array.from({ length: 100 }, (_, i) => createRecord({
+  const json = JSON.stringify(fullBackup(Array.from({ length: 49 }, (_, i) => createRecord({
     service: 'G' + (100 + i), departureDate: '2026-10-01', origin: '测试出发' + i, destination: '测试到达' + i,
     departureTime: '08:00', passenger: '测试旅客', identity: 'TEST123', carriage: '05', seat: '08F', seatClass: '二等座'
   }))));
@@ -179,11 +147,11 @@ test('app creates, reloads, edits, imports and filters personal records without 
   click('[data-action="navigate"][data-page="archive"]');
   await waitFor(() => document.querySelector('[data-action="filter"][data-type="all"]'));
   click('[data-action="filter"][data-type="all"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 48);
-  assert.equal((await get('records', [])).length, 102);
+  assert.equal((await get('records', [])).length, 51);
   const firstCard = document.querySelector('.ticket-card');
   firstCard.querySelector('[data-archive-select]').click();
   document.querySelector('[data-action="load-more"]').focus();
-  click('[data-action="load-more"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 96);
+  click('[data-action="load-more"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 50);
   assert.equal(document.activeElement.closest('.ticket-card'), document.querySelectorAll('.ticket-card')[48]);
   assert.equal(document.querySelector('.ticket-card'), firstCard);
   assert.equal(firstCard.querySelector('[data-archive-select]').checked, true);

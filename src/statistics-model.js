@@ -29,10 +29,6 @@ export function statisticsOptions(input = {}, today = todayDate()) {
   return { dateFrom: input.dateFrom ?? '', dateTo, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railSubtypes:input.railSubtypes !== false, aircraftSubtypes:input.aircraftSubtypes !== false, marketingAirlines:input.marketingAirlines === true };
 }
 
-export function statisticsRange(records, input = {}, today = todayDate()) {
-  return filterStatisticsRange(records, statisticsOptions(input, today));
-}
-
 function filterStatisticsRange(records, { dateFrom, dateTo }) {
   const from = dateInterval(dateFrom), to = dateInterval(dateTo);
   if ((dateFrom && !from) || (dateTo && !to)) return { records: [], omittedDates: 0, error: '请选择有效的起止日期' };

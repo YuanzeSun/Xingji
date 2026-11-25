@@ -27,12 +27,15 @@ test('a fresh visitor can browse examples without GitHub, then return to the con
       assert.equal(document.querySelector('#demo-toggle').checked,true);
       assert.equal(document.querySelector('nav [data-page="data"],nav [data-page="import"],#github-form,#profile-form,[data-action="sync"],.connection-notice'),null);
       assert.equal(document.querySelectorAll('.guest-demo-notice').length,1);assert.match(document.querySelector('.guest-demo-notice').textContent,/登录后即可开始记录自己的旅程/);
-      if(['map','archive'].includes(page))click('.guest-demo-notice [data-action="exit-demo"]');
-      else{const toggle=document.querySelector('#demo-toggle');toggle.checked=false;toggle.dispatchEvent(new window.Event('change',{bubbles:true}));}
-      await wait(()=>document.querySelector('.cloud-setup #github-form'));assert.equal(await db.get('showDemo'),false);
-      assert.equal(document.querySelector('[name="owner"]').value,'draft-owner');
-      click('[data-action="enter-demo"]');await wait(()=>document.querySelectorAll('.ticket-card').length===sampleCount);
     }
+    const toggle = document.querySelector('#demo-toggle');
+    toggle.checked = false;
+    toggle.dispatchEvent(new window.Event('change', { bubbles: true }));
+    await wait(() => document.querySelector('.cloud-setup #github-form'));
+    assert.equal(await db.get('showDemo'), false);
+    assert.equal(document.querySelector('[name="owner"]').value, 'draft-owner');
+    click('[data-action="enter-demo"]');
+    await wait(() => document.querySelectorAll('.ticket-card').length === sampleCount);
     click('[data-action="view"][data-id="demo-2"]');await wait(()=>document.querySelector('.detail-grid'));
     assert.equal(document.querySelector('#modal-root [data-action="edit"],#modal-root [data-action="delete"]'),null);click('[data-action="close-modal"]');
     for(const page of ['data','import']){location.hash=page;await wait(()=>location.hash==='#archive');assert.equal(document.querySelector('#github-form,#profile-form,#import-text'),null);}

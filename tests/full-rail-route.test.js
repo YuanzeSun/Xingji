@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {createRecord,archive,readArchive} from '../src/model.js';
-import {selectRailRoute,loadRailRoute} from '../src/rail-route.js';
+import {selectRailRoute} from '../src/rail-route.js';
 import {normalizeRailRoute,railRouteNeedsSave} from '../src/rail-route-snapshot.js';
 import {savedRailwayNetwork,uniqueRailEdges} from '../src/railway-network.js';
 import {mountRailRoute} from '../src/rail-route-map.js';
@@ -19,15 +19,6 @@ test('full route context persists independently of the traveled segments and sta
   const network=savedRailwayNetwork([saved]);assert.equal(uniqueRailEdges(network.routes).length,1);
   const invalid=structuredClone(route);invalid.fullRoute.segments.splice(1,1);assert.throws(()=>normalizeRailRoute(invalid),/乘坐区间/);
   const partial=structuredClone(route);delete partial.fullRoute;assert.equal(railRouteNeedsSave(record({railRoute:partial}),route),true);assert.equal(railRouteNeedsSave(saved,partial),false);
-});
-
-test('only an explicit route refresh queries the API; the stored complete route loads offline',async()=>{
-  const saved=record({railRoute:selectRailRoute(record(),payload())});let calls=0;
-  const fetcher=async()=>{calls++;return Response.json(payload());};
-  const refreshed=await loadRailRoute(saved,{fetcher,refresh:true});assert.equal(calls,1);assert.ok(refreshed.fullRoute);
-  const offline=()=>{throw Error('offline');};
-  assert.deepEqual(await loadRailRoute(record({railRoute:refreshed}),{fetcher:offline}),refreshed);
-  await assert.rejects(loadRailRoute(saved,{fetcher:offline,refresh:true}),/offline/);
 });
 
 test('viewing a missing route does not query the provider or attempt to repair saved data',()=>{

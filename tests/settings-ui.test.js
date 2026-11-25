@@ -18,6 +18,9 @@ test('saving or receiving a shared MCP key never consumes quota; explicit refres
  };
  const wait=async fn=>{for(let i=0;i<300;i++){if(await fn())return;await new Promise(r=>setTimeout(r,10));}assert.fail('Settings did not settle');};
  await import('../src/app.js');await wait(()=>document.querySelector('#flight-form [name="key"]')?.disabled===false);
+ assert.equal(document.querySelector('.data-layout').lastElementChild.classList.contains('backup-panel'), true);
+ window.dispatchEvent(new window.Event('online'));
+ document.dispatchEvent(new window.Event('visibilitychange'));
  const yearInput=document.querySelector('#flight-year');assert.equal(yearInput.value,String(new Date().getFullYear()));yearInput.value='2024';yearInput.dispatchEvent(new window.Event('input',{bubbles:true}));assert.equal(queries,0);
  assert.equal(document.querySelector('#flight-form [name="key"]').value,'initial-key');assert.equal(queries,0);
  assert.equal(document.querySelector('[aria-labelledby="travel-services-title"] a[download]').getAttribute('href'),'./downloads/xingji-connector-extension.zip');

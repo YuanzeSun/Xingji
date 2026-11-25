@@ -1,5 +1,5 @@
 import {calendarDate} from './journey-date.js';
-import { loadRailRoute } from './rail-route.js';
+import { fetchRailRoute } from './rail-route.js';
 import { railRouteMatches } from './rail-route-snapshot.js';
 import { loadRailLineNames } from './rail-line-names.js';
 import { railDepartureDay, railDetails, shiftRailDate } from './rail-lookup-model.js';
@@ -188,7 +188,7 @@ export async function lookupRailDetails(query, { fetcher = globalThis.fetch, sig
     journey.stops.forEach((stop,i)=>{stop.distanceKm=rows[i].distance;});journey.distanceQueriedAt=queriedAt;
   };
   const extras = await Promise.allSettled([stocks(),coaches(),mileage(),access(), (async () => {
-    const route = await loadRailRoute(routeRecord,{...options,refresh:true});
+    const route = await fetchRailRoute(routeRecord, options);
     if (route) {
       result.railRoute = await loadRailLineNames(retainFullRoute(route, savedRoute, journey.stops),options);
       // A name-source outage must not erase labels already verified for this geometry.

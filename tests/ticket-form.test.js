@@ -1,9 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { requiredTicketFields, validateTicketForm, ticketFieldLabel } from '../src/ticket-form.js';
-import { normalizeAircraft } from '../src/aircraft.js';
 import { mergeBackupRecords, createRecord } from '../src/model.js';
-import { ticketSVG } from '../src/tickets.js';
 
 test('rail and flight require their visible essential fields, with carriage limited to rail', () => {
   for (const type of ['rail', 'flight']) {
@@ -17,16 +15,6 @@ test('rail and flight require their visible essential fields, with carriage limi
       assert.throws(() => validateTicketForm({ ...record, departureDate: { year: 2026, dayOfYear: null } }), /计划起飞日期/);
     }
   }
-});
-
-test('Airbus manufacturer prefixes are omitted from manual records, imported data and rendered passes', () => {
-  for (const value of ['Airbus A330-300', 'AIRBUS A330-300', '空客 A330-300', '空中客车A330-300']) assert.equal(normalizeAircraft(value), 'A330-300');
-  assert.equal(normalizeAircraft('Boeing 737-800'), '737-800');
-  assert.equal(normalizeAircraft('波音 737-85C(WL)'), '737-85C(WL)');
-  const record = createRecord({ type: 'flight', template: 'air-boarding-pass', aircraft: 'Airbus A320-200' });
-  assert.equal(record.aircraft, 'A320-200');
-  const rendered = ticketSVG({ ...record, aircraft: 'Airbus A330-300' });
-  assert.match(rendered, /A330-300/); assert.doesNotMatch(rendered, /Airbus/);
 });
 
 test('ticket forms and archive imports require a complete identity when one is provided', () => {

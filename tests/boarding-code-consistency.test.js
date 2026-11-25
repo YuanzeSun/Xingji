@@ -108,14 +108,6 @@ test('reading an original barcode fills the generator, carrier and supplied cabi
   }finally{page.dispose();}
 });
 
-test('original barcode reading replaces conflicting input with decoded facts and locks those fields',async()=>{
-  const code=createBoardingCode(values),draft=flight({seat:'20C'}),page=editor(draft,{loadRebuilder:async()=>async()=>({codes:[{data:code,format:code.format}],issues:[]})});
-  try{
-    const photo=page.form.querySelector('#code-photo');Object.defineProperty(photo,'files',{value:[new Blob(['fixture'])]});photo.dispatchEvent(new page.dom.window.Event('change',{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,0));
-    assert.equal(draft.seat,'12A');assert.equal(page.form.elements.seat.value,'12A');assert.equal(page.form.elements.seat.readOnly,true);assert.deepEqual(draft.boardingCode,code);
-  }finally{page.dispose();}
-});
-
 test('generated codes update after edits, preserve adopted settings, and synchronously flush before saving',async()=>{
   const draft=flight({boardingCode:createBoardingCode(values),boardingCodeSource:'generated'}),page=editor(draft);
   try{
@@ -144,11 +136,22 @@ test('automatic regeneration retains explicit operating flights and a disposed e
 });
 
 test('scanning fills and locks decoded facts and enables manual editing and generation after removing the original',async()=>{
-  const code=createBoardingCode(values),draft=flight({passenger:'默认姓名',pnr:'MYPNR',seatClass:'M',airline:'手动航司',lockedFields:['pnr','seatClass','airline']}),page=editor(draft,{loadRebuilder:async()=>async()=>({codes:[{data:code,format:code.format}],issues:[]})});
+  const code = createBoardingCode(values), draft = flight({ passenger: '默认姓名', pnr: 'MYPNR', seat: '20C',
+    seatClass: 'M', airline: '手动航司', lockedFields: ['pnr', 'seatClass', 'airline'] });
+  const page = editor(draft, { loadRebuilder: async () => async (_file, type) => {
+    assert.equal(type, 'flight');
+    return { codes: [{ data: code, format: code.format }], issues: [] };
+  } });
   try{
     const photo=page.form.querySelector('#code-photo');Object.defineProperty(photo,'files',{value:[new Blob(['fixture'])]});photo.dispatchEvent(new page.dom.window.Event('change',{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,0));
     assert.equal(draft.passenger,'DOE/JANE');assert.equal(draft.pnr,'ABC123');assert.equal(page.form.querySelector('[data-bcbp-fields]').disabled,true);
     assert.equal(draft.seatClass,'Y');assert.equal(draft.airline,'中国国际航空');assert.equal(page.form.elements.passenger.readOnly,true);assert.equal(page.form.elements.pnr.readOnly,true);
+    assert.equal(draft.seat, '12A');
+    assert.equal(page.form.elements.seat.value, '12A');
+    assert.equal(page.form.elements.seat.readOnly, true);
+    assert.deepEqual(draft.boardingCode, code);
+    assert.equal(page.form.querySelector('canvas,[type="range"]:not([data-code-zoom-slider])'), null);
+    assert.match(page.form.querySelector('#code-status').textContent, /PDF417/);
     const before=structuredClone(draft.boardingCode);page.submit();assert.deepEqual(draft.boardingCode,before);
     page.form.querySelector('#code-remove').click();assert.equal(page.form.querySelector('[data-bcbp-fields]').disabled,false);
     assert.equal(page.form.elements.passenger.readOnly,false);assert.equal(page.form.elements.pnr.readOnly,false);

@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {JSDOM} from 'jsdom';
 import {prepareZXingModule,readBarcodes} from 'zxing-wasm/reader';
 import {encodeBCBP,createBoardingCode,boardingCodeDefaults,BCBP_FORMATS} from '../src/bcbp.js';
+import { readBCBP } from '../src/bcbp-reader.js';
 import {symbolImage} from '../src/barcode-symbols.js';
 import {codeBytes,symbolFromCodeData} from '../src/barcode-data.js';
 import {createRecord,archive,readArchive} from '../src/model.js';
@@ -16,14 +17,22 @@ import {bindUppercaseInputs} from '../src/uppercase-input.js';
 const values=()=>({passenger:'DESMARAIS/LUC',pnr:'ABC123',origin:'YUL',destination:'FRA',carrier:'AC',flightNumber:'834',date:'2009-08-14',cabin:'F',seat:'1A',sequence:'25',status:'1',electronic:'E'});
 const flight=extra=>createRecord({type:'flight',template:'air-boarding-pass',passenger:'DESMARAIS/LUC',pnr:'ABC123',origin:'YUL',destination:'FRA',service:'AC834',departureDate:'2009-08-14',seat:'1A',seatClass:'F',boardingCodeSource:'original',boardingLegIndex:'0',...extra});
 
-test('single-leg mandatory BCBP matches fixed-width reference fields, handles leap dates and never truncates values',()=>{
+test('single-leg BCBP round-trips fixed-width fields and rejects invalid values or payloads',()=>{
   const raw=encodeBCBP(values());
   assert.equal(raw,'M1DESMARAIS/LUC       EABC123 YULFRAAC 0834 226F001A00025100');assert.equal(raw.length,60);
+  const decoded = readBCBP(raw), fields = values();
+  assert.deepEqual([decoded.passenger, decoded.pnr, decoded.originCode, decoded.destinationCode, decoded.carrier,
+    decoded.service, decoded.dayOfYear, decoded.cabin, decoded.seat],
+    [fields.passenger, fields.pnr, fields.origin, fields.destination, fields.carrier, 'AC834', 226, 'F', '1A']);
   assert.equal(encodeBCBP({...values(),date:'2024-12-31'}).slice(44,47),'366');
   assert.equal(encodeBCBP({...values(),carrier:'u2',flightNumber:'12a',seat:'INF',sequence:'A12'}).slice(36,44),'U2 0012A');
   assert.equal(encodeBCBP({...values(),electronic:''})[22],' ');
   assert.equal(encodeBCBP({...values(),electronic:undefined})[22],' ');
   for(const [key,value] of [['passenger','姓名'],['passenger','SURNAME/GIVENNAMETOOLONG'],['pnr','ABCD1234'],['origin','PE'],['flightNumber','12345'],['date','2025-02-29'],['date','2024'],['seat','12345A'],['sequence','123456'],['status',''],['cabin','K1']])assert.throws(()=>encodeBCBP({...values(),[key]:value}));
+  for (const malformed of ['https://example.com', raw.slice(0, 59), 'M2' + raw.slice(2),
+    raw.slice(0, 58) + 'FF', raw.slice(0, 44) + '999' + raw.slice(47), raw.slice(0, 2) + '张' + raw.slice(3)]) {
+    assert.equal(readBCBP(malformed), null);
+  }
 });
 
 test('new generators default to check-in status 1, no electronic marker and economy Y while saved codes retain their values',()=>{

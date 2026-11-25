@@ -5,10 +5,9 @@ import { indexedDB } from 'fake-indexeddb';
 import { createRecord } from '../src/model.js';
 import { prepareCloud } from './helpers/cloud.js';
 
-test('private timeline, interactive map and manual-only flight refresh work in the app', async () => {
+test('timeline hides passenger names and map routes support keyboard dismissal', async () => {
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost/' });
   const { window } = dom;
-  Object.defineProperty(window.navigator, 'userAgent', { value: 'Mozilla/5.0 (Windows NT 10.0) Chrome/142.0' });
   for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData']) Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
   Object.defineProperty(globalThis, 'navigator', { value: window.navigator, configurable: true });
   Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true });
@@ -16,18 +15,9 @@ test('private timeline, interactive map and manual-only flight refresh work in t
   const wait = async fn => { for (let i = 0; i < 300; i++) { if (fn()) return; await new Promise(r => setTimeout(r, 10)); } assert.fail('Journey UI did not settle'); };
   const click = selector => { const target = document.querySelector(selector); assert.ok(target, selector); target.click(); };
   const records = [createRecord({ id: 'a', origin: '清河', destination: '上海虹桥', service: 'G103', departureDate: '2025-08-16', passenger: '隐私中文旅客' }), createRecord({ id: 'b', type: 'flight', template: 'air-boarding-pass', origin: '首都国际', destination: '东京羽田', departureDate: '2026-01-01', service: 'CA181', passenger: 'PRIVATE ENGLISH NAME' })];
-  const server = await prepareCloud(records, { flightMcpKey: 'test-key' }), db = await import('../src/db.js');
-  await db.set('flightAuto', true); sessionStorage.setItem('xingji-flight-key', 'test-key');
-  const flightRequests = [];
-  globalThis.fetch = async (url, options) => {
-    if (!String(url).includes('variflight.com')) return server.fetch(url, options);
-    const body = JSON.parse(options.body); flightRequests.push(body);
-    if (body.method === 'notifications/initialized') return new Response(null, { status: 204 });
-    const result = body.method === 'tools/call' ? { content: [{ type: 'text', text: '{"flights":[]}' }] } : {};
-    return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result }), { headers: { 'Content-Type': 'application/json', ...(body.method === 'initialize' ? { 'Mcp-Session-Id': 'test-session' } : {}) } });
-  };
+  await prepareCloud(records);
+  const db = await import('../src/db.js');
   await import('../src/app.js'); await wait(() => document.querySelector('[data-action="new"]')?.disabled === false);
-  assert.equal(flightRequests.length, 0, 'starting with a valid flight key must not spend quota');
   click('[data-ticket-view="list"]'); await wait(() => document.querySelector('.timeline'));
   assert.doesNotMatch(document.querySelector('.timeline').textContent, /隐私中文旅客|PRIVATE ENGLISH NAME/);
   click('[data-action="navigate"][data-page="map"]'); await wait(() => document.querySelector('.journey-map-canvas'));
@@ -43,17 +33,6 @@ test('private timeline, interactive map and manual-only flight refresh work in t
   assert.equal(document.querySelector('dialog'), null);
   document.querySelector('.journey-map-canvas').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(document.querySelector('.map-route.selected'), null);
-  click('[data-action="navigate"][data-page="data"]'); await wait(() => document.querySelector('#flight-form'));
-  assert.equal(document.querySelector('.data-layout').lastElementChild.classList.contains('backup-panel'), true);
-  assert.equal(document.querySelector('#flight-form [name="auto"]'), null);
-  window.dispatchEvent(new window.Event('online')); document.dispatchEvent(new window.Event('visibilitychange'));
-  await new Promise(r => setTimeout(r, 40)); assert.equal(flightRequests.length, 0);
-  click('[data-action="flight-refresh"]');
-  await wait(() => document.querySelector('[data-action="flight-result"]') &&
-    document.querySelector('[data-action="flight-refresh"]')?.disabled === false);
-  assert.equal(flightRequests.filter(r => r.method === 'tools/call').length, 1);
-  click('[data-action="navigate"][data-page="archive"]'); click('[data-action="navigate"][data-page="data"]');
-  await new Promise(r => setTimeout(r, 30)); assert.equal(flightRequests.filter(r => r.method === 'tools/call').length, 1);
   assert.deepEqual(await db.get('records'), records);
   dom.window.close();
 });

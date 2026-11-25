@@ -1,8 +1,7 @@
-import { normalizeRailRoute, savedRailRoute, railStationKey, isRailCoordinate } from './rail-route-snapshot.js';
+import { normalizeRailRoute, railStationKey, isRailCoordinate } from './rail-route-snapshot.js';
 import { resolvePlace } from './places.js';
 
 export const RAIL_ROUTE_SOURCE = 'https://api.railgo.dev/479769351e0';
-const caches = new WeakMap();
 const distance = (a, b) => Math.hypot((a[0] - b[0]) * Math.cos((a[1] + b[1]) / 2 * Math.PI / 180), a[1] - b[1]) * 111;
 
 function stationName(record, side) {
@@ -60,25 +59,16 @@ export function selectRailRoute(record, payload) {
   return normalizeRailRoute({service:record.service,origin,destination,...selected,...(fullRoute ? {fullRoute} : {}),queriedAt:new Date().toISOString()});
 }
 
-export async function loadRailRoute(record, { fetcher = globalThis.fetch, refresh=false } = {}) {
-  const saved = savedRailRoute(record);
-  if(saved && !refresh)return saved;
+export async function fetchRailRoute(record, { fetcher = globalThis.fetch, signal } = {}) {
   const service = String(record.service || '').trim().toUpperCase();
   if (record.type !== 'rail' || !/^[A-Z]?\d{1,5}(?:\/(?:[A-Z]?\d{1,5}))*$/.test(service)) return null;
-  const train = service.split('/')[0], day = new Date().toISOString().slice(0, 10), key = day + ':' + train;
-  if (!caches.has(fetcher)) caches.set(fetcher, new Map());
-  const cache = caches.get(fetcher);
-  if (refresh || !cache.has(key) || Date.now() - cache.get(key).at > 15 * 60 * 1000) {
-    const promise = (async () => {
-      const response = await fetcher.call(globalThis, 'https://rg-api.zenglingkun.cn/api/v2/mapLine?train=' + encodeURIComponent(train), { signal: AbortSignal.timeout(20000), credentials: 'omit', referrerPolicy: 'no-referrer' });
-      if (!response.ok) throw new Error('暂未取得铁路线路');
-      const text = await response.text();
-      if (text.length > 4000000) throw new Error('铁路线路数据过大');
-      return JSON.parse(text);
-    })();
-    cache.set(key, { at: Date.now(), promise });
-    promise.catch(() => cache.delete(key));
-    if (cache.size > 64) cache.delete(cache.keys().next().value);
-  }
-  return selectRailRoute(record,await cache.get(key).promise);
+  const train = service.split('/')[0];
+  const timeout = AbortSignal.timeout(20000);
+  const response = await fetcher.call(globalThis, 'https://rg-api.zenglingkun.cn/api/v2/mapLine?train=' + encodeURIComponent(train), {
+    signal: signal ? AbortSignal.any([signal, timeout]) : timeout, credentials: 'omit', referrerPolicy: 'no-referrer'
+  });
+  if (!response.ok) throw new Error('暂未取得铁路线路');
+  const text = await response.text();
+  if (text.length > 4000000) throw new Error('铁路线路数据过大');
+  return selectRailRoute(record, JSON.parse(text));
 }

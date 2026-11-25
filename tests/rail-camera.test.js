@@ -4,9 +4,25 @@ import { JSDOM } from 'jsdom';
 import { openRailCamera } from '../src/rail-camera.js';
 import { readPrintedDate } from '../src/scan-date.js';
 import { railStationFromRegion, printedRailNumber } from '../src/rail-ticket.js';
-import { separateRailRedInk } from '../src/scan-image.js';
+import { prepareOCRImage, separateRailRedInk } from '../src/scan-image.js';
 import { marksFromRailRegion } from '../src/ticket-marks.js';
 import { chooseRailReading, fullRailRead, paddleRailReading, recognizedRailRecords } from '../src/paddle-rail.js';
+
+test('photo preparation bounds large images and preserves their proportions', async () => {
+  const previous = globalThis.document, draws = [];
+  globalThis.document = { createElement: () => ({
+    width: 0, height: 0, getContext: () => ({ fillRect() {}, drawImage: (...args) => draws.push(args) })
+  }) };
+  try {
+    for (const [width, height, expectedWidth, expectedHeight] of [[9732, 4067, 1800, 752], [1000, 8000, 375, 3000], [1800, 900, 1800, 900]]) {
+      const canvas = await prepareOCRImage({ width, height });
+      assert.deepEqual([canvas.width, canvas.height], [expectedWidth, expectedHeight]);
+    }
+    assert.equal(draws.length, 3);
+  } finally {
+    globalThis.document = previous;
+  }
+});
 
 test('the rail camera only delivers the pixels inside the guide after a shutter press', async t => {
   const { window } = new JSDOM('<div id="preview"></div>');

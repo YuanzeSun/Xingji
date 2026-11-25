@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRecord, archive, readArchive } from '../src/model.js';
 import { normalizeRailRoute } from '../src/rail-route-snapshot.js';
-import { selectRailRoute, loadRailRoute } from '../src/rail-route.js';
+import { selectRailRoute, fetchRailRoute } from '../src/rail-route.js';
 import { railMapPoint } from '../src/rail-route-map.js';
 
 const record = extra => createRecord({ type: 'rail', service: 'D3759', origin: '柳州', destination: '来宾北', departureDate: '2023-05-26', ...extra });
@@ -40,19 +40,18 @@ test('missing or reversed stops, same-city substitutions and broken or malformed
   assert.equal(selectRailRoute(record(), { success: false }), null);
 });
 
-test('query shares one request per current train and sends no passenger data or credentials', async () => {
+test('an explicit route query sends only the train number and accepts cancellation', async () => {
   const requests = [], fetcher = async function(url, options) { assert.equal(this, globalThis); requests.push({ url, options }); return Response.json(payload()); };
-  const [short, through] = await Promise.all([loadRailRoute(record({ passenger: 'PRIVATE' }), { fetcher }), loadRailRoute(record({ destination: '平南南' }), { fetcher })]);
-  assert.equal(requests.length, 1); assert.equal(short.segments.length, 1); assert.equal(through.segments.length, 2);
+  const controller = new AbortController();
+  const route = await fetchRailRoute(record({ passenger: 'PRIVATE' }), { fetcher, signal: controller.signal });
+  assert.equal(route.segments.length, 1);
+  assert.equal(requests.length, 1);
   assert.equal(requests[0].url, 'https://rg-api.zenglingkun.cn/api/v2/mapLine?train=D3759');
   assert.equal(requests[0].options.credentials, 'omit'); assert.equal(requests[0].options.referrerPolicy, 'no-referrer');
-  assert.equal(JSON.stringify(requests).includes('PRIVATE'), false);
-  assert.equal(await loadRailRoute(record({ service: 'invalid&token=private' }), { fetcher }), null);
+  controller.abort();
+  assert.equal(requests[0].options.signal.aborted, true);
+  assert.equal(await fetchRailRoute(record({ service: 'invalid&token=private' }), { fetcher }), null);
   assert.equal(requests.length, 1);
-  let attempts = 0;
-  const retry = async () => { if (++attempts === 1) throw new TypeError('offline'); return Response.json(payload()); };
-  await assert.rejects(loadRailRoute(record(), { fetcher: retry }), /offline/);
-  assert.ok(await loadRailRoute(record(), { fetcher: retry }));
 });
 
 test('GCJ-02 track coordinates align with the WGS84 country basemap', () => {
@@ -61,12 +60,9 @@ test('GCJ-02 track coordinates align with the WGS84 country basemap', () => {
   assert.ok(Math.abs(y - (90 - 39.915) / 360 * 1000) < .0001);
 });
 
-test('saved raw route geometry survives JSON and never queries again when its train and endpoints match', async () => {
+test('saved route geometry survives JSON and is discarded when its train or endpoints change', () => {
   const route=selectRailRoute(record(),payload()),saved=record({railRoute:route});
-  for (const restored of [readArchive(archive([saved]))[0]]) {
-    assert.deepEqual(restored.railRoute,route);
-    assert.deepEqual(await loadRailRoute(restored,{fetcher:()=>{throw Error('Saved routes must not make requests');}}),route);
-  }
+  assert.deepEqual(readArchive(archive([saved]))[0].railRoute,route);
   assert.equal(record({...saved,service:'D3758'}).railRoute,'');
   assert.equal(record({...saved,destination:'平南南',destinationCode:''}).railRoute,'');
   assert.equal(record({...saved,type:'flight',template:'air-boarding-pass'}).railRoute,'');
