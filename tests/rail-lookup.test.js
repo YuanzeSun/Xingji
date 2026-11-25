@@ -153,6 +153,35 @@ test('RailGo fills from the closest run day, preserves the ticket date, and keep
   } finally { cleanup(); dom.window.close(); }
 });
 
+test('an explicitly selected RailGo start date can fill reference data without a prompt to change the date', async t => {
+  const ticket = record({ departureDate: '2025-09-30' }), calls = [];
+  const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '</form>');
+  const form = dom.window.document.querySelector('form');
+  const cleanup = bindRailLookup(form, {
+    getRecord: () => ticket, canQuery: () => true,
+    apply: (changes, source) => applyLookupValues(ticket, changes, !!source, source),
+    lookup: (query, options) => lookupRailDetails(query, { ...options, fetcher: async url => {
+      calls.push(new URL(url).searchParams.get('date'));
+      return Response.json(payload({ rundays: ['20251001', '20250930'] }));
+    } })
+  });
+  t.after(() => { cleanup(); dom.window.close(); });
+
+  const start = form.querySelector('[data-rail-start]');
+  start.value = '2025-10-01';
+  start.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+  form.querySelector('[data-rail-lookup]').click();
+  await new Promise(done => setImmediate(done));
+
+  assert.deepEqual(calls, ['20251001']);
+  assert.equal(start.value, '2025-10-01');
+  assert.equal(calendarDate(ticket.departureDate), '2025-09-30');
+  assert.equal(calendarDate(ticket.arrivalDate), '2025-09-30');
+  assert.equal(ticket.fieldSources.railModel, 'railgo-reference');
+  assert.match(form.querySelector('[data-rail-reference]').textContent, /仅供参考.*参考开行日 2025-10-01.*乘车日 2025-09-30/);
+  assert.doesNotMatch(form.querySelector('[data-rail-status]').textContent, /后重查/);
+});
+
 test('RailGo diagnostics remain available when a response is rejected and reset on the next lookup', async t => {
   const ticket = record({ origin: '深圳北' });
   const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '</form>');

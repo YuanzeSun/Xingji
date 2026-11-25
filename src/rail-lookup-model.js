@@ -39,7 +39,7 @@ function nearestRunDate(runDays, boardingDate, conventionalStart) {
     .sort((a, b) => distance(a) - distance(b) || a.localeCompare(b))[0];
 }
 
-export function railDetails(payload, query, queriedAt = new Date().toISOString(), { reference = false } = {}) {
+export function railDetails(payload, query, queriedAt = new Date().toISOString(), { dateMode = 'automatic' } = {}) {
   const row = payload?.data;
   if (payload?.success !== true || !row || Array.isArray(row)) throw new Error('未查到该始发日期的列车资料，可手动填写');
   if (!Array.isArray(row.numberFull) || !row.numberFull.some(number => service(number) === query.trainNum)) {
@@ -59,9 +59,9 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
   const boardingDate = shiftRailDate(startDate, offset);
   if (!runDays.includes(query.date)) {
     const error = new Error('RailGo 未确认所查日期的开行资料');
-    if (!reference) {
+    if (dateMode !== 'reference') {
       const actualStart = shiftRailDate(query.boardingDate, -offset);
-      const inferred = startDate === query.boardingDate;
+      const inferred = dateMode === 'automatic' && startDate === query.boardingDate;
       if (inferred && runDays.includes(actualStart.replaceAll('-', ''))) error.startDate = actualStart;
       else {
         const conventionalStart = /^[ZNTKVY\d]/.test(query.trainNum) ? (inferred ? actualStart : startDate) : '';
@@ -70,7 +70,7 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
     }
     throw error;
   }
-  if (!reference && boardingDate !== query.boardingDate) {
+  if (dateMode === 'automatic' && boardingDate !== query.boardingDate) {
     const suggested = shiftRailDate(query.boardingDate, -offset);
     const departureDay = offset === 0 ? '始发当天' : offset === 1 ? '始发次日' : `始发 ${offset} 天后`;
     const error = new Error(`RailGo 显示，列车在${departureDay}从「${query.origin}」发车。本次查询对应的乘车日是 ${boardingDate}，请在「调整列车始发日期」中选择 ${suggested} 后重查`);

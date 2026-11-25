@@ -69,13 +69,14 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
   async function query({ automatic = false } = {}) {
     if (busy || disposed || !canQuery()) return;
     try {
-      const input = railQuery(getRecord(),date.value || undefined), original=stamp();
+      const startDate = date.value || undefined;
+      const input = railQuery(getRecord(), startDate), original = stamp();
       const initialTime = getRecord().departureTime;
       clearDiagnostics();
       busy=true; button.disabled=true; button.textContent='正在查询…'; status.textContent='正在查询时刻、担当单位与列车资料…';
       request=new AbortController();
       const result=await lookup(input,{
-        railRoute:getRecord().railRoute, railJourney:getRecord().railJourney, signal:AbortSignal.any([request.signal,AbortSignal.timeout(40000)]),
+        railRoute:getRecord().railRoute, railJourney:getRecord().railJourney, explicitStartDate: Boolean(startDate), signal:AbortSignal.any([request.signal,AbortSignal.timeout(40000)]),
         onTimetableResponse(response) {
           if (disposed || !form.isConnected || original !== stamp()) return;
           diagnosticsStamp = original;
@@ -90,7 +91,7 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
         status.textContent='RailGo 发车时间与票面不同，请核对后手动查询';
         return;
       }
-      const changes=railCompletion(getRecord(),result,date.value || undefined), count=Object.keys(changes).filter(key=>changes[key] && !['railJourney','railRoute'].includes(key)).length, snapshot=!!(changes.railJourney || changes.railRoute);
+      const changes=railCompletion(getRecord(),result,startDate), count=Object.keys(changes).filter(key=>changes[key] && !['railJourney','railRoute'].includes(key)).length, snapshot=!!(changes.railJourney || changes.railRoute);
       if (Object.keys(changes).length) {
         const runDay=calendarDate(result.railJourney.query.startDate);
         const source=reference ? {kind:RAILGO_REFERENCE_SOURCE,label:`RailGo 参考资料（开行日 ${runDay}）`} : {kind:'rail-lookup',label:`RailGo 行程资料（始发日 ${runDay}）`};

@@ -124,15 +124,15 @@ function retainFullRoute(route, saved, stops) {
   return route;
 }
 
-export async function lookupRailDetails(query, { fetcher = globalThis.fetch, signal, enrich = true, railRoute = '', railJourney = '', onTimetableResponse } = {}) {
+export async function lookupRailDetails(query, { fetcher = globalThis.fetch, signal, enrich = true, railRoute = '', railJourney = '', explicitStartDate = false, onTimetableResponse } = {}) {
   const options = { fetcher, signal };
-  const main = async (input, reference = false) => {
+  const main = async (input, dateMode = explicitStartDate ? 'selected' : 'automatic') => {
     const url = new URL('https://rg-api.zenglingkun.cn/api/v2/getTrainMain');
     url.searchParams.set('trainNum',input.trainNum); url.searchParams.set('date',input.date);
     const payload = await requestJSON(url, options, response => {
-      onTimetableResponse?.({ ...response, trainNum: input.trainNum, date: input.date, reference });
+      onTimetableResponse?.({ ...response, trainNum: input.trainNum, date: input.date, reference: dateMode === 'reference' });
     });
-    return railDetails(payload, input, undefined, { reference });
+    return railDetails(payload, input, undefined, { dateMode });
   };
   async function matchingTrip() {
     try { return await main(query); }
@@ -146,7 +146,7 @@ export async function lookupRailDetails(query, { fetcher = globalThis.fetch, sig
   try { result = await matchingTrip(); }
   catch (error) {
     if (!error.referenceDate) throw error;
-    result = await main({ ...query, date: error.referenceDate.replaceAll('-', '') }, true);
+    result = await main({ ...query, date: error.referenceDate.replaceAll('-', '') }, 'reference');
   }
   if (!enrich || result.railJourney.query.referenceFor) return result;
   const journey = result.railJourney, queriedAt = journey.queriedAt;
