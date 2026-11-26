@@ -69,6 +69,8 @@ test('stopovers stay tied to the dated airport pair and preserve confirmed count
   const countOnly = matching([row({ StopFlag: '1', StopAirportCode: 'HND' })]);
   assert.deepEqual(countOnly.flightStops, { ...stops, airports: [] });
   assert.deepEqual(flightCompletion(countOnly, candidate).flightStops, stops);
+  assert.equal(flightCompletion({ ...countOnly, fieldSources: { flightStops: 'manual' } }, candidate).flightStops, undefined);
+  assert.equal(flightCompletion({ ...record(trip), fieldSources: { flightStops: 'manual' } }, candidate).flightStops, undefined);
   assert.deepEqual(matching([row()]).flightStops, { ...stops, count: 0, airports: [] });
   assert.equal(matching([row({ StopFlag: undefined })]).flightStops, undefined);
   assert.equal(matching([row({ StopFlag: '1', StopAirportCode: 'KIX', LegFlag: '1' })]).flightStops, undefined);

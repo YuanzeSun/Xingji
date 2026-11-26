@@ -4,11 +4,10 @@ import { flightCandidates, flightCompletion, flightLookupNeeds, rotationRegistra
 import { flightQuery } from './flight-query.js';
 import { FlightConnector } from './mcp.js';
 import { flightTrackRequest, readFlightTrack } from './flight-track.js';
-import { flightStopsText, normalizeFlightStops } from './flight-stops.js';
 import { reconcileAircraft } from './aircraft.js';
 
 export function flightLookupMarkup() {
-  return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><div class="button-row flight-lookup-actions"><button class="button secondary small" type="button" data-flight-track-query>查询航迹</button><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div></div><p class="flight-lookup-status" data-flight-stops></p><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><div data-flight-candidates></div></section>`;
+  return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><div class="button-row flight-lookup-actions"><button class="button secondary small" type="button" data-flight-track-query>查询航迹</button><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div></div><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><div data-flight-candidates></div></section>`;
 }
 
 export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, apply, applyTrack, onPending, lookup }) {
@@ -16,15 +15,12 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
   if (!section) return () => {};
   const button = section.querySelector('[data-flight-lookup]'), status = section.querySelector('[data-flight-status]'), list = section.querySelector('[data-flight-candidates]');
   const trackButton = section.querySelector('[data-flight-track-query]');
-  const stopSummary = section.querySelector('[data-flight-stops]');
   const cache = new Map();
   let disposed = false, activeRequest, candidates = [], candidateStamp = '', cacheOwner = '', selectedKey = '';
   const stamp = () => { const record = getRecord(); return JSON.stringify(['type', 'service', 'departureDate', 'origin', 'originCode', 'destination', 'destinationCode'].map(field => record[field] || '')); };
   const validContext = original => !disposed && form.isConnected && canQuery() && desktop() && stamp() === original && getKey() === selectedKey;
   function refreshButtons() {
     const record = getRecord();
-    const stops = normalizeFlightStops(record, record.flightStops);
-    stopSummary.textContent = stops ? '经停情况：' + flightStopsText(stops) : '';
     let currentTrack = false;
     if (record.flightTrack) {
       try { currentTrack = record.flightTrack.flightStr === flightTrackRequest(record); } catch {}
@@ -84,7 +80,10 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     if (!recordBeforeLookup.boardingTime && !recordBeforeLookup.lockedFields?.includes('boardingTime') && !candidate.boardingTime) {
       summary += '飞常准未提供计划登机时间。';
     }
-    if (!getRecord().flightStops) summary += '飞常准未提供可核对的经停信息。';
+    const currentRecord = getRecord();
+    if (!currentRecord.flightStops && currentRecord.fieldSources?.flightStops !== 'manual') {
+      summary += '飞常准未提供可核对的经停信息。';
+    }
     if (!summary) summary = '本次没有可补全的航班信息。';
     status.textContent = summary;
     if (flightLookupNeeds(getRecord()).registration) {

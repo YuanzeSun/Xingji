@@ -167,7 +167,8 @@ export function rotationRegistration(result, query) {
 const scheduleFields = ['departureTime', 'flightDistance', 'airline', 'aircraft', 'terminal', 'gate', 'boardingTime'];
 const timePairs = [['arrivalDate', 'arrivalTime'], ['actualDepartureDate', 'actualDepartureTime'], ['actualArrivalDate', 'actualArrivalTime']];
 const canFill = (record, field) => !record[field] && !record.lockedFields?.includes(field);
-const needsStops = record => !record.flightStops || record.flightStops.airports.length < record.flightStops.count;
+const needsStops = record => record.fieldSources?.flightStops !== 'manual' &&
+  (!record.flightStops || record.flightStops.airports.length < record.flightStops.count);
 const canCompletePair = (record, [first, second]) =>
   (canFill(record, first) && (record[second] || canFill(record, second))) ||
   (canFill(record, second) && record[first]);

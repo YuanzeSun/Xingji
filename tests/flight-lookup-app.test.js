@@ -5,7 +5,7 @@ import { indexedDB } from 'fake-indexeddb';
 import { prepareCloud } from './helpers/cloud.js';
 
 test('the editor fills a flight through the provider, preserves private input and saves the selected schedule and attribution', async () => {
-  const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost/#archive' }), { window } = dom;
+  const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost/#archive', pretendToBeVisual: true }), { window } = dom;
   Object.defineProperty(window.navigator, 'userAgent', { value: 'Mozilla/5.0 (Windows NT 10.0) Chrome/142.0' });
   for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData', 'Image']) Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
   Object.defineProperty(globalThis, 'navigator', { value: window.navigator, configurable: true }); Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true });
@@ -23,6 +23,7 @@ test('the editor fills a flight through the provider, preserves private input an
   };
   const wait = async fn => { for (let i = 0; i < 250; i++) { if (await fn()) return; await new Promise(resolve => setTimeout(resolve, 5)); } assert.fail('Flight lookup did not settle'); };
   const fill = (name, value) => { const input = document.querySelector(`#editor-form [name="${name}"]`); input.value = value; input.dispatchEvent(new window.Event('input', { bubbles: true })); };
+  const submit = () => document.querySelector('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
   try {
     const db = await import('../src/db.js'); await import('../src/app.js'); await wait(() => document.querySelector('[data-action=new]:not(:disabled)'));
     document.querySelector('[data-action=new]').click(); await wait(() => document.querySelector('#editor-form'));
@@ -33,7 +34,9 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.equal(document.querySelector('[name=originCode]').value, 'PEK'); assert.equal(document.querySelector('[name=destinationCode]').value, 'HND');
     assert.equal(document.querySelector('[name=departureTime]').value, '08:45'); assert.equal(document.querySelector('[name=arrivalDate]').value, '2026-07-18'); assert.equal(document.querySelector('[name=arrivalTime]').value, '12:50');
     assert.equal(document.querySelector('[name=boardingTime]').value, '08:05');
-    assert.match(document.querySelector('[data-flight-stops]').textContent, /经停情况.*KIX/);
+    assert.equal(document.querySelector('[name=flightStopCount]').value, '1');
+    assert.equal(document.querySelector('[name=flightStopAirports]').value, 'KIX');
+    assert.equal(document.querySelector('[data-flight-stops-source]').textContent, '飞常准');
     assert.equal(document.querySelector('[name=actualDepartureTime]').value,'09:15');assert.equal(document.querySelector('[name=actualArrivalTime]').value,'13:15');assert.equal(document.querySelector('[name=flightDistance]').value,'2100');
     assert.match(document.querySelector('[name=departureTime]').closest('.field').textContent,/计划起飞时间/);assert.equal(document.querySelector('[name=actualDepartureTime]').required,false);assert.equal(document.querySelector('[name=actualDepartureDateYear]').type,'number');
     assert.equal(document.querySelector('[name=aircraft]').value, 'A330-343'); assert.equal(document.querySelector('[name=gate]').value, 'E12');
@@ -46,7 +49,7 @@ test('the editor fills a flight through the provider, preserves private input an
       { name: 'getFlightStatus', arguments: { fnum: 'CA181', date: '2026-07-18' } },
       { name: 'getFlightTrackLine', arguments: { flightStr: 'CA181_PEK_HND_2026-07-18_0' } },
     ]);
-    document.querySelector('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })); await wait(() => !document.querySelector('dialog'));
+    submit(); await wait(() => !document.querySelector('dialog'));
     const saved = (await db.get('records', []))[0];
     assert.equal(saved.departureZone,'Asia/Shanghai');assert.equal(saved.arrivalZone,'Asia/Tokyo');
     assert.equal(saved.departureTime, '08:45'); assert.equal(saved.arrivalTime, '12:50'); assert.equal(saved.seat, '24K'); assert.equal(saved.pnr, 'ABC123');
@@ -60,5 +63,33 @@ test('the editor fills a flight through the provider, preserves private input an
     document.querySelector('[data-action=\"navigate\"][data-page=\"archive\"]').click();await wait(()=>document.querySelector('[data-action=\"view\"]'));document.querySelector('[data-action=\"view\"]').click();await wait(()=>document.querySelector('[data-ticket-detail=journey] .detail-grid'));
     assert.match(document.querySelector('[data-ticket-detail=journey] .detail-grid').textContent,/计划起飞时间08:45/);assert.match(document.querySelector('[data-ticket-detail=actual-times] .detail-grid').textContent,/实际起飞时间09:15/);assert.doesNotMatch(document.querySelector('.detail-preview').textContent,/09:15|13:15/);
     assert.match(document.querySelector('[data-detail-field=flightStops]').textContent, /经停情况.*KIX/);
+    document.querySelector('[data-action="edit"]').click(); await wait(() => document.querySelector('#editor-form'));
+    assert.equal(document.querySelector('[name=flightStopAirports]').value, 'KIX');
+    fill('flightStopCount', '2'); fill('flightStopAirports', 'PVG、PVG');
+    submit();
+    assert.equal(document.querySelector('[name=flightStopAirports]').getAttribute('aria-invalid'), 'true');
+    assert.match(document.querySelector('#editor-error').textContent, /经停机场重复/);
+    fill('flightStopAirports', 'PVG、关西国际机场');
+    assert.equal(document.querySelector('[data-flight-stops-source]').textContent, '手动输入');
+    submit(); await wait(() => !document.querySelector('dialog'));
+    const corrected = (await db.get('records', []))[0];
+    assert.deepEqual(corrected.flightStops.airports, ['PVG','KIX']);
+    assert.equal(corrected.fieldSources.flightStops, 'manual');
+    document.querySelector('[data-action="view"]').click(); await wait(() => document.querySelector('[data-action="edit"]:not(:disabled)'));
+    assert.match(document.querySelector('[data-detail-field=flightStops]').textContent, /手动输入.*PVG.*KIX/);
+    document.querySelector('[data-action="edit"]').click(); await wait(() => document.querySelector('#editor-form'));
+    fill('flightStopCount', '0');
+    assert.equal(document.querySelector('[data-flight-stops-airports]').hidden, true);
+    submit(); await wait(() => !document.querySelector('dialog'));
+    const direct = (await db.get('records', []))[0];
+    assert.equal(direct.flightStops.count, 0);
+    assert.deepEqual(direct.flightStops.airports, []);
+    document.querySelector('[data-action="view"]').click(); await wait(() => document.querySelector('[data-action="edit"]:not(:disabled)'));
+    document.querySelector('[data-action="edit"]').click(); await wait(() => document.querySelector('#editor-form'));
+    fill('flightStopCount', '');
+    submit(); await wait(() => !document.querySelector('dialog'));
+    const cleared = (await db.get('records', []))[0];
+    assert.equal(cleared.flightStops, undefined);
+    assert.equal(cleared.fieldSources.flightStops, undefined);
   } finally { window.dispatchEvent(new window.Event('offline')); dom.window.close(); }
 });

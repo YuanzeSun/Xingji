@@ -134,6 +134,7 @@ export function validateRecord(input) {
   if (flightTrack) out.flightTrack = flightTrack;
   const flightStops = normalizeFlightStops(out, input.flightStops);
   if (flightStops) out.flightStops = flightStops;
+  else delete out.fieldSources.flightStops;
   if (out.railJourney && !railJourneyMatches(out)) {
     if(out.railJourney.distanceQueriedAt && !out.lockedFields.includes('railMileage'))out.railMileage='';
     out.railJourney = '';

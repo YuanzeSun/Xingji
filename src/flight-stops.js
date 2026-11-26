@@ -23,7 +23,7 @@ export function flightStopsText(stops) {
     const place = resolvePlace({ type: 'flight', origin: code }, 'origin');
     return place.name ? `${place.name}（${code}）` : code;
   });
-  if (!names.length) return `经停 ${stops.count} 次，机场未提供`;
-  if (names.length < stops.count) names.push(`另有 ${stops.count - names.length} 站机场未提供`);
+  if (!names.length) return `经停 ${stops.count} 次，机场未记录`;
+  if (names.length < stops.count) names.push(`另有 ${stops.count - names.length} 站机场未记录`);
   return names.join('、');
 }

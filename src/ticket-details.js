@@ -100,8 +100,14 @@ export function ticketDetailsMarkup(record, labels, hasRenderedCode) {
     return `<section class="ticket-detail-group" data-ticket-detail="${name}" aria-labelledby="${heading}">
       <h3 id="${heading}">${title}</h3>
       <dl class="detail-grid">${fields.map(([key, value]) => `<div data-detail-field="${e(key)}">` +
-        `<dt>${e(detailLabel(record, key, labels))}${record.fieldSources?.[key] === RAILGO_REFERENCE_SOURCE || Object.hasOwn(RAIL_TIMETABLE_REFERENCES, record.fieldSources?.[key]) ? fieldSourceBadge(key, record) : ''}</dt>` +
+        `<dt>${e(detailLabel(record, key, labels))}${detailSourceBadge(key, record)}</dt>` +
         `<dd>${e(value)}</dd></div>`).join('')}</dl>
     </section>`;
   }).join('')}</div>`;
+}
+
+function detailSourceBadge(key, record) {
+  const source = record.fieldSources?.[key];
+  return source && (key === 'flightStops' || source === RAILGO_REFERENCE_SOURCE || Object.hasOwn(RAIL_TIMETABLE_REFERENCES, source))
+    ? fieldSourceBadge(key, record) : '';
 }
