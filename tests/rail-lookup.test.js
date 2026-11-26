@@ -13,6 +13,7 @@ import { fieldSourceLabel } from '../src/field-sources.js';
 import { journeyStatistics } from '../src/statistics-model.js';
 import { mountStatistics } from '../src/statistics.js';
 import { ticketSVG } from '../src/tickets.js';
+import { ticketDetailsMarkup } from '../src/ticket-details.js';
 
 const record = extra => createRecord({ type:'rail', service:'G1', origin:'北京南', destination:'上海虹桥', departureDate:'2026-11-17', ...extra });
 const railEditor = ticket => railLookupMarkup(ticket) + railTimetableMarkup(ticket);
@@ -225,6 +226,61 @@ test('Open CRH Tracker uses the inferred first-station day and rejects conflicti
   await assert.rejects(lookup('00:05'), /历史时刻表有冲突/);
 });
 
+test('Open CRH Tracker saves units only for the current matching service day and route', async () => {
+  const midnightOffset = 8 * 3600, secondsPerDay = 86400;
+  const day = Math.floor((Date.now() / 1000 + midnightOffset) / secondsPerDay);
+  const date = new Date(day * secondsPerDay * 1000).toISOString().slice(0, 10);
+  const midnight = day * secondsPerDay - midnightOffset;
+  const ticket = record({ departureDate: date, departureTime: '06:30' });
+  const query = railQuery(ticket), trainCode = { prefix: 'G', number: 1 };
+  const historicalStops = [
+    { stationName: '北京南', departOffset: 23400, stationTrainCode: trainCode },
+    { stationName: '上海虹桥', arriveOffset: 41040, stationTrainCode: trainCode }
+  ];
+  const current = {
+    serviceDay: day, trainCode, bureauCode: 'H', bureauName: '上海局集团',
+    trainDepartment: '上海动车段', passengerDepartment: '上海客运段',
+    stops: [
+      { stationName: '北京南', departAt: midnight + 23400, stationTrainCode: trainCode },
+      { stationName: '上海虹桥', arriveAt: midnight + 41040, stationTrainCode: trainCode }
+    ]
+  };
+  const lookup = (row, withHistory = true) => lookupRailTimetableReference('open-crh-tracker', query, ticket.departureTime, {
+    async fetcher(address) {
+      const path = new URL(address).pathname;
+      const data = path.endsWith('/current') ? row : path.includes('/timetable/') ? {
+        trainCode, items: withHistory ? [{ serviceDayStart: day, serviceDayEndExclusive: day + 1, timetableId: 1 }] : [],
+        timetableMappings: { 1: { stops: historicalStops } }
+      } : { trainCode, items: [] };
+      return Response.json({ ok: true, data });
+    }
+  });
+  const fields = ['railBureau', 'railRunner', 'railCarOwner'];
+  const result = await lookup(current);
+  applyLookupValues(ticket, railCompletion(ticket, result), true, { kind: 'open-crh-tracker' });
+  const [saved] = readArchive(archive([ticket]));
+  assert.deepEqual(fields.map(key => saved[key]), ['上海局', '上海客运段', '上海动车段']);
+  assert.deepEqual(fields.map(key => fieldSourceLabel(saved, key)), Array(3).fill('Open CRH Tracker'));
+  const details = JSDOM.fragment(ticketDetailsMarkup(saved, {}, false));
+  for (const field of fields) {
+    assert.equal(details.querySelector(`[data-detail-field="${field}"] .field-source`).textContent, 'Open CRH Tracker');
+  }
+  assert.equal(fieldSourceLabel(saved, 'arrivalTime'), 'Open CRH Tracker');
+  assert.equal((await lookup(current, false)).railCarOwner, '上海动车段');
+  const manual = { ...ticket, railRunner: '手填客运段', lockedFields: ['railRunner'] };
+  assert.equal(railCompletion(manual, result).railRunner, undefined);
+  for (const row of [
+    { ...current, serviceDay: day - 1 },
+    { ...current, trainCode: { prefix: 'G', number: 2 } },
+    { ...current, stops: [current.stops[0], { ...current.stops[1], arriveAt: midnight + 41100 }] },
+    { ...current, stops: [current.stops[0], { ...current.stops[1], stationName: '上海' }] }
+  ]) {
+    const unmatched = await lookup(row);
+    assert.ok(fields.every(key => unmatched[key] === undefined));
+    assert.ok(fields.every(key => !Object.hasOwn(railCompletion(saved, unmatched), key)));
+  }
+});
+
 test('a train that left before renumbering can be queried on its manually selected start date', async () => {
   const ticket = record({ service: 'T109', origin: '南京南', departureDate: '2026-11-25' });
   const oldRun = payload({ numberFull: ['T109'], rundays: ['20261124'], timetable: [
@@ -279,7 +335,7 @@ test('an automatic RailGo miss leaves fields blank until the user selects an ava
     assert.equal(ticket.arrivalDate, '');
     assert.equal(ticket.railJourney, '');
     const date = form.querySelector('[data-rail-query-date]');
-    assert.match(form.querySelector('.rail-query-hint').textContent, /原始返回.*开行日期/);
+    assert.match(form.querySelector('.rail-query-hint').textContent, /原始返回.*开行日期.*或用下方任一服务查询/);
     diagnostics.open = true;
     date.value = '2026-11-16';
     date.dispatchEvent(new dom.window.Event('change', { bubbles: true }));

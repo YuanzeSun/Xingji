@@ -29,7 +29,7 @@ export function railLookupMarkup(record) {
   const savedStart = hasConfirmedRailJourney(record) ? calendarDate(journey.query.startDate) : '';
   const startOverride = savedStart === calendarDate(record.departureDate) ? '' : savedStart;
   const reference = railReferenceNotice(record);
-  const historicalOptions = `<div data-rail-fallback hidden role="group" aria-label="历史时刻表查询">${Object.entries(RAIL_TIMETABLE_REFERENCES).map(([key, { name }]) => `<button class="button secondary small" type="button" data-rail-provider="${key}">查 ${name}</button>`).join('')}</div>`;
+  const fallbackOptions = `<div data-rail-fallback hidden role="group" aria-label="其他铁路查询">${Object.entries(RAIL_TIMETABLE_REFERENCES).map(([key, { name }]) => `<button class="button secondary small" type="button" data-rail-provider="${key}">查 ${name}</button>`).join('')}</div>`;
   return `
     <section class="rail-lookup" aria-label="铁路资料补全">
       <div class="rail-lookup-heading">
@@ -37,8 +37,8 @@ export function railLookupMarkup(record) {
         <button class="button secondary small" type="button" data-rail-lookup>${journey ? '重新查询' : '查询并补全'}</button>
       </div>
       <p class="rail-lookup-status" data-rail-status role="status" aria-live="polite"></p>
-      <p class="rail-query-hint" data-rail-query-hint hidden><button type="button" aria-controls="rail-lookup-diagnostics">查看 RailGo 原始返回</button><span data-rail-retry-date>，按开行日期（rundays）调整查询日期后重查。</span></p>
-      ${historicalOptions}
+      <p class="rail-query-hint" data-rail-query-hint hidden><button type="button" aria-controls="rail-lookup-diagnostics">查看 RailGo 原始返回</button><span data-rail-retry-date>，按开行日期（rundays）调整查询日期后重查，或用下方任一服务查询。</span></p>
+      ${fallbackOptions}
       <div class="code-consistency" data-rail-reference role="status" aria-live="polite" ${reference ? '' : 'hidden'}>${reference}</div>
       <details class="rail-query-date">
         <summary>查询日期</summary>

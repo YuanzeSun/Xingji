@@ -109,11 +109,14 @@ export function railCompletion(record, result, startDate) {
     values.arrivalDate = shiftRailDate(referenceFor, overnightDays);
   }
   const fields = ['railBureau','railModel','railTrainsets','railPowerSupply','railMileage','railRunner','railCarOwner','gate','railPlatform','departureTime','arrivalDate','arrivalTime'];
+  const sameServiceDay = saved && journey && calendarDate(saved.query.startDate) === calendarDate(journey.query.startDate);
   const changes = {};
   for (const field of fields) {
     const previousSource = record.fieldSources?.[field];
     const fromTimetableReference = Object.hasOwn(RAIL_TIMETABLE_REFERENCES, previousSource);
     if (combined && fromTimetableReference && previousSource !== timetableReference.provider) continue;
+    if (sameServiceDay && previousSource === 'open-crh-tracker' && timetableReference?.provider === previousSource &&
+        ['railBureau','railRunner','railCarOwner'].includes(field) && !Object.hasOwn(result, field)) continue;
     const fromLookup = isLookupValue(record,field);
     if (values[field] && (!record[field] || fromLookup) && !record.lockedFields?.includes(field)) changes[field] = values[field];
     if (!values[field] && fromLookup && (previousSource === RAILGO_REFERENCE_SOURCE || fromTimetableReference)) changes[field] = '';

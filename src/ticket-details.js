@@ -3,7 +3,7 @@ import { formatDate } from './model.js';
 import { cityLabel } from './locations.js';
 import { maskIdentity } from './identity.js';
 import { describeMarks } from './ticket-marks.js';
-import { railTrainsetIds } from './rail-journey.js';
+import { RAIL_TIMETABLE_REFERENCES, railTrainsetIds } from './rail-journey.js';
 import { readBoardingCode } from './bcbp.js';
 import { flightPassengerName } from './flight-passenger.js';
 import { ACTUAL_FLIGHT_FIELDS } from './flight-times.js';
@@ -100,7 +100,7 @@ export function ticketDetailsMarkup(record, labels, hasRenderedCode) {
     return `<section class="ticket-detail-group" data-ticket-detail="${name}" aria-labelledby="${heading}">
       <h3 id="${heading}">${title}</h3>
       <dl class="detail-grid">${fields.map(([key, value]) => `<div data-detail-field="${e(key)}">` +
-        `<dt>${e(detailLabel(record, key, labels))}${record.fieldSources?.[key] === RAILGO_REFERENCE_SOURCE ? fieldSourceBadge(key, record) : ''}</dt>` +
+        `<dt>${e(detailLabel(record, key, labels))}${record.fieldSources?.[key] === RAILGO_REFERENCE_SOURCE || Object.hasOwn(RAIL_TIMETABLE_REFERENCES, record.fieldSources?.[key]) ? fieldSourceBadge(key, record) : ''}</dt>` +
         `<dd>${e(value)}</dd></div>`).join('')}</dl>
     </section>`;
   }).join('')}</div>`;

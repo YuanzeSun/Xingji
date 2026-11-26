@@ -1,8 +1,10 @@
 import { calendarDate, journeyDate } from './journey-date.js';
 import { railDepartureDay } from './rail-lookup-model.js';
-import { normalizeRailJourney, railService, railStation, railTime, RAIL_TIMETABLE_REFERENCES, validRailDistances } from './rail-journey.js';
+import { bureauFromCode, normalizeRailBureau } from './rail-details.js';
+import { normalizeRailJourney, railService, railStation, railText, railTime, RAIL_TIMETABLE_REFERENCES, sameRailTimetable, validRailDistances } from './rail-journey.js';
 
 const SECONDS_PER_DAY = 86400;
+const SHANGHAI_OFFSET = 8 * 3600;
 const RAILLOG_API = 'https://api.raillog.top/api/train-timetables';
 const TRACKER_API = 'https://crh.lihugang.top/api/v2';
 const dayNumber = date => Date.parse(date + 'T00:00:00Z') / (SECONDS_PER_DAY * 1000);
@@ -68,10 +70,33 @@ async function trackerTimetables(query, options) {
   }) };
 }
 
+async function trackerCurrentTimetable(query, options) {
+  const url = new URL(TRACKER_API + '/timetable/train/' + encodeURIComponent(query.trainNum) + '/current');
+  const timeout = AbortSignal.timeout(5000);
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+  const payload = await fetchJSON(url, { ...options, signal }), row = payload?.data;
+  if (payload?.ok !== true || !Number.isInteger(row?.serviceDay) || !Array.isArray(row.stops) ||
+      row.stops.length < 2 || row.stops.length > 300) return null;
+  const numbers = [row.trainCode, ...(Array.isArray(row.allCodes) ? row.allCodes : [])].map(trackerCode);
+  if (!numbers.includes(query.trainNum)) return null;
+
+  const start = row.serviceDay, midnight = start * SECONDS_PER_DAY - SHANGHAI_OFFSET;
+  const stops = row.stops.map(stop => ({
+    station: railStation(stop?.stationName), trainCode: trackerCode(stop?.stationTrainCode),
+    arrival: Number.isInteger(stop?.arriveAt) ? stop.arriveAt - midnight : null,
+    departure: Number.isInteger(stop?.departAt) ? stop.departAt - midnight : null
+  }));
+  const code = bureauFromCode(railText(row.bureauCode)), name = normalizeRailBureau(railText(row.bureauName));
+  const railBureau = code && name && code !== name ? '' : code || name;
+  return { start, end: start + 1, stops, units: {
+    railBureau, railRunner: railText(row.passengerDepartment), railCarOwner: railText(row.trainDepartment)
+  } };
+}
+
 async function trackerTrainset(query, journey, timetableId, options) {
   // The history API uses timestamps at Shanghai midnight and reports the first-station service day.
   const day = dayNumber(calendarDate(journey.query.startDate));
-  const start = day * SECONDS_PER_DAY - 8 * 3600;
+  const start = day * SECONDS_PER_DAY - SHANGHAI_OFFSET;
   const url = new URL(TRACKER_API + '/history/train/' + encodeURIComponent(query.trainNum));
   url.search = new URLSearchParams({ start, end: start + SECONDS_PER_DAY - 1 });
   const { signal } = options;
@@ -112,22 +137,43 @@ function referenceJourney(timetable, query, departureTime, timetableReference, q
 export async function lookupRailTimetableReference(provider, query, departureTime, { fetcher = globalThis.fetch, signal } = {}) {
   const name = RAIL_TIMETABLE_REFERENCES[provider].name;
   if (!railTime(departureTime)) throw new Error('请先填写票面的出发时间，再查询历史时刻表');
-  const load = provider === 'raillog' ? railLogTimetable : trackerTimetables;
-  const { snapshotDate, timetables } = await load(query, { fetcher, signal, name });
+  const tracker = provider === 'open-crh-tracker', options = { fetcher, signal, name };
+  const today = Math.floor((Date.now() / 1000 + SHANGHAI_OFFSET) / SECONDS_PER_DAY);
+  const boardingDay = dayNumber(query.boardingDate);
+  // Current metadata is dated by the first station; boarding can be after midnight.
+  const currentRequest = tracker && boardingDay >= today && boardingDay < today + 8
+    ? trackerCurrentTimetable(query, options).catch(() => null) : null;
+  const load = tracker ? trackerTimetables : railLogTimetable;
+  const { snapshotDate, timetables, historyError } = await load(query, options).catch(error => {
+    if (!currentRequest) throw error;
+    return { timetables: [], historyError: error };
+  });
   const queriedAt = new Date().toISOString();
   const matches = new Map();
   const timetableReference = { provider, ...(snapshotDate && { snapshotDate }) };
+  const match = timetable => {
+    try { return referenceJourney(timetable, query, departureTime, timetableReference, queriedAt); }
+    catch { return null; }
+  };
   for (const timetable of timetables) {
-    try {
-      const candidate = referenceJourney(timetable, query, departureTime, timetableReference, queriedAt);
-      if (candidate) matches.set(candidate.signature, { result: candidate.result, timetableId: timetable.id });
-    } catch { /* Reject an inconsistent timetable. */ }
+    const candidate = match(timetable);
+    if (candidate) matches.set(candidate.signature, { result: candidate.result, timetableId: timetable.id });
   }
-  if (!matches.size) throw new Error(name + ' 未查到与票面日期、区间和出发时间相符的时刻表');
   if (matches.size > 1) throw new Error(name + ' 返回的历史时刻表有冲突，请核对后手动填写');
-  const { result, timetableId } = matches.values().next().value;
-  if (provider === 'open-crh-tracker') {
-    const trainset = await trackerTrainset(query, result.railJourney, timetableId, { fetcher, signal, name }).catch(() => null);
+  const historical = matches.values().next().value;
+  const stockRequest = tracker && historical
+    ? trackerTrainset(query, historical.result.railJourney, historical.timetableId, options).catch(() => null) : null;
+  const current = await currentRequest;
+  const currentMatch = current && match(current);
+  if (signal?.aborted) throw signal.reason;
+  const result = historical?.result || currentMatch?.result;
+  if (!result) throw historyError || new Error(name + ' 未查到与票面日期、区间和出发时间相符的时刻表');
+  if (currentMatch && (!historical || sameRailTimetable(result.railJourney, currentMatch.result.railJourney))) {
+    Object.assign(result, current.units);
+  }
+  if (stockRequest) {
+    const trainset = await stockRequest;
+    if (signal?.aborted) throw signal.reason;
     if (trainset) {
       result.railModel = trainset.model;
       result.railJourney = normalizeRailJourney({ ...result.railJourney, trainsets: [trainset] });
