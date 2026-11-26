@@ -157,18 +157,17 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
     const isCurrent = () => trip === tripStamp() && departureTime === getRecord().departureTime && canQuery() && !form.querySelector('[type="submit"]')?.disabled;
     busy = true;
     refresh();
-    status.textContent = '正在查询 ' + name + ' 历史时刻表…';
+    status.textContent = '正在查询 ' + name + '…';
     request = new AbortController();
     try {
       const result = await lookupReference(provider, railQuery(getRecord()), departureTime, { signal: AbortSignal.any([request.signal, AbortSignal.timeout(25000)]) });
       if (disposed || !form.isConnected) return;
       if (!isCurrent()) { status.textContent = '查询条件已改变，本次结果未填入'; return; }
       const changes = railCompletion(getRecord(), result);
-      const snapshot = result.railJourney.timetableReference.snapshotDate;
-      applyResult(changes, { kind: provider, label: name + ' 历史时刻表' + (snapshot ? '（快照 ' + calendarDate(snapshot) + '）' : '') });
+      applyResult(changes, { kind: provider, label: name });
       failedTrip = '';
       renderResult();
-      status.textContent = changes.railJourney ? '已取得 ' + name + ' 历史时刻表，请核对后保存' : '已有行程资料已保留';
+      status.textContent = changes.railJourney ? '已从 ' + name + ' 补全，请核对后保存' : '已有行程资料已保留';
     } catch (error) {
       if (!disposed && form.isConnected) status.textContent = !isCurrent() ? '查询条件已改变，本次结果未填入' :
         error.name === 'TimeoutError' ? name + ' 查询超时，请重试' : error.message;

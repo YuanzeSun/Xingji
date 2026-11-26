@@ -10,14 +10,7 @@ const localToday = () => { const date = new Date(); return `${date.getFullYear()
 
 export function railReferenceNotice(record) {
   if (!railJourneyMatches(record)) return '';
-  const { query, timetableReference } = record.railJourney;
-  if (timetableReference) {
-    const { provider, snapshotDate } = timetableReference;
-    const name = RAIL_TIMETABLE_REFERENCES[provider].name;
-    const snapshot = snapshotDate ? ` · 快照 ${calendarDate(snapshotDate)}` : '';
-    return `<strong>历史时刻表 · 仅供参考</strong><div>${name}${snapshot}</div>`;
-  }
-  const { startDate, boardingDate, referenceFor } = query;
+  const { startDate, boardingDate, referenceFor } = record.railJourney.query;
   if (!referenceFor) return '';
   const referenceBoarding = sameDate(startDate, boardingDate) ? '' : ` · 参考上车日 ${calendarDate(boardingDate)}`;
   return `<strong>非乘车当日 · 仅供参考</strong><div>参考开行日 ${e(calendarDate(startDate))}${e(referenceBoarding)} · 乘车日 ${e(calendarDate(referenceFor))}</div>`;

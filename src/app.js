@@ -42,7 +42,7 @@ import { flightLookupMarkup, bindFlightLookup } from './flight-lookup.js';
 import { railLookupMarkup, bindRailLookup, railTrainsetField } from './rail-lookup.js';
 import { RAIL_POINTS_PAGE, railPointsRange, readRailPoints, railPointsRecords } from './rail-points.js';
 import { railJourneyMarkup, railReferenceNotice } from './rail-journey-ui.js';
-import { railJourneyMatches, railService } from './rail-journey.js';
+import { railJourneyMatches, railService, RAIL_TIMETABLE_REFERENCES } from './rail-journey.js';
 import { openRailCamera } from './rail-camera.js';
 import { parseScanText, railPhotoChanges } from './scan-engine.js';
 import { normalizePlaces, resolvePlace } from './places.js';
@@ -954,7 +954,7 @@ function viewRecord(id) {
     : boardingJourneyMarkup(record, records) + (record.flightTrack ? '<section class="rail-route flight-track" data-flight-track aria-label="飞行航迹"></section>' : '');
   const sources = record.sources.length ? `<details class="source-details">
     <summary>数据来源 · ${record.sources.length} 条</summary>
-    ${record.sources.map(source => `<p>${e(source.label)}<span>${e(source.at.slice(0, 10))}</span></p>`).join('')}
+    ${record.sources.map(source => `<p>${e(Object.hasOwn(RAIL_TIMETABLE_REFERENCES, source.kind) ? RAIL_TIMETABLE_REFERENCES[source.kind].name : source.label)}<span>${e(source.at.slice(0, 10))}</span></p>`).join('')}
   </details>` : '';
   const service = record.service || (record.flightStatus === 'open' ? 'OPEN' : '班次待补充');
   const heading = `<span class="heading-service">${e(service)}</span><span class="heading-route">${e(record.origin || '出发地')} <span class="muted">→</span> ${e(record.destination || '到达地')}</span>`;
