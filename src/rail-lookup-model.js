@@ -53,26 +53,23 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
   const codeBureau = bureauFromCode(clean(row.bureau)), shortBureau = normalizeRailBureau(clean(row.bureauShortName));
   if (codeBureau && shortBureau && codeBureau !== shortBureau) throw new Error('返回路局信息不一致，未填入');
   const stops = row.timetable.map(item => {
-    if (!Number.isInteger(item.day) || item.day < 0 || item.day > 7) throw new Error('经停站跨日资料异常，未填入');
+    if (!Number.isInteger(item?.day) || item.day < 0 || item.day > 7) throw new Error('经停站跨日资料异常，未填入');
     const arrivalTime = railTime(item.arrive), departureTime = railTime(item.depart);
-    return { station:stationName(item.station), trainCode:service(item.trainCode), arrivalDate:arrivalTime ? shiftRailDate(startDate, item.day) : '', arrivalTime, departureDate:departureTime ? shiftRailDate(startDate, railDepartureDay(item.day, arrivalTime, departureTime)) : '', departureTime, stopMinutes:Number.isInteger(item.stopTime) ? item.stopTime : null };
+    return {
+      station: stationName(item.station), trainCode: service(item.trainCode),
+      arrivalDate: arrivalTime ? journeyDate(shiftRailDate(startDate, item.day)) : '', arrivalTime,
+      departureDate: departureTime ? journeyDate(shiftRailDate(startDate, railDepartureDay(item.day, arrivalTime, departureTime))) : '', departureTime,
+      stopMinutes: item.stopTime
+    };
   });
-  let previous = calendarDate(stops[0].departureDate) + 'T' + stops[0].departureTime;
-  for (const [i, item] of stops.entries()) {
-    for (const side of (i === 0 ? [] : i === stops.length - 1 ? ['arrival'] : ['arrival','departure'])) if (item[side + 'Date'] && item[side + 'Time']) {
-      const instant = calendarDate(item[side + 'Date']) + 'T' + item[side + 'Time'];
-      if (instant < previous) throw new Error('经停站时间顺序异常，未填入');
-      previous = instant;
-    }
-  }
   const railJourney = normalizeRailJourney({
     query: { trainNum: query.trainNum, startDate: journeyDate(startDate), boardingDate: journeyDate(boardingDate), origin: query.origin, destination: query.destination,
       ...(reference && { referenceFor: journeyDate(query.boardingDate) }) },
     queriedAt,
-    stops: stops.map(stop => ({ ...stop, arrivalDate: journeyDate(stop.arrivalDate), departureDate: journeyDate(stop.departureDate) })),
+    stops
   });
   const model=parseRailGoModel(clean(row.car));
-  return { query, railBureau:codeBureau || shortBureau, railModel:model.model, railPowerSupply:model.powerSupply, railRunner:clean(row.runner), railCarOwner:clean(row.carOwner), departureTime:stops[from].departureTime, arrivalDate:stops[to].arrivalDate, arrivalTime:stops[to].arrivalTime, railJourney };
+  return { query, railBureau:codeBureau || shortBureau, railModel:model.model, railPowerSupply:model.powerSupply, railRunner:clean(row.runner), railCarOwner:clean(row.carOwner), departureTime:stops[from].departureTime, arrivalDate:calendarDate(stops[to].arrivalDate), arrivalTime:stops[to].arrivalTime, railJourney };
 }
 
 function combineTimetables(saved, incoming) {
