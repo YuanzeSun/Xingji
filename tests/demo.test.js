@@ -13,16 +13,19 @@ import {journeyStatistics} from '../src/statistics-model.js';
 test('four sample journeys stay recent across month and year boundaries while historical ticket styles keep their dates',()=>{
   for(const today of ['2026-11-17','2027-01-02']){
     const rows=demoRecords(today),recent=rows.filter(record=>Date.parse(today)-Date.parse(calendarDate(record.departureDate))>0 && Date.parse(today)-Date.parse(calendarDate(record.departureDate))<=3*86400000);
-    assert.equal(rows.length,10);assert.equal(recent.length,4);assert.equal(recent.filter(record=>record.type==='rail').length,2);assert.equal(recent.filter(record=>record.type==='flight').length,2);
+    assert.equal(rows.length,11);assert.equal(recent.length,4);assert.equal(recent.filter(record=>record.type==='rail').length,2);assert.equal(recent.filter(record=>record.type==='flight').length,2);
     assert.equal(calendarDate(rows.find(record=>record.template==='rail-blue').departureDate),'2018-10-01');assert.equal(calendarDate(rows.find(record=>record.template==='rail-red-classic').departureDate),'2014-07-12');assert.equal(calendarDate(rows.find(record=>record.template==='rail-red').departureDate),'2017-09-10');
     for(const record of rows){assert.doesNotThrow(()=>validateTicketForm(record));assert.ok(calendarDate(record.departureDate)<=calendarDate(record.arrivalDate));for(const key of ['passenger','identity','origin','destination','departureTime','arrivalTime','price','gate','ticketNumber','orderNumber','departureZone','arrivalZone'])assert.ok(record[key],record.id+' '+key);}
-    assert.equal(journeyStatistics(rows,{dateTo:today},today).flight,5);assert.equal(journeyStatistics(rows,{dateTo:today},today).rail,5);
+    const statistics=journeyStatistics(rows,{dateTo:today},today);
+    assert.equal(statistics.flight,5);assert.equal(statistics.rail,6);
+    assert.deepEqual(statistics.repeatedTrainsets.map(({name,count})=>({name,count})),[{name:'CR400BF-B-5099',count:2}]);
+    assert.deepEqual(statistics.repeatedAircraft.map(({name,count})=>({name,count})),[{name:'B-DEMO1',count:2}]);
   }
 });
 
 test('every sample train has an offline route with line names, a complete timetable and applicable rolling-stock fields',()=>{
   const rows=demoRecords('2026-11-17').filter(record=>record.type==='rail');
-  assert.deepEqual(rows.map(record=>record.service),['G21','G7602','Z83','G6203','C2021']);
+  assert.deepEqual(rows.map(record=>record.service),['G21','G7602','Z83','G6203','C2021','G21']);
   for(const record of rows){
     assert.equal(railRouteMatches(record),true,record.service);assert.equal(railJourneyMatches(record),true,record.service);
     assert.ok(record.railRoute.lineLabels?.length || record.railRoute.fullRoute?.lineLabels?.length);

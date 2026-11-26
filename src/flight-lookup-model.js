@@ -2,7 +2,7 @@ import {sameDate} from './journey-date.js';
 import { createRecord, validDate } from './model.js';
 import { resolvePlace } from './places.js';
 import { AIRPORT_TIMEZONES } from './data/airport-timezones.js';
-import { reconcileAircraft } from './aircraft.js';
+import { normalizeAircraftRegistration, reconcileAircraft } from './aircraft.js';
 import { flightNumber, flightQuery } from './flight-query.js';
 import { airlineNameForCode } from './airline-codes.js';
 
@@ -60,7 +60,7 @@ export function flightCandidates(result, input) {
     for (const value of [row.miniAirplaneModels, row.generic, row.aircraftType]) {
       aircraftValues.add(Number.isInteger(value) ? String(value) : clean(value));
     }
-    const registration = aircraftRegistration(row.aircraftNumber) || aircraftRegistration(row.AircraftNumber);
+    const registration = normalizeAircraftRegistration(row.aircraftNumber) || normalizeAircraftRegistration(row.AircraftNumber);
     if (registration) registrations.add(registration);
   }
   return [...candidates.values()].map(({ record, aircraftValues, registrations }) => {
@@ -88,18 +88,12 @@ function plannedBoardingTime(value, departureDate, zone) {
   return planned && [departureDate, previousDate].includes(planned.date) ? planned.time : '';
 }
 
-function aircraftRegistration(value) {
-  const text = clean(value).toUpperCase();
-  if (!/^(?=.*[A-Z])[A-Z0-9]{1,3}-?[A-Z0-9]{2,5}$/.test(text) || /^(?:UNKNOWN|NONE|TBD)$/.test(text)) return '';
-  return /^B-?[A-Z0-9]{4}$/.test(text) ? 'B-' + text.slice(-4) : text;
-}
-
 export function rotationRegistration(result, query) {
   const item = flightPayload(result)?.item;
   const flight = item?.currentFlight;
   if (!query.dep || !query.arr || flightIdentity(item?.fnum) !== flightIdentity(query.fnum) || item?.date !== query.date ||
     flightIdentity(flight?.fnum) !== flightIdentity(query.fnum) || flight?.departureCode !== query.dep || flight?.arrivalCode !== query.arr) return '';
-  const registration = aircraftRegistration(item.aircraftNumber), current = aircraftRegistration(flight.aircraftNumber);
+  const registration = normalizeAircraftRegistration(item.aircraftNumber), current = normalizeAircraftRegistration(flight.aircraftNumber);
   return registration && current && registration !== current ? '' : current || registration;
 }
 

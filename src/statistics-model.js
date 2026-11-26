@@ -1,6 +1,6 @@
 import {calendarDate} from './journey-date.js';
 import { resolvePlace } from './places.js';
-import { aircraftClassification } from './aircraft.js';
+import { aircraftClassification, normalizeAircraftRegistration } from './aircraft.js';
 import { airlineNameForCode, airlineNameForLabel } from './airline-codes.js';
 import { readBoardingCode } from './bcbp.js';
 import { operatingFlight } from './boarding-code-state.js';
@@ -11,6 +11,7 @@ import { isJourneyRecord } from './record-kind.js';
 import { flightTrackDistanceKm } from './flight-track.js';
 import { normalizeRailBureau } from './rail-details.js';
 import { railModelsForRecord } from './rail-model-statistics.js';
+import { railText, railTrainsetIds } from './rail-journey.js';
 import { journeyMinutes } from './journey-duration.js';
 
 const CONTINENTS = Object.freeze({ AF: '非洲', AN: '南极洲', AS: '亚洲', EU: '欧洲', NA: '北美洲', OC: '大洋洲', SA: '南美洲' });
@@ -19,6 +20,19 @@ const airportContinents = new Map(Object.entries(CONTINENT_AIRPORT_CODES).flatMa
 const laoStations = new Set(['YTM', 'VBM', 'VJM', 'VFM', 'VCM', 'VOM']);
 const regionNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' });
 const compare = new Intl.Collator('zh-CN', { numeric: true }).compare;
+const rankOrder = (a, b) => b.count - a.count || compare(a.name, b.name);
+function addVehicleTrip(collection, name, record) {
+  if (!collection.has(name)) collection.set(name, []);
+  collection.get(name).push(record);
+}
+function repeatedVehicleTrips(collection) {
+  return [...collection].filter(([, trips]) => trips.length >= 2)
+    .map(([name, trips]) => ({
+      name, count: trips.length,
+      trips: trips.sort((a, b) => calendarDate(b.departureDate).localeCompare(calendarDate(a.departureDate)) ||
+        (b.departureTime || '').localeCompare(a.departureTime || ''))
+    })).sort(rankOrder);
+}
 export const countryName = code => code === 'CN' ? '中国' : regionNames.of(code) || code;
 export function todayDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -69,6 +83,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   const options = statisticsOptions(input, today), range = filterStatisticsRange(records, options), rows = range.records;
   const airports = new Map(), stations = new Map(), countries = new Map(), continents = new Set(), routes = new Map(), aircraft = new Map();
   const railModels = new Map(), railBureaus = new Map(), airlines = new Map();
+  const trainsets = new Map(), registrations = new Map();
   let unknownAircraft = 0, unknownAirlines = 0, unknownPlaces = 0, unknownRoutes = 0;
   let actualFlightDistance = 0, actualFlightDistanceTrips = 0;
   let rail = 0, flight = 0, railMileage = 0, railMileageTrips = 0;
@@ -86,6 +101,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
         railMileageTrips++;
       }
       for (const model of railModelsForRecord(record,options)) railModels.set(model, (railModels.get(model) || 0) + 1);
+      for (const id of railTrainsetIds(record)) if (railText(id)) addVehicleTrip(trainsets, id, record);
       let bureau = normalizeRailBureau(record.railBureau);
       if (options.railUnits) {
         const owner = String(record.railCarOwner || '').trim();
@@ -103,6 +119,8 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     }
     if (record.type !== 'flight') continue;
     flight++;
+    const registration = normalizeAircraftRegistration(record.aircraftRegistration);
+    if (registration) addVehicleTrip(registrations, registration, record);
     const airline = flightAirline(record, options.marketingAirlines);
     if (airline) airlines.set(airline, (airlines.get(airline) || 0) + 1);
     else unknownAirlines++;
@@ -123,7 +141,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   }
   const byName = values => [...values].sort((a, b) => compare(a.name, b.name));
   const years = [...new Set(rows.map(record => calendarDate(record.departureDate).slice(0, 4)))].sort();
-  const ranked = collection => [...collection].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || compare(a.name, b.name));
+  const ranked = collection => [...collection].map(([name, count]) => ({ name, count })).sort(rankOrder);
   return { ...range, rail, flight,
     years, airports: byName(airports.values()), stations: byName(stations.values()), countries: byName(countries.values()),
     continents: [...continents].sort().map(code => ({ code, name: CONTINENTS[code] })),
@@ -131,6 +149,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     railMileage: Math.round(railMileage * 1000) / 1000,
     railMileageTrips, actualFlightDistance, actualFlightDistanceTrips, travelTime,
     railModels: ranked(railModels), railBureaus: ranked(railBureaus),
+    repeatedTrainsets: repeatedVehicleTrips(trainsets), repeatedAircraft: repeatedVehicleTrips(registrations),
     routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)), unknownAircraft, unknownAirlines, unknownPlaces, unknownRoutes };
 }
 

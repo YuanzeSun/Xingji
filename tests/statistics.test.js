@@ -13,6 +13,45 @@ const rail = extra => createRecord({ origin: '北京南', destination: '上海�
 const flight = extra => createRecord({ type: 'flight', template: 'air-boarding-pass', origin: 'PEK', destination: 'HND', departureDate: '2024-03-01', aircraft: 'Boeing 737-800', ...extra });
 const range = { dateFrom: '', dateTo: '2026-11-16' };
 
+test('repeat visits group physical vehicle IDs and expose only the included trips', () => {
+  const rows = [
+    rail({ id: 'first-train', service: 'G1', railTrainsets: 'CR400BF-B-5099 / CR400BF-B-5099 / CR400BF-5100' }),
+    rail({ id: 'second-train', service: 'G21', departureDate: '2024-03-06', railTrainsets: 'ｃｒ４００ｂｆ－ｂ－５０９９' }),
+    rail({ id: 'refund', template: 'rail-refund-receipt', railTrainsets: 'CR400BF-5100' }),
+    rail({ id: 'missing-train', service: 'G1' }),
+    flight({ id: 'first-flight', service: 'CA181', aircraftRegistration: 'b1813' }),
+    flight({ id: 'second-flight', service: 'CA182', departureDate: '2024-03-05', aircraftRegistration: 'Ｂ－１８１３' }),
+    flight({ id: 'once', aircraftRegistration: 'B-1814' }),
+    flight({ id: 'invalid', aircraftRegistration: 'B-1814', flightStatus: 'invalid' }),
+    flight({ id: 'deleted-flight', aircraftRegistration: 'B-1814', deleted: true })
+  ];
+  const data = journeyStatistics(rows, range);
+  const grouped = groups => groups.map(({ name, count, trips }) => [name, count, trips.map(trip => trip.id)]);
+  assert.deepEqual(grouped(data.repeatedTrainsets), [['CR400BF-B-5099', 2, ['second-train', 'first-train']]]);
+  assert.deepEqual(grouped(data.repeatedAircraft), [['B-1813', 2, ['second-flight', 'first-flight']]]);
+
+  const dom = new JSDOM('<div id="root"></div>');
+  const root = dom.window.document.querySelector('#root');
+  const unmount = mountStatistics(root, rows, { options: { ...range } });
+  try {
+    const railPanel = root.querySelector('[data-stat-repeated="rail"]');
+    const flightPanel = root.querySelector('[data-stat-repeated="flight"]');
+    assert.match(railPanel.querySelector('summary').textContent, /CR400BF-B-5099.*2 次/);
+    assert.match(flightPanel.querySelector('summary').textContent, /B-1813.*2 次/);
+    flightPanel.querySelector('summary').click();
+    assert.equal(flightPanel.querySelector('details').open, true);
+    assert.deepEqual([...flightPanel.querySelectorAll('[data-action="view"]')].map(link => link.dataset.id), ['second-flight', 'first-flight']);
+    assert.match(flightPanel.querySelector('[data-action="view"]').textContent, /2024\.03\.05.*CA182.*→/s);
+    bindTestDialogs(dom.window);
+    applyStatisticsDate(root, '[data-stat-from]', '2024-03-02');
+    assert.equal(root.querySelector('[data-stat-repeated="rail"] details'), null);
+    assert.equal(root.querySelector('[data-stat-repeated="flight"] details'), null);
+  } finally {
+    unmount();
+    dom.window.close();
+  }
+});
+
 test('rail mileage and flown distance share the date filter and show independent coverage', () => {
   const base = flight({ id: 'tracked', service: 'CA123', flightDistance: '750' });
   const tracked = createRecord({ ...base, flightTrack: {

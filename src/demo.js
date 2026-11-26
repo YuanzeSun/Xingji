@@ -43,20 +43,22 @@ export function demoRecords(today=localToday()){
     seat: '32A', seatClass: 'Y', terminal: 'T2', gate: 'D21', price: '860.00',
     checkedBaggageCount: '1', freeBaggageAllowance: '20K', frequentFlyerCarrier: 'MU', frequentFlyerNumber: '000012345678'
   };
-  const boeingExamples = ['737-8Q8', '737-800', '737-8'].map((aircraft, index) => ({
+  const boeingExamples = [['737-8Q8', 'B-DEMO1'], ['737-800', 'B-DEMO1'], ['737-8', 'B-DEMO3']].map(([aircraft, aircraftRegistration], index) => ({
     ...domesticFlight, id: `demo-${8 + index}`, service: `MU990${1 + index}`, departureDate: recent(4 + index),
-    aircraft, aircraftRegistration: `B-DEMO${1 + index}`, pnr: `DEMO0${3 + index}`,
+    aircraft, aircraftRegistration, pnr: `DEMO0${3 + index}`,
     baggageTagNumbers: `781000010${2 + index}`, ticketNumber: `781000000000${2 + index}`
   }));
+  const g21 = {id:'demo-1',type:'rail',template:'rail-receipt',departureDate:recent(1),origin:'北京南',destination:'南京南',service:'G21',carriage:'05',seat:'08F',seatClass:'二等座',price:'503.0',issuer:'北京南',railShowIssuer:true,gate:'16A',railPlatform:'8'};
   const rows=[
-    {id:'demo-1',type:'rail',template:'rail-receipt',departureDate:recent(1),origin:'北京南',destination:'南京南',service:'G21',carriage:'05',seat:'08F',seatClass:'二等座',price:'503.0',issuer:'北京南',railShowIssuer:true,gate:'16A',railPlatform:'8'},
+    g21,
     {...domesticFlight,id:'demo-2',departureDate:recent(1),service:'MU5403',aircraft:'A321-200',aircraftRegistration:'B-1813',pnr:'DEMO01',baggageTagNumbers:'7810000101',ticketNumber:'7810000000001'},
     {id:'demo-3',type:'rail',template:'rail-blue',departureDate:'2018-10-01',origin:'杭州东',destination:'南京南',service:'G7602',carriage:'03',seat:'12A',seatClass:'二等座',price:'117.5',issuer:'杭州东',gate:'7',railPlatform:'7',provenance:'reconstruction'},
     {id:'demo-4',type:'rail',template:'rail-red-classic',departureDate:'2014-07-12',origin:'北京',destination:'齐齐哈尔',service:'Z83',carriage:'09',seat:'015号下铺',seatClass:'硬卧',price:'363.0',issuer:'北京',gate:'2',railPlatform:'5',provenance:'reconstruction'},
     {id:'demo-5',type:'rail',template:'rail-receipt',departureDate:recent(2),origin:'广州南',destination:'深圳北',service:'G6203',carriage:'07',seat:'06C',seatClass:'二等座',price:'74.5',issuer:'广州南',gate:'B18',railPlatform:'18'},
     {id:'demo-6',type:'flight',template:'air-boarding-pass',departureDate:recent(3),departureTime:'08:40',arrivalTime:'12:50',boardingTime:'08:00',actualDepartureTime:'08:48',actualArrivalTime:'12:55',origin:'北京首都',destination:'东京羽田',originCode:'PEK',destinationCode:'HND',service:'CA181',airline:'中国国际航空',seat:'24K',seatClass:'Y',terminal:'T3',gate:'E23',aircraft:'A330-343',aircraftRegistration:'B-0002',flightDistance:'2100',pnr:'DEMO02',actualBoardingTime:'08:06',baggageTagNumbers:'9990000201–9990000202',checkedBaggageCount:'2',freeBaggageAllowance:'2PC',frequentFlyerCarrier:'CA',frequentFlyerNumber:'000087654321',marketingCarrier:'CA',price:'2680.00',ticketNumber:'9990000000002',passenger:'EXAMPLE/TRAVELER',identity:'P00000000'},
     {id:'demo-7',type:'rail',template:'rail-red',departureDate:'2017-09-10',origin:'北京南',destination:'天津',service:'C2021',carriage:'01',seat:'02A',seatClass:'二等座',price:'57.0',issuer:'北京南',gate:'18',railPlatform:'9',provenance:'reconstruction'},
-    ...boeingExamples
+    ...boeingExamples,
+    {...g21,id:'demo-11',departureDate:recent(7),seat:'10A'}
   ];
   const marks={'demo-1':[{text:'网',shape:'circle'}],'demo-3':[{text:'网',shape:'plain'}],'demo-4':[{text:'网',shape:'circle'}],'demo-5':[{text:'网',shape:'circle'},{text:'学',shape:'circle'}],'demo-7':[{text:'网',shape:'plain'}]};
   return rows.map((row,index)=>{
@@ -69,7 +71,7 @@ export function demoRecords(today=localToday()){
     if(row.type==='rail'){
       values.ticketNumber='X'+serial.padStart(6,'0');
       values.saleCode=serial.padStart(21,'0');
-      values.ticketMarks=marks[row.id];
+      values.ticketMarks=marks[row.id] || [];
       Object.assign(values,railExample(values));
       values.ticketCode=DEMO_TICKET_CODE;
       values.sources.push({kind:'rail-lookup',label:'RailGo 列车与铁路线路快照（示例日期用于展示）',at:values.railJourney.queriedAt});

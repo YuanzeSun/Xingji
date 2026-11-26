@@ -6,6 +6,12 @@ const configuration = /\((?:BW|WL|SHARKLETS?)\)$/;
 const seriesPrefixes = [/^(A\d{3}|7\d{2})/, /^(DHC-[678])/, /^(ATR (?:42|72))/, /^(E(?:170|175|190|195))/,
   /^(ERJ|CRJ)-/, /^(SAAB (?:340|2000))/, /^(BAe 146)/, /^((?:MD|DC|IL|TU|AN|YAK)-\d{1,3})(?:-|$)/];
 
+export function normalizeAircraftRegistration(value) {
+  const text = typeof value === 'string' ? value.normalize('NFKC').replace(/[‐‑‒–—−]/g, '-').replace(/\s+/g, '').toUpperCase() : '';
+  if (!/^(?=.*[A-Z])[A-Z0-9]{1,3}-?[A-Z0-9]{2,5}$/.test(text) || /^(?:UNKNOWN|NONE|NULL|TBD)$/.test(text)) return '';
+  return /^B-?[A-Z0-9]{4}$/.test(text) ? 'B-' + text.slice(-4) : text;
+}
+
 function aircraftSeries(model) {
   for (const pattern of seriesPrefixes) {
     const match = model.match(pattern);
