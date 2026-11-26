@@ -1,4 +1,5 @@
 import {tripChartMarkup,bindTripChart} from './statistics-chart.js';
+import { bindArrivalDelayChart } from './arrival-delay-chart.js';
 import { escape as e } from './html.js';
 import { dateLabel } from './journey-date.js';
 import { journeyStatistics, statisticsOptions, todayDate, tripSeries, countryName } from './statistics-model.js';
@@ -35,7 +36,8 @@ const rankings = {
   'rail-models': { title: '乘坐车型', data: 'railModels', unit: '种', option: 'railSubtypes', label: '细分子型号' },
   'rail-bureaus': { title: '担当路局', data: 'railBureaus', unit: '个', option: 'railUnits', label: '细分车辆归属单位' },
   aircraft: { title: '乘坐机型', data: 'aircraft', unit: '种', option: 'aircraftSubtypes', label: '细分子型号', unknown: 'unknownAircraft', unknownLabel: '未识别机型' },
-  airlines: { title: '乘坐航司', data: 'airlines', unit: '家', unknown: 'unknownAirlines', unknownLabel: '未识别航司' }
+  airlines: { title: '乘坐航司', data: 'airlines', unit: '家', unknown: 'unknownAirlines', unknownLabel: '未识别航司' },
+  'rail-lines': { title: '铁路线足迹', data: 'railLines', unit: '条线路', emptyText: '暂无已识别的铁路线' }
 };
 
 export function mountStatistics(container, records, { options = {} } = {}) {
@@ -45,6 +47,11 @@ export function mountStatistics(container, records, { options = {} } = {}) {
   let statistics, dateDialog, renderedDay;
   let series = [],chartCleanup=()=>{};
   const scrollPositions = { year: null, month: null };
+  function rankingPlot(kind, view) {
+    const { title, data, emptyText } = rankings[kind];
+    const rows = statistics[data];
+    return !rows.length && emptyText ? empty(emptyText) : rankingChartMarkup(title, rows, view);
+  }
   function rankingPanel(kind) {
     const { title, data, unit, option, label, unknown, unknownLabel } = rankings[kind];
     const rows = statistics[data], view = rankingCharts[kind] || 'donut';
@@ -53,7 +60,9 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       ? `<div class="statistics-airline-basis" role="radiogroup" aria-labelledby="statistics-airline-basis-label"><span id="statistics-airline-basis-label">代码共享航班</span>${[['operating', '按实际承运'], ['marketing', '按购票航司']].map(([value, name]) => `<label><input type="radio" name="airline-basis" value="${value}" data-stat-option="marketingAirlines" ${options.marketingAirlines === (value === 'marketing') ? 'checked' : ''}/>${name}</label>`).join('')}</div>`
       : option ? `<label><input type="checkbox" data-stat-option="${option}" ${options[option] ? 'checked' : ''}/>${label}</label>` : '';
     const unidentified = statistics[unknown] ? `<p class="fine-print">${unknownLabel} · ${statistics[unknown]} 次</p>` : '';
-    return `<section class="statistics-panel statistics-ranking" data-stat-ranking="${kind}"><header><h2>${title}</h2><span>${rows.length} ${unit}</span></header><div class="statistics-ranking-controls"><div class="statistics-view-picker" role="group" aria-label="${title}图表样式">${chooser}</div>${grouping}</div><div data-stat-plot>${rankingChartMarkup(title, rows, view)}</div>${unidentified}</section>`;
+    const coverage = kind === 'rail-lines'
+      ? `<p class="statistics-coverage">${statistics.railLineTrips} / ${statistics.rail} 程已识别线路。同一程经过同一线路计一次。</p>` : '';
+    return `<section class="statistics-panel statistics-ranking" data-stat-ranking="${kind}"><header><h2>${title}</h2><span>${rows.length} ${unit}</span></header><div class="statistics-ranking-controls"><div class="statistics-view-picker" role="group" aria-label="${title}图表样式">${chooser}</div>${grouping}</div><div data-stat-plot>${rankingPlot(kind, view)}</div>${unidentified}${coverage}</section>`;
   }
   function render() {
     chartCleanup();
@@ -88,23 +97,21 @@ export function mountStatistics(container, records, { options = {} } = {}) {
         `<section class="statistics-panel statistics-journey-card"><h2>${transport}</h2><dl>${metrics.map(([label, value, count, coverage]) =>
           `<div><dt>${label}</dt><dd><strong>${count === 0 ? '—' : value}</strong>${coverage ? `<span>${count} / ${total} ${coverage}</span>` : ''}</dd></div>`).join('')}</dl></section>`).join('')}</section>
       <section class="statistics-panel statistics-trend"><header><h2>乘坐次数</h2><div class="statistics-period-controls"><div role="group" aria-label="统计图时间粒度">${[['year', '按年'], ['month', '按月']].map(([value, label]) => `<button data-stat-scale="${value}" aria-pressed="${options.period === value}">${label}</button>`).join('')}</div><label ${options.period === 'month' ? '' : 'hidden'}><span class="visually-hidden">月度图年份</span><select data-stat-year aria-label="月度图年份">${[...yearChoices].reverse().map(year => `<option ${options.year === year ? 'selected' : ''}>${e(year)}</option>`).join('')}</select></label></div></header>${tripChartMarkup(series,{zoom:options.chartZoom,viewportWidth:container.clientWidth || 720})}</section>
-      <div class="statistics-columns">
-        <section class="statistics-panel" data-stat-rail-lines><header><h2>铁路线足迹</h2><span>${data.railLines.length} 条线路</span></header>
-          ${data.railLineTrips ? rankingChartMarkup('铁路线足迹', data.railLines, 'bars') : empty('暂无已识别的铁路线')}
-          <p class="statistics-coverage">${data.railLineTrips} / ${data.rail} 程已识别线路。同一程经过同一线路计一次。</p>
-        </section>
-        <section class="statistics-panel" data-stat-arrival-delays><header><h2>落地延误分布</h2><span>${data.arrivalDelayTrips} / ${data.flight} 班可比较</span></header>
-          ${data.arrivalDelayTrips ? rankingChartMarkup('落地延误分布', data.arrivalDelays, 'bars', '班') : empty('暂无可比较的落地时间')}
-          <p class="statistics-coverage">按实际和计划落地时间之差分组，同一分钟为准点。</p>
-        </section>
-      </div>
+      <section class="statistics-panel" data-stat-arrival-delays><header><h2>落地延误分布</h2><span>${data.arrivalDelayTrips} / ${data.flight} 班可比较</span></header>
+        ${data.arrivalDelayTrips ? `<figure class="statistics-delay-plot" data-stat-delay-plot tabindex="0" aria-label="落地延误折线图，可用左右方向键查看数据点">
+          <svg class="statistics-delay-chart" aria-hidden="true"></svg><output class="statistics-delay-readout" aria-live="polite"></output>
+        </figure><p class="statistics-coverage">负数表示提前，0 表示准点，正数表示延误。</p>` : empty('暂无可比较的落地时间')}
+      </section>
       <div class="statistics-columns">${rankingPanel('rail-models')}${rankingPanel('rail-bureaus')}</div>
       <div class="statistics-columns">${rankingPanel('airlines')}${rankingPanel('aircraft')}</div>
+      ${rankingPanel('rail-lines')}
       <div class="statistics-columns">${repeatedVehiclesPanel('多次乘坐的列车', 'rail', data.repeatedTrainsets)}${repeatedVehiclesPanel('多次乘坐的飞机', 'flight', data.repeatedAircraft)}</div>
       <section class="statistics-panel"><header><h2>去过的大洲和国家</h2></header><h3>大洲 <span>${data.continents.length}</span></h3>${data.continents.length ? `<ul class="statistics-chips">${data.continents.map(row => `<li>${e(row.name)}</li>`).join('')}</ul>` : empty('暂无已识别的大洲')}<h3>国家 <span>${data.countries.length}</span></h3>${data.countries.length ? `<ul class="statistics-chips countries">${data.countries.map(row => `<li>${e(row.name)}</li>`).join('')}</ul>` : empty('暂无已识别的国家')}</section>
       <div class="statistics-columns">${placesPanel('去过的机场', data.airports, 'airport', options.includeStopoverAirports)}${placesPanel('去过的火车站', data.stations, 'station')}</div>
       <section class="statistics-panel" data-stat-routes><header><h2>乘坐过的航线</h2><div class="statistics-route-controls"><label><input type="checkbox" data-stat-merge-routes ${options.mergeDirections ? 'checked' : ''}/>合并双向航线</label><span>${data.routes.length} 条</span></div></header>${data.routes.length ? `<div class="statistics-table-scroll"><table class="statistics-routes"><thead><tr><th>航线</th><th>次数</th></tr></thead><tbody>${data.routes.map(route => `<tr><td><div class="statistics-route-pair"><span class="statistics-route-endpoint">${e(route.from.name)} <code>${e(route.from.code)}</code></span><span class="statistics-route-arrow" role="img" aria-label="${options.mergeDirections ? '双向' : '前往'}">${options.mergeDirections ? '↔' : '→'}</span><span class="statistics-route-endpoint">${e(route.to.name)} <code>${e(route.to.code)}</code></span></div></td><td>${route.count}</td></tr>`).join('')}</tbody></table></div>` : empty('暂无可识别的航线')}</section>`}`;
-    chartCleanup=bindTripChart(container,series,options,{onZoom:()=>{const scroll=container.querySelector('.statistics-chart-scroll');if(scroll)scrolled({target:scroll});}});
+    const stopTripChart = bindTripChart(container,series,options,{onZoom:()=>{const scroll=container.querySelector('.statistics-chart-scroll');if(scroll)scrolled({target:scroll});}});
+    const stopDelayChart = bindArrivalDelayChart(container, data.arrivalDelays);
+    chartCleanup = () => { stopTripChart(); stopDelayChart(); };
     const scroll = container.querySelector('.statistics-chart-scroll');
     if (scroll) {
       if (scrollPositions[options.period] !== null) scroll.scrollLeft = scrollPositions[options.period];
@@ -203,11 +210,10 @@ export function mountStatistics(container, records, { options = {} } = {}) {
     if (view) {
       if (view.getAttribute('aria-pressed') === 'true') return;
       const panel = view.closest('[data-stat-ranking]'), kind = panel.dataset.statRanking;
-      const { title, data } = rankings[kind];
       rankingCharts[kind] = view.dataset.statView;
       panel.querySelector('[aria-pressed="true"][data-stat-view]').setAttribute('aria-pressed', 'false');
       view.setAttribute('aria-pressed', 'true');
-      panel.querySelector('[data-stat-plot]').innerHTML = rankingChartMarkup(title, statistics[data], rankingCharts[kind]);
+      panel.querySelector('[data-stat-plot]').innerHTML = rankingPlot(kind, rankingCharts[kind]);
       return;
     }
     const scale = event.target.closest('[data-stat-scale]');

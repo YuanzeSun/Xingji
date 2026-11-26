@@ -176,9 +176,31 @@ test('railway footprints count each named line once per ridden section within th
   assert.equal(all.rail, 4);
   const filtered = journeyStatistics(rows, { ...range, dateTo: '2024-03-01' });
   assert.deepEqual(filtered.railLines, [{ name: '京沪高速线', count: 1 }]);
+
+  const dom = new JSDOM('<div id="root"></div>');
+  const root = dom.window.document.querySelector('#root');
+  const unmount = mountStatistics(root, rows, { options: { ...range } });
+  try {
+    const rankings = [...root.querySelectorAll('[data-stat-ranking]')];
+    assert.deepEqual(rankings.map(panel => panel.dataset.statRanking), ['rail-models', 'rail-bureaus', 'airlines', 'aircraft', 'rail-lines']);
+    const panel = rankings.at(-1);
+    assert.ok(panel.nextElementSibling.querySelector('[data-stat-repeated="rail"]'));
+    assert.equal(panel.querySelector('[aria-pressed="true"]').dataset.statView, 'donut');
+    assert.match(panel.querySelector('.statistics-ring-legend').textContent, /京沪高速线.*2 次/);
+    panel.querySelector('[data-stat-view="bars"]').click();
+    assert.match(panel.querySelector('.statistics-aircraft').textContent, /京沪高速线.*2 次/);
+    panel.querySelector('[data-stat-view="columns"]').click();
+    assert.match(panel.querySelector('.statistics-columns-plot').textContent, /2 次.*京沪高速线/);
+    panel.querySelector('[data-stat-view="donut"]').click();
+    assert.ok(panel.querySelector('.statistics-ring'));
+    assert.equal(rankings[2].querySelector('[aria-pressed="true"]').dataset.statView, 'donut');
+  } finally {
+    unmount();
+    dom.window.close();
+  }
 });
 
-test('arrival delay bands use both local arrival dates and account for midnight and clock changes', () => {
+test('the arrival delay curve uses exact minute counts across midnight and clock changes', () => {
   const trip = (actualArrivalTime, extra) => flight({
     arrivalDate: '2024-03-01', arrivalTime: '12:00', actualArrivalDate: '2024-03-01', actualArrivalTime, ...extra
   });
@@ -198,7 +220,8 @@ test('arrival delay bands use both local arrival dates and account for midnight 
   const all = journeyStatistics(rows, range);
   assert.equal(all.flight, 15);
   assert.equal(all.arrivalDelayTrips, 11);
-  assert.deepEqual(all.arrivalDelays.map(band => band.count), [1, 1, 3, 3, 2, 1]);
+  assert.deepEqual(all.arrivalDelays.map(({ minutes, count }) => [minutes, count]),
+    [[-1, 1], [0, 1], [1, 1], [10, 1], [14, 1], [15, 2], [29, 1], [30, 1], [59, 1], [60, 1]]);
 
   const dom = new JSDOM('<div id="root"></div>');
   const root = dom.window.document.querySelector('#root');
@@ -207,11 +230,22 @@ test('arrival delay bands use both local arrival dates and account for midnight 
   try {
     const delayPanel = () => root.querySelector('[data-stat-arrival-delays]');
     assert.match(delayPanel().textContent, /11 \/ 15 班可比较/);
-    assert.deepEqual([...delayPanel().querySelectorAll('li span:not([style])')].map(item => item.textContent),
-      ['1 班', '1 班', '3 班', '3 班', '2 班', '1 班']);
-    assert.match(root.querySelector('[data-stat-rail-lines]').textContent, /暂无已识别的铁路线/);
+    const plot = delayPanel().querySelector('[data-stat-delay-plot]');
+    const line = plot.querySelector('.statistics-line').getAttribute('d');
+    assert.match(line, /^M.*C/);
+    assert.ok(line.match(/C/g).length <= all.arrivalDelays.length * 3 + 1);
+    assert.match(plot.querySelector('svg').textContent, /次数.*延误分钟数/s);
+    assert.equal(plot.querySelectorAll('[data-stat-delay-point]').length, all.arrivalDelays.length);
+    plot.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    assert.equal(plot.querySelector('output').textContent, '−1 分钟 · 1 班');
+    plot.querySelector('[data-stat-delay-point="5"] circle').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    assert.equal(plot.querySelector('output').textContent, '15 分钟 · 2 班');
+    assert.match(root.querySelector('[data-stat-ranking="rail-lines"]').textContent, /暂无已识别的铁路线/);
     applyStatisticsDate(root, '[data-stat-from]', '2024-03-10');
     assert.match(delayPanel().textContent, /1 \/ 2 班可比较/);
+    const single = delayPanel().querySelector('.statistics-line').getAttribute('d');
+    assert.doesNotMatch(single, /NaN|Infinity/);
+    assert.equal(delayPanel().querySelectorAll('[data-stat-delay-point]').length, 1);
   } finally {
     unmount();
     dom.window.close();

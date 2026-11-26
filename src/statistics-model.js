@@ -22,14 +22,6 @@ const laoStations = new Set(['YTM', 'VBM', 'VJM', 'VFM', 'VCM', 'VOM']);
 const regionNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' });
 const compare = new Intl.Collator('zh-CN', { numeric: true }).compare;
 const rankOrder = (a, b) => b.count - a.count || compare(a.name, b.name);
-const arrivalDelayBands = [
-  ['提前到达', -1],
-  ['准点', 0],
-  ['晚 1–14 分钟', 14],
-  ['晚 15–29 分钟', 29],
-  ['晚 30–59 分钟', 59],
-  ['晚 60 分钟及以上', Infinity]
-];
 function addVehicleTrip(collection, name, record) {
   if (!collection.has(name)) collection.set(name, []);
   collection.get(name).push(record);
@@ -99,7 +91,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   let railLineTrips = 0, arrivalDelayTrips = 0;
   const travelTime = { rail: { minutes: 0, trips: 0 }, flight: { minutes: 0, trips: 0 } };
   const fares = { rail: { cents: 0, trips: 0 }, flight: { cents: 0, trips: 0 } };
-  const arrivalDelays = arrivalDelayBands.map(([name]) => ({ name, count: 0 }));
+  const arrivalDelays = new Map();
   for (const record of rows) {
     if (record.price) {
       const fare = fares[record.type];
@@ -143,7 +135,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     flight++;
     if (Number.isFinite(delay)) {
       arrivalDelayTrips++;
-      arrivalDelays[arrivalDelayBands.findIndex(([, max]) => delay <= max)].count++;
+      arrivalDelays.set(delay, (arrivalDelays.get(delay) || 0) + 1);
     }
     const code = options.includeStopoverAirports && record.flightStop?.airport;
     if (code && !airports.has(code)) {
@@ -180,7 +172,8 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     railMileage: Math.round(railMileage * 1000) / 1000,
     railMileageTrips, actualFlightDistance, actualFlightDistanceTrips, travelTime, fares,
     railModels: ranked(railModels), railBureaus: ranked(railBureaus),
-    railLines: ranked(railLines), railLineTrips, arrivalDelays, arrivalDelayTrips,
+    railLines: ranked(railLines), railLineTrips, arrivalDelayTrips,
+    arrivalDelays: [...arrivalDelays].sort(([a], [b]) => a - b).map(([minutes, count]) => ({ minutes, count })),
     repeatedTrainsets: repeatedVehicleTrips(trainsets), repeatedAircraft: repeatedVehicleTrips(registrations),
     routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)), unknownAircraft, unknownAirlines, unknownPlaces, unknownRoutes };
 }
