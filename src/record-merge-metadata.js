@@ -50,7 +50,9 @@ export function mergeBoardingCode(base,local,remote,merged,conflicts) {
 export function resolveRecordConflict(record,conflict,choice) {
   choice=choice==='remote' ? 'remote' : 'local';
   const source=conflict.context?.[choice];
-  if(conflict.field==='boardingCode' && source)takeBoardingCode(record,source);
+  if(conflict.field==='deleted') {
+    if (!source.deleted) Object.assign(record, structuredClone(source), { updatedAt: record.updatedAt });
+  } else if(conflict.field==='boardingCode' && source)takeBoardingCode(record,source);
   else if(source && (conflict.trackFieldLock || LOOKUP_FIELDS.includes(conflict.field)))takeField(record,source,conflict.field,conflict.trackFieldLock);
   else {
     record[conflict.field]=structuredClone(conflict[choice]);

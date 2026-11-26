@@ -58,6 +58,8 @@ test('archive selection supports direct actions and confirmed deletion, while ma
     await wait(()=>document.querySelector('[data-delete-challenge]'));document.querySelector('[name="arithmetic-answer"]').value='999999';document.querySelector('[data-delete-challenge]').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));assert.match(document.querySelector('[data-arithmetic-error]').textContent,/不正确/);assert.equal(server.records().some(row=>row.deleted),false);answerArithmetic(document);document.querySelector('[data-delete-challenge]').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
     await wait(()=>server.records().find(row=>row.id==='a')?.deleted);await wait(()=>document.querySelector('[data-archive-select="a"]')===null);
     await wait(()=>document.querySelector('#toast-root').textContent.includes('所选票据已删除'));
+    const deleted = server.records().find(row => row.id === 'a');
+    assert.deepEqual(deleted, { id: 'a', deleted: true, updatedAt: deleted.updatedAt });
     assert.equal(server.records().filter(row=>!row.deleted).length,2);assert.match(document.querySelector('.archive-selection-count').textContent,/0/);
     click('[data-archive-select="b"]');
     Object.defineProperty(navigator,'onLine',{value:false,configurable:true});

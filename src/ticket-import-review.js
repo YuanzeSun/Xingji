@@ -115,7 +115,7 @@ export function applyReviewedTicket(records, incoming, decision) {
     const review = new TicketImportReview(matches);
     if (!decision || !sameValue(decision.matches, matches) || (!decision.id && !review.canSaveSeparately)) throw review;
   }
-  if (records.some(record => record.id === incoming.id || record.mergedIds.includes(incoming.id))) {
+  if (records.some(record => record.id === incoming.id || record.mergedIds?.includes(incoming.id))) {
     return { records, added: 0, enriched: 0 };
   }
   if (!decision?.id) return { records: [...records, incoming], added: 1, enriched: 0 };

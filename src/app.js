@@ -10,7 +10,7 @@ import {markManualFields,applyLookupValues,lookupContext,clearLookupValues} from
 import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } from './arithmetic-confirm.js';
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
 import { renderCodeData } from './barcode-data.js';
-import { createRecord, validateRecord, mergeThreeWay, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, formatDate } from './model.js';
+import { createRecord, validateRecord, mergeThreeWay, deletionMarker, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, formatDate } from './model.js';
 import { SUPPLEMENT_FIELDS, isRailReceiptTemplate, ticketTemplateChoices } from './rail-template.js';
 import { hasRailQRCode } from './ticket-code.js';
 import * as db from './db.js';
@@ -2400,8 +2400,8 @@ const actions = {
     if (!selected.length || state.showDemo || !canWrite() || state.saving) return;
     if (!confirm('删除所选的 ' + selected.length + ' 张票据？删除后无法恢复。')) return;
     if (!await requireArithmetic('删除所选 '+selected.length+' 张票据') || !canWrite() || state.saving) return;
-    const ids = new Set(selected.map(record => record.id)), records = clone(state.records), updatedAt = now();
-    for (const record of records) if (ids.has(record.id) && !record.deleted) { record.deleted = true; record.updatedAt = updatedAt; }
+    const ids = new Set(selected.map(record => record.id)), updatedAt = now();
+    const records = state.records.map(record => ids.has(record.id) && !record.deleted ? deletionMarker(record, updatedAt) : record);
     await persist(records); archiveSelected.clear(); render(); toast(savedMessage('所选票据已删除并同步'));
   },
   'enter-demo': async button => { button.disabled=true; try { await setDemoMode(true); navigate('archive'); } finally { button.disabled=false; } },
@@ -2422,8 +2422,9 @@ const actions = {
     if (!confirm('删除这张票据？删除后无法恢复。')) return;
     const id=button.dataset.id;
     if (!await requireArithmetic('删除票据') || !canWrite() || state.saving) return;
-    const records = clone(state.records), r = records.find(r => r.id === id); if (!r) return;
-    r.deleted = true; r.updatedAt = now(); await persist(records); closeModal(true); render(); toast(savedMessage('删除已同步'));
+    if (!findRecord(id)) return;
+    const records = state.records.map(record => record.id === id ? deletionMarker(record, now()) : record);
+    await persist(records); closeModal(true); render(); toast(savedMessage('删除已同步'));
   },
   sync: async () => {
     if (!cloudToken()) { navigate('data'); return; }

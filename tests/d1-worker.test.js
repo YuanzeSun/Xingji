@@ -91,7 +91,14 @@ test('D1 whole replacements are atomic and stale clients cannot delete or overwr
   assert.equal(Object.hasOwn(db.calls.at(-1).body, 'settings'), false);
   assert.equal((await store.read()).generation, current.generation);
   await assert.rejects(store.write([], current, sharedSettings()), { status: 409 });
-  assert.deepEqual((await store.read()).records.map(row => row.id), ['new', 'old']);
+  const latest = await store.read();
+  assert.deepEqual(latest.records.map(row => row.id), ['new', 'old']);
+  const mark = { id: original.id, deleted: true, updatedAt: '2026-11-27T00:00:00Z', mergedIds: ['absorbed'] };
+  const invalid = await db.fetch(endpoint + '/v1/archive', { method: 'POST', headers: { Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ id: latest.id, head: latest.head, records: [{ ...mark, offsetX: '' }], removed: [] }) });
+  assert.equal(invalid.status, 400);
+  await store.write([replacement, mark], latest, latest.settings);
+  assert.deepEqual((await store.readRaw()).records, [replacement, mark]);
   const resetId = crypto.randomUUID(), beforeReset = await store.read();
   await assert.rejects(store.replace(beforeReset, [replacement], beforeReset.settings, { resetId }), { status: 400 });
   await assert.rejects(store.replace(beforeReset, [], beforeReset.settings, { resetId: 'bad-id' }), { status: 400 });

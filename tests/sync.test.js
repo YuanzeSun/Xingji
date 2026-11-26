@@ -59,7 +59,7 @@ test('all year files are committed together and a non-forced branch update preve
 
 test('direct deletion removes ticket contents and concurrent edits can be retained with a checked choice', async () => {
   const base = record(), deleted = createRecord({ ...base, deleted: true });
-  assert.equal(deleted.origin, ''); assert.equal(deleted.seat, ''); assert.deepEqual(deleted.sources, []);
+  assert.deepEqual(deleted, { id: base.id, deleted: true, updatedAt: base.updatedAt });
   let remote = { ...base, seat: '03A' }, written;
   const store = { read: async () => ({ records: [remote] }), write: async records => { written = records; } };
   const conflict = await synchronize(store, [base], [deleted]);
@@ -67,9 +67,12 @@ test('direct deletion removes ticket contents and concurrent edits can be retain
   const c = conflict.conflicts[0], keep = { 'sync-test:deleted': { choice: 'remote', local: c.local, remote: c.remote, context: c.context } };
   const retained = await synchronize(store, [base], [deleted], keep);
   assert.equal(retained.conflicts.length, 0); assert.equal(retained.records[0].seat, '03A'); assert.equal(retained.records[0].origin, '北京');
+  const discard = { 'sync-test:deleted': { ...keep['sync-test:deleted'], choice: 'local' } };
+  assert.equal((await synchronize(store, [base], [deleted], discard)).conflicts.length, 0);
+  assert.deepEqual(written, [deleted]);
   remote = { ...remote, seat: '04A' }; written = undefined;
   assert.equal((await synchronize(store, [base], [deleted], keep)).conflicts.length, 1, 'a new edit must invalidate an earlier deletion choice');
   assert.equal(written, undefined);
   const removed = await synchronize({ read: async () => ({ records: [base] }), write: async records => { written = records; } }, [base], [deleted]);
-  assert.equal(removed.conflicts.length, 0); assert.equal(written[0].deleted, true); assert.equal(written[0].origin, '');
+  assert.equal(removed.conflicts.length, 0); assert.deepEqual(written, [deleted]);
 });

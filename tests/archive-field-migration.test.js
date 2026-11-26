@@ -95,22 +95,24 @@ test('GitHub migration previews changes, cancels without writing, and updates on
 });
 
 test('D1 migration aborts on a stale preview and updates only changed records after a new preview', async () => {
-  const server = memoryD1([oldFlight, train], { flightMcpKey: 'test-key' });
+  const marker = { id: 'old-deletion', deleted: true, updatedAt: train.updatedAt };
+  const oldMarker = { ...marker, type: 'rail', template: train.template, offsetX: '', offsetY: '', fieldSources: {} };
+  const server = memoryD1([oldFlight, train, oldMarker], { flightMcpKey: 'test-key' });
   const store = new D1Store({ url: endpoint }, token, server.fetch.bind(server));
   const snapshot = await store.readRaw();
   const plan = planArchiveFieldMigration(snapshot);
-  assert.equal(plan.changes.length, 1);
+  assert.equal(plan.changes.length, 2);
   assert.equal(plan.errors.length, 0);
   const newerTrain = { ...train, gate: '8' };
-  await store.write([oldFlight, newerTrain], snapshot, snapshot.settings);
+  await store.write([oldFlight, newerTrain, oldMarker], snapshot, snapshot.settings);
   await assert.rejects(writeArchiveFieldMigration(store, snapshot, plan), { status: 409 });
   assert.equal((await store.readRaw()).records[0].orderNumber, oldFlight.orderNumber);
 
   const fresh = await store.readRaw();
   await writeArchiveFieldMigration(store, fresh, planArchiveFieldMigration(fresh));
-  assert.deepEqual(server.calls.filter(call => call.method === 'POST').at(-1).body.records, [flightWithStop]);
+  assert.deepEqual(server.calls.filter(call => call.method === 'POST').at(-1).body.records, [flightWithStop, marker]);
   const migrated = await store.read();
-  assert.deepEqual(migrated.records, [flightWithStop, newerTrain]);
+  assert.deepEqual(migrated.records, [flightWithStop, marker, newerTrain]);
   assert.equal(migrated.generation, snapshot.generation);
   assert.equal(migrated.settings.flightMcpKey, 'test-key');
   assert.equal(planArchiveFieldMigration(await store.readRaw()).changes.length, 0);
@@ -133,9 +135,11 @@ test('the preview groups matching ticket changes and summarizes previously delet
     { ...deleted, offsetX: '0', offsetY: '0' }
   ] });
   const markup = archiveFieldMigrationMarkup(plan, 'Cloudflare D1 主票库', { orderNumber: '订单号' });
-  assert.match(markup, /将整理 2 张票据的字段，以及 1 条已删除票据的同步记录/);
+  assert.match(markup, /将整理 2 张票据的字段，并精简 1 条删除标记/);
   assert.match(markup, /涉及 2 张票据<\/summary>\s*<ul[^>]*>.*CA181.*CA182.*?<\/li><\/ul>/s);
-  assert.match(markup, /涉及 1 条已删除票据的同步记录/);
   assert.equal(markup.match(/订单号/g)?.length, 1);
+  assert.equal(markup.match(/整张票面的位置微调/g)?.length, 1);
   assert.doesNotMatch(markup, /previously-deleted|second-flight/);
+  assert.deepEqual(plan.records.at(-1), { id: deleted.id, deleted: true, updatedAt: deleted.updatedAt });
+  assert.equal(planArchiveFieldMigration({ records: plan.records }).changes.length, 0);
 });

@@ -27,7 +27,7 @@ test('original boarding codes render without stretching and survive import, back
   assert.deepEqual(readArchive(archive([record]))[0].boardingCode,code);
   assert.deepEqual(mergeBackupRecords([flight()],[record])[0].boardingCode,code);
   const merged=mergeThreeWay([flight()],[record],[flight({seat:'24K'})]);assert.deepEqual(merged.records[0].boardingCode,code);assert.equal(merged.records[0].seat,'24K');
-  assert.equal(createRecord({...record,deleted:true}).boardingCode,'');
+  assert.equal(Object.hasOwn(createRecord({...record,deleted:true}), 'boardingCode'), false);
   globalThis.location={href:'https://example.com/'};globalThis.fetch=async()=>new Response('font fixture');assert.ok((await exportSVG(record)).includes('data-boarding-code'));
 });
 

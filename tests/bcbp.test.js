@@ -54,7 +54,7 @@ test('all generated symbologies decode to the complete BCBP and survive metadata
     assert.ok(result,format);assert.equal(result.text,encodeBCBP(values()));assert.deepEqual(result.bytes,codeBytes(code.rawBytes));
     assert.equal(result.symbologyIdentifier,code.symbologyIdentifier);
     const record=flight({boardingCode:code});assert.deepEqual(readArchive(archive([record]))[0].boardingCode,code);
-    assert.equal(createRecord({...record,deleted:true}).boardingCode,'');
+    assert.equal(Object.hasOwn(createRecord({...record,deleted:true}), 'boardingCode'), false);
   }
 });
 

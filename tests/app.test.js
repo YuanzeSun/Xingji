@@ -126,10 +126,10 @@ test('ticket edits, duplicate review and backup restore work across the archive'
   assert.match(document.querySelector('.ticket-card').textContent, /CA181/);
   click('[data-action="view"]'); await waitFor(() => document.querySelector('[data-action="delete"]'));
   click('[data-action="delete"]');await waitFor(()=>document.querySelector('[data-delete-challenge]'));answerArithmetic(document);document.querySelector('[data-delete-challenge]').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true})); await waitFor(() => !document.querySelector('dialog'));
-  for(let i=0;i<150 && !(await get('records',[])).find(r=>r.type==='flight').deleted;i++)await new Promise(resolve=>setTimeout(resolve,10));
-  assert.equal((await get('records', [])).find(r => r.type === 'flight').deleted, true);
-  const removed = (await get('records', [])).find(r => r.type === 'flight');
-  assert.equal(removed.origin, ''); assert.equal(removed.service, ''); assert.deepEqual(removed.sources, []);
+  const flightId = records[1].id;
+  for(let i=0;i<150 && !(await get('records',[])).find(r=>r.id===flightId)?.deleted;i++)await new Promise(resolve=>setTimeout(resolve,10));
+  const removed = (await get('records', [])).find(r => r.id === flightId);
+  assert.deepEqual(removed, { id: flightId, deleted: true, updatedAt: removed?.updatedAt });
   click('[data-action="navigate"][data-page="data"]'); await waitFor(() => document.querySelector('[data-action="disconnect"]'));
   assert.equal(document.querySelector('#github-form,[data-action="import-csv"]'), null);
   assert.equal(document.querySelector('[data-action="restore"]'), null);

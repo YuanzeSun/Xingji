@@ -30,9 +30,16 @@ const OPTIONAL_FIELDS = ['railInvoice', 'flightTrack', 'flightStop', 'railShowIs
 export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'flightTrack', 'flightStop', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'railShowIssuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'railInvoice', ...Object.keys(SUPPLEMENT_FIELDS), 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'deleted'];
 const flightFields = FIELDS.filter(field => field !== 'orderNumber');
 export const fieldsForTransport = type => type === 'rail' ? FIELDS : flightFields;
+const validId = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id);
+const mergedRecordIds = record => [...new Set((Array.isArray(record.mergedIds) ? record.mergedIds : []).filter(id => validId(id) && id !== record.id))].sort();
 export const now = () => new Date().toISOString();
 export const clone = value => structuredClone(value);
 export const sameRecords = (a, b) => JSON.stringify([...a].sort((x, y) => x.id.localeCompare(y.id))) === JSON.stringify([...b].sort((x, y) => x.id.localeCompare(y.id)));
+export function deletionMarker(record, updatedAt = record.updatedAt) {
+  const mergedIds = mergedRecordIds(record);
+  return { id: record.id, deleted: true,
+    updatedAt: typeof updatedAt === 'string' ? updatedAt : now(), ...(mergedIds.length ? { mergedIds } : {}) };
+}
 export function createRecord(values = {}) {
   const record = Object.fromEntries(FIELDS.filter(key => !OPTIONAL_FIELDS.includes(key)).map(k => [k, '']));
   Object.assign(record, { id: crypto.randomUUID(), type: 'rail', template: DEFAULT_RAIL_TEMPLATE, departureZone: 'Asia/Shanghai', arrivalZone: 'Asia/Shanghai', provenance: 'commemorative', deleted: false, ticketMarks: [], sources: [], mergedIds: [], lockedFields: [], createdAt: now(), updatedAt: now() });
@@ -53,7 +60,8 @@ export function validDate(value) {
 }
 export function validateRecord(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('票据不是有效对象');
-  if (typeof input.id !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(input.id)) throw new Error('票据ID无效');
+  if (!validId(input.id)) throw new Error('票据ID无效');
+  if (input.deleted === true) return deletionMarker(input);
   if (!['rail', 'flight'].includes(input.type)) throw new Error('未知交通方式');
   if (!Object.hasOwn(TEMPLATES, input.template)) throw new Error('不支持的票面样式');
   if ((input.type === 'flight') !== input.template.startsWith('air-')) throw new Error('票面与交通方式不匹配');
@@ -62,12 +70,12 @@ export function validateRecord(input) {
   for (const field of fields) {
     if (field === 'flightTrack' || field === 'flightStop') continue;
     if (field === 'railShowIssuer') {
-      if (!input.deleted && isRailReceiptTemplate(input.template) && input.railShowIssuer === true) out.railShowIssuer = true;
+      if (isRailReceiptTemplate(input.template) && input.railShowIssuer === true) out.railShowIssuer = true;
       continue;
     }
-    if (Object.hasOwn(SUPPLEMENT_FIELDS, field) && (input.template !== 'rail-supplement' || input.deleted)) continue;
+    if (Object.hasOwn(SUPPLEMENT_FIELDS, field) && input.template !== 'rail-supplement') continue;
     if (field === 'railInvoice') {
-      const invoice = input.type === 'rail' && !input.deleted ? normalizeRailInvoice(input.railInvoice) : undefined;
+      const invoice = input.type === 'rail' ? normalizeRailInvoice(input.railInvoice) : undefined;
       if (invoice) out.railInvoice = invoice;
       continue;
     }
@@ -75,7 +83,7 @@ export function validateRecord(input) {
     if (field === 'fieldSources') { out.fieldSources = normalizeFieldSources(input.fieldSources,fields); continue; }
     if (field === 'lookupValues') { out.lookupValues = normalizeLookupValues(input.lookupValues); continue; }
     if (field === 'railStanding') { out.railStanding = input.type === 'rail' && input.railStanding === true; continue; }
-    if (field === 'deleted') { out.deleted = input.deleted === true; continue; }
+    if (field === 'deleted') { out.deleted = false; continue; }
     if (field === 'ticketMarks') { out.ticketMarks = normalizeMarks(input.ticketMarks); continue; }
     if (field === 'ticketCode') { out.ticketCode = normalizeTicketCode(input.ticketCode); continue; }
     if (field === 'boardingCode') { out.boardingCode = normalizeBoardingCode(input.boardingCode); continue; }
@@ -106,13 +114,7 @@ export function validateRecord(input) {
   out.sources = (Array.isArray(input.sources) ? input.sources : []).slice(0, 200).filter(s => s && typeof s === 'object').map(s => ({ kind: String(s.kind || 'manual').slice(0, 80), label: String(s.label || '').slice(0, 300), at: String(s.at || now()).slice(0, 40) }));
   out.sources.sort((a, b) => wireOrder(JSON.stringify(a), JSON.stringify(b)));
   out.lockedFields = [...new Set((Array.isArray(input.lockedFields) ? input.lockedFields : []).filter(f => fields.includes(f) && !['originCity','destinationCity','lookupValues','fieldSources','boardingCodeSource','boardingCodeOperatingFlight'].includes(f)))].sort();
-  out.mergedIds = [...new Set((Array.isArray(input.mergedIds) ? input.mergedIds : []).filter(id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id) && id !== out.id))].sort();
-  if (out.deleted) {
-    // Keep only an ID marker for synchronization; there is no recoverable ticket.
-    for (const field of fields) if (!['type', 'template', 'deleted'].includes(field) && !OPTIONAL_FIELDS.includes(field) && !Object.hasOwn(SUPPLEMENT_FIELDS, field)) out[field] = ['lookupValues','fieldSources'].includes(field) ? {} : field === 'ticketMarks' ? [] : field === 'railStanding' ? false : '';
-    out.sources = []; out.lockedFields = [];
-    return out;
-  }
+  out.mergedIds = mergedRecordIds(input);
   if (out.type !== 'flight' || !out.boardingCode) {
     for (const field of BOARDING_FIELDS) out[field] = '';
   } else {
@@ -160,6 +162,13 @@ export function readArchive(input) {
 }
 const recordIds = record => [record.id, ...(record.mergedIds || [])];
 function joinRecords(existing, incoming) {
+  const ids = [...new Set([...recordIds(existing), ...recordIds(incoming)])].sort();
+  existing.id = ids[0]; existing.mergedIds = ids.slice(1);
+  existing.updatedAt = [existing.updatedAt, incoming.updatedAt].sort().at(-1);
+  if (existing.deleted || incoming.deleted) {
+    existing.deleted = true;
+    return existing;
+  }
   const empty = value => !value || (Array.isArray(value) && !value.length);
   for (const field of FIELDS) {
     if (['lookupValues','fieldSources'].includes(field) || BOARDING_FIELDS.includes(field) || field === 'deleted') continue;
@@ -168,13 +177,9 @@ function joinRecords(existing, incoming) {
     if (fromInvoice || incoming.lockedFields.includes(field) || (empty(existing[field]) && !empty(incoming[field]))) takeField(existing,incoming,field);
   }
   if(!existing.lockedFields.includes('boardingCode') && (incoming.lockedFields.includes('boardingCode') || !existing.boardingCode))takeBoardingCode(existing,incoming);
-  const ids = [...new Set([...recordIds(existing), ...recordIds(incoming)])].sort();
-  existing.id = ids[0]; existing.mergedIds = ids.slice(1);
-  existing.deleted ||= incoming.deleted;
   existing.sources = union(existing.sources, incoming.sources);
   existing.lockedFields = union(existing.lockedFields, incoming.lockedFields);
   existing.createdAt = [existing.createdAt, incoming.createdAt].sort()[0];
-  existing.updatedAt = [existing.updatedAt, incoming.updatedAt].sort().at(-1);
   return existing;
 }
 export function deduplicateRecords(records) {
@@ -192,7 +197,7 @@ export function deduplicateRecords(records) {
 export function mergeBackupRecords(records, backupRecords) {
   for (const record of backupRecords) requireCompleteIdentity(record.identity);
   const before = new Map(records.flatMap(r => recordIds(r).map(id => [id, r])));
-  const merged = deduplicateRecords([...records, ...backupRecords]);
+  const merged = deduplicateRecords(alignMergedIds(records, backupRecords).flat());
   for (const record of merged) {
     const previous = recordIds(record).map(id => before.get(id)).find(Boolean);
     if (previous && !equal(record, previous)) record.updatedAt = now();
@@ -209,7 +214,11 @@ export function alignMergedIds(...collections) {
   }
   const groups = new Map();
   for (const id of parents.keys()) { const root = find(id); if (!groups.has(root)) groups.set(root, []); groups.get(root).push(id); }
-  return collections.map(records => records.map(record => { const id = find(record.id); return { ...record, id, mergedIds: groups.get(id).filter(other => other !== id).sort() }; }));
+  return collections.map(records => records.map(record => {
+    const id = find(record.id);
+    const aligned = { ...record, id, mergedIds: groups.get(id).filter(other => other !== id).sort() };
+    return record.deleted ? deletionMarker(aligned) : aligned;
+  }));
 }
 export function mergeThreeWay(baseRecords, localRecords, remoteRecords) {
   [baseRecords, localRecords, remoteRecords] = alignMergedIds(baseRecords, localRecords, remoteRecords);
@@ -224,9 +233,9 @@ export function mergeThreeWay(baseRecords, localRecords, remoteRecords) {
     if (l.deleted || r.deleted) {
       const kept = l.deleted ? r : l;
       const changed = !kept.deleted && b && FIELDS.some(field => field !== 'deleted' && !equal(kept[field], b[field]));
-      const merged = { ...clone(kept), deleted: true, mergedIds: union(l.mergedIds, r.mergedIds).filter(other => other !== id).sort(), updatedAt: [l.updatedAt, r.updatedAt].sort().at(-1) };
+      const marker = deletionMarker(l.deleted ? l : r, [l.updatedAt, r.updatedAt].sort().at(-1));
       if (changed) conflicts.push({ id, field: 'deleted', base: b.deleted, local: l.deleted, remote: r.deleted, context: { local: clone(l), remote: clone(r) } });
-      records.push(changed ? merged : validateRecord(merged));
+      records.push(marker);
       continue;
     }
     const merged = clone(l);

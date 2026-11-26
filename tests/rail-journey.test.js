@@ -171,7 +171,7 @@ test('rail snapshots survive JSON and independent cloud edits; a changed journey
   assert.equal(createRecord({...record,departureDate:'2026-11-18'}).railJourney,'');
   assert.equal(createRecord({...record,service:'G2'}).railJourney,'');
   assert.equal(createRecord({...record,destination:'苏州北',destinationCode:''}).railJourney,'');
-  assert.equal(createRecord({...record,deleted:true}).railJourney,'');
+  assert.equal(Object.hasOwn(createRecord({...record,deleted:true}), 'railJourney'), false);
   assert.equal(ticketSVG(record),ticketSVG({...record,railJourney:'',railRunner:'',railCarOwner:''}));
 });
 

@@ -39,8 +39,9 @@ test('synchronization retains a confirmed supplement and its absorbed ID cannot 
   const old = { ...structuredClone(stored[0]), id: 'b', mergedIds: [] };
   await synchronize(store, [old], [{ ...old, deleted: true }]);
   assert.equal(stored.length, 1); assert.equal(stored[0].deleted, true, 'deleting from a previously absorbed ID must affect the actual merged record');
-  assert.equal(stored[0].origin, ''); assert.equal(stored[0].price, ''); assert.equal(stored[0].seat, '');
-  assert.deepEqual(stored[0].sources, []);
+  assert.deepEqual(stored[0], { id: 'a', deleted: true, updatedAt: stored[0].updatedAt, mergedIds: ['b'] });
+  const restored = mergeBackupRecords([a, b], stored);
+  assert.deepEqual(restored, [{ ...stored[0], updatedAt: restored[0].updatedAt }]);
 });
 
 test('import review catches discrepancies and requires fresh confirmation before writing a supplement', () => {

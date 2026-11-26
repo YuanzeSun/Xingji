@@ -42,7 +42,8 @@ test('provenance round-trips through backups, validates metadata and disappears 
   for(const restored of [readArchive(archive([record]))[0]]){
     assert.equal(restored.boardingCodeSource,'generated');assert.equal(restored.boardingCodeOperatingFlight,'AA45A');assert.deepEqual(restored.lookupValues,record.lookupValues);assert.deepEqual(restored.boardingCode,record.boardingCode);
   }
-  const deleted=createRecord({...record,deleted:true});assert.equal(deleted.boardingCodeSource,'');assert.equal(deleted.boardingCodeOperatingFlight,'');assert.deepEqual(deleted.lookupValues,{});
+  const deleted = createRecord({ ...record, deleted: true });
+  for (const field of ['boardingCodeSource', 'boardingCodeOperatingFlight', 'lookupValues']) assert.equal(Object.hasOwn(deleted, field), false);
   assert.throws(()=>flight({lookupValues:{password:'secret'}}),/自动补全/);
   const arrivalDate = { year: 2026, dayOfYear: 321 };
   const stored = archive([flight({ arrivalDate, lookupValues:{ arrivalDate } })]);

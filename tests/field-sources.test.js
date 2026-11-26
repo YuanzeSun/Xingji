@@ -42,6 +42,6 @@ test('field origins round-trip in archive and merge with the values chosen for e
 test('RailGo sources survive normalization and disappear with deleted ticket data',()=>{
   const record=createRecord({service:'G21'});applyLookupValues(record,{railModel:'CR400BF-B',railBureau:'京局',railMileage:'1023'},true,{kind:'rail-lookup'});
   const normalized=createRecord(record);assert.equal(normalized.fieldSources.railModel,'railgo');assert.equal(fieldSourceLabel(normalized,'railBureau'),'RailGo');
-  const deleted=createRecord({...normalized,deleted:true});assert.deepEqual(deleted.fieldSources,{});
+  const deleted=createRecord({...normalized,deleted:true});assert.equal(Object.hasOwn(deleted, 'fieldSources'), false);
   for(const source of [{passenger:'invented'},{fieldSources:'manual'},{nonexistent:'manual'},{passenger:['manual']},[]])assert.throws(()=>flight({fieldSources:source}),/来源/);
 });
