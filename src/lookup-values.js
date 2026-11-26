@@ -42,7 +42,7 @@ export function applyLookupValues(record,changes,automatic=true,source) {
   }
 }
 export function lookupContext(record) {
-  return JSON.stringify([record.type,record.template==='rail-refund-receipt',String(record.service || '').replace(/\s/g,'').toUpperCase(),record.departureDate,...['origin','destination'].map(side=>placeIdentity(record,side) || record[side])]);
+  return JSON.stringify([record.type,record.template==='rail-refund-receipt',String(record.service || '').replace(/\s/g,'').toUpperCase(),record.departureDate,...['origin','destination'].map(side=>placeIdentity(record,side) || record[side]),record.railJourney?.timetableReference ? record.departureTime : '']);
 }
 export function clearLookupValues(record) {
   const changes={};

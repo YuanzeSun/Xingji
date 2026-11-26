@@ -4,7 +4,7 @@ import { railRouteMatches } from './rail-route-snapshot.js';
 import { loadRailLineNames } from './rail-line-names.js';
 import { railDepartureDay, railDetails, shiftRailDate } from './rail-lookup-model.js';
 import {resolvePlace} from './places.js';
-import { railText as clean, railService, railTime, railStation, isEmuModel, normalizeRailJourney, railJourneyRange, sameRailTimetable } from './rail-journey.js';
+import { railText as clean, railService, railTime, railStation, isEmuModel, normalizeRailJourney, railJourneyRange, sameRailTimetable, validRailDistances } from './rail-journey.js';
 export const RAIL_DETAILS_SOURCE = 'https://api.railgo.dev/479755220e0';
 
 async function requestJSON(url, { fetcher, signal }, onResponse) {
@@ -72,15 +72,11 @@ async function stationAccess(result,options) {
   return {station:stop.station,date,gates,platform};
 }
 
-function validDistances(distances) {
-  return distances[0] === 0 && distances.every((km, i) =>
-    Number.isFinite(km) && km <= 100000 && (i === 0 || km > distances[i - 1]));
-}
 
 function retainSavedDetails(journey, saved, { emuPossible }) {
   if (!saved) return;
   if (!journey.distanceQueriedAt && saved.distanceQueriedAt
-      && validDistances(saved.stops.map(stop => stop.distanceKm))) {
+      && validRailDistances(saved.stops.map(stop => stop.distanceKm))) {
     journey.stops.forEach((stop, i) => { stop.distanceKm = saved.stops[i].distanceKm; });
     journey.distanceQueriedAt = saved.distanceQueriedAt;
   }
@@ -168,7 +164,7 @@ export async function lookupRailDetails(query, { fetcher = globalThis.fetch, sig
         (!departure || shiftRailDate(startDate,railDepartureDay(stop.day,arrival,departure))===calendarDate(expected.departureDate));
     });
     if (!timetableMatches) return;
-    if (!validDistances(rows.map(stop => stop.distance))) return;
+    if (!validRailDistances(rows.map(stop => stop.distance))) return;
     journey.stops.forEach((stop,i)=>{stop.distanceKm=rows[i].distance;});journey.distanceQueriedAt=queriedAt;
   };
   const extras = await Promise.allSettled([stocks(),coaches(),mileage(),access(), (async () => {

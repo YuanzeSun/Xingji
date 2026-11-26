@@ -11,6 +11,12 @@ const railDate = value => {
   return date?.year && date.dayOfYear ? date : '';
 };
 export const railTime = value => typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : '';
+export const RAIL_TIMETABLE_REFERENCES = Object.freeze({
+  raillog: { name: 'RailLog', url: 'https://raillog.top/api-docs/timetable.html' },
+  'open-crh-tracker': { name: 'Open CRH Tracker', url: 'https://crh.lihugang.top/docs/api/timetable-train-history' }
+});
+export const validRailDistances = distances => distances[0] === 0 && distances.every((km, index) =>
+  Number.isFinite(km) && km <= 100000 && (index === 0 || km > distances[index - 1]));
 const timestamp = value => typeof value === 'string' && /^\d{4}-\d\d-\d\dT/.test(value) && Number.isFinite(Date.parse(value)) ? value.slice(0, 40) : '';
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const texts = (value, keys) => Object.fromEntries(keys.map(key => [key, railText(value[key])]));
@@ -33,6 +39,17 @@ export function normalizeRailJourney(value) {
     const referenceFor = railDate(value.query.referenceFor);
     if (!referenceFor || sameDate(referenceFor, query.boardingDate)) throw new Error('铁路参考资料的乘车日期无效');
     query.referenceFor = referenceFor;
+  }
+  let timetableReference;
+  if (Object.hasOwn(value, 'timetableReference')) {
+    const { provider, snapshotDate } = value.timetableReference || {};
+    if (!Object.hasOwn(RAIL_TIMETABLE_REFERENCES, provider) || query.referenceFor) throw new Error('历史时刻表来源无效');
+    timetableReference = { provider };
+    if (provider === 'raillog') {
+      const date = railDate(snapshotDate);
+      if (!date || calendarDate(date) > calendarDate(query.boardingDate)) throw new Error('历史时刻表快照日期无效');
+      timetableReference.snapshotDate = date;
+    }
   }
   if (!Array.isArray(value.stops) || value.stops.length < 2 || value.stops.length > 300) throw new Error('铁路经停站资料格式不正确');
   const stops = value.stops.map(stop => {
@@ -63,11 +80,12 @@ export function normalizeRailJourney(value) {
     coaches = { ...texts(value.coaches, ['model','code','type']), queriedAt:timestamp(value.coaches.queriedAt), cars, info:(Array.isArray(value.coaches.info) ? value.coaches.info : []).slice(0, 20).filter(item => object(item) && railText(item.name) && !/婴儿|护理台|办公席|无障碍|卫生间|商务座/.test(railText(item.name)) && railText(item.value)).map(item => ({ name:railText(item.name), value:railText(item.value) })) };
   }
   const access=(Array.isArray(value.access)?value.access:[]).slice(0,1).filter(item=>object(item)&&railStation(item.station)===query.origin).map(item=>({station:railStation(item.station),date:railDate(item.date),platform:railText(item.platform),gates:(Array.isArray(item.gates)?item.gates:[]).slice(0,20).map(railText).filter(Boolean)}));
-  return { query, queriedAt:timestamp(value.queriedAt), stops, distanceQueriedAt:timestamp(value.distanceQueriedAt), trainsets, coupling:value.coupling === true, coaches,access };
+  return { query, ...(timetableReference && { timetableReference }), queriedAt:timestamp(value.queriedAt), stops, distanceQueriedAt:timestamp(value.distanceQueriedAt), trainsets, coupling:value.coupling === true, coaches,access };
 }
 
 export function sameRailTimetable(saved, fresh) {
   if (!saved?.query || !fresh?.query || saved.stops.length !== fresh.stops.length) return false;
+  if (saved.timetableReference?.provider !== fresh.timetableReference?.provider) return false;
   if (!['trainNum', 'origin', 'destination'].every(key => saved.query[key] === fresh.query[key])
       || !['startDate', 'boardingDate', 'referenceFor'].every(key => sameDate(saved.query[key], fresh.query[key]))) return false;
   return fresh.stops.every((stop, i) => {
@@ -80,13 +98,14 @@ export function sameRailTimetable(saved, fresh) {
 export function railJourneyMatches(record, journey = record.railJourney) {
   if (record.type !== 'rail' || record.template === 'rail-refund-receipt' || !journey?.query) return false;
   const query = journey.query;
+  if (journey.timetableReference && journey.stops.find(stop => stop.station === query.origin)?.departureTime !== record.departureTime) return false;
   return railService(record.service).split('/')[0] === query.trainNum && sameDate(record.departureDate, query.referenceFor || query.boardingDate) && ['origin','destination'].every(side => {
     const place = resolvePlace(record, side);
     return !['ambiguous','conflict'].includes(place.status) && railStation(place.status === 'matched' ? place.name : record[side]) === query[side];
   });
 }
 
-export const hasConfirmedRailJourney = record => railJourneyMatches(record) && !record.railJourney.query.referenceFor;
+export const hasConfirmedRailJourney = record => railJourneyMatches(record) && !record.railJourney.query.referenceFor && !record.railJourney.timetableReference;
 
 export const normalizeRailTrainsets=value=>[...new Set(railText(value).normalize('NFKC').toUpperCase().split(/[/、,，;；+\n]+/).map(id=>id.replace(/\s/g,'')).filter(Boolean))].join(' / ');
 export const railTrainsetIds=record=>record.type==='rail' ? normalizeRailTrainsets(record.railTrainsets).split(' / ').filter(Boolean) : [];

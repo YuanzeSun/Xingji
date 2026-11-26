@@ -5,7 +5,7 @@ import { railRouteNeedsSave } from './rail-route-snapshot.js';
 import { validDate } from './model.js';
 import { resolvePlace } from './places.js';
 import { bureauFromCode, normalizeRailBureau, parseRailGoModel } from './rail-details.js';
-import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, hasConfirmedRailJourney, sameRailTimetable } from './rail-journey.js';
+import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, hasConfirmedRailJourney, sameRailTimetable, RAIL_TIMETABLE_REFERENCES } from './rail-journey.js';
 import { isRailService } from './rail-service.js';
 
 export const shiftRailDate = (date, days) => { const result = new Date(calendarDate(date) + 'T00:00:00Z'); result.setUTCDate(result.getUTCDate() + days); return result.toISOString().slice(0, 10); };
@@ -77,9 +77,10 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
 
 export function railCompletion(record, result, startDate) {
   const journey = result.railJourney, referenceFor = journey?.query.referenceFor;
+  const timetableReference = journey?.timetableReference;
   const query = railQuery(record, startDate);
   if (JSON.stringify(query) !== JSON.stringify(result.query)) return {};
-  if (referenceFor && hasConfirmedRailJourney(record)) return {};
+  if ((referenceFor || timetableReference) && hasConfirmedRailJourney(record)) return {};
   const values={...result,railTrainsets:(journey?.trainsets || []).map(stock=>stock.id).join(' / ')};
   if (referenceFor) {
     const overnightDays = (Date.parse(result.arrivalDate) - Date.parse(calendarDate(journey.query.boardingDate))) / 86400000;
@@ -90,7 +91,9 @@ export function railCompletion(record, result, startDate) {
   const differentTimetable = record.railJourney && result.railJourney
     && !sameRailTimetable(record.railJourney, result.railJourney);
   for (const field of fields) {
-    if (!values[field] && record.fieldSources?.[field] === RAILGO_REFERENCE_SOURCE && isLookupValue(record,field)) changes[field] = '';
+    const previousSource = record.fieldSources?.[field];
+    if (!values[field] && isLookupValue(record,field) &&
+        (previousSource === RAILGO_REFERENCE_SOURCE || Object.hasOwn(RAIL_TIMETABLE_REFERENCES, previousSource))) changes[field] = '';
   }
   if (differentTimetable) {
     for (const field of ['railMileage', 'railTrainsets', 'gate', 'railPlatform']) {

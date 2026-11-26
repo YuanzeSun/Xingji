@@ -6,7 +6,9 @@ import { createRecord, archive, readArchive } from '../src/model.js';
 import { railQuery, railDetails, railCompletion } from '../src/rail-lookup-model.js';
 import { lookupRailDetails } from '../src/rail-data.js';
 import { railLookupMarkup, bindRailLookup } from '../src/rail-lookup.js';
-import { applyLookupValues } from '../src/lookup-values.js';
+import { lookupRailTimetableReference } from '../src/rail-timetable-reference.js';
+import { applyLookupValues, lookupContext } from '../src/lookup-values.js';
+import { hasConfirmedRailJourney, railJourneyMatches } from '../src/rail-journey.js';
 import { journeyStatistics } from '../src/statistics-model.js';
 import { mountStatistics } from '../src/statistics.js';
 import { ticketSVG } from '../src/tickets.js';
@@ -68,6 +70,96 @@ test('new prefixes pass the lookup and snapshot checks, including combined numbe
       enrich: false, fetcher: async () => Response.json(wrongRoute),
     }), /已返回时刻表.*缺少「北京南」/);
   }
+});
+
+test('RailGo failure offers two manual references and persists the selected snapshot as editable data', async () => {
+  const ticket = record({ origin: '南京南', departureTime: '00:05' });
+  const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '<button type="submit">保存</button></form>');
+  const form = dom.window.document.querySelector('form');
+  const fallback = form.querySelector('[data-rail-fallback]'), railLog = fallback.querySelector('[data-rail-provider="raillog"]');
+  const calls = [];
+  const cleanup = bindRailLookup(form, {
+    getRecord: () => ticket,
+    canQuery: () => true,
+    apply: (changes, source) => applyLookupValues(ticket, changes, !!source, source),
+    lookup: async () => { calls.push('RailGo'); throw new Error('未查到该日期的列车资料'); },
+    lookupReference: (provider, query, time, options) => lookupRailTimetableReference(provider, query, time, {
+      ...options,
+      fetcher: async (address, request) => {
+        const url = new URL(address);
+        assert.equal(url.hostname, 'api.raillog.top');
+        assert.equal(request.credentials, 'omit');
+        calls.push(url.pathname);
+        if (url.pathname.endsWith('/versions')) return Response.json(['2026.11.28', '2026.11.14', '2026.11.03']);
+        assert.deepEqual([...url.searchParams], [['trainNumber', 'G1'], ['version', '2026.11.14']]);
+        return Response.json({ version: '2026.11.14', train_codes: 'G1', stops: [
+          { station_name: '北京南', start_time: '19:00', arrive_day_diff: 0, mileage: 0 },
+          { station_name: '南京南', arrive_time: '23:58', start_time: '00:05', arrive_day_diff: 0, mileage: 927 },
+          { station_name: '上海虹桥', arrive_time: '02:00', arrive_day_diff: 1, mileage: 1318 }
+        ] });
+      }
+    })
+  });
+  try {
+    assert.equal(fallback.hidden, true);
+    assert.deepEqual(calls, []);
+    form.querySelector('[data-rail-lookup]').click();
+    await new Promise(done => setImmediate(done));
+    assert.equal(fallback.hidden, false);
+    assert.ok(fallback.querySelector('[data-rail-provider="open-crh-tracker"]'));
+    assert.deepEqual(calls, ['RailGo']);
+    railLog.click();
+    railLog.click();
+    await new Promise(done => setImmediate(done));
+    assert.deepEqual(calls, ['RailGo', '/api/train-timetables/versions', '/api/train-timetables']);
+    assert.equal(fallback.hidden, true);
+    const [saved] = readArchive(archive([ticket]));
+    assert.equal(calendarDate(saved.railJourney.query.startDate), '2026-11-16');
+    assert.equal(calendarDate(saved.arrivalDate), '2026-11-17');
+    assert.equal(saved.arrivalTime, '02:00');
+    assert.equal(saved.railMileage, '391');
+    assert.equal(saved.fieldSources.arrivalTime, 'raillog');
+    assert.equal(hasConfirmedRailJourney(saved), false);
+    assert.equal(form.querySelector('[data-rail-query-date]').disabled, false);
+    assert.match(form.querySelector('[data-rail-reference]').textContent, /历史时刻表.*RailLog.*2026-11-14/);
+    assert.match(form.querySelector('[data-rail-result]').textContent, /RailLog/);
+    const edited = { ...saved, departureTime: '00:06' };
+    assert.notEqual(lookupContext(edited), lookupContext(saved));
+    assert.equal(railJourneyMatches(edited), false);
+  } finally { cleanup(); dom.window.close(); }
+});
+
+test('Open CRH Tracker uses the inferred first-station day and rejects conflicting timetables', async () => {
+  const ticket = record({ origin: '南京南', departureTime: '00:05' }), query = railQuery(ticket);
+  const boardingDay = Date.parse(query.boardingDate) / 86400000;
+  const trainCode = { prefix: 'G', number: 1 };
+  const stops = [
+    { stationName: '北京南', departOffset: 68400, stationTrainCode: trainCode },
+    { stationName: '南京南', arriveOffset: 86280, departOffset: 86700, stationTrainCode: trainCode },
+    { stationName: '上海虹桥', arriveOffset: 93600, stationTrainCode: trainCode }
+  ];
+  const items = [{ serviceDayStart: boardingDay - 2, serviceDayEndExclusive: boardingDay, timetableId: 1 }];
+  const timetableMappings = { 1: { stops } };
+  const day = boardingDay - 1;
+  const start = day * 86400 - 8 * 3600;
+  const fetcher = async address => {
+    const url = new URL(address);
+    if (url.pathname === '/api/v2/history/train/G1') {
+      assert.deepEqual([...url.searchParams], [['start', String(start)], ['end', String(start + 86399)]]);
+      return Response.json({ ok: true, data: { trainCode, items: [{ serviceDay: day, timetableId: 1, emuId: 1, status: 1 }],
+        emuCodeMappings: { 1: 'CR400BF-A-5059' } } });
+    }
+    return Response.json({ ok: true, data: { trainCode, items, timetableMappings } });
+  };
+  const lookup = time => lookupRailTimetableReference('open-crh-tracker', query, time, { fetcher });
+  const result = await lookup('00:05');
+  assert.equal(result.arrivalDate, '2026-11-17');
+  assert.equal(result.railJourney.trainsets[0].id, 'CR400BF-A-5059');
+  assert.equal(result.railModel, 'CR400BF-A');
+  await assert.rejects(lookup('00:06'), /未查到与票面/);
+  items.push({ ...items[0], timetableId: 2 });
+  timetableMappings[2] = { stops: [...stops.slice(0, -1), { ...stops.at(-1), arriveOffset: 93660 }] };
+  await assert.rejects(lookup('00:05'), /历史时刻表有冲突/);
 });
 
 test('a train that left before renumbering can be queried on its manually selected start date', async () => {

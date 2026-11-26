@@ -1,7 +1,7 @@
 import {escape as e} from './html.js';
 import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import {hasRailQRCode} from './ticket-code.js';
-import {hasConfirmedRailJourney} from './rail-journey.js';
+import {hasConfirmedRailJourney,RAIL_TIMETABLE_REFERENCES} from './rail-journey.js';
 export const sourceFieldValue=(record,key)=>key.endsWith('DateYear') ? journeyDate(record[key.slice(0,-4)])?.year : record[key];
 export const railBarcodeFieldLocked=(record,key)=>hasRailQRCode(record) &&
   key!=='ticketCode' && record.fieldSources?.[key]==='barcode' && !!record.lockedFields?.includes(key);
@@ -21,12 +21,13 @@ export const matchedIdentityLocked = (record, key) => key === 'identity' &&
   record.fieldSources?.identity === 'profile-match' && !!record.lockedFields?.includes(key);
 export const railCodeEntryLocked = record => record.type === 'rail' &&
   (!!record.railInvoice?.electronicTicketNumber || isRailPointsRecord(record));
-const FIELD_SOURCES=Object.freeze({manual:'手动输入',barcode:'条码',variflight:'飞常准',railgo:'RailGo',profile:'个人资料','profile-match':'证件匹配',ocr:'图片识别',pdf:'PDF 导入',default:'默认值',generated:'自动生成',database:'地点数据库',lookup:'查询补全',[RAIL_POINTS_SOURCE]:'12306 积分',[RAILGO_REFERENCE_SOURCE]:'RailGo 参考'});
+const referenceLabels=Object.fromEntries(Object.entries(RAIL_TIMETABLE_REFERENCES).map(([key, { name }]) => [key, name + ' 参考']));
+const FIELD_SOURCES=Object.freeze({manual:'手动输入',barcode:'条码',variflight:'飞常准',railgo:'RailGo',profile:'个人资料','profile-match':'证件匹配',ocr:'图片识别',pdf:'PDF 导入',default:'默认值',generated:'自动生成',database:'地点数据库',lookup:'查询补全',[RAIL_POINTS_SOURCE]:'12306 积分',[RAILGO_REFERENCE_SOURCE]:'RailGo 参考',...referenceLabels});
 const metadata=new Set(['fieldSources','lookupValues','boardingCodeSource','boardingCodeOperatingFlight','deleted']);
 const editorSettings=new Set(['type','template','flightStatus','provenance','offsetX','offsetY']);
 export const hasFieldValue=value=>value!==undefined && value!==null && value!==false && value!=='' && (!Array.isArray(value) || value.length>0);
 const imports={manual:'manual',scan:'ocr',pdf:'pdf','rail-lookup':'railgo','flight-lookup':'variflight',[RAIL_POINTS_SOURCE]:RAIL_POINTS_SOURCE,[RAILGO_REFERENCE_SOURCE]:RAILGO_REFERENCE_SOURCE};
-export const importFieldSource=kind=>Object.hasOwn(imports,kind) ? imports[kind] : '';
+export const importFieldSource=kind=>Object.hasOwn(referenceLabels,kind) ? kind : Object.hasOwn(imports,kind) ? imports[kind] : '';
 
 export function normalizeFieldSources(input,fields) {
   if(!input)return {};
