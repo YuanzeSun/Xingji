@@ -40,3 +40,10 @@ export function journeyMinutes(record) {
   const actual = record.type === 'flight' && duration(record.actualDepartureDate, record.actualDepartureTime, record.actualArrivalDate, record.actualArrivalTime);
   return actual || duration(record.departureDate, record.departureTime, record.arrivalDate, record.arrivalTime);
 }
+
+export function arrivalDifferenceMinutes(record) {
+  const { arrivalDate, arrivalTime, actualArrivalDate, actualArrivalTime, arrivalZone } = record;
+  const planned = localInstant(arrivalDate, arrivalTime, arrivalZone);
+  const actual = localInstant(actualArrivalDate, actualArrivalTime, arrivalZone);
+  return Math.round((actual - planned) / MINUTE);
+}

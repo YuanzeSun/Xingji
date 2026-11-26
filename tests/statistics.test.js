@@ -154,6 +154,70 @@ test('ticket fare totals follow the journey date range and distinguish zero pric
   }
 });
 
+test('railway footprints count each named line once per ridden section within the date range', () => {
+  const [beijing, tianjin, shanghai] = [[116.38, 39.86], [117.06, 39.05], [121.33, 31.19]];
+  const stops = [
+    { name: '北京南', coordinates: beijing }, { name: '天津南', coordinates: tianjin }, { name: '上海虹桥', coordinates: shanghai }
+  ];
+  const route = {
+    service: 'G1', origin: '北京南', destination: '天津南', queriedAt: '2024-03-01T00:00:00Z',
+    segments: [[beijing, tianjin]], stops: stops.slice(0, 2),
+    lineLabels: [{ name: '京沪高速线', coordinates: beijing }, { name: '京沪高速线', coordinates: tianjin }],
+    fullRoute: { segments: [[beijing, tianjin], [tianjin, shanghai]], stops,
+      lineLabels: [{ name: '区间以外的线路', coordinates: shanghai }] }
+  };
+  const first = rail({ id: 'section', service: 'G1', destination: '天津南', railRoute: route });
+  const next = rail({ id: 'later', service: 'G1', destination: '天津南', departureDate: '2024-03-03', railRoute: route });
+  const rows = [first, next, rail({}), { ...first, id: 'stale', service: 'G2' },
+    rail({ deleted: true }), rail({ template: 'rail-refund-receipt' })];
+  const all = journeyStatistics(rows, range);
+  assert.deepEqual(all.railLines, [{ name: '京沪高速线', count: 2 }]);
+  assert.equal(all.railLineTrips, 2);
+  assert.equal(all.rail, 4);
+  const filtered = journeyStatistics(rows, { ...range, dateTo: '2024-03-01' });
+  assert.deepEqual(filtered.railLines, [{ name: '京沪高速线', count: 1 }]);
+});
+
+test('arrival delay bands use both local arrival dates and account for midnight and clock changes', () => {
+  const trip = (actualArrivalTime, extra) => flight({
+    arrivalDate: '2024-03-01', arrivalTime: '12:00', actualArrivalDate: '2024-03-01', actualArrivalTime, ...extra
+  });
+  const rows = ['11:59', '12:00', '12:01', '12:14', '12:15', '12:29', '12:30', '12:59', '13:00'].map(time => trip(time));
+  rows.push(
+    trip('00:05', { arrivalTime: '23:50', actualArrivalDate: '2024-03-02' }),
+    trip('03:05', { origin: 'SFO', destination: 'JFK', departureDate: '2024-03-10',
+      arrivalDate: '2024-03-10', arrivalTime: '01:55', actualArrivalDate: '2024-03-10' }),
+    trip('02:00', { origin: 'SFO', destination: 'JFK', departureDate: '2024-11-03',
+      arrivalDate: '2024-11-03', arrivalTime: '01:30', actualArrivalDate: '2024-11-03' }),
+    trip('12:45', { actualArrivalDate: '' }),
+    trip('12:45', { arrivalDate: '' }),
+    trip('12:45', { destination: '未识别机场' }),
+    trip('15:00', { flightStatus: 'invalid' }),
+    trip('15:00', { deleted: true })
+  );
+  const all = journeyStatistics(rows, range);
+  assert.equal(all.flight, 15);
+  assert.equal(all.arrivalDelayTrips, 11);
+  assert.deepEqual(all.arrivalDelays.map(band => band.count), [1, 1, 3, 3, 2, 1]);
+
+  const dom = new JSDOM('<div id="root"></div>');
+  const root = dom.window.document.querySelector('#root');
+  bindTestDialogs(dom.window);
+  const unmount = mountStatistics(root, rows, { options: { ...range } });
+  try {
+    const delayPanel = () => root.querySelector('[data-stat-arrival-delays]');
+    assert.match(delayPanel().textContent, /11 \/ 15 班可比较/);
+    assert.deepEqual([...delayPanel().querySelectorAll('li span:not([style])')].map(item => item.textContent),
+      ['1 班', '1 班', '3 班', '3 班', '2 班', '1 班']);
+    assert.match(root.querySelector('[data-stat-rail-lines]').textContent, /暂无已识别的铁路线/);
+    applyStatisticsDate(root, '[data-stat-from]', '2024-03-10');
+    assert.match(delayPanel().textContent, /1 \/ 2 班可比较/);
+  } finally {
+    unmount();
+    dom.window.close();
+  }
+});
+
 test('statistics default to an unbounded start and today, compare dates only and respect edited bounds', () => {
   assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railSubtypes:true, aircraftSubtypes:true, marketingAirlines:false, includeStopoverAirports:false });
   const rows = [rail({ id: 'past' }), flight({ id: 'today', departureDate: '2026-11-16', departureTime: '23:59' }), rail({ id: 'future', departureDate: '2026-11-17' }), rail({ id: 'deleted', deleted: true }), rail({ id: 'undated', departureDate: '' })];

@@ -12,7 +12,8 @@ import { flightTrackDistanceKm } from './flight-track.js';
 import { normalizeRailBureau } from './rail-details.js';
 import { railModelsForRecord } from './rail-model-statistics.js';
 import { railText, railTrainsetIds } from './rail-journey.js';
-import { journeyMinutes } from './journey-duration.js';
+import { railRouteMatches } from './rail-route-snapshot.js';
+import { arrivalDifferenceMinutes, journeyMinutes } from './journey-duration.js';
 
 const CONTINENTS = Object.freeze({ AF: '非洲', AN: '南极洲', AS: '亚洲', EU: '欧洲', NA: '北美洲', OC: '大洋洲', SA: '南美洲' });
 const airportContinents = new Map(Object.entries(CONTINENT_AIRPORT_CODES).flatMap(([continent, codes]) => codes.split(' ').filter(Boolean).map(code => [code, continent])));
@@ -21,6 +22,14 @@ const laoStations = new Set(['YTM', 'VBM', 'VJM', 'VFM', 'VCM', 'VOM']);
 const regionNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' });
 const compare = new Intl.Collator('zh-CN', { numeric: true }).compare;
 const rankOrder = (a, b) => b.count - a.count || compare(a.name, b.name);
+const arrivalDelayBands = [
+  ['提前到达', -1],
+  ['准点', 0],
+  ['晚 1–14 分钟', 14],
+  ['晚 15–29 分钟', 29],
+  ['晚 30–59 分钟', 59],
+  ['晚 60 分钟及以上', Infinity]
+];
 function addVehicleTrip(collection, name, record) {
   if (!collection.has(name)) collection.set(name, []);
   collection.get(name).push(record);
@@ -82,13 +91,15 @@ function flightAirline(record, byMarketing) {
 export function journeyStatistics(records, input = {}, today = todayDate()) {
   const options = statisticsOptions(input, today), range = filterStatisticsRange(records, options), rows = range.records;
   const airports = new Map(), stations = new Map(), countries = new Map(), continents = new Set(), routes = new Map(), aircraft = new Map();
-  const railModels = new Map(), railBureaus = new Map(), airlines = new Map();
+  const railModels = new Map(), railBureaus = new Map(), airlines = new Map(), railLines = new Map();
   const trainsets = new Map(), registrations = new Map();
   let unknownAircraft = 0, unknownAirlines = 0, unknownPlaces = 0, unknownRoutes = 0;
   let actualFlightDistance = 0, actualFlightDistanceTrips = 0;
   let rail = 0, flight = 0, railMileage = 0, railMileageTrips = 0;
+  let railLineTrips = 0, arrivalDelayTrips = 0;
   const travelTime = { rail: { minutes: 0, trips: 0 }, flight: { minutes: 0, trips: 0 } };
   const fares = { rail: { cents: 0, trips: 0 }, flight: { cents: 0, trips: 0 } };
+  const arrivalDelays = arrivalDelayBands.map(([name]) => ({ name, count: 0 }));
   for (const record of rows) {
     if (record.price) {
       const fare = fares[record.type];
@@ -105,6 +116,11 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
       if (record.railMileage) {
         railMileage += Number(record.railMileage);
         railMileageTrips++;
+      }
+      const lineLabels = record.railRoute?.lineLabels;
+      if (lineLabels?.length && railRouteMatches(record)) {
+        railLineTrips++;
+        for (const name of new Set(lineLabels.map(label => label.name))) railLines.set(name, (railLines.get(name) || 0) + 1);
       }
       for (const model of railModelsForRecord(record,options)) railModels.set(model, (railModels.get(model) || 0) + 1);
       for (const id of railTrainsetIds(record)) if (railText(id)) addVehicleTrip(trainsets, id, record);
@@ -125,6 +141,11 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     }
     if (record.type !== 'flight') continue;
     flight++;
+    const delay = arrivalDifferenceMinutes(record);
+    if (Number.isFinite(delay)) {
+      arrivalDelayTrips++;
+      arrivalDelays[arrivalDelayBands.findIndex(([, max]) => delay <= max)].count++;
+    }
     const code = options.includeStopoverAirports && record.flightStop?.airport;
     if (code && !airports.has(code)) {
       const { name = code, country = '' } = placeGeography({ type: 'flight', origin: code }, 'origin') || {};
@@ -160,6 +181,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     railMileage: Math.round(railMileage * 1000) / 1000,
     railMileageTrips, actualFlightDistance, actualFlightDistanceTrips, travelTime, fares,
     railModels: ranked(railModels), railBureaus: ranked(railBureaus),
+    railLines: ranked(railLines), railLineTrips, arrivalDelays, arrivalDelayTrips,
     repeatedTrainsets: repeatedVehicleTrips(trainsets), repeatedAircraft: repeatedVehicleTrips(registrations),
     routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)), unknownAircraft, unknownAirlines, unknownPlaces, unknownRoutes };
 }

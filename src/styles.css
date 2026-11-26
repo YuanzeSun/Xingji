@@ -483,6 +483,7 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 .statistics-aircraft li span{color:#7e8b73;white-space:nowrap}
 .statistics-bar{height:7px;border-radius:4px;background:#edf0e6;overflow:hidden}
 .statistics-bar>span{height:100%;display:block;border-radius:4px;background:#6a8970}
+.statistics-coverage{margin-top:12px;color:var(--muted);font-size:13px}
 .statistics-panel.statistics-ranking>header{margin-bottom:12px}
 .statistics-ranking-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 14px;margin-bottom:19px}
 .statistics-ranking-controls>label{display:flex;align-items:center;gap:6px;min-height:32px;font-size:13px;color:#596c58}

@@ -88,6 +88,16 @@ export function mountStatistics(container, records, { options = {} } = {}) {
         `<section class="statistics-panel statistics-journey-card"><h2>${transport}</h2><dl>${metrics.map(([label, value, count, coverage]) =>
           `<div><dt>${label}</dt><dd><strong>${count === 0 ? '—' : value}</strong>${coverage ? `<span>${count} / ${total} ${coverage}</span>` : ''}</dd></div>`).join('')}</dl></section>`).join('')}</section>
       <section class="statistics-panel statistics-trend"><header><h2>乘坐次数</h2><div class="statistics-period-controls"><div role="group" aria-label="统计图时间粒度">${[['year', '按年'], ['month', '按月']].map(([value, label]) => `<button data-stat-scale="${value}" aria-pressed="${options.period === value}">${label}</button>`).join('')}</div><label ${options.period === 'month' ? '' : 'hidden'}><span class="visually-hidden">月度图年份</span><select data-stat-year aria-label="月度图年份">${[...yearChoices].reverse().map(year => `<option ${options.year === year ? 'selected' : ''}>${e(year)}</option>`).join('')}</select></label></div></header>${tripChartMarkup(series,{zoom:options.chartZoom,viewportWidth:container.clientWidth || 720})}</section>
+      <div class="statistics-columns">
+        <section class="statistics-panel" data-stat-rail-lines><header><h2>铁路线足迹</h2><span>${data.railLines.length} 条线路</span></header>
+          ${data.railLineTrips ? rankingChartMarkup('铁路线足迹', data.railLines, 'bars') : empty('暂无已识别的铁路线')}
+          <p class="statistics-coverage">${data.railLineTrips} / ${data.rail} 程已识别线路。同一程经过同一线路计一次。</p>
+        </section>
+        <section class="statistics-panel" data-stat-arrival-delays><header><h2>落地延误分布</h2><span>${data.arrivalDelayTrips} / ${data.flight} 班可比较</span></header>
+          ${data.arrivalDelayTrips ? rankingChartMarkup('落地延误分布', data.arrivalDelays, 'bars', '班') : empty('暂无可比较的落地时间')}
+          <p class="statistics-coverage">按实际和计划落地时间之差分组，同一分钟为准点。</p>
+        </section>
+      </div>
       <div class="statistics-columns">${rankingPanel('rail-models')}${rankingPanel('rail-bureaus')}</div>
       <div class="statistics-columns">${rankingPanel('airlines')}${rankingPanel('aircraft')}</div>
       <div class="statistics-columns">${repeatedVehiclesPanel('多次乘坐的列车', 'rail', data.repeatedTrainsets)}${repeatedVehiclesPanel('多次乘坐的飞机', 'flight', data.repeatedAircraft)}</div>

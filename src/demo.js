@@ -46,9 +46,9 @@ export function demoRecords(today=localToday()){
     seat: '32A', seatClass: 'Y', terminal: 'T2', gate: 'D21', price: '860.00',
     frequentFlyerCarrier: 'MU', frequentFlyerNumber: '000012345678'
   };
-  const boeingExamples = [['737-8Q8', 'B-DEMO1'], ['737-800', 'B-DEMO1'], ['737-8', 'B-DEMO3']].map(([aircraft, aircraftRegistration], index) => ({
+  const boeingExamples = [['737-8Q8', 'B-DEMO1', '12:21'], ['737-800', 'B-DEMO1', '12:30'], ['737-8', 'B-DEMO3', '13:08']].map(([aircraft, aircraftRegistration, actualArrivalTime], index) => ({
     ...domesticFlight, id: `demo-${8 + index}`, service: `MU990${1 + index}`, departureDate: recent(4 + index),
-    aircraft, aircraftRegistration, pnr: `DEMO0${3 + index}`, ticketNumber: `781000000000${2 + index}`,
+    aircraft, aircraftRegistration, actualArrivalTime, pnr: `DEMO0${3 + index}`, ticketNumber: `781000000000${2 + index}`,
     ...(index === 0 ? { baggageTagNumbers: '7810000102', checkedBaggageCount: '1', freeBaggageAllowance: '20K' } : {})
   }));
   const g21 = {id:'demo-1',type:'rail',template:'rail-receipt',departureDate:recent(1),origin:'北京南',destination:'南京南',service:'G21',carriage:'05',seat:'08F',seatClass:'二等座',price:'503.0',issuer:'北京南',railShowIssuer:true,gate:'16A',railPlatform:'8'};
