@@ -1,4 +1,6 @@
-// RailGo's bureau codes identify the train's operator, not its departure station.
+export const RAIL_UNIT_FIELDS = ['railBureau', 'railRunner', 'railCarOwner'];
+
+// Railway bureau abbreviations used by the timetable providers.
 // https://api.railgo.dev/9408882m0
 export const RAIL_BUREAUS = [
   ['B','哈尔滨局','哈局'], ['C','呼和浩特局','呼局'], ['F','郑州局','郑局'], ['G','南昌局','南局'],

@@ -1,6 +1,7 @@
 import {calendarDate} from './journey-date.js';
 import { escape as e } from './html.js';
 import { railQuery, railCompletion } from './rail-lookup-model.js';
+import { RAIL_UNIT_FIELDS } from './rail-details.js';
 import { lookupRailDetails, RAIL_DETAILS_SOURCE } from './rail-data.js';
 import { railJourneyMarkup, railReferenceNotice } from './rail-journey-ui.js';
 import { hasConfirmedRailJourney, railJourneyMatches, RAIL_TIMETABLE_REFERENCES } from './rail-journey.js';
@@ -192,7 +193,10 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
       const changes = railCompletion(getRecord(), result);
       applyResult(changes, { kind: provider, label: name });
       renderResult();
+      const unitsDate = RAIL_UNIT_FIELDS.some(field => changes[field]) &&
+        calendarDate(getRecord().railJourney?.timetableReference?.unitsDate);
       status.textContent = changes.railJourney ? '已从 ' + name + ' 补全，请核对后保存' : '已有行程资料已保留';
+      if (unitsDate) status.textContent += '。担当单位取自 ' + unitsDate + ' 的资料。';
     } catch (error) {
       if (!disposed && form.isConnected) status.textContent = !isCurrent() ? '查询条件已改变，本次结果未填入' :
         error.name === 'TimeoutError' ? name + ' 查询超时，请重试' : error.message;

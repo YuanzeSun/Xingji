@@ -4,7 +4,7 @@ import { RAILGO_REFERENCE_SOURCE } from './field-sources.js';
 import { railRouteNeedsSave } from './rail-route-snapshot.js';
 import { validDate } from './model.js';
 import { resolvePlace } from './places.js';
-import { bureauFromCode, normalizeRailBureau, parseRailGoModel } from './rail-details.js';
+import { bureauFromCode, normalizeRailBureau, parseRailGoModel, RAIL_UNIT_FIELDS } from './rail-details.js';
 import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, hasConfirmedRailJourney, railJourneyMatches, railJourneyRange, sameRailTimetable, RAIL_TIMETABLE_REFERENCES } from './rail-journey.js';
 import { isRailService } from './rail-service.js';
 
@@ -84,9 +84,13 @@ function combineTimetables(saved, incoming) {
   if (interval(saved) !== interval(incoming)) throw new Error('两家时刻表不一致，已保留原结果');
   const incomingIsRailLog = incoming.timetableReference.provider === 'raillog';
   const timetable = incomingIsRailLog ? incoming : saved;
+  const { unitsDate } = (incomingIsRailLog ? saved : incoming).timetableReference;
+  const timetableReference = { ...timetable.timetableReference, alsoFrom: 'open-crh-tracker' };
+  delete timetableReference.unitsDate;
+  if (unitsDate) timetableReference.unitsDate = unitsDate;
   return {
     ...timetable,
-    timetableReference: { ...timetable.timetableReference, alsoFrom: 'open-crh-tracker' },
+    timetableReference,
     trainsets: incomingIsRailLog ? saved.trainsets : incoming.trainsets,
     queriedAt: incoming.queriedAt
   };
@@ -102,7 +106,7 @@ export function railCompletion(record, result, startDate) {
   const savedReference = saved?.timetableReference;
   const combined = !!(timetableReference && savedReference &&
     (savedReference.alsoFrom || savedReference.provider !== timetableReference.provider));
-  const nextJourney = combined ? combineTimetables(saved, journey) : journey;
+  let nextJourney = combined ? combineTimetables(saved, journey) : journey;
   const values={...result,railTrainsets:(journey?.trainsets || []).map(stock=>stock.id).join(' / ')};
   if (referenceFor) {
     const overnightDays = (Date.parse(result.arrivalDate) - Date.parse(calendarDate(journey.query.boardingDate))) / 86400000;
@@ -110,13 +114,22 @@ export function railCompletion(record, result, startDate) {
   }
   const fields = ['railBureau','railModel','railTrainsets','railPowerSupply','railMileage','railRunner','railCarOwner','gate','railPlatform','departureTime','arrivalDate','arrivalTime'];
   const sameServiceDay = saved && journey && calendarDate(saved.query.startDate) === calendarDate(journey.query.startDate);
+  const keepUnits = sameServiceDay && timetableReference?.provider === 'open-crh-tracker' &&
+    RAIL_UNIT_FIELDS.some(field => record[field] && record.fieldSources?.[field] === 'open-crh-tracker') &&
+    (!RAIL_UNIT_FIELDS.some(field => Object.hasOwn(result, field)) ||
+      (timetableReference.unitsDate && !savedReference?.unitsDate));
+  if (keepUnits) {
+    const keptReference = { ...nextJourney.timetableReference };
+    delete keptReference.unitsDate;
+    if (savedReference?.unitsDate) keptReference.unitsDate = savedReference.unitsDate;
+    nextJourney = { ...nextJourney, timetableReference: keptReference };
+  }
   const changes = {};
   for (const field of fields) {
     const previousSource = record.fieldSources?.[field];
     const fromTimetableReference = Object.hasOwn(RAIL_TIMETABLE_REFERENCES, previousSource);
     if (combined && fromTimetableReference && previousSource !== timetableReference.provider) continue;
-    if (sameServiceDay && previousSource === 'open-crh-tracker' && timetableReference?.provider === previousSource &&
-        ['railBureau','railRunner','railCarOwner'].includes(field) && !Object.hasOwn(result, field)) continue;
+    if (keepUnits && RAIL_UNIT_FIELDS.includes(field)) continue;
     const fromLookup = isLookupValue(record,field);
     if (values[field] && (!record[field] || fromLookup) && !record.lockedFields?.includes(field)) changes[field] = values[field];
     if (!values[field] && fromLookup && (previousSource === RAILGO_REFERENCE_SOURCE || fromTimetableReference)) changes[field] = '';

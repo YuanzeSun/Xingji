@@ -141,8 +141,8 @@ export async function lookupRailTimetableReference(provider, query, departureTim
   const today = Math.floor((Date.now() / 1000 + SHANGHAI_OFFSET) / SECONDS_PER_DAY);
   const boardingDay = dayNumber(query.boardingDate);
   // Current metadata is dated by the first station; boarding can be after midnight.
-  const currentRequest = tracker && boardingDay >= today && boardingDay < today + 8
-    ? trackerCurrentTimetable(query, options).catch(() => null) : null;
+  const loadCurrent = () => trackerCurrentTimetable(query, options).catch(() => null);
+  const currentRequest = tracker && boardingDay >= today && boardingDay < today + 8 ? loadCurrent() : null;
   const load = tracker ? trackerTimetables : railLogTimetable;
   const { snapshotDate, timetables, historyError } = await load(query, options).catch(error => {
     if (!currentRequest) throw error;
@@ -157,19 +157,28 @@ export async function lookupRailTimetableReference(provider, query, departureTim
   };
   for (const timetable of timetables) {
     const candidate = match(timetable);
-    if (candidate) matches.set(candidate.signature, { result: candidate.result, timetableId: timetable.id });
+    if (candidate) matches.set(candidate.signature, { result: candidate.result, timetable });
   }
   if (matches.size > 1) throw new Error(name + ' 返回的历史时刻表有冲突，请核对后手动填写');
   const historical = matches.values().next().value;
   const stockRequest = tracker && historical
-    ? trackerTrainset(query, historical.result.railJourney, historical.timetableId, options).catch(() => null) : null;
-  const current = await currentRequest;
+    ? trackerTrainset(query, historical.result.railJourney, historical.timetable.id, options).catch(() => null) : null;
+  const current = await (currentRequest || (tracker && historical ? loadCurrent() : null));
   const currentMatch = current && match(current);
   if (signal?.aborted) throw signal.reason;
   const result = historical?.result || currentMatch?.result;
   if (!result) throw historyError || new Error(name + ' 未查到与票面日期、区间和出发时间相符的时刻表');
-  if (currentMatch && (!historical || sameRailTimetable(result.railJourney, currentMatch.result.railJourney))) {
-    Object.assign(result, current.units);
+  if (current && Object.values(current.units).some(Boolean)) {
+    const startDay = dayNumber(calendarDate(result.railJourney.query.startDate));
+    const coverage = historical?.timetable;
+    // For a different day, compare the complete stop schedule within the same coverage interval.
+    const sameCoverage = coverage && current.start >= coverage.start && current.start < coverage.end;
+    const matched = current.start === startDay ? currentMatch :
+      sameCoverage ? match({ ...current, start: coverage.start, end: coverage.end }) : null;
+    if (matched && (!historical || sameRailTimetable(result.railJourney, matched.result.railJourney))) {
+      Object.assign(result, current.units);
+      if (current.start !== startDay) result.railJourney.timetableReference.unitsDate = journeyDate(dayDate(current.start));
+    }
   }
   if (stockRequest) {
     const trainset = await stockRequest;

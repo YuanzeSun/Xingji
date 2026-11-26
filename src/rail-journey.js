@@ -42,7 +42,7 @@ export function normalizeRailJourney(value) {
   }
   let timetableReference;
   if (Object.hasOwn(value, 'timetableReference')) {
-    const { provider, snapshotDate, alsoFrom } = value.timetableReference || {};
+    const { provider, snapshotDate, alsoFrom, unitsDate } = value.timetableReference || {};
     if (!Object.hasOwn(RAIL_TIMETABLE_REFERENCES, provider) || query.referenceFor) throw new Error('历史时刻表来源无效');
     timetableReference = { provider };
     if (alsoFrom) {
@@ -53,6 +53,13 @@ export function normalizeRailJourney(value) {
       const date = railDate(snapshotDate);
       if (!date || calendarDate(date) > calendarDate(query.boardingDate)) throw new Error('历史时刻表快照日期无效');
       timetableReference.snapshotDate = date;
+    }
+    if (unitsDate) {
+      const date = railDate(unitsDate);
+      if (!date || sameDate(date, query.startDate) || ![provider, alsoFrom].includes('open-crh-tracker')) {
+        throw new Error('Open CRH Tracker 担当单位资料日期无效');
+      }
+      timetableReference.unitsDate = date;
     }
   }
   if (!Array.isArray(value.stops) || value.stops.length < 2 || value.stops.length > 300) throw new Error('铁路经停站资料格式不正确');

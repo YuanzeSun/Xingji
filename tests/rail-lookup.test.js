@@ -1,4 +1,4 @@
-import {calendarDate} from '../src/journey-date.js';
+import {calendarDate, journeyDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
@@ -278,6 +278,60 @@ test('Open CRH Tracker saves units only for the current matching service day and
     const unmatched = await lookup(row);
     assert.ok(fields.every(key => unmatched[key] === undefined));
     assert.ok(fields.every(key => !Object.hasOwn(railCompletion(saved, unmatched), key)));
+  }
+});
+
+test('an older D8888 ticket can use dated Tracker units within the same complete timetable coverage', async () => {
+  const ticket = record({ service: 'D8888', origin: '武威东', destination: '古浪北',
+    departureDate: '2026-09-30', departureTime: '12:11' });
+  const query = railQuery(ticket), trainCode = { prefix: 'D', number: 8888 };
+  const ticketDay = Date.parse('2026-09-30') / 86400000;
+  const currentDay = Date.parse('2026-11-26') / 86400000, midnight = currentDay * 86400 - 8 * 3600;
+  const stops = [
+    { stationName: '武威东', departOffset: 43860, stationTrainCode: trainCode },
+    { stationName: '古浪北', arriveOffset: 45000, departOffset: 45120, stationTrainCode: trainCode },
+    { stationName: '兰州西', arriveOffset: 50460, stationTrainCode: trainCode }
+  ];
+  const current = {
+    trainCode, serviceDay: currentDay, bureauCode: 'J', bureauName: '兰州局集团',
+    passengerDepartment: '银川客运段', trainDepartment: '兰州车辆段',
+    stops: stops.map(({ stationName, stationTrainCode, arriveOffset, departOffset }) => ({
+      stationName, stationTrainCode, arriveAt: midnight + arriveOffset, departAt: midnight + departOffset
+    }))
+  };
+  const lookup = ({ end = currentDay + 1, row = current } = {}) =>
+    lookupRailTimetableReference('open-crh-tracker', query, ticket.departureTime, { async fetcher(address) {
+      const path = new URL(address).pathname;
+      const data = path.endsWith('/current') ? row : path.includes('/timetable/') ? {
+        trainCode, items: [{ serviceDayStart: ticketDay, serviceDayEndExclusive: end, timetableId: 3560 }],
+        timetableMappings: { 3560: { stops } }
+      } : { trainCode, items: [] };
+      return Response.json({ ok: true, data });
+    } });
+  const fields = ['railBureau', 'railRunner', 'railCarOwner'];
+  const result = await lookup();
+  applyLookupValues(ticket, railCompletion(ticket, result), true, { kind: 'open-crh-tracker' });
+  const [saved] = readArchive(archive([ticket]));
+  assert.equal(saved.arrivalTime, '12:30');
+  assert.equal(calendarDate(saved.railJourney.query.startDate), '2026-09-30');
+  assert.equal(calendarDate(saved.railJourney.timetableReference.unitsDate), '2026-11-26');
+  assert.deepEqual(fields.map(key => saved[key]), ['兰州局', '银川客运段', '兰州车辆段']);
+  assert.deepEqual(fields.map(key => fieldSourceLabel(saved, key)), Array(3).fill('Open CRH Tracker · 2026-11-26'));
+  assert.equal(fieldSourceLabel(saved, 'arrivalTime'), 'Open CRH Tracker');
+
+  const railLog = { query, arrivalDate: result.arrivalDate, arrivalTime: result.arrivalTime,
+    railJourney: { ...result.railJourney, timetableReference: { provider: 'raillog', snapshotDate: journeyDate('2026-09-29') } } };
+  applyLookupValues(saved, railCompletion(saved, railLog), true, { kind: 'raillog' });
+  assert.equal(fieldSourceLabel(readArchive(archive([saved]))[0], 'railRunner'), 'Open CRH Tracker · 2026-11-26');
+  for (const input of [
+    { end: currentDay },
+    { row: { ...current, stops: [...current.stops.slice(0, -1), { ...current.stops.at(-1), arriveAt: midnight + 50520 }] } }
+  ]) {
+    const historyOnly = await lookup(input);
+    assert.equal(historyOnly.arrivalTime, '12:30');
+    assert.ok(fields.every(key => !Object.hasOwn(historyOnly, key)));
+    applyLookupValues(saved, railCompletion(saved, historyOnly), true, { kind: 'open-crh-tracker' });
+    assert.equal(fieldSourceLabel(saved, 'railRunner'), 'Open CRH Tracker · 2026-11-26');
   }
 });
 

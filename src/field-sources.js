@@ -1,7 +1,8 @@
 import {escape as e} from './html.js';
-import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
+import {calendarDate,JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import {hasRailQRCode} from './ticket-code.js';
 import {hasConfirmedRailJourney,RAIL_TIMETABLE_REFERENCES} from './rail-journey.js';
+import {RAIL_UNIT_FIELDS} from './rail-details.js';
 export const sourceFieldValue=(record,key)=>key.endsWith('DateYear') ? journeyDate(record[key.slice(0,-4)])?.year : record[key];
 export const railBarcodeFieldLocked=(record,key)=>hasRailQRCode(record) &&
   key!=='ticketCode' && record.fieldSources?.[key]==='barcode' && !!record.lockedFields?.includes(key);
@@ -59,7 +60,10 @@ export function copyFieldSource(target,source,key) {
 export function fieldSourceLabel(record,key) {
   const value = JOURNEY_DATE_FIELDS.includes(key) ? journeyDate(record[key])?.dayOfYear : sourceFieldValue(record,key);
   if(!hasFieldValue(value))return '未填写';
-  return FIELD_SOURCES[record.fieldSources?.[key]] || '未记录';
+  const source = record.fieldSources?.[key], label = FIELD_SOURCES[source] || '未记录';
+  const unitsDate = record.railJourney?.timetableReference?.unitsDate;
+  return source === 'open-crh-tracker' && unitsDate && RAIL_UNIT_FIELDS.includes(key)
+    ? label + ' · ' + calendarDate(unitsDate) : label;
 }
 export function fieldSourceBadge(key,record) {
   if(editorSettings.has(key))return '';
