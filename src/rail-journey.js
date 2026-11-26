@@ -42,9 +42,13 @@ export function normalizeRailJourney(value) {
   }
   let timetableReference;
   if (Object.hasOwn(value, 'timetableReference')) {
-    const { provider, snapshotDate } = value.timetableReference || {};
+    const { provider, snapshotDate, alsoFrom } = value.timetableReference || {};
     if (!Object.hasOwn(RAIL_TIMETABLE_REFERENCES, provider) || query.referenceFor) throw new Error('历史时刻表来源无效');
     timetableReference = { provider };
+    if (alsoFrom) {
+      if (!Object.hasOwn(RAIL_TIMETABLE_REFERENCES, alsoFrom) || alsoFrom === provider) throw new Error('历史时刻表来源无效');
+      timetableReference.alsoFrom = alsoFrom;
+    }
     if (provider === 'raillog') {
       const date = railDate(snapshotDate);
       if (!date || calendarDate(date) > calendarDate(query.boardingDate)) throw new Error('历史时刻表快照日期无效');

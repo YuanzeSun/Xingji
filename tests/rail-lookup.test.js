@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom';
 import { createRecord, archive, readArchive } from '../src/model.js';
 import { railQuery, railDetails, railCompletion } from '../src/rail-lookup-model.js';
 import { lookupRailDetails } from '../src/rail-data.js';
-import { railLookupMarkup, bindRailLookup } from '../src/rail-lookup.js';
+import { railLookupMarkup, railTimetableMarkup, bindRailLookup } from '../src/rail-lookup.js';
 import { lookupRailTimetableReference } from '../src/rail-timetable-reference.js';
 import { applyLookupValues, lookupContext } from '../src/lookup-values.js';
 import { hasConfirmedRailJourney, railJourneyMatches } from '../src/rail-journey.js';
@@ -15,6 +15,7 @@ import { mountStatistics } from '../src/statistics.js';
 import { ticketSVG } from '../src/tickets.js';
 
 const record = extra => createRecord({ type:'rail', service:'G1', origin:'北京南', destination:'上海虹桥', departureDate:'2026-11-17', ...extra });
+const railEditor = ticket => railLookupMarkup(ticket) + railTimetableMarkup(ticket);
 const payload = extra => ({ success:true, data:{ bureau:'H', bureauShortName:'上局', car:'CR400BF-S', numberFull:['G1'], rundays:['20261116','20261117'], timetable:[{station:'北京南',day:0,arrive:'06:30',depart:'06:30'},{station:'南京南',day:0,arrive:'10:13',depart:'10:15'},{station:'上海虹桥',day:0,arrive:'11:24',depart:'11:24'}], ...extra } });
 
 test('RailGo requests send only public train and start-day identifiers and reject absent or mismatched data', async () => {
@@ -73,24 +74,50 @@ test('new prefixes pass the lookup and snapshot checks, including combined numbe
   }
 });
 
-test('RailGo failure offers two manual references and persists the selected snapshot as editable data', async () => {
+test('after RailGo misses, both alternatives can contribute and a successful RailGo lookup supersedes them', async () => {
   const ticket = record({ origin: '南京南', departureTime: '00:05' });
-  const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '<button type="submit">保存</button></form>');
+  const dom = new JSDOM('<form>' + railEditor(ticket) + '<button type="submit">保存</button></form>');
   const form = dom.window.document.querySelector('form');
   const fallback = form.querySelector('[data-rail-fallback]'), railLog = fallback.querySelector('[data-rail-provider="raillog"]');
+  const tracker = fallback.querySelector('[data-rail-provider="open-crh-tracker"]');
+  const go = form.querySelector('[data-rail-lookup]');
   const calls = [];
+  const trainCode = { prefix: 'G', number: 1 };
+  const day = Date.parse('2026-11-16') / 86400000;
+  let railGoAvailable = false, trackerArrival = 93660;
   const cleanup = bindRailLookup(form, {
     getRecord: () => ticket,
     canQuery: () => true,
     apply: (changes, source) => applyLookupValues(ticket, changes, !!source, source),
-    lookup: async () => { calls.push('RailGo'); throw new Error('未查到该日期的列车资料'); },
+    lookup: async query => {
+      calls.push('RailGo');
+      if (!railGoAvailable) throw new Error('未查到该日期的列车资料');
+      return railDetails(payload({ timetable: [
+        { station: '北京南', day: 0, depart: '19:00' },
+        { station: '南京南', day: 0, arrive: '23:58', depart: '00:05' },
+        { station: '上海虹桥', day: 1, arrive: '02:00' }
+      ] }), query);
+    },
     lookupReference: (provider, query, time, options) => lookupRailTimetableReference(provider, query, time, {
       ...options,
       fetcher: async (address, request) => {
         const url = new URL(address);
-        assert.equal(url.hostname, 'api.raillog.top');
         assert.equal(request.credentials, 'omit');
         calls.push(url.pathname);
+        if (url.hostname === 'crh.lihugang.top') {
+          if (url.pathname === '/api/v2/history/train/G1') return Response.json({ ok: true, data: {
+            trainCode, items: [{ serviceDay: day, timetableId: 1, emuId: 1, status: 1 }], emuCodeMappings: { 1: 'CR400BF-A-5059' }
+          } });
+          return Response.json({ ok: true, data: {
+            trainCode, items: [{ serviceDayStart: day, serviceDayEndExclusive: day + 1, timetableId: 1 }],
+            timetableMappings: { 1: { stops: [
+              { stationName: '北京南', departOffset: 68400 },
+              { stationName: '南京南', arriveOffset: 86280, departOffset: 86700 },
+              { stationName: '上海虹桥', arriveOffset: trackerArrival }
+            ] } }
+          } });
+        }
+        assert.equal(url.hostname, 'api.raillog.top');
         if (url.pathname.endsWith('/versions')) return Response.json(['2026.11.28', '2026.11.14', '2026.11.03']);
         assert.deepEqual([...url.searchParams], [['trainNumber', 'G1'], ['version', '2026.11.14']]);
         return Response.json({ version: '2026.11.14', train_codes: 'G1', stops: [
@@ -104,16 +131,16 @@ test('RailGo failure offers two manual references and persists the selected snap
   try {
     assert.equal(fallback.hidden, true);
     assert.deepEqual(calls, []);
-    form.querySelector('[data-rail-lookup]').click();
+    go.click();
     await new Promise(done => setImmediate(done));
     assert.equal(fallback.hidden, false);
-    assert.ok(fallback.querySelector('[data-rail-provider="open-crh-tracker"]'));
+    assert.equal(tracker.disabled, false);
     assert.deepEqual(calls, ['RailGo']);
     railLog.click();
     railLog.click();
     await new Promise(done => setImmediate(done));
     assert.deepEqual(calls, ['RailGo', '/api/train-timetables/versions', '/api/train-timetables']);
-    assert.equal(fallback.hidden, true);
+    assert.equal(fallback.hidden, false);
     const [saved] = readArchive(archive([ticket]));
     assert.equal(calendarDate(saved.railJourney.query.startDate), '2026-11-16');
     assert.equal(calendarDate(saved.arrivalDate), '2026-11-17');
@@ -129,6 +156,39 @@ test('RailGo failure offers two manual references and persists the selected snap
     const edited = { ...saved, departureTime: '00:06' };
     assert.notEqual(lookupContext(edited), lookupContext(saved));
     assert.equal(railJourneyMatches(edited), false);
+
+    tracker.click();
+    await new Promise(done => setImmediate(done));
+    assert.match(form.querySelector('[data-rail-status]').textContent, /两家时刻表不一致/);
+    assert.equal(ticket.railMileage, '391');
+    assert.equal(ticket.railTrainsets, '');
+    assert.equal(fallback.hidden, false);
+
+    trackerArrival = 93600;
+    tracker.click();
+    await new Promise(done => setImmediate(done));
+    const [combined] = readArchive(archive([ticket]));
+    assert.equal(combined.railJourney.timetableReference.alsoFrom, 'open-crh-tracker');
+    assert.equal(combined.railJourney.trainsets[0].id, 'CR400BF-A-5059');
+    assert.equal(combined.railMileage, '391');
+    assert.equal(combined.fieldSources.railMileage, 'raillog');
+    assert.equal(combined.fieldSources.railTrainsets, 'open-crh-tracker');
+    assert.equal(combined.fieldSources.arrivalTime, 'raillog');
+    assert.match(form.querySelector('[data-rail-result]').textContent, /RailLog.*Open CRH Tracker/);
+    assert.equal(fallback.hidden, false);
+    assert.equal(railLog.disabled, false);
+    assert.equal(tracker.disabled, false);
+
+    railGoAvailable = true;
+    form.querySelector('[data-rail-query-date]').value = '2026-11-16';
+    go.click();
+    await new Promise(done => setImmediate(done));
+    assert.equal(hasConfirmedRailJourney(ticket), true);
+    assert.equal(ticket.railJourney.timetableReference, undefined);
+    assert.equal(ticket.railMileage, '');
+    assert.equal(ticket.railTrainsets, '');
+    assert.equal(ticket.fieldSources.arrivalTime, 'railgo');
+    assert.equal(fallback.hidden, true);
   } finally { cleanup(); dom.window.close(); }
 });
 
@@ -192,7 +252,7 @@ test('an automatic RailGo miss leaves fields blank until the user selects an ava
     {station:'北京南',day:0,depart:'23:50'},
     {station:'上海虹桥',day:1,arrive:'05:30'}
   ];
-  const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '<input name="service"><button type="submit">保存</button></form>');
+  const dom = new JSDOM('<form>' + railEditor(ticket) + '<input name="service"><button type="submit">保存</button></form>');
   const form = dom.window.document.querySelector('form');
   const cleanup = bindRailLookup(form, {
     getRecord: () => ticket, canQuery: () => true,
@@ -230,7 +290,7 @@ test('an automatic RailGo miss leaves fields blank until the user selects an ava
     await new Promise(done => setImmediate(done));
     assert.deepEqual(calls, ['20261117', '20261116']);
     assert.equal(results.hidden, false);
-    assert.equal(results.open, false);
+    assert.ok(results.querySelector('.rail-stops'));
     assert.match(diagnostics.textContent, /G1 · 查询日期 2026-11-16 · HTTP 200/);
     assert.ok(diagnostics.querySelector('pre').textContent.includes('rundays: ["20261116"]'));
     assert.equal(diagnostics.querySelectorAll('pre').length, 1);
@@ -267,7 +327,7 @@ test('an automatic RailGo miss leaves fields blank until the user selects an ava
 
 test('an explicitly selected RailGo start date can fill reference data without a prompt to change the date', async t => {
   const ticket = record({ departureDate: '2025-09-30' }), calls = [];
-  const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '</form>');
+  const dom = new JSDOM('<form>' + railEditor(ticket) + '</form>');
   const form = dom.window.document.querySelector('form');
   const cleanup = bindRailLookup(form, {
     getRecord: () => ticket, canQuery: () => true,
@@ -296,7 +356,7 @@ test('an explicitly selected RailGo start date can fill reference data without a
 
 test('RailGo diagnostics remain available when a response is rejected and reset on the next lookup', async t => {
   const ticket = record({ origin: '深圳北' });
-  const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '</form>');
+  const dom = new JSDOM('<form>' + railEditor(ticket) + '</form>');
   const form = dom.window.document.querySelector('form');
   let fetchCount = 0;
   const cleanup = bindRailLookup(form, {
@@ -356,7 +416,7 @@ test('rail metadata persists through backups, is absent from printed tickets, an
 
 test('rail lookup refreshes on an explicit click, blocks duplicate requests while busy and refuses stale or unavailable editor results', async () => {
   for (const invalidation of ['', 'changed', 'closed', 'saving', 'offline']) {
-    const dom=new JSDOM(`<form>${railLookupMarkup(record())}<button type="submit">保存</button></form>`),form=dom.window.document.querySelector('form');
+    const dom=new JSDOM(`<form>${railEditor(record())}<button type="submit">保存</button></form>`),form=dom.window.document.querySelector('form');
     let ticket=record(),count=0,resolve,allowed=true,signal;
     const apply=changes=>Object.assign(ticket,changes);
     const cleanup = bindRailLookup(form, { getRecord: () => ticket, canQuery: () => allowed, apply, lookup: (query, options) => {
@@ -391,7 +451,7 @@ test('a matching photo with a departure time or a complete QR trip triggers one 
     if (missing) scannedRail[missing] = '';
     if (scenario === 'edited') ticket.departureTime = '06:31';
     if (scenario === 'qrNoTime') ticket.departureTime = '';
-    const dom = new JSDOM('<form>' + railLookupMarkup(ticket) + '<button type="submit">保存</button></form>');
+    const dom = new JSDOM('<form>' + railEditor(ticket) + '<button type="submit">保存</button></form>');
     const form = dom.window.document.querySelector('form');
     let count = 0;
     const dispose = bindRailLookup(form, {

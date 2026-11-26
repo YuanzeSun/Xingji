@@ -5,7 +5,7 @@ import { railRouteNeedsSave } from './rail-route-snapshot.js';
 import { validDate } from './model.js';
 import { resolvePlace } from './places.js';
 import { bureauFromCode, normalizeRailBureau, parseRailGoModel } from './rail-details.js';
-import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, hasConfirmedRailJourney, sameRailTimetable, RAIL_TIMETABLE_REFERENCES } from './rail-journey.js';
+import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, hasConfirmedRailJourney, railJourneyMatches, railJourneyRange, sameRailTimetable, RAIL_TIMETABLE_REFERENCES } from './rail-journey.js';
 import { isRailService } from './rail-service.js';
 
 export const shiftRailDate = (date, days) => { const result = new Date(calendarDate(date) + 'T00:00:00Z'); result.setUTCDate(result.getUTCDate() + days); return result.toISOString().slice(0, 10); };
@@ -75,26 +75,50 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
   return { query, railBureau:codeBureau || shortBureau, railModel:model.model, railPowerSupply:model.powerSupply, railRunner:clean(row.runner), railCarOwner:clean(row.carOwner), departureTime:stops[from].departureTime, arrivalDate:stops[to].arrivalDate, arrivalTime:stops[to].arrivalTime, railJourney };
 }
 
+function combineTimetables(saved, incoming) {
+  const interval = journey => {
+    const { stops } = railJourneyRange(journey);
+    const arrival = stops.at(-1);
+    return JSON.stringify([calendarDate(journey.query.startDate), arrival.arrivalDate, arrival.arrivalTime, stops.map(stop => stop.station)]);
+  };
+  if (interval(saved) !== interval(incoming)) throw new Error('两家时刻表不一致，已保留原结果');
+  const incomingIsRailLog = incoming.timetableReference.provider === 'raillog';
+  const timetable = incomingIsRailLog ? incoming : saved;
+  return {
+    ...timetable,
+    timetableReference: { ...timetable.timetableReference, alsoFrom: 'open-crh-tracker' },
+    trainsets: incomingIsRailLog ? saved.trainsets : incoming.trainsets,
+    queriedAt: incoming.queriedAt
+  };
+}
+
 export function railCompletion(record, result, startDate) {
   const journey = result.railJourney, referenceFor = journey?.query.referenceFor;
   const timetableReference = journey?.timetableReference;
   const query = railQuery(record, startDate);
   if (JSON.stringify(query) !== JSON.stringify(result.query)) return {};
   if ((referenceFor || timetableReference) && hasConfirmedRailJourney(record)) return {};
+  const saved = railJourneyMatches(record) && record.railJourney;
+  const savedReference = saved?.timetableReference;
+  const combined = !!(timetableReference && savedReference &&
+    (savedReference.alsoFrom || savedReference.provider !== timetableReference.provider));
+  const nextJourney = combined ? combineTimetables(saved, journey) : journey;
   const values={...result,railTrainsets:(journey?.trainsets || []).map(stock=>stock.id).join(' / ')};
   if (referenceFor) {
     const overnightDays = (Date.parse(result.arrivalDate) - Date.parse(calendarDate(journey.query.boardingDate))) / 86400000;
     values.arrivalDate = shiftRailDate(referenceFor, overnightDays);
   }
   const fields = ['railBureau','railModel','railTrainsets','railPowerSupply','railMileage','railRunner','railCarOwner','gate','railPlatform','departureTime','arrivalDate','arrivalTime'];
-  const changes = Object.fromEntries(fields.filter(field => (!record[field] || isLookupValue(record,field)) && !record.lockedFields?.includes(field) && values[field]).map(field => [field, values[field]]));
-  const differentTimetable = record.railJourney && result.railJourney
-    && !sameRailTimetable(record.railJourney, result.railJourney);
+  const changes = {};
   for (const field of fields) {
     const previousSource = record.fieldSources?.[field];
-    if (!values[field] && isLookupValue(record,field) &&
-        (previousSource === RAILGO_REFERENCE_SOURCE || Object.hasOwn(RAIL_TIMETABLE_REFERENCES, previousSource))) changes[field] = '';
+    const fromTimetableReference = Object.hasOwn(RAIL_TIMETABLE_REFERENCES, previousSource);
+    if (combined && fromTimetableReference && previousSource !== timetableReference.provider) continue;
+    const fromLookup = isLookupValue(record,field);
+    if (values[field] && (!record[field] || fromLookup) && !record.lockedFields?.includes(field)) changes[field] = values[field];
+    if (!values[field] && fromLookup && (previousSource === RAILGO_REFERENCE_SOURCE || fromTimetableReference)) changes[field] = '';
   }
+  const differentTimetable = !combined && record.railJourney && nextJourney && !sameRailTimetable(record.railJourney, nextJourney);
   if (differentTimetable) {
     for (const field of ['railMileage', 'railTrainsets', 'gate', 'railPlatform']) {
       if (!values[field] && isLookupValue(record, field)) changes[field] = '';
@@ -103,6 +127,6 @@ export function railCompletion(record, result, startDate) {
   const route = result.railRoute || '';
   if (railRouteNeedsSave(record, route)) changes.railRoute = route;
   else if (differentTimetable && record.railRoute && !route) changes.railRoute = '';
-  if (result.railJourney && JSON.stringify(record.railJourney) !== JSON.stringify(result.railJourney)) changes.railJourney = result.railJourney;
+  if (nextJourney && JSON.stringify(record.railJourney) !== JSON.stringify(nextJourney)) changes.railJourney = nextJourney;
   return changes;
 }

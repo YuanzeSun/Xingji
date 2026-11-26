@@ -8,7 +8,7 @@ import { railQuery, railDetails, railCompletion } from '../src/rail-lookup-model
 import { normalizeRailJourney } from '../src/rail-journey.js';
 import {markManualFields,applyLookupValues} from '../src/lookup-values.js';
 import { railJourneyMarkup } from '../src/rail-journey-ui.js';
-import { railLookupMarkup, bindRailLookup } from '../src/rail-lookup.js';
+import { railLookupMarkup, railTimetableMarkup, bindRailLookup } from '../src/rail-lookup.js';
 import { ticketSVG } from '../src/tickets.js';
 
 const at='2026-11-17T02:00:00.000Z';
@@ -239,7 +239,7 @@ test('detail view lists the formation but loads only the booked carriage diagram
 
 test('lookup becomes available after the four necessary fields are complete without sending requests on input',()=>{
   let record=ticket({service:'',departureDate:''}),calls=0;
-  const dom=new JSDOM(`<form>${railLookupMarkup(record)}</form>`),form=dom.window.document.querySelector('form');
+  const dom=new JSDOM(`<form>${railLookupMarkup(record)}${railTimetableMarkup(record)}</form>`),form=dom.window.document.querySelector('form');
   const cleanup=bindRailLookup(form,{getRecord:()=>record,canQuery:()=>true,apply:()=>{},lookup:()=>{calls++;}});
   assert.equal(form.querySelector('[data-rail-lookup]').disabled,true);
   record=ticket();form.dispatchEvent(new dom.window.Event('input',{bubbles:true}));
@@ -249,7 +249,7 @@ test('lookup becomes available after the four necessary fields are complete with
 
 test('changing query conditions clears untouched automatic completions while keeping edits made after the query',async()=>{
   let record=ticket({origin:'北京南'}),clears=0;
-  const dom=new JSDOM(`<form><input name="arrivalTime"/><input name="service"/>${railLookupMarkup(record)}<button type="submit">保存</button></form>`),form=dom.window.document.querySelector('form');
+  const dom=new JSDOM(`<form><input name="arrivalTime"/><input name="service"/>${railLookupMarkup(record)}${railTimetableMarkup(record)}<button type="submit">保存</button></form>`),form=dom.window.document.querySelector('form');
   const cleanup=bindRailLookup(form,{getRecord:()=>record,canQuery:()=>true,lookup:async query=>railDetails(main({timetable:[{station:'北京南',day:0,arrive:'06:30',depart:'06:30'},{station:'上海虹桥',day:0,arrive:'11:24',depart:'11:24'}]}),query,at),apply:(changes,source)=>{Object.assign(record,changes);if(!source)clears++;}});
   form.querySelector('[data-rail-lookup]').click();await new Promise(done=>setTimeout(done,0));assert.equal(record.departureTime,'06:30');
   record.arrivalTime='11:30';form.elements.arrivalTime.dispatchEvent(new dom.window.Event('input',{bubbles:true}));

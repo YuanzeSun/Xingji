@@ -22,7 +22,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   click('[data-action="new"]'); await wait(()=>document.querySelector('#editor-preview'));
   assert.deepEqual([...requiredHint().children].map(note=>note.textContent),['* 保存必填','* 生成二维码必填']);
   assert.equal(requiredHint().querySelector('.barcode-required-mark').getAttribute('aria-label'),'蓝色星号');
-  assert.equal(document.querySelector('.editor-fields details:not(.rail-query-date):not(.rail-lookup-result):not([data-rail-diagnostics]):not([data-rail-photo-entry])'),null);
+  assert.equal(document.querySelector('.editor-fields details:not(.rail-query-date):not([data-rail-diagnostics]):not([data-rail-photo-entry])'),null);
   assert.equal(document.querySelector('[data-rail-diagnostics]').hidden, true);
   assert.equal(document.querySelector('[data-rail-photo-entry]').open,false);
   assert.equal(document.querySelector('[data-rail-photo-entry] > summary').firstChild.textContent.trim(), '扫描票面（alpha）');

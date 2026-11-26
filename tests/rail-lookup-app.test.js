@@ -43,6 +43,14 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     assert.equal(queryHint.hidden,true);
     document.querySelector('[data-rail-lookup]').click();
     await wait(()=>document.querySelector('[data-rail-status]').textContent.includes('已补全'));
+    const resultBox = document.querySelector('[data-rail-result]');
+    assert.equal(resultBox.previousElementSibling, document.querySelector('.editor-layout'));
+    assert.equal(resultBox.nextElementSibling, document.querySelector('.editor-footer'));
+    assert.equal(resultBox.hidden, false);
+    assert.equal(resultBox.tagName, 'SECTION');
+    assert.equal(resultBox.querySelector('h3').textContent, '列车时刻表');
+    assert.equal(document.querySelector('[data-rail-fallback]').hidden, true);
+    assert.ok(resultBox.querySelector('.rail-stops'));
     assert.equal(document.querySelector('[name="railBureau"]').value,'上海局');assert.equal(document.querySelector('[name="railModel"]').value,'CR400BF-S');
     assert.equal(document.querySelector('[data-rail-trainsets]').value,'CR400BF-S-0001');assert.equal(document.querySelector('[data-rail-trainsets]').readOnly,true);
     assert.equal(document.querySelector('[name=arrivalDateYear]').readOnly,true);
