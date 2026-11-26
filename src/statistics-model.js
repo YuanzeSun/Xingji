@@ -88,7 +88,13 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   let actualFlightDistance = 0, actualFlightDistanceTrips = 0;
   let rail = 0, flight = 0, railMileage = 0, railMileageTrips = 0;
   const travelTime = { rail: { minutes: 0, trips: 0 }, flight: { minutes: 0, trips: 0 } };
+  const fares = { rail: { cents: 0, trips: 0 }, flight: { cents: 0, trips: 0 } };
   for (const record of rows) {
+    if (record.price) {
+      const fare = fares[record.type];
+      fare.cents += Math.round(Number(record.price) * 100);
+      fare.trips++;
+    }
     const minutes = journeyMinutes(record);
     if (minutes) {
       travelTime[record.type].minutes += minutes;
@@ -152,7 +158,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     continents: [...continents].sort().map(code => ({ code, name: CONTINENTS[code] })),
     aircraft: ranked(aircraft), airlines: ranked(airlines),
     railMileage: Math.round(railMileage * 1000) / 1000,
-    railMileageTrips, actualFlightDistance, actualFlightDistanceTrips, travelTime,
+    railMileageTrips, actualFlightDistance, actualFlightDistanceTrips, travelTime, fares,
     railModels: ranked(railModels), railBureaus: ranked(railBureaus),
     repeatedTrainsets: repeatedVehicleTrips(trainsets), repeatedAircraft: repeatedVehicleTrips(registrations),
     routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)), unknownAircraft, unknownAirlines, unknownPlaces, unknownRoutes };

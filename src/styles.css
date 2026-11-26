@@ -435,6 +435,7 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 .statistics-range>p{font-size:12px;line-height:1.7;color:#75816f;margin:12px 0 0}
 .statistics-range>p.form-error{color:var(--red)}
 .statistics-journey-card dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 12px;margin:12px 0 0}
+.statistics-journey-card dl>div:last-child:nth-child(odd){grid-column:1/-1;border-block-start:1px solid var(--line);padding-block-start:12px}
 .statistics-journey-card dt{font-size:14px;color:#52654e}
 .statistics-journey-card dd{display:grid;gap:4px;margin:4px 0 0}
 .statistics-journey-card strong{font-size:clamp(18px,4.8vw,25px);line-height:1.2;font-weight:600;color:var(--green);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}

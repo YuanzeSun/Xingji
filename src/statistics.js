@@ -5,7 +5,9 @@ import { journeyStatistics, statisticsOptions, todayDate, tripSeries, countryNam
 import { rankingViews, rankingChartMarkup } from './statistics-ranking.js';
 
 const empty = text => `<p class="statistics-empty">${text}</p>`;
-const metricMarkup = (value, unit, maximumFractionDigits = 0) => `${value.toLocaleString('zh-CN', { maximumFractionDigits })}<small> ${unit}</small>`;
+const metricMarkup = (value, unit, maximumFractionDigits = 0, minimumFractionDigits = 0) =>
+  `${value.toLocaleString('zh-CN', { maximumFractionDigits, minimumFractionDigits })}<small> ${unit}</small>`;
+const fareMetric = ({ cents, trips }) => ['总金额', metricMarkup(cents / 100, '元', 2, 2), trips, '程已录入票价'];
 function durationMarkup(minutes) {
   const days = Math.floor(minutes / 1440), hours = Math.floor(minutes % 1440 / 60), remainder = minutes % 60;
   return [[days, '天'], [hours, '小时'], [remainder, '分']].filter(([value]) => value)
@@ -70,13 +72,15 @@ export function mountStatistics(container, records, { options = {} } = {}) {
         ['乘坐次数', metricMarkup(data.rail, '次')],
         ['火车站数', metricMarkup(data.stations.length, '个')],
         ['铁路里程', metricMarkup(data.railMileage, 'km', 3), data.railMileageTrips, '程已收录里程'],
-        ['总在途时间', durationMarkup(rail.minutes), rail.trips, '程可计算']
+        ['总在途时间', durationMarkup(rail.minutes), rail.trips, '程可计算'],
+        fareMetric(data.fares.rail)
       ]],
       ['飞机', data.flight, [
         ['航班数', metricMarkup(data.flight, '班')],
         ['机场数', metricMarkup(data.airports.length, '个')],
         ['实际飞行航程', metricMarkup(data.actualFlightDistance, 'km', 1), data.actualFlightDistanceTrips, '程已收录航迹'],
-        ['总在途时间', durationMarkup(flight.minutes), flight.trips, '程可计算']
+        ['总在途时间', durationMarkup(flight.minutes), flight.trips, '程可计算'],
+        fareMetric(data.fares.flight)
       ]]
     ];
     container.innerHTML = `<section class="statistics-range" aria-label="统计日期范围"><div>${rangeButton('dateFrom', '起始日期', 'data-stat-from')}<span class="statistics-range-dash">—</span>${rangeButton('dateTo', '截止日期', 'data-stat-to')}<button type="button" class="text-button" data-stat-reset aria-label="恢复默认日期" title="恢复默认日期"><span class="statistics-reset-symbol" aria-hidden="true">↺</span><span class="statistics-reset-label">恢复默认</span></button></div><p class="form-error" role="alert" ${data.error ? '' : 'hidden'}>${e(data.error)}</p></section>${data.error ? '' : `

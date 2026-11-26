@@ -113,9 +113,9 @@ test('rail and flight travel times are totaled independently across dates, time 
   const cards = () => [...root.querySelectorAll('.statistics-journey-metrics > section')];
   assert.deepEqual(cards().map(card => card.querySelector('h2').textContent), ['火车', '飞机']);
   assert.deepEqual(cards().map(card => [...card.querySelectorAll('dt')].map(label => label.textContent)), [
-    ['乘坐次数', '火车站数', '铁路里程', '总在途时间'], ['航班数', '机场数', '实际飞行航程', '总在途时间']
+    ['乘坐次数', '火车站数', '铁路里程', '总在途时间', '总金额'], ['航班数', '机场数', '实际飞行航程', '总在途时间', '总金额']
   ]);
-  const duration = index => cards()[index].querySelector('dl > div:last-child').textContent;
+  const duration = index => [...cards()[index].querySelectorAll('dt')].find(label => label.textContent === '总在途时间').parentElement.textContent;
   assert.match(duration(0), /总在途时间.*1 小时 40 分.*1 \/ 3 程可计算/);
   assert.match(duration(1), /总在途时间.*21 小时 15 分.*4 \/ 6 程可计算/);
   bindTestDialogs(dom.window);
@@ -124,6 +124,34 @@ test('rail and flight travel times are totaled independently across dates, time 
   assert.match(duration(1), /—.*0 \/ 0 程可计算/);
   unmount();
   dom.window.close();
+});
+
+test('ticket fare totals follow the journey date range and distinguish zero prices from missing prices', () => {
+  const rows = [
+    rail({ price: '0.1' }), rail({ price: '0.20', template: 'rail-supplement', railSupplementFee: '0.10' }),
+    rail({}), rail({ price: '20', template: 'rail-refund-receipt' }),
+    flight({ price: '0' }), flight({ price: '1024.57', departureDate: '2024-03-02' }),
+    flight({ price: '300', flightStatus: 'invalid' }), flight({ price: '400', departureDate: '2024-03-03' })
+  ];
+  const options = { dateTo: '2024-03-02' };
+  assert.deepEqual(journeyStatistics(rows, options).fares, { rail: { cents: 30, trips: 2 }, flight: { cents: 102457, trips: 2 } });
+
+  const dom = new JSDOM('<div id="root"></div>');
+  const root = dom.window.document.querySelector('#root');
+  bindTestDialogs(dom.window);
+  const unmount = mountStatistics(root, rows, { options: { ...options } });
+  const amounts = () => [...root.querySelectorAll('.statistics-journey-card')].map(card =>
+    [...card.querySelectorAll('dt')].find(label => label.textContent === '总金额').nextElementSibling.textContent);
+  try {
+    assert.deepEqual(amounts(), ['0.30 元2 / 3 程已录入票价', '1,024.57 元2 / 2 程已录入票价']);
+    applyStatisticsDate(root, '[data-stat-to]', '2024-03-01');
+    assert.deepEqual(amounts(), ['0.30 元2 / 3 程已录入票价', '0.00 元1 / 1 程已录入票价']);
+    applyStatisticsDate(root, '[data-stat-to]', '2024-02-29');
+    assert.deepEqual(amounts(), ['0.30 元2 / 3 程已录入票价', '—0 / 0 程已录入票价']);
+  } finally {
+    unmount();
+    dom.window.close();
+  }
 });
 
 test('statistics default to an unbounded start and today, compare dates only and respect edited bounds', () => {
