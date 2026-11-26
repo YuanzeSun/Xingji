@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { createRecord } from '../src/model.js';
-import { savedRailwayNetwork, uniqueRailEdges, railwayGeometry } from '../src/railway-network.js';
+import { savedRailwayNetwork, uniqueRailEdges, railwayGeometry, railwayTicketPicker } from '../src/railway-network.js';
+import { railMapPoint } from '../src/rail-projection.js';
 import { mountJourneyMap } from '../src/journey-map.js';
 
 const record = extra => createRecord({ type: 'rail', service: 'D3759', origin: '柳州', destination: '来宾北', departureDate: '2024-01-01', ...extra });
@@ -15,6 +16,18 @@ test('track union removes repeats, reversed geometry and differently sampled par
   assert.equal(edges.length, 3);
   assert.ok(edges.some(edge => JSON.stringify(edge) === JSON.stringify([[109, 24], [110.5, 24]])));
   assert.equal(uniqueRailEdges([{ route: route([[[109, 24], [109, 24]]]) }]).length, 0);
+});
+
+test('a shared railway segment exposes all matching tickets and excludes nearby separate tracks', () => {
+  const pick = railwayTicketPicker([
+    { route: route(), records: [{ id: 'a' }, { id: 'b' }] },
+    { route: route([[[110, 24], [109.5, 24]]]), records: [{ id: 'reverse' }] },
+    { route: route([[[109, 24.01], [110, 24.01]]]), records: [{ id: 'parallel' }] },
+  ]);
+  const [x, y] = railMapPoint([109.8, 24]), unit = .002;
+  assert.deepEqual(pick([x + 1000, y], unit).map(ticket => ticket.id), ['a', 'b', 'reverse']);
+  assert.deepEqual(pick(railMapPoint([109.2, 24]), unit).map(ticket => ticket.id), ['a', 'b']);
+  assert.deepEqual(pick(railMapPoint([109.8, 25]), unit), []);
 });
 
 test('the saved railway network groups matching tickets and reports missing and invalid tracks', () => {

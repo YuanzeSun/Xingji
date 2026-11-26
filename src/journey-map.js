@@ -1,13 +1,14 @@
-import {calendarDate} from './journey-date.js';
+import {calendarDate,dateLabel} from './journey-date.js';
 import { escape as e } from './html.js';
 import { journeyNetwork, networkGeometry } from './journey-map-model.js';
 import { mapPlaybackTrips, bindMapPlayback } from './journey-map-playback.js';
 import { LAND_PATH, PROVINCE_PATH, COUNTRY_PATH } from './data/map-reference.js';
 import { createMapBasemap } from './map-basemap.js';
-import { savedRailwayNetwork, railwayGeometry } from './railway-network.js';
+import { savedRailwayNetwork, railwayGeometry, railwayTicketPicker } from './railway-network.js';
 import { RAIL_ROUTE_SOURCE } from './rail-route.js';
 import { isJourneyRecord } from './record-kind.js';
 import {railLineAnnotations} from './rail-line-names.js';
+import { showRelatedTickets } from './related-tickets.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const layers = [['rail', '火车'], ['flight', '飞机'], ['airway', '航线'], ['railway', '铁路线']];
@@ -57,8 +58,8 @@ export function mountJourneyMap(container, records, { icon, options = {} }) {
     const mapped = networks.reduce((count, part) => count + part.mapped, railMapped);
     const routeCount = network.routes.length + savedRoutes.length;
     const hasGeometry = !!geometry.trackPath || !!geometry.nodes.length;
-    const selected = network.routes.find(route => route.id === options.selected);
-    const node = geometry.nodes.find(node => node.id === options.node);
+    let selected = network.routes.find(route => route.id === options.selected);
+    let node = geometry.nodes.find(node => node.id === options.node);
     if (!selected) options.selected = '';
     if (!node) options.node = '';
     const bitmap=typeof window.Path2D==='function';
@@ -137,10 +138,11 @@ export function mountJourneyMap(container, records, { icon, options = {} }) {
       ] : nodes;
       const visibleNodes=candidates.filter(node=>node.point[0]>=left-15*unit&&node.point[0]<=right+15*unit&&node.point[1]>=top-15*unit&&node.point[1]<=bottom+15*unit);
       svg.querySelector('.map-routes').innerHTML = [...visibleRoutes].sort((a, b) => Number(active(a)) - Number(active(b))).map(route => {
-        const description = route.from.name + (route.aggregated ? ' ↔ ' : ' → ') + route.to.name + ' · ' + (route.aggregated ? route.records.length + ' 程' : [route.records[0].service, route.records[0].departureDate].filter(Boolean).join(' '));
-        return `<path class="map-route ${route.type} ${active(route) ? 'emphasized' : 'dimmed'} ${route.id === selected?.id ? 'selected' : ''}" d="${route.path}" transform="translate(${route.offset},0)" data-map-route="${e(route.id)}" tabindex="0" role="button" aria-label="${e(description)}" style="--route-width:${route.aggregated ? Math.min(4, 1.5 + Math.log2(route.records.length + 1) * .45) : 1.7}"><title>${e(description)}</title></path>`;
+        const description = route.from.name + (route.aggregated ? ' ↔ ' : ' → ') + route.to.name + ' · ' + (route.aggregated ? route.records.length + ' 程' : [route.records[0].service, dateLabel(route.records[0].departureDate)].filter(Boolean).join(' '));
+        const attrs = `d="${route.path}" transform="translate(${route.offset},0)" data-map-route="${e(route.id)}"`;
+        return `<path class="map-route-hit" ${attrs} aria-hidden="true"/><path class="map-route ${route.type} ${active(route) ? 'emphasized' : 'dimmed'} ${route.id === selected?.id ? 'selected' : ''}" ${attrs} tabindex="0" role="button" aria-haspopup="dialog" aria-label="${e(description)}" style="--route-width:${route.aggregated ? Math.min(4, 1.5 + Math.log2(route.records.length + 1) * .45) : 1.7}"><title>${e(description)}</title></path>`;
       }).join('');
-      svg.querySelector('.map-nodes').innerHTML = visibleNodes.map(point => `<g class="map-node ${point.id === options.node ? 'selected' : ''}" ${playback?.running ? '' : `data-map-node="${e(point.id)}" tabindex="0" role="button" aria-label="${e(point.name + '，' + point.trips.size + '程')}"`}><circle class="node-hit" cx="${point.point[0]}" cy="${point.point[1]}" r="${13 * unit}"/><circle cx="${point.point[0]}" cy="${point.point[1]}" r="${(point.id === options.node ? 5.5 : 3.5) * unit}"/><title>${e(point.name)}${point.code ? ' · ' + point.code : ''}</title></g>`).join('');
+      svg.querySelector('.map-nodes').innerHTML = visibleNodes.map(point => `<g class="map-node ${point.id === options.node ? 'selected' : ''}" ${playback?.running ? '' : `data-map-node="${e(point.id)}" tabindex="0" role="button" aria-haspopup="dialog" aria-label="${e(point.name + '，' + point.trips.size + '程')}"`}><circle class="node-hit" cx="${point.point[0]}" cy="${point.point[1]}" r="${13 * unit}"/><circle cx="${point.point[0]}" cy="${point.point[1]}" r="${(point.id === options.node ? 5.5 : 3.5) * unit}"/><title>${e(point.name)}${point.code ? ' · ' + point.code : ''}</title></g>`).join('');
       const occupied = [], labels = [], labelledNodes = new Set();
       const labelLimit = clamp(Math.round(width * height * clamp(viewport.zoom / fitZoom(), .5, 5) / 28000), 4, 60);
       const railLabels = playback?.running ? [...playback.labels] : geometry.lineLabels;
@@ -174,7 +176,6 @@ export function mountJourneyMap(container, records, { icon, options = {} }) {
       if (event.button !== 0) return;
       frameBounds=frame.getBoundingClientRect();
       pointers.set(event.pointerId, pointerPosition(event)); dragged = false;
-      if (event.isTrusted) svg.setPointerCapture?.(event.pointerId);
       if (pointers.size === 1) gesture = { start: pointerPosition(event), viewport: { ...viewport } };
       else if (pointers.size === 2) { const [a, b] = [...pointers.values()]; gesture = { distance: Math.hypot(a[0] - b[0], a[1] - b[1]), anchor: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], viewport: { ...viewport } }; }
     };
@@ -188,7 +189,14 @@ export function mountJourneyMap(container, records, { icon, options = {} }) {
       }
       if (dragged) { event.preventDefault(); if (event.isTrusted) svg.setPointerCapture?.(event.pointerId); frame.classList.add('dragging'); }
     };
-    const up = event => { pointers.delete(event.pointerId); gesture = pointers.size === 1 ? { start: [...pointers.values()][0], viewport: { ...viewport } } : null; if (!pointers.size) {frame.classList.remove('dragging');scheduleDraw(true);} };
+    const up = event => {
+      pointers.delete(event.pointerId);
+      gesture = pointers.size === 1 ? { start: [...pointers.values()][0], viewport: { ...viewport } } : null;
+      if (!pointers.size) {
+        frame.classList.remove('dragging');
+        if (dragged) scheduleDraw(true);
+      }
+    };
     const wheel = event => {
       if(!event.ctrlKey&&!event.metaKey)return;
       event.preventDefault();if(!wheelTimer)frameBounds=frame.getBoundingClientRect();
@@ -196,17 +204,45 @@ export function mountJourneyMap(container, records, { icon, options = {} }) {
       zoom(Math.exp(-clamp(delta,-120,120)*.008),anchor,viewport,anchor,true);
       window.clearTimeout(wheelTimer);wheelTimer=window.setTimeout(()=>{wheelTimer=0;scheduleDraw(true);},120);
     };
+    function openMapTickets(title, tickets) {
+      draw();
+      showRelatedTickets(container, title, tickets, svg);
+    }
     const click = event => {
       if (dragged) { dragged = false; if (event.target.closest('svg')) return; }
-      const target = event.target.closest('[data-map-route],[data-map-node],[data-map-zoom],[data-map-fit]'); if (!target) return;
-      if (target.hasAttribute('data-map-zoom')) zoom(target.dataset.mapZoom === 'in' ? 1.5 : 1 / 1.5);
-      else if (target.hasAttribute('data-map-fit')) { fit(); draw(); }
-      else if (target.hasAttribute('data-map-route')) { options.selected = options.selected === target.dataset.mapRoute ? '' : target.dataset.mapRoute; options.node = ''; render(); }
-      else { options.node = options.node === target.dataset.mapNode ? '' : target.dataset.mapNode; options.selected = ''; render(); }
+      const target = event.target.closest('[data-map-route],[data-map-node],[data-map-zoom],[data-map-fit]');
+      if (target?.hasAttribute('data-map-zoom')) { zoom(target.dataset.mapZoom === 'in' ? 1.5 : 1 / 1.5); return; }
+      if (target?.hasAttribute('data-map-fit')) { fit(); draw(); return; }
+      if (playback?.running || !svg.contains(event.target)) return;
+      if (target?.hasAttribute('data-map-route')) {
+        selected = network.routes.find(route => route.id === target.dataset.mapRoute);
+        node = undefined;
+        options.selected = selected.id;
+        options.node = '';
+        openMapTickets(selected.from.name + (selected.aggregated ? ' ↔ ' : ' → ') + selected.to.name, selected.records);
+      } else if (target?.hasAttribute('data-map-node')) {
+        node = geometry.nodes.find(point => point.id === target.dataset.mapNode);
+        selected = undefined;
+        options.node = node.id;
+        options.selected = '';
+        openMapTickets(node.name, visibleRecords.filter(record => node.trips.has(record.id)));
+      } else if (savedRoutes.length && event.type === 'click') {
+        const rect = svg.getBoundingClientRect(), unit = 1000 / viewport.zoom / width;
+        const point = [viewport.x + (event.clientX - rect.left - width / 2) * unit,
+          viewport.y + (event.clientY - rect.top - height / 2) * unit];
+        railState.pickTickets ??= railwayTicketPicker(savedRoutes);
+        const tickets = railState.pickTickets(point, unit);
+        if (tickets.length) showRelatedTickets(container, '途经此处的铁路票据', tickets, svg);
+      }
     };
     const keydown = event => {
       if (['Enter', ' '].includes(event.key) && event.target.closest('[data-map-route],[data-map-node]')) { event.preventDefault(); click(event); return; }
-      if (event.key === 'Escape') { event.preventDefault(); if (playback?.running) playback.stop(); else { options.selected = ''; options.node = ''; render(); } return; }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (playback?.running) playback.stop();
+        else { options.selected = ''; options.node = ''; selected = node = undefined; draw(); svg.focus(); }
+        return;
+      }
       if (event.target !== svg) return;
       if (['+', '=', '-', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(event.key)) event.preventDefault();
       if (['+', '='].includes(event.key)) zoom(1.5); else if (event.key === '-') zoom(1 / 1.5); else if (event.key === 'Home') { fit(); draw(); }

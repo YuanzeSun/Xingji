@@ -4,14 +4,16 @@ import { JSDOM } from 'jsdom';
 import { indexedDB } from 'fake-indexeddb';
 import { createRecord } from '../src/model.js';
 import { prepareCloud } from './helpers/cloud.js';
+import { bindTestDialogs } from './helpers/stat-date.js';
 
-test('timeline hides passenger names and map routes support keyboard dismissal', async () => {
+test('the timeline and related map tickets omit names, and map tickets open the existing details', async () => {
   const dom = new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>', { url: 'http://localhost/' });
   const { window } = dom;
   for (const key of ['window', 'document', 'location', 'history', 'sessionStorage', 'FormData']) Object.defineProperty(globalThis, key, { value: key === 'window' ? window : window[key], configurable: true });
   Object.defineProperty(globalThis, 'navigator', { value: window.navigator, configurable: true });
   Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true });
-  window.scrollTo = () => {}; window.HTMLDialogElement.prototype.showModal = function () { this.open = true; }; window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+  window.scrollTo = () => {};
+  bindTestDialogs(window);
   const wait = async fn => { for (let i = 0; i < 300; i++) { if (fn()) return; await new Promise(r => setTimeout(r, 10)); } assert.fail('Journey UI did not settle'); };
   const click = selector => { const target = document.querySelector(selector); assert.ok(target, selector); target.click(); };
   const records = [createRecord({ id: 'a', origin: '清河', destination: '上海虹桥', service: 'G103', departureDate: '2025-08-16', passenger: '隐私中文旅客' }), createRecord({ id: 'b', type: 'flight', template: 'air-boarding-pass', origin: '首都国际', destination: '东京羽田', departureDate: '2026-01-01', service: 'CA181', passenger: 'PRIVATE ENGLISH NAME' })];
@@ -30,9 +32,24 @@ test('timeline hides passenger names and map routes support keyboard dismissal',
   click('[data-map-layer="rail"]'); assert.equal(routeCount(), 1);
   document.querySelector('.map-route').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   assert.ok(document.querySelector('.map-route.selected'));
-  assert.equal(document.querySelector('dialog'), null);
-  document.querySelector('.journey-map-canvas').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  const related = () => document.querySelector('.related-tickets-dialog[open]');
+  assert.doesNotMatch(related().textContent, /PRIVATE ENGLISH NAME/);
+  assert.deepEqual([...related().querySelectorAll('[data-action=view]')].map(row => row.dataset.id), ['b']);
+  click('.related-tickets-dialog [data-action=view]');
+  await wait(() => document.querySelector('.ticket-detail-modal'));
+  assert.equal(document.querySelector('.heading-service').textContent, 'CA181');
+  click('.ticket-detail-modal [data-action=close-modal]');
+  await wait(() => !document.querySelector('.ticket-detail-modal'));
+  assert.equal(related().open, true);
+  related().dispatchEvent(new window.Event('cancel', { cancelable: true }));
+  const map = document.querySelector('.journey-map-canvas');
+  assert.equal(related(), null);
+  assert.equal(document.activeElement, map);
+  map.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(document.querySelector('.map-route.selected'), null);
+  document.querySelector('[data-map-node="airport:PEK"]').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  assert.equal(related().querySelector('[data-action=view]').dataset.id, 'b');
+  click('.related-tickets-dialog [data-close-related]');
   assert.deepEqual(await db.get('records'), records);
   dom.window.close();
 });

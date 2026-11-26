@@ -27,6 +27,35 @@ export function savedRailwayNetwork(records) {
   return { records: rows, routes, unmatched, failed };
 }
 
+export function railwayTicketPicker(routes) {
+  const paths = routes.map(({ route, records }) => {
+    const segments = route.segments.map(line => line.map(railMapPoint));
+    const bounds = segments.flat().reduce(([left, top, right, bottom], [x, y]) =>
+      [Math.min(left, x), Math.min(top, y), Math.max(right, x), Math.max(bottom, y)],
+    [Infinity, Infinity, -Infinity, -Infinity]);
+    return { segments, bounds, records };
+  });
+  return ([mapX, y], unit) => {
+    const x = ((mapX % 1000) + 1000) % 1000, radius = 9 * unit;
+    let nearest = radius;
+    const matches = [];
+    for (const { segments, bounds: [left, top, right, bottom], records } of paths) {
+      if (x < left - radius || x > right + radius || y < top - radius || y > bottom + radius) continue;
+      let distance = Infinity;
+      for (const line of segments) for (let index = 1; index < line.length; index++) {
+        const [ax, ay] = line[index - 1], [bx, by] = line[index];
+        const dx = bx - ax, dy = by - ay, length = dx * dx + dy * dy;
+        const fraction = length ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / length)) : 0;
+        distance = Math.min(distance, Math.hypot(x - ax - fraction * dx, y - ay - fraction * dy));
+      }
+      if (distance > radius) continue;
+      nearest = Math.min(distance, nearest);
+      matches.push({ distance, records });
+    }
+    return matches.filter(match => match.distance <= nearest + 2 * unit).flatMap(match => match.records);
+  };
+}
+
 // A sub-metre identity grid joins coincident track vertices. Collinear interval
 // union also removes partial overlaps with different sampling and direction.
 export function uniqueRailEdges(routes) {

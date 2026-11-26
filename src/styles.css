@@ -330,6 +330,8 @@ dialog:is(.ticket-editor-modal,.ticket-detail-modal)::backdrop{backdrop-filter:n
 .map-land{fill:#d8e2d3;stroke:#c2cfbd;stroke-width:.65;vector-effect:non-scaling-stroke}.map-land use{vector-effect:non-scaling-stroke}
 .map-graticule{fill:none;stroke:#b9cbbd;stroke-width:.55;opacity:.45;pointer-events:none}.map-graticule path{vector-effect:non-scaling-stroke}
 .map-route{fill:none;stroke-linecap:round;stroke-width:var(--route-width,2);vector-effect:non-scaling-stroke;cursor:pointer;transition:opacity .15s}
+.map-route-hit{fill:none;stroke:transparent;stroke-width:12;vector-effect:non-scaling-stroke;pointer-events:stroke;cursor:pointer}
+@media(pointer:coarse){.map-route-hit{stroke-width:24}}
 .map-route.rail{stroke:#b0783e}.map-route.flight{stroke:#247e87}.map-route.selected,.map-route:focus-visible,.map-route:hover{stroke-width:4;opacity:1;outline:none}
 .map-route.dimmed{opacity:.14}.map-route.emphasized{opacity:.78}
 .map-node{cursor:pointer;fill:#fffefa;stroke:#456853;stroke-width:1.6;outline:none}.map-node circle{vector-effect:non-scaling-stroke}.map-node .node-hit{fill:transparent;stroke:none}
@@ -539,7 +541,25 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 .statistics-route-endpoint{min-width:0;overflow-wrap:anywhere;text-align:center}.statistics-route-endpoint code{display:inline-block}
 .statistics-route-arrow{color:#a8b19b;text-align:center;line-height:1;white-space:nowrap}
 .map-real-tracks{pointer-events:none}
-.map-track{fill:none;stroke:#ffc077;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+body:has(.related-tickets-dialog[open]){overflow:hidden}
+dialog.related-tickets-dialog{width:min(540px,calc(100% - 28px));max-height:76dvh;scroll-padding-block:92px 12px}
+dialog.related-tickets-dialog::backdrop{backdrop-filter:none}
+.related-tickets-dialog .modal-heading .button{min-width:44px;min-height:44px;flex:none}
+.related-tickets-dialog .modal-heading h2{overflow-wrap:anywhere}
+.related-tickets-dialog .modal-heading p{color:var(--muted)}
+.related-tickets-list{list-style:none;padding:6px 24px 14px;margin:0}
+.related-tickets-list li+li{border-top:1px solid var(--line)}
+.related-tickets-list button{display:grid;gap:4px;position:relative;width:100%;min-height:56px;border:0;background:transparent;color:var(--ink);padding:10px 26px 10px 8px;text-align:left;border-radius:5px}
+.related-tickets-list button:hover,.related-tickets-list button:focus-visible{background:#eef3eb}
+.related-tickets-list button::after{content:"";position:absolute;right:10px;top:calc(50% - 4px);width:7px;height:7px;border:solid var(--muted);border-width:1px 1px 0 0;transform:rotate(45deg)}
+.related-ticket-meta{display:flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.related-ticket-meta strong{color:var(--green)}
+.related-ticket-route{font-size:15px;overflow-wrap:anywhere}
+@media(max-width:680px){
+  dialog.modal.related-tickets-dialog{inset:auto 0 0;margin:0;width:100%;max-width:100%;max-height:72dvh;border-radius:14px 14px 0 0;padding-bottom:env(safe-area-inset-bottom)}
+  .related-tickets-list{padding-inline:14px}
+}
+.map-track{fill:none;stroke:#ffc077;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;pointer-events:stroke;cursor:pointer}
 .map-railway-status{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 18px;padding:6px 12px;background:#10263a;color:#a2bacb;border-top:1px solid #2a4459;font-size:11px}.map-railway-status strong{font-weight:500;color:#d4e3ec}.map-legend:empty{display:none}
 .flight-lookup{grid-column:1/-1;padding:15px 16px;margin:0 0 20px;background:#eff3e9;border:1px solid #dce5d4;border-radius:8px;min-width:0}
 .flight-lookup-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;font-size:13px;color:#59714f}
