@@ -39,8 +39,8 @@ import { seatClassField, bindSeatClassFields } from './seat-class-field.js';
 import { seatField, bindSeatFields } from './seat-field.js';
 import { bindDatePickers,dateControl,ticketDateField,bindTicketDates,readTicketDate,writeTicketDate,barcodeDateDay } from './date-field.js';
 import { flightLookupMarkup, bindFlightLookup } from './flight-lookup.js';
-import { flightStopsText } from './flight-stops.js';
-import { bindFlightStopsEditor, flightStopsField } from './flight-stops-editor.js';
+import { flightStopText } from './flight-stop.js';
+import { bindFlightStopEditor, flightStopField } from './flight-stop-editor.js';
 import { railLookupMarkup, railTimetableMarkup, bindRailLookup, railTrainsetField } from './rail-lookup.js';
 import { RAIL_POINTS_PAGE, railPointsRange, readRailPoints, railPointsRecords } from './rail-points.js';
 import { railJourneyMarkup, railReferenceNotice } from './rail-journey-ui.js';
@@ -88,7 +88,7 @@ const icons = {
   chart: '<path d="M4 3v17h17M7 14l4-5 4 3 5-7"/>'
 };
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.ticket}</svg>`;
-const labels = { ...BOARDING_METADATA_LABELS, flightStops: '经停情况', ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightTrack: '飞行航迹', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '条码', boardingCode: '机票条码' };
+const labels = { ...BOARDING_METADATA_LABELS, flightStop: '经停机场', ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightTrack: '飞行航迹', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '条码', boardingCode: '机票条码' };
 const imports = { task: null, backup: null, railPoints: null };
 let importView = 0;
 const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null };
@@ -1055,14 +1055,14 @@ function editRecord(record, {
   setImportReference(photo);
   const draft = normalizePlaces(clone(record));
   const generatorSettings = preserve && draft.type==='flight' ? readBoardingGenerator(modalRoot) : undefined;
-  const flightStopsInput = preserve && draft.type === 'flight' ? editor?.flightStopsInput : undefined;
+  const flightStopInput = preserve && draft.type === 'flight' ? editor?.flightStopInput : undefined;
   draft.flightStatus = draft.type === 'flight' ? normalizeFlightStatus(draft.flightStatus) : '';
   const passengerEdited = preserve ? !!editor?.passengerEdited : !!record.lockedFields?.includes('passenger');
   const editingSaved = state.records.some(record => record.id === draft.id);
   const typeFixed = imported || editingSaved;
   const serviceFixed = editingSaved && Boolean(original.service);
   if (preserve && !typeFixed) Object.assign(draft, applyProfileDefaults(draft, state.settings.profile, { passengerEdited }));
-  editor = { original, draft, imported, editingSaved, serviceFixed, context, dirty: preserve, passengerEdited, photo, flightStopsInput };
+  editor = { original, draft, imported, editingSaved, serviceFixed, context, dirty: preserve, passengerEdited, photo, flightStopInput };
   const flight = draft.type === 'flight';
   const basics = flight ? ['origin','destination','service','departureDate','departureTime','arrivalTime','arrivalDate','boardingTime','passenger','identity','airline','seat','seatClass','price','gate'] : ['origin','destination','service','departureDate','departureTime','passenger','identity','carriage','seatClass','seat','price','gate','railPlatform'];
   const extra = flight ? ['orderNumber', 'terminal', 'aircraft', 'aircraftRegistration', 'pnr', 'ticketNumber', 'flightDistance'] : ['arrivalDate','arrivalTime','railBureau','railRunner','railCarOwner','railModel','railPowerSupply','railMileage','orderNumber','ticketNumber','saleCode','issuer'];
@@ -1076,7 +1076,7 @@ function editRecord(record, {
   const invoiceRows = railInvoiceDetails(draft.railInvoice);
   const invoiceDetails = invoiceRows.length ? `<details class="editor-extra"><summary>电子报销凭证资料</summary><dl class="detail-grid">${invoiceRows.map(([label, value]) => `<div><dt>${e(label)}</dt><dd>${e(value)}</dd></div>`).join('')}</dl></details>` : '';
   const requiredHint = `<span class="editor-required-hint"><span><b class="required-mark" role="img" aria-label="红色星号">*</b> 保存必填</span><span><b class="required-mark barcode-required-mark" role="img" aria-label="蓝色星号">*</b> 生成${flight ? '条码' : '二维码'}必填</span></span>`;
-  openModal(modalHead(imported ? '核对这张票据' : editingSaved ? '编辑票据' : '添加一张票据', requiredHint) + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${ticketEntry}${basics.filter(key => !(draft.railStanding && key === 'seat')).map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() + flightStopsField() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : invoiceDetails + marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ''}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div>${flight || isRefundReceipt(draft) ? '' : railTimetableMarkup(draft)}<div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="close-modal">取消</button><div class="spacer"></div><button class="button primary" type="submit">${icon('check')}保存票据</button></div></form>`, true);
+  openModal(modalHead(imported ? '核对这张票据' : editingSaved ? '编辑票据' : '添加一张票据', requiredHint) + `<form id="editor-form" novalidate><input type="hidden" name="originCode" value="${e(draft.originCode)}" /><input type="hidden" name="destinationCode" value="${e(draft.destinationCode)}" /><div class="editor-layout ${flight ? 'flight-editor-layout' : ''}"><div class="editor-fields"><div class="form-grid">${ticketEntry}${basics.filter(key => !(draft.railStanding && key === 'seat')).map(key => field(key,draft) + (key === 'departureDate' ? flight ? flightLookupMarkup() + flightStopField() : !isRefundReceipt(draft) ? railLookupMarkup(draft) : '' : '')).join('')}${extra.map(key=>field(key,draft)+(key==='railModel' && !isRefundReceipt(draft) ? railTrainsetField(draft) : '')).join('')}</div>${flight ? '<details class="editor-extra boarding-metadata" '+(BOARDING_METADATA_FIELDS.some(key=>draft[key])?'open':'')+'><summary>行李、常旅客与代码共享</summary><div class="form-grid">'+BOARDING_METADATA_FIELDS.map(key=>field(key,draft)).join('')+'</div></details><div data-boarding-journey>'+boardingJourneyMarkup(draft)+'</div><section class="editor-extra actual-flight-times"><h3>实际登机与起降（仅存档）</h3><div class="form-grid">' + ACTUAL_FLIGHT_FIELDS.map(key=>field(key,draft)).join('') + '</div></section>' : invoiceDetails + marksEditor(draft)}${flight ? boardingGeneratorMarkup(draft,{profile:state.settings.profile,settings:generatorSettings}) : ''}<section class="editor-extra"><h3>排版微调</h3><div class="form-grid">${field('offsetX', draft, { type: 'number' })}${field('offsetY', draft, { type: 'number' })}</div></section></div><aside class="editor-visual"><div class="preview-label"><span>票面预览</span></div><div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div>${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}</aside></div>${flight || isRefundReceipt(draft) ? '' : railTimetableMarkup(draft)}<div class="modal-footer editor-footer"><p class="editor-error" id="editor-error" role="alert" tabindex="-1" hidden></p><button class="button secondary" type="button" data-action="close-modal">取消</button><div class="spacer"></div><button class="button primary" type="submit">${icon('check')}保存票据</button></div></form>`, true);
   // openModal replaces the DOM, but keeps the editor state deliberately.
   const form = document.querySelector('#editor-form');
   form.closest('dialog').classList.add('ticket-editor-modal');
@@ -1101,8 +1101,8 @@ function editRecord(record, {
   }
   form.setAttribute('autocapitalize', 'characters');
   bindUppercaseInputs(form);
-  const flightStopsEditor = flight ? bindFlightStopsEditor(form, draft, flightStopsInput, value => {
-    editor.flightStopsInput = value;
+  const flightStopEditor = flight ? bindFlightStopEditor(form, draft, flightStopInput, value => {
+    editor.flightStopInput = value;
     editor.dirty = true;
   }) : null;
   bindSeatClassFields(form);
@@ -1116,7 +1116,7 @@ function editRecord(record, {
       if (JOURNEY_DATE_FIELDS.includes(key)) writeTicketDate(form,key,'');
       else if (form.elements[key]) form.elements[key].value='';
     }
-    flightStopsEditor?.refresh();
+    flightStopEditor?.refresh();
   }
   form.addEventListener('change',event=>{
     const input=event.target;
@@ -1134,9 +1134,9 @@ function editRecord(record, {
       if (rescan) {
         draft.lookupValues = {};
         delete draft.flightTrack;
-        delete draft.flightStops;
-        delete draft.fieldSources.flightStops;
-        flightStopsEditor?.refresh();
+        delete draft.flightStop;
+        delete draft.fieldSources.flightStop;
+        flightStopEditor?.refresh();
       }
       else clearEditorLookupValues();
     }
@@ -1165,7 +1165,7 @@ function editRecord(record, {
     autoRead:draft.type==='rail' && !!localFileURL && !draft.ticketCode
   });
   form.addEventListener('input', event => {
-    if (event.target.matches('[data-rail-query-date]') || event.target.closest('[data-code-editor],[data-flight-stops-editor]')) return;
+    if (event.target.matches('[data-rail-query-date]') || event.target.closest('[data-code-editor],[data-flight-stop-editor]')) return;
     const target=event.target;
     const dateKey=target.closest('[data-journey-date]')?.dataset.journeyDate;
     const changedKey=target.name || (target.matches('[data-seat-preset]') ? 'seatClass'
@@ -1261,7 +1261,7 @@ function editRecord(record, {
         try{draft[key]=readTicketDate(form,key,draft,{strict:true});}catch(error){error.fields=[key];throw error;}
       }
       validateTicketForm(draft);
-      flightStopsEditor?.commit();
+      flightStopEditor?.commit();
     } catch (error) { showError(error); return; }
     release = freezeForm(form, '保存中…');
     try {
@@ -1306,7 +1306,7 @@ function editRecord(record, {
           input.dispatchEvent(new window.Event('change', { bubbles: true }));
         }
         normalizePlaces(draft);
-        if (changes.flightStops) flightStopsEditor.refresh();
+        if (changes.flightStop) flightStopEditor.refresh();
       }
       if (changes.railJourney && !changes.railJourney.timetableReference) {
         draft.sources = draft.sources.filter(item => !Object.hasOwn(RAIL_TIMETABLE_REFERENCES, item.kind));
@@ -1317,8 +1317,8 @@ function editRecord(record, {
     } finally {lookupApplying=false;}
   }
   if (flight) flightLookupCleanup = bindFlightLookup(form, {
-    getRecord: () => editor.flightStopsInput ?
-      { ...draft, fieldSources: { ...draft.fieldSources, flightStops: 'manual' } } : draft,
+    getRecord: () => editor.flightStopInput !== undefined ?
+      { ...draft, fieldSources: { ...draft.fieldSources, flightStop: 'manual' } } : draft,
     getKey: flightKey, canQuery: canWrite, desktop: supportsBrowserConnector, apply: applyEditorLookup,
     applyTrack: track => { draft.flightTrack = track; editor.dirty = true; },
     onPending: trackLookup
@@ -2083,7 +2083,7 @@ function showConflicts(conflicts) {
   state.pendingConflicts = conflicts;
   const valueText = (value, field) => field === 'railJourney' ? value ? `${value.query?.startDate || ''} 始发 · ${value.stops?.length || 0} 个全程站点 · ${(value.trainsets || []).map(stock=>stock.id).join(' / ') || '具体车组未收录'}` : '未收录' : field === 'ticketMarks' ? describeMarks(value) : field === 'deleted' ? value ? '删除票据' : '保留票据' : String(value || '（空白）');
   const conflictValue = (value, field) => {
-    if (field === 'flightStops') return e(flightStopsText(value) || '未收录');
+    if (field === 'flightStop') return e(flightStopText(value) || '未收录');
     return field === 'connections' ? (value ? '访问凭证已隐藏' : '未收录') : field === 'flightMcpKey' ? e(maskedKey(value)) : field === 'profile' ? `<span class="profile-conflict">${e(personalProfileSummary(value))}</span>` : ['ticketCode', 'boardingCode'].includes(field) ? value ? renderCodeData(value, { className: 'conflict-code' }) : '未收录' : e(valueText(value, field));
   };
   const settingLabels = { profile: '个人常用资料', flightMcpKey: '飞常准 MCP Key', connections: '云端账号设置' };

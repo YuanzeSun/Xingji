@@ -21,7 +21,7 @@
     "actualBoardingTime",
     "flightDistance",
     "flightTrack",
-    "flightStops",
+    "flightStop",
     "departureZone",
     "arrivalZone",
     "passenger",

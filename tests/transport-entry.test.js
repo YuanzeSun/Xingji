@@ -62,14 +62,13 @@ test('archive entries preselect each transport and share a switchable editor',as
     assert.equal(form().elements.departureTime.required,false);
     assert.equal(form().querySelector('[data-field-source="departureDateYear"]').textContent,'默认值');
     assert.equal(form().querySelector('[data-field-source="departureDate"]').textContent,'未填写');
-    fill('flightStopCount','1','change');
     fill('flightStopAirport','法兰克福机场');
     fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDateMonth:'11',departureDateDay:'17',seat:'20C',seatClass:'Y'});await submit();
     const flight=server.records().find(row=>row.type==='flight');
     assert.equal(calendarDate(flight.departureDate),year+'-11-17');
     assert.equal(flight.departureTime,'');
-    assert.deepEqual(flight.flightStops.airports,['FRA']);
-    assert.equal(flight.fieldSources.flightStops,'manual');
+    assert.equal(flight.flightStop.airport,'FRA');
+    assert.equal(flight.fieldSources.flightStop,'manual');
     document.querySelector('[data-action="navigate"][data-page="archive"]').click();
     for(const ticket of server.records()){
       await wait(()=>document.querySelector(`[data-action="view"][data-id="${ticket.id}"]`));

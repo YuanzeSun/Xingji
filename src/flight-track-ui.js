@@ -20,7 +20,7 @@ function inFlightDirection(track) {
 function mountTrackMap(frame, track, record) {
   const view = frame.ownerDocument.defaultView, svg = frame.querySelector('svg');
   const basemap = createMapBasemap(frame.querySelector('canvas'), view, { provinceContrast: true });
-  const stopCode = record.flightStops?.airports[0], stopCoordinates = AIRPORT_POINTS[stopCode];
+  const stopCode = record.flightStop?.airport, stopCoordinates = AIRPORT_POINTS[stopCode];
   const longitudes = track.segments.flatMap(line => line.map(point => point[0]));
   if (stopCoordinates) longitudes.push(stopCoordinates[0]);
   const center = longitudeCenter(longitudes);

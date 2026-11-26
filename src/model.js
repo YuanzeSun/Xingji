@@ -9,7 +9,7 @@ import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {BOARDING_FIELDS,refreshGeneratedCode,operatingFlight} from './boarding-code-state.js';
 import { normalizeRailRoute, railRouteMatches } from './rail-route-snapshot.js';
 import { normalizeFlightTrack } from './flight-track.js';
-import { normalizeFlightStops } from './flight-stops.js';
+import { normalizeFlightStop } from './flight-stop.js';
 import { normalizeMarks } from './ticket-marks.js';
 import { normalizeTicketCode } from './ticket-code.js';
 import { normalizeBoardingCode } from './boarding-code.js';
@@ -26,8 +26,8 @@ import { normalizeRailInvoice } from './rail-invoice.js';
 import { DEFAULT_RAIL_TEMPLATE, SUPPLEMENT_FIELDS, TEMPLATES, isRailReceiptTemplate } from './rail-template.js';
 export { DEFAULT_RAIL_TEMPLATE, TEMPLATES };
 export const SCHEMA_VERSION = 2;
-const OPTIONAL_FIELDS = ['railInvoice', 'flightTrack', 'flightStops', 'railShowIssuer'];
-export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'flightTrack', 'flightStops', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'railShowIssuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'railInvoice', ...Object.keys(SUPPLEMENT_FIELDS), 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
+const OPTIONAL_FIELDS = ['railInvoice', 'flightTrack', 'flightStop', 'railShowIssuer'];
+export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'flightTrack', 'flightStop', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'railShowIssuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'railInvoice', ...Object.keys(SUPPLEMENT_FIELDS), 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
 export const now = () => new Date().toISOString();
 export const clone = value => structuredClone(value);
 export const sameRecords = (a, b) => JSON.stringify([...a].sort((x, y) => x.id.localeCompare(y.id))) === JSON.stringify([...b].sort((x, y) => x.id.localeCompare(y.id)));
@@ -57,7 +57,7 @@ export function validateRecord(input) {
   if ((input.type === 'flight') !== input.template.startsWith('air-')) throw new Error('票面与交通方式不匹配');
   const out = { id: input.id };
   for (const field of FIELDS) {
-    if (field === 'flightTrack' || field === 'flightStops') continue;
+    if (field === 'flightTrack' || field === 'flightStop') continue;
     if (field === 'railShowIssuer') {
       if (!input.deleted && isRailReceiptTemplate(input.template) && input.railShowIssuer === true) out.railShowIssuer = true;
       continue;
@@ -132,9 +132,9 @@ export function validateRecord(input) {
   if (out.railRoute && !railRouteMatches(out)) out.railRoute = '';
   const flightTrack = normalizeFlightTrack(out, input.flightTrack);
   if (flightTrack) out.flightTrack = flightTrack;
-  const flightStops = normalizeFlightStops(out, input.flightStops);
-  if (flightStops) out.flightStops = flightStops;
-  else delete out.fieldSources.flightStops;
+  const flightStop = normalizeFlightStop(out, input.flightStop);
+  if (flightStop) out.flightStop = flightStop;
+  else delete out.fieldSources.flightStop;
   if (out.railJourney && !railJourneyMatches(out)) {
     if(out.railJourney.distanceQueriedAt && !out.lockedFields.includes('railMileage'))out.railMileage='';
     out.railJourney = '';

@@ -170,12 +170,12 @@ test('statistics keep airport and station identities, combine return air routes 
 });
 
 test('the airport option counts each saved stopover once in the selected date range', () => {
-  const route = { fnum: 'CA181', dep: 'PEK', arr: 'HND', date: '2024-03-01', count: 1 };
+  const route = { fnum: 'CA181', dep: 'PEK', arr: 'HND', date: '2024-03-01' };
   const stopped = ['ICN', 'ICN', 'NRT', 'ZZZ'].map((code, index) =>
-    flight({ id: 'stopover-' + index, service: 'CA181', flightStops: { ...route, airports: [code] } }));
+    flight({ id: 'stopover-' + index, service: 'CA181', flightStop: { ...route, airport: code } }));
   const other = flight({ id: 'other', origin: 'NRT', destination: 'PEK' });
   const later = flight({ service: 'CA181', departureDate: '2024-03-02',
-    flightStops: { ...route, date: '2024-03-02', airports: ['PVG'] } });
+    flightStop: { ...route, date: '2024-03-02', airport: 'PVG' } });
   const rows = [...stopped, other, later];
   const options = { ...range, dateTo: '2024-03-01' };
   const endpoints = journeyStatistics(rows, options);

@@ -86,7 +86,7 @@ export function demoRecords(today=localToday()){
           [137.24, 34.65], [138.19, 34.68], [139.35, 34.92], [139.78, 35.55]]]
       };
       if (row.service === 'MU9901') {
-        values.flightStops = { ...flightQuery(values), count: 1, airports: ['WUH'] };
+        values.flightStop = { ...flightQuery(values), airport: 'WUH' };
         values.flightTrack = {
           flightStr: flightTrackRequest(values), queriedAt: verifiedAt,
           segments: [

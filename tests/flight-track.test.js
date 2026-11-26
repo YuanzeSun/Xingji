@@ -11,7 +11,7 @@ import { prepareCloud } from './helpers/cloud.js';
 const flight = createRecord({
   id: 'test-flight', type: 'flight', template: 'air-boarding-pass', service: 'JL62',
   origin: 'NRT', destination: 'LAX', departureDate: '2026-11-23', passenger: 'TEST/PASSENGER', identity: 'P000001', seat: '12A', seatClass: 'Y',
-  flightStops: { fnum: 'JL62', date: '2026-11-23', dep: 'NRT', arr: 'LAX', count: 1, airports: ['ANC'] }
+  flightStop: { fnum: 'JL62', date: '2026-11-23', dep: 'NRT', arr: 'LAX', airport: 'ANC' }
 });
 const flightStr = 'JL62_NRT_LAX_2026-11-23_0';
 const coordinates = [
@@ -40,7 +40,7 @@ test('flight tracks are keyed to the dated airport pair and never change the jou
   assert.equal(validateRecord({ ...saved, deleted: true }).flightTrack, undefined);
   const geometry = record => networkGeometry(journeyNetwork([record]));
   assert.equal(geometry(saved).routes[0].path, geometry(flight).routes[0].path);
-  const routeWithStops = geometry(saved), direct = geometry({ ...saved, flightStops: undefined });
+  const routeWithStops = geometry(saved), direct = geometry({ ...saved, flightStop: undefined });
   assert.equal(routeWithStops.routes[0].path, direct.routes[0].path);
   assert.deepEqual(routeWithStops.nodes.map(node => node.code), ['NRT', 'LAX']);
   assert.deepEqual(readFlightTrack({ structuredContent: domesticTrack }, domesticFlightStr).segments, domesticCoordinates);

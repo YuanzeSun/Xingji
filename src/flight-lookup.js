@@ -80,10 +80,6 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     if (!recordBeforeLookup.boardingTime && !recordBeforeLookup.lockedFields?.includes('boardingTime') && !candidate.boardingTime) {
       summary += '飞常准未提供计划登机时间。';
     }
-    const currentRecord = getRecord();
-    if (!currentRecord.flightStops && currentRecord.fieldSources?.flightStops !== 'manual') {
-      summary += '飞常准未提供可核对的经停信息。';
-    }
     if (!summary) summary = '本次没有可补全的航班信息。';
     status.textContent = summary;
     if (flightLookupNeeds(getRecord()).registration) {

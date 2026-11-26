@@ -5,7 +5,7 @@ import { AIRPORT_TIMEZONES } from './data/airport-timezones.js';
 import { normalizeAircraftRegistration, reconcileAircraft } from './aircraft.js';
 import { flightNumber, flightQuery } from './flight-query.js';
 import { airlineNameForCode } from './airline-codes.js';
-import { airportCode, normalizeFlightStops } from './flight-stops.js';
+import { airportCode, normalizeFlightStop } from './flight-stop.js';
 
 const clean = value => typeof value === 'string' && !/^(?:-+|null|undefined|n\/?a)$/i.test(value.trim()) ? value.trim().slice(0, 1000) : '';
 const flightIdentity = value => flightNumber(value).replace(/^([A-Z0-9]{2})0+(?=\d)/, '$1');
@@ -60,21 +60,19 @@ function stopFromLegs({ dep, arr, departure, arrival }, legs) {
   return stops.size === 1 ? stops.values().next().value : '';
 }
 
-function stopsForSchedule(whole, legs, fnum) {
-  const { dep, arr, departure, count, airport } = whole;
+function stopEvidenceFor(whole, legs) {
+  const { dep, arr, count, airport } = whole;
   if (!whole.scheduled || dep === arr) return;
-  const trip = { fnum, date: departure.date, dep, arr };
-  if (count === 0 || count > 1) return { ...trip, count, airports: [] };
+  if (count === 0 || count > 1) return { count };
   if (airport && !airportCode(airport)) return;
   const stop = airport && airport !== dep && airport !== arr ? airport : stopFromLegs(whole, legs);
-  if (count === 1 || stop) return { ...trip, count: 1, airports: stop ? [stop] : [] };
+  if (count === 1 || stop) return { count: 1, airport: stop };
 }
 
-function mergeStopEvidence(values) {
-  const [first] = values;
-  if (!first || first.count > 1 || values.some(value => value.count !== first.count)) return;
-  const airports = new Set(values.flatMap(value => value.airports));
-  return { ...first, airports: airports.size === 1 ? [...airports] : [] };
+function confirmedStopAirport(evidence) {
+  if (evidence.some(value => value.count !== 1)) return;
+  const airports = new Set(evidence.map(value => value.airport).filter(Boolean));
+  if (airports.size === 1) return airports.values().next().value;
 }
 
 export function flightCandidates(result, input) {
@@ -101,8 +99,8 @@ export function flightCandidates(result, input) {
     const key = JSON.stringify(record);
     if (!candidates.has(key)) candidates.set(key, { record, aircraftValues: new Set(), registrations: new Set(), stopEvidence: [] });
     const { aircraftValues, registrations, stopEvidence } = candidates.get(key);
-    const stops = stopsForSchedule(item, legs, query.fnum);
-    if (stops) stopEvidence.push(stops);
+    const evidence = stopEvidenceFor(item, legs);
+    if (evidence) stopEvidence.push(evidence);
     for (const value of [row.miniAirplaneModels, row.generic, row.aircraftType]) {
       aircraftValues.add(Number.isInteger(value) ? String(value) : clean(value));
     }
@@ -111,7 +109,11 @@ export function flightCandidates(result, input) {
   }
   return [...candidates.values()].map(({ record, aircraftValues, registrations, stopEvidence }) => {
     const { name, conflicts } = reconcileAircraft(aircraftValues);
-    const candidate = createRecord({ ...record, aircraft: name, aircraftRegistration: registrations.size === 1 ? [...registrations][0] : '', flightStops: mergeStopEvidence(stopEvidence) });
+    const airport = confirmedStopAirport(stopEvidence);
+    const flightStop = airport ? {
+      fnum: query.fnum, date: query.date, dep: record.originCode, arr: record.destinationCode, airport
+    } : undefined;
+    const candidate = createRecord({ ...record, aircraft: name, aircraftRegistration: registrations.size === 1 ? [...registrations][0] : '', flightStop });
     return conflicts.length ? { ...candidate, aircraftConflicts: conflicts } : candidate;
   });
 }
@@ -147,8 +149,6 @@ export function rotationRegistration(result, query) {
 const scheduleFields = ['departureTime', 'flightDistance', 'airline', 'aircraft', 'terminal', 'gate', 'boardingTime'];
 const timePairs = [['arrivalDate', 'arrivalTime'], ['actualDepartureDate', 'actualDepartureTime'], ['actualArrivalDate', 'actualArrivalTime']];
 const canFill = (record, field) => !record[field] && !record.lockedFields?.includes(field);
-const needsStops = record => record.fieldSources?.flightStops !== 'manual' &&
-  (!record.flightStops || (record.flightStops.count === 1 && !record.flightStops.airports.length));
 const canCompletePair = (record, [first, second]) =>
   (canFill(record, first) && (record[second] || canFill(record, second))) ||
   (canFill(record, second) && record[first]);
@@ -160,7 +160,7 @@ export function flightLookupNeeds(record) {
       ((!record[side] && !record[code]) || resolvePlace(record, side).status === 'matched');
   });
   return {
-    schedule: incompleteAirport || needsStops(record) || scheduleFields.some(field => canFill(record, field)) || timePairs.some(pair => canCompletePair(record, pair)),
+    schedule: incompleteAirport || scheduleFields.some(field => canFill(record, field)) || timePairs.some(pair => canCompletePair(record, pair)),
     registration: canFill(record, 'aircraftRegistration')
   };
 }
@@ -189,9 +189,9 @@ export function flightCompletion(record, candidate) {
   }
   for (const field of [...scheduleFields, 'aircraftRegistration', 'marketingCarrier']) fill(field, candidate[field]);
   for (const [date, time] of timePairs) fillTimePair(date, time);
-  if (needsStops(record)) {
-    const current = record.flightStops, found = normalizeFlightStops({ ...record, ...changes }, candidate.flightStops);
-    if (found && (!current || found.airports.length)) changes.flightStops = found;
+  if (!record.flightStop && record.fieldSources?.flightStop !== 'manual') {
+    const stop = normalizeFlightStop({ ...record, ...changes }, candidate.flightStop);
+    if (stop) changes.flightStop = stop;
   }
   return changes;
 }
