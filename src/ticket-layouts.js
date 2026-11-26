@@ -283,7 +283,7 @@ function boardingPenCircle(field, x, y, width, height, reverse = false) {
   return `<path data-boarding-pen="${field}" aria-hidden="true" d="${outline}" fill="none" stroke="#394b73" stroke-width="3" stroke-linecap="round" opacity=".79"/>`;
 }
 
-function baggageSticker(record, departureDate, mark) {
+function baggageSticker(record, departureDate, presentation, mark) {
   const tags = record.baggageTagNumbers?.trim() || '';
   const barcodeTag = /\b\d{10}\b/.exec(tags)?.[0];
   const count = record.checkedBaggageCount?.trim();
@@ -291,22 +291,29 @@ function baggageSticker(record, departureDate, mark) {
   const code = barcodeTag && renderCodeData({
     version: 1, format: 'ITF', rawBytes: btoa(barcodeTag), symbologyIdentifier: ']I0',
     eci: [], gs1: false, parameters: {}
-  }, { x: 8, y: 151, width: 250, height: 33, stretch: true, marker: 'baggage-tag-code' });
+  }, { x: 6, y: 153, width: 255, height: 29, stretch: true, marker: 'baggage-tag-code' });
   const outline = 'M1 2H268V191L247 191L241 194L202 192L157 195L151 192L103 194L99 191L57 193L49 190L1 192Z';
   const number = barcodeTag || ([...tags].length > 36 ? [...tags].slice(0, 35).join('') + '…' : tags);
+  const { carrierNames, passenger } = presentation;
+  const carrier = carrierNames?.en?.toUpperCase() || record.airline || 'BAGGAGE CLAIM';
+  const headerX = mark ? 55 : 14;
+  const print = (x, y, value, width, size = 16, attrs = '') =>
+    text(x, y, value, Math.min(size, width / Math.max(1, textUnits(value || ''))), 'TicketMono,TicketHei', attrs);
+  const right = 'text-anchor="end"';
   return `<g data-boarding-baggage-sticker="true" transform="translate(570 8) rotate(177 135 98)" fill="#26282a">
     <title>${esc(['行李提取联', tags, count && `托运 ${count} 件`, allowance && `免费行李额 ${allowance}`].filter(Boolean).join(' · '))}</title>
-    <path d="${outline}" transform="translate(-2 -3)" fill="#273136" opacity=".15"/>
+    <path d="${outline}" transform="translate(-2 -3)" fill="#e2e4df" stroke="#bcc2bc"/>
     <path d="${outline}" fill="#f8f8f5" stroke="#cacdca"/>
-    ${mark ? `<image data-baggage-airline-logo="true" x="16" y="6" width="27" height="27" preserveAspectRatio="xMidYMid meet" href="${mark.image}"/>` : ''}
-    ${text(mark ? 53 : 16, 27, 'BAGGAGE CLAIM', 18, 'TicketMono')}
-    <path d="M15 38H253" stroke="#c0c2be"/>
-    ${text(16, 63, record.service, 19, 'TicketMono')}
-    ${text(253, 63, departureDate, 17, 'TicketMono', 'text-anchor="end"')}
-    ${text(16, 88, record.destinationCode && `TO: ${record.destinationCode}`, 19, 'TicketMono')}
-    ${text(253, 88, count && `BAG:${count.padStart(2, '0')}`, 17, 'TicketMono', 'text-anchor="end"')}
-    ${text(16, 110, allowance && `ALLOWANCE ${allowance.slice(0, 16)}`, 14, 'TicketMono')}
-    ${text(16, code ? 147 : 151, number, Math.min(27, 236 / Math.max(1, textUnits(number))), 'TicketMono', 'font-weight="700"')}
+    ${mark ? `<image data-baggage-airline-logo="true" x="13" y="8" width="33" height="32" preserveAspectRatio="xMidYMid meet" href="${mark.image}"/>` : ''}
+    ${text(headerX, carrierNames?.zh ? 24 : 32, carrier, Math.min(24, (254 - headerX) / textUnits(carrier)), 'TicketLatin,TicketHei', 'font-weight="700"')}
+    ${text(headerX, 40, carrierNames?.zh, 14, 'TicketHei')}
+    ${print(14, 66, record.service, 127, 19)}
+    ${print(254, 66, departureDate, 73, 17, right)}
+    ${print(14, 83, passenger, 239, 14)}
+    ${print(14, 104, record.destinationCode && `TO: ${record.destinationCode}`, 129, 18)}
+    ${print(254, 104, count && `BAG ${count.padStart(2, '0')}`, 96, 16, right)}
+    ${print(14, 120, allowance && `ALLOWANCE ${allowance.slice(0, 16)}`, 239, 13)}
+    ${print(14, 149, number, 237, 23, 'font-weight="700" letter-spacing=".4"')}
     ${code || ''}
   </g>`;
 }
@@ -396,7 +403,7 @@ function flight(r) {
       ${label(930, 351, words.gate)}${label(1084, 351, words.seat)}${printed(930, 398, r.gate, 35, 125)}${printed(1084, 401, r.seat, 43, 120)}
       ${label(930, 444, words.boarding)}${label(1084, 444, words.terminal)}${printed(930, 477, r.boardingTime, 26, 140)}${printed(1084, 477, r.terminal, 25, 120)}
     </g>
-  </g></g>${hasSticker ? baggageSticker(r, date(r.departureDate), mark) : ''}</g>`;
+  </g></g>${hasSticker ? baggageSticker(r, date(r.departureDate), presentation, mark) : ''}</g>`;
 }
 
 export function renderTicket(record) {

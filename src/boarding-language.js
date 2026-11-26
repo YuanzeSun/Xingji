@@ -60,6 +60,7 @@ export function boardingPresentation(record) {
   };
   const airport = origin.status !== 'matched' ? record.origin || words.airport
     : language === 'zh' ? origin.chineseFullName || origin.englishName : origin.englishName;
-  const airline = airlineNames.get(airlineKey(record.airline))?.[language] || record.airline || words.airline;
-  return { language, words, airport, airline, origin: routeName('origin'), destination: routeName('destination'), passenger:flightPassengerName(record,readBoardingCode(record.boardingCode,record.boardingLegIndex) || {}) };
+  const carrierNames = airlineNames.get(airlineKey(record.airline));
+  const airline = carrierNames?.[language] || record.airline || words.airline;
+  return { language, words, airport, airline, carrierNames, origin: routeName('origin'), destination: routeName('destination'), passenger:flightPassengerName(record,readBoardingCode(record.boardingCode,record.boardingLegIndex) || {}) };
 }
