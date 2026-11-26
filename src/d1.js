@@ -43,14 +43,21 @@ export class D1Store {
   }
 
   async read() {
-    const result = await this.request({ head: this.cached?.head });
-    if (!result) return this.cached;
-    if (typeof result.generation !== 'string' || !Object.hasOwn(result, 'settings')) {
+    const result = await this.readRaw(this.cached?.head);
+    return result ? {
+      ...result, records: readArchive({ format: 'xingji-archive', schemaVersion: SCHEMA_VERSION, records: result.records })
+    } : this.cached;
+  }
+
+  async readRaw(head) {
+    const result = await this.request({ head });
+    if (!result) return null;
+    if (typeof result.generation !== 'string' || !Object.hasOwn(result, 'settings') || !Array.isArray(result.records)) {
       throw new Error('Worker 票库接口返回无效');
     }
     return {
       id: result.id, head: result.head, generation: result.generation,
-      records: readArchive({ format: 'xingji-archive', schemaVersion: SCHEMA_VERSION, records: result.records }),
+      records: result.records,
       settings: sharedSettings(result.settings)
     };
   }

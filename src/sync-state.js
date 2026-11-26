@@ -41,6 +41,15 @@ function archiveFields(current, remote) {
   return { records, settings, base: clone(records), settingsBase: clone(settings), syncMeta, lastSync: now() };
 }
 
+export function adoptVerifiedArchive(captured, remote) {
+  return db.atomic(keys, raw => {
+    const current = unpack(raw);
+    if (!sameArchiveBaseline(current, captured) || current.meta.pending || current.archiveResetProgress) return { result: null };
+    const write = archiveFields(current, remote);
+    return { write, result: unpack({ ...raw, ...write }) };
+  });
+}
+
 export function bindRepository(config, expectedD1 = null, credential, cloudLinkReady) {
   return db.atomic(sessionKeys, raw => {
     const current = unpack(raw);

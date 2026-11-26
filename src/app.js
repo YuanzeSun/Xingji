@@ -2,7 +2,7 @@ import {BOARDING_METADATA_LABELS,BOARDING_METADATA_FIELDS,BOARDING_BAGGAGE_FIELD
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
-import {ACTUAL_FLIGHT_FIELDS, FLIGHT_LOCAL_TIMES} from './flight-times.js';
+import {ACTUAL_FLIGHT_FIELDS, FLIGHT_LOCAL_TIMES, FLIGHT_TIME_LABELS} from './flight-times.js';
 import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
 import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railImportFieldLocked,refreshFieldSources} from './field-sources.js';
 import { bindIdentityInput, maskIdentity, printedIdentityHint } from './identity.js';
@@ -14,7 +14,7 @@ import { createRecord, validateRecord, mergeThreeWay, DEFAULT_RAIL_TEMPLATE, FIE
 import { SUPPLEMENT_FIELDS, isRailReceiptTemplate, ticketTemplateChoices } from './rail-template.js';
 import { hasRailQRCode } from './ticket-code.js';
 import * as db from './db.js';
-import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageBackupRestore, stageTicket, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, replaceWithRemote } from './sync-state.js';
+import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageBackupRestore, stageTicket, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, adoptVerifiedArchive, replaceWithRemote } from './sync-state.js';
 import { TicketImportReview } from './ticket-import-review.js';
 import { sharedSettings, sameSettings, maskedKey, wasUnlinked } from './shared-settings.js';
 import { watchAppUpdates } from './app-update.js';
@@ -139,6 +139,8 @@ const canWrite = () => !!(!state.showDemo && !state.resetting && !state.archiveR
   state.syncMeta.verified && cloudToken() && navigator.onLine && !state.connecting &&
   (state.syncMeta.pending ? state.syncMeta.rejection && state.connectionStatus === 'rejected' && !state.syncing
     : state.connectionStatus === 'online'));
+const canMigrateFields = () => hasCloud() && cloudToken() && navigator.onLine && !state.showDemo && !state.saving &&
+  !state.syncing && !state.connecting && !state.resetting && !state.archiveResetProgress && !state.githubBackingUp && !state.syncMeta.pending;
 
 function useSnapshot(snapshot) {
   const context = archiveContext();
@@ -282,7 +284,7 @@ function guestDemoNotice() {
   return `<section class="guest-demo-notice" aria-label="示例模式提示"><div>${icon('info')}<p>正在体验<strong>示例模式</strong>，登录后即可开始记录自己的旅程。</p></div><button type="button" class="button primary" data-action="exit-demo">退出示例并登录${icon('arrow')}</button></section>`;
 }
 function connectionPage() {
-  return `<main class="cloud-setup"><div class="cloud-setup-brand">${icon('ticket')} 行迹 ${versionMarkup()}</div><section class="guest-demo-entry" aria-labelledby="guest-demo-title"><div class="guest-demo-heading">${icon('ticket')}<strong id="guest-demo-title">体验示例模式</strong></div><p>直接浏览示例票据与行程。</p><button type="button" class="button primary" data-action="enter-demo">进入示例模式${icon('arrow')}</button></section>${d1ConnectionPanel()}<section class="panel"><h1>连接 GitHub</h1><p class="cloud-setup-description">GitHub 和 D1 都可单独使用。若两个账号已绑定，登录任一账号即可恢复两个连接，并从 D1 读取主票库。</p>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError || (!state.d1 && state.syncMessage) || '')}</p>${githubExtras()}${state.records.some(r => !r.deleted) ? '<button class="text-button" data-action="backup">导出本机票据</button>' : ''}</section>${cloudActions()}${pageFooter()}</main>`;
+  return `<main class="cloud-setup"><div class="cloud-setup-brand">${icon('ticket')} 行迹 ${versionMarkup()}</div><section class="guest-demo-entry" aria-labelledby="guest-demo-title"><div class="guest-demo-heading">${icon('ticket')}<strong id="guest-demo-title">体验示例模式</strong></div><p>直接浏览示例票据与行程。</p><button type="button" class="button primary" data-action="enter-demo">进入示例模式${icon('arrow')}</button></section>${d1ConnectionPanel()}<section class="panel"><h1>连接 GitHub</h1><p class="cloud-setup-description">GitHub 和 D1 都可单独使用。若两个账号已绑定，登录任一账号即可恢复两个连接，并从 D1 读取主票库。</p>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError || (!state.d1 && state.syncMessage) || '')}</p>${githubExtras()}${state.records.some(r => !r.deleted) ? '<button class="text-button" data-action="backup">导出本机票据</button>' : ''}</section>${hasCloud() ? `<div class="backup-actions">${migrationButton()}</div>` : ''}${cloudActions()}${pageFooter()}</main>`;
 }
 function connectionNotice() {
   if (!state.showDemo && state.archiveResetProgress) return '<div class="connection-notice" role="status"><div><strong>上次仓库重置尚未完成</strong></div><button class="button secondary small" data-action="resume-archive-reset">继续重置</button></div>';
@@ -303,6 +305,7 @@ function connectionNotice() {
 function applyAccessPolicy() {
   for (const button of document.querySelectorAll('[data-action="new"],[data-action="edit"],[data-action="delete"]')) button.disabled = !canWrite() || state.saving || state.showDemo;
   for (const button of document.querySelectorAll('[data-action="import-json"]')) button.disabled = !canWrite() || state.saving || !!imports.task;
+  for (const button of root.querySelectorAll('[data-action="migrate-fields"]')) button.disabled = !canMigrateFields();
   const batchDelete = document.querySelector('[data-action="delete-selected"]'); if (batchDelete) batchDelete.disabled = !canWrite() || state.saving || state.showDemo;
   for (const input of document.querySelectorAll('[data-setting-control]')) input.disabled = !canWrite() || state.saving;
   const refresh = document.querySelector('[data-action="flight-refresh"]'); if (refresh) refresh.disabled = !flightKey() || imports.task?.kind === 'flight' || !navigator.onLine || (state.flightKeyDraft !== null && state.flightKeyDraft.trim() !== flightKey());
@@ -665,6 +668,9 @@ function archiveSyncPanel() {
     <section class="settings-provider"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h3>GitHub 私有仓库</h3><p data-cloud-label>${state.d1 ? '手动备份' : e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError)}</p>${githubExtras()}</section>
   </div></section>`;
 }
+function migrationButton() {
+  return `<button type="button" data-action="migrate-fields" ${canMigrateFields() ? '' : 'disabled'}><span>${icon('database')}</span><strong>迁移数据</strong><small>预览并清理旧字段，补齐当前版本所需字段</small>${icon('chevron')}</button>`;
+}
 function dataPage() {
   const count = state.records.filter(r => !r.deleted).length;
   return header('数据与同步', '管理个人资料、同步与外部连接。') + `<div class="data-layout">
@@ -672,7 +678,7 @@ function dataPage() {
     ${personalProfilePanel(state.profileDraft || state.settings.profile,state.profileError)}
     ${archiveSyncPanel()}
     ${travelServicesPanel()}
-    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button></div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div><div data-restore-followup>${backupRestoreMarkup()}</div>${queuedBackupButton()}${cloudActions()}</section>
+    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button>${migrationButton()}</div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div><div data-restore-followup>${backupRestoreMarkup()}</div>${queuedBackupButton()}${cloudActions()}</section>
   </div>`;
 }
 function render() {
@@ -1941,6 +1947,85 @@ async function discardRejectedChanges() {
   render();
   await doSync();
 }
+async function showFieldMigration() {
+  if (!canMigrateFields()) return;
+  const context = archiveContext();
+  openModal(modalHead('迁移数据') + `
+    <div class="detail-body" data-field-migration-loading>
+      <p class="operation-status" role="status">${icon('refresh', 'spin')}正在检查主票库…</p>
+      <p class="form-error" role="alert"></p>
+      <button type="button" class="button secondary" data-action="close-modal">取消</button>
+    </div>`);
+  const loading = modalRoot.querySelector('[data-field-migration-loading]');
+  try {
+    const migration = await import('./archive-field-migration.js');
+    const preview = await withCloudLock(async () => {
+      const captured = await readSyncState({ session: true });
+      if (captured.meta.pending || captured.archiveResetProgress || activeBinding(captured) !== context.binding || !isArchiveContext(context)) {
+        throw new Error('本机票库已变化，请重新预览迁移');
+      }
+      const store = captured.d1 ? new D1Store(captured.d1, captured.credentials.d1)
+        : new GitHubStore(clone(captured.config), captured.credentials.github);
+      if (!captured.d1) await store.verify();
+      const snapshot = await store.readRaw();
+      if (captured.meta.head && (captured.meta.generation || '') !== snapshot.generation) throw new Error('云端票库已重置，请先核对同步状态');
+      if (!captured.d1) {
+        if (snapshot.settings.connections?.d1) throw new Error('此仓库关联了 D1，请进入 D1 主票库后迁移');
+        if (captured.meta.head && !snapshot.initialized) throw new Error('云端档案缺失，请先核对同步状态');
+        await store.assertDescendant(captured.meta.head, snapshot.head);
+      }
+      return { captured, store, snapshot, plan: migration.planArchiveFieldMigration(snapshot) };
+    });
+    if (!loading.isConnected) return;
+    const { captured, store, snapshot, plan } = preview;
+    const target = captured.d1 ? 'Cloudflare D1 主票库' : `GitHub · ${captured.config.owner}/${captured.config.repo}`;
+    const focus = modalFocus;
+    openModal(modalHead('迁移数据') + migration.archiveFieldMigrationMarkup(plan, target, {
+      ...FLIGHT_TIME_LABELS, ...labels, fieldSources: '字段来源', lookupValues: '自动补全快照', lockedFields: '锁定字段',
+      boardingCodeSource: '条码来源', boardingLegIndex: '条码航段', flightStops: '旧经停资料', sources: '资料来源',
+      createdAt: '归档创建时间', updatedAt: '最近修改时间', mergedIds: '合并记录编号'
+    }));
+    modalFocus = focus;
+    const form = modalRoot.querySelector('[data-field-migration-form]');
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!canMigrateFields() || form.dataset.pending) return;
+      const restore = freezeForm(form, '正在迁移…');
+      const errorOutput = form.querySelector('[data-field-migration-error]');
+      errorOutput.textContent = '';
+      state.saving = true;
+      applyAccessPolicy();
+      try {
+        const accepted = await withCloudLock(async () => {
+          if (!isArchiveContext(context) || !sameArchiveBaseline(await readSyncState(), captured)) {
+            throw new Error('票库已变化，请重新预览迁移');
+          }
+          const head = await migration.writeArchiveFieldMigration(store, snapshot, plan);
+          return adoptVerifiedArchive(captured, { ...snapshot, records: plan.records, head });
+        });
+        if (accepted) {
+          useSnapshot(accepted);
+          state.connectionStatus = 'online';
+          state.syncMessage = '';
+          announce();
+        }
+        closeModal(true);
+        toast(`迁移已写入主票库 · ${plan.changes.length} 条票据有变更`);
+        if (!accepted) void doSync();
+      } catch (error) {
+        errorOutput.textContent = error.message;
+      } finally {
+        state.saving = false;
+        restore();
+        renderSyncState();
+      }
+    });
+  } catch (error) {
+    if (!loading.isConnected) return;
+    loading.querySelector('[role="status"]').hidden = true;
+    loading.querySelector('[role="alert"]').textContent = error.message;
+  }
+}
 let resetPromptHead = '';
 async function showArchiveReset(manual = false) {
   if (state.archiveResetProgress) return showResetResume();
@@ -2302,6 +2387,7 @@ const actions = {
   'resume-archive-reset': showResetResume,
   'abandon-archive-reset': abandonArchiveReset,
   'continue-backup-restore': continueBackupRestore,
+  'migrate-fields': showFieldMigration,
   'reset-filters': () => { state.filters = searchOptions(); state.limit = 48; render(); },
   'clear-search-field': button => { state.filters = clearSearchField(state.filters, button.dataset.field); state.limit = 48; render(); },
   'swap-route': () => { const f = state.filters; [f.originCity, f.destinationCity] = [f.destinationCity, f.originCity]; [f.origin, f.destination] = [f.destination, f.origin]; state.limit = 48; render(); },

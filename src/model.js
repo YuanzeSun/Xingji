@@ -29,6 +29,7 @@ export const SCHEMA_VERSION = 2;
 const OPTIONAL_FIELDS = ['railInvoice', 'flightTrack', 'flightStop', 'railShowIssuer'];
 export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'flightTrack', 'flightStop', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'railShowIssuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'railInvoice', ...Object.keys(SUPPLEMENT_FIELDS), 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
 const flightFields = FIELDS.filter(field => field !== 'orderNumber');
+export const fieldsForTransport = type => type === 'rail' ? FIELDS : flightFields;
 export const now = () => new Date().toISOString();
 export const clone = value => structuredClone(value);
 export const sameRecords = (a, b) => JSON.stringify([...a].sort((x, y) => x.id.localeCompare(y.id))) === JSON.stringify([...b].sort((x, y) => x.id.localeCompare(y.id)));
@@ -56,7 +57,7 @@ export function validateRecord(input) {
   if (!['rail', 'flight'].includes(input.type)) throw new Error('未知交通方式');
   if (!Object.hasOwn(TEMPLATES, input.template)) throw new Error('不支持的票面样式');
   if ((input.type === 'flight') !== input.template.startsWith('air-')) throw new Error('票面与交通方式不匹配');
-  const fields = input.type === 'rail' ? FIELDS : flightFields;
+  const fields = fieldsForTransport(input.type);
   const out = { id: input.id };
   for (const field of fields) {
     if (field === 'flightTrack' || field === 'flightStop') continue;
@@ -71,7 +72,7 @@ export function validateRecord(input) {
       continue;
     }
     if (JOURNEY_DATE_FIELDS.includes(field)) {out[field]=storedJourneyDate(input[field]);continue;}
-    if (field === 'fieldSources') { out.fieldSources = normalizeFieldSources(input.fieldSources,FIELDS); continue; }
+    if (field === 'fieldSources') { out.fieldSources = normalizeFieldSources(input.fieldSources,fields); continue; }
     if (field === 'lookupValues') { out.lookupValues = normalizeLookupValues(input.lookupValues); continue; }
     if (field === 'railStanding') { out.railStanding = input.type === 'rail' && input.railStanding === true; continue; }
     if (field === 'deleted') { out.deleted = input.deleted === true; continue; }
@@ -83,7 +84,6 @@ export function validateRecord(input) {
     if (input[field] !== undefined && typeof input[field] !== 'string') throw new Error(`字段 ${field} 必须为文字`);
     out[field] = (input[field] || '').slice(0, 1000);
   }
-  if (out.type === 'flight') delete out.fieldSources.orderNumber;
   out.seatClass = normalizeSeatClass(out.seatClass, out.type);
   if (out.type === 'rail' && ['无座', '站票'].includes(out.seatClass)) throw new Error('请填写席别，并单独选择无座');
   if (out.railStanding) out.seat = '';

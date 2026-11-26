@@ -72,31 +72,37 @@ export class GitHubStore {
     return { snapshot, manifest, shards };
   }
   async read(index) {
+    const snapshot = await this.readRaw(index);
+    const records = snapshot.paths.flatMap(path => {
+      const rows = readArchive(JSON.parse(snapshot.contents[path]));
+      if (rows.some(record => yearOf(record) !== path.slice(8, -5))) throw new Error('云端票据年份与文件不匹配');
+      return rows;
+    });
+    if (new Set(records.map(r => r.id)).size !== records.length) throw new Error('远端票库包含重复ID，请先导出检查');
+    if (records.length !== snapshot.recordCount) throw new Error('云端票据数量与索引不匹配');
+    const { recordCount, ...archiveSnapshot } = snapshot;
+    return { ...archiveSnapshot, records };
+  }
+  async readRaw(index) {
     const { snapshot, manifest, shards } = index ?? await this.readArchiveIndex();
     if (!manifest) {
       if (shards.length) throw new ArchiveResetError(snapshot);
-      return snapshot;
+      return { ...snapshot, recordCount: 0 };
     }
     const manifestPaths = Object.keys(manifest.files);
     const shardPaths = new Set(snapshot.paths);
     if (manifestPaths.some(path => !shardPaths.has(path))) throw new ArchiveResetError({ ...snapshot, initialized: false, settings: sharedSettings(), generation: '' });
     if (manifestPaths.length !== snapshot.paths.length) throw new Error('云端票库文件不完整，已停止同步');
-    const records = [], contents = {};
+    const contents = {};
     // Bound API concurrency to avoid burst throttling on decades of history.
     for (let i = 0; i < shards.length; i += 4) {
-      const groups = await Promise.all(shards.slice(i, i + 4).map(async item => {
+      await Promise.all(shards.slice(i, i + 4).map(async item => {
         const content = await this.readBlob(item.sha);
         if (await digest(content) !== manifest.files[item.path]) throw new Error('云端票库文件校验失败，保留本机缓存');
-        const rows = readArchive(JSON.parse(content));
-        if (rows.some(record => yearOf(record) !== item.path.slice(8, -5))) throw new Error('云端票据年份与文件不匹配');
         contents[item.path] = content;
-        return rows;
       }));
-      records.push(...groups.flat());
     }
-    if (new Set(records.map(r => r.id)).size !== records.length) throw new Error('远端票库包含重复ID，请先导出检查');
-    if (records.length !== manifest.recordCount) throw new Error('云端票据数量与索引不匹配');
-    return { ...snapshot, records, contents };
+    return { ...snapshot, recordCount: manifest.recordCount, contents };
   }
   async resetTarget(fallbackSettings = {}) {
     await this.verify();
