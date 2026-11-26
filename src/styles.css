@@ -598,6 +598,7 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 
 .personal-profile .profile-document{padding:8px 12px 12px}.profile-document legend{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:0 3px}.profile-document legend .text-button{font-size:13px;min-height:28px;line-height:1.4;padding:2px 5px}.profile-document-fields{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.personal-profile .profile-document-fields .field{margin:0}.personal-profile .field input,.personal-profile .field select{width:100%;min-width:0;max-width:100%;height:var(--control-height);min-height:var(--control-height);padding:9px 10px}.personal-profile .profile-basics{gap:0 12px}
 .statistics-station-list{display:flex;flex-wrap:wrap;align-content:flex-start;align-items:flex-start}.statistics-station-list li{flex:0 0 auto;max-width:100%}.statistics-route-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.statistics-route-controls label{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink);cursor:pointer}.statistics-route-controls input{width:16px;height:16px;margin:0;accent-color:var(--green)}
+@media(pointer:coarse){.statistics-stopover-option{min-height:44px}}
 @media(max-width:900px){.profile-document-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.statistics-route-controls{gap:10px}.statistics-route-controls label{font-size:12px}.personal-profile .profile-basics{grid-template-columns:repeat(2,minmax(0,1fr))}.personal-profile .field>span{font-size:13px}.personal-profile .field input,.personal-profile .field select{font-size:14px}.personal-profile .profile-document{padding:7px 10px 10px}.profile-document-fields{gap:10px}.personal-profile .profile-document-fields .field{margin:0}}
 .page-footer{align-items:center;gap:12px;flex-wrap:wrap}.author-credit{white-space:nowrap}.author-credit a{text-decoration:underline;text-underline-offset:3px}.author-credit a:hover{color:var(--green)}
@@ -629,6 +630,8 @@ select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-w
 .flight-track-status{margin:0}
 .flight-track [hidden]{display:none}
 .flight-track-frame .flight-track-line path{stroke:#8fd0e3;stroke-width:2.5}
+.flight-stopover circle{fill:#ffd28d;stroke:#162d42}
+.flight-track-frame .flight-stopover text{fill:#ffd28d}
 .flight-track-highlight,.flight-track-frame [data-flight-track-aircraft]{visibility:hidden}
 [data-flight-track-played] .flight-track-line{opacity:.38}
 [data-flight-track-played] .flight-track-highlight,[data-flight-track-playing] [data-flight-track-aircraft]{visibility:visible}

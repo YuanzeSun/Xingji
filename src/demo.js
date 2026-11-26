@@ -7,6 +7,7 @@ import {railCompletion,shiftRailDate} from './rail-lookup-model.js';
 import {LOOKUP_FIELDS} from './lookup-values.js';
 import {markFieldSources} from './field-sources.js';
 import {flightTrackRequest} from './flight-track.js';
+import {flightQuery} from './flight-query.js';
 
 const localToday=()=>{const date=new Date();return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;};
 const verifiedAt='2026-11-17T00:00:00.000Z';
@@ -84,6 +85,16 @@ export function demoRecords(today=localToday()){
           [121.67, 38.66], [123.31, 37.18], [126.1, 35.7], [129.09, 34.68], [132.5, 34.11], [135.1, 34.43],
           [137.24, 34.65], [138.19, 34.68], [139.35, 34.92], [139.78, 35.55]]]
       };
+      if (row.service === 'MU9901') {
+        values.flightStops = { ...flightQuery(values), count: 1, airports: ['WUH'] };
+        values.flightTrack = {
+          flightStr: flightTrackRequest(values), queriedAt: verifiedAt,
+          segments: [
+            [[121.33426, 31.198104], [121.06, 31.22], [119.21, 31.29], [117.38, 31.37], [115.04, 30.99], [114.213723, 30.774798]],
+            [[114.213723, 30.774798], [113.9, 30.93], [112.34, 31.08], [109.94, 30.83], [106.33, 30.55], [103.945966, 30.558257]]
+          ]
+        };
+      }
       values.boardingCode=createBoardingCode({passenger:values.passenger==='示例旅客' ? 'SHILI/LVKE' : values.passenger,pnr:values.pnr,origin:values.originCode,destination:values.destinationCode,carrier:values.service.slice(0,2),flightNumber:values.service.slice(2),date:values.departureDate,cabin:values.seatClass,seat:values.seat,sequence:String(42+index),status:'1',electronic:''});
       values.boardingCodeSource='generated';values.boardingLegIndex='0';values.fieldSources.boardingCode='generated';
       if (!syntheticFlight) values.sources.push({kind:'reference',label:`航班参考：${values.airline} ${values.service}，${values.origin}—${values.destination}`,at:verifiedAt});

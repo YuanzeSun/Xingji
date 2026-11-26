@@ -127,7 +127,7 @@ test('rail and flight travel times are totaled independently across dates, time 
 });
 
 test('statistics default to an unbounded start and today, compare dates only and respect edited bounds', () => {
-  assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railSubtypes:true, aircraftSubtypes:true, marketingAirlines:false });
+  assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railSubtypes:true, aircraftSubtypes:true, marketingAirlines:false, includeStopoverAirports:false });
   const rows = [rail({ id: 'past' }), flight({ id: 'today', departureDate: '2026-11-16', departureTime: '23:59' }), rail({ id: 'future', departureDate: '2026-11-17' }), rail({ id: 'deleted', deleted: true }), rail({ id: 'undated', departureDate: '' })];
   const result = journeyStatistics(rows, range);
   assert.deepEqual(result.records.map(row => row.id), ['past', 'today']); assert.equal(result.omittedDates, 1);
@@ -167,6 +167,41 @@ test('statistics keep airport and station identities, combine return air routes 
   assert.equal(data.unknownAircraft, 1); assert.equal(data.unknownRoutes, 1); assert.equal(data.unknownPlaces, 1);
   assert.deepEqual(data.countries.map(row => row.code).sort(), ['CN', 'JP']);
   assert.equal(JSON.stringify(rows), before);
+});
+
+test('the airport option counts each saved stopover once in the selected date range', () => {
+  const route = { fnum: 'CA181', dep: 'PEK', arr: 'HND', date: '2024-03-01', count: 3, airports: ['ICN', 'NRT', 'ZZZ'] };
+  const stopped = flight({ id: 'stopover', service: 'CA181', flightStops: route });
+  const other = flight({ id: 'other', origin: 'NRT', destination: 'PEK' });
+  const later = flight({ service: 'CA181', departureDate: '2024-03-02',
+    flightStops: { ...route, date: '2024-03-02', count: 1, airports: ['PVG'] } });
+  const rows = [stopped, other, later];
+  const options = { ...range, dateTo: '2024-03-01' };
+  const endpoints = journeyStatistics(rows, options);
+  const withStops = journeyStatistics(rows, { ...options, includeStopoverAirports: true });
+  const codes = data => data.airports.map(airport => airport.code).sort();
+  assert.deepEqual(codes(endpoints), ['HND', 'NRT', 'PEK']);
+  assert.deepEqual(codes(withStops), ['HND', 'ICN', 'NRT', 'PEK', 'ZZZ']);
+  assert.deepEqual(withStops.routes, endpoints.routes);
+  assert.deepEqual(withStops.countries, endpoints.countries);
+
+  const dom = new JSDOM('<div id="root"></div>'), root = dom.window.document.querySelector('#root');
+  const unmount = mountStatistics(root, rows, { options });
+  try {
+    const toggle = () => root.querySelector('[data-stat-option="includeStopoverAirports"]');
+    const summary = () => root.querySelector('.statistics-journey-card:nth-child(2) dl > div:nth-child(2) strong').textContent;
+    assert.equal(toggle().checked, false);
+    assert.equal(summary(), '3 个');
+    toggle().click();
+    assert.equal(toggle().checked, true);
+    assert.equal(summary(), '5 个');
+    assert.deepEqual([...root.querySelectorAll('.statistics-airport-list code')].map(code => code.textContent).sort(), codes(withStops));
+    toggle().click();
+    assert.equal(summary(), '3 个');
+  } finally {
+    unmount();
+    dom.window.close();
+  }
 });
 
 test('the airline ranking merges recognized aliases and switches between operating and marketing carriers', () => {

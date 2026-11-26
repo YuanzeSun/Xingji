@@ -40,7 +40,7 @@ export function todayDate(date = new Date()) {
 export function statisticsOptions(input = {}, today = todayDate()) {
   const selectedEnd = input.dateTo || today;
   const dateTo = dateInterval(selectedEnd)?.end > today ? today : selectedEnd;
-  return { dateFrom: input.dateFrom ?? '', dateTo, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railSubtypes:input.railSubtypes !== false, aircraftSubtypes:input.aircraftSubtypes !== false, marketingAirlines:input.marketingAirlines === true };
+  return { dateFrom: input.dateFrom ?? '', dateTo, period: input.period === 'month' ? 'month' : 'year', year: input.year || '', chartZoom:Number.isFinite(input.chartZoom) ? Math.max(.0001,Math.min(8,input.chartZoom)) : 1, mergeDirections: input.mergeDirections !== false, railUnits:input.railUnits === true, railSubtypes:input.railSubtypes !== false, aircraftSubtypes:input.aircraftSubtypes !== false, marketingAirlines:input.marketingAirlines === true, includeStopoverAirports:input.includeStopoverAirports === true };
 }
 
 function filterStatisticsRange(records, { dateFrom, dateTo }) {
@@ -119,6 +119,11 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     }
     if (record.type !== 'flight') continue;
     flight++;
+    if (options.includeStopoverAirports) for (const code of record.flightStops?.airports || []) {
+      if (airports.has(code)) continue;
+      const { name = code, country = '' } = placeGeography({ type: 'flight', origin: code }, 'origin') || {};
+      airports.set(code, { id: code, code, name, country });
+    }
     const registration = normalizeAircraftRegistration(record.aircraftRegistration);
     if (registration) addVehicleTrip(registrations, registration, record);
     const airline = flightAirline(record, options.marketingAirlines);

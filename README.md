@@ -33,7 +33,7 @@
 
 ![火车票详情、时刻表和车厢示意图](docs/images/rail-ticket-details.jpg)
 
-![登机牌详情、行李、起降时间和示例航迹](docs/images/boarding-pass-details.jpg)
+![登机牌详情、行李、起降时间和带经停标记的示例航迹](docs/images/boarding-pass-details.jpg)
 
 ### 行程地图与路线播放
 
@@ -45,7 +45,7 @@
 
 ### 数据统计
 
-![数据统计](docs/images/statistics.jpg)
+![数据统计及计入经停机场选项](docs/images/statistics.jpg)
 
 ### 旅行纪念册
 

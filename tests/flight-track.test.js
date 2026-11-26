@@ -11,6 +11,7 @@ import { prepareCloud } from './helpers/cloud.js';
 const flight = createRecord({
   id: 'test-flight', type: 'flight', template: 'air-boarding-pass', service: 'JL62',
   origin: 'NRT', destination: 'LAX', departureDate: '2026-11-23', passenger: 'TEST/PASSENGER', identity: 'P000001', seat: '12A', seatClass: 'Y',
+  flightStops: { fnum: 'JL62', date: '2026-11-23', dep: 'NRT', arr: 'LAX', count: 1, airports: ['ANC'] }
 });
 const flightStr = 'JL62_NRT_LAX_2026-11-23_0';
 const coordinates = [
@@ -39,6 +40,9 @@ test('flight tracks are keyed to the dated airport pair and never change the jou
   assert.equal(validateRecord({ ...saved, deleted: true }).flightTrack, undefined);
   const geometry = record => networkGeometry(journeyNetwork([record]));
   assert.equal(geometry(saved).routes[0].path, geometry(flight).routes[0].path);
+  const routeWithStops = geometry(saved), direct = geometry({ ...saved, flightStops: undefined });
+  assert.equal(routeWithStops.routes[0].path, direct.routes[0].path);
+  assert.deepEqual(routeWithStops.nodes.map(node => node.code), ['NRT', 'LAX']);
   assert.deepEqual(readFlightTrack({ structuredContent: domesticTrack }, domesticFlightStr).segments, domesticCoordinates);
   assert.throws(() => readFlightTrack({ structuredContent: { items: [{ ...domesticRow, date: '2026-08-12_0' }] } }, domesticFlightStr), /无法识别/);
 });
@@ -125,6 +129,9 @@ test('flight track queries run in the editor and saved tracks replay in details'
     assert.ok(Number(svg.getAttribute('viewBox').split(' ')[2]) < 400, 'fits across the date line');
     const cityLabels = [...svg.querySelectorAll('.route-city text')].map(label => label.textContent);
     assert.ok(cityLabels.includes('东京') && cityLabels.includes('洛杉矶'));
+    const marker = svg.querySelector('[data-flight-stopover="ANC"]');
+    assert.match(marker?.querySelector('title').textContent ?? '', /经停.*ANC/);
+    assert.match(marker?.querySelector('text').textContent ?? '', /经停/);
     assert.equal(svg.hasAttribute('data-flight-track-played'), false);
     play.click();
     step(0);
@@ -148,6 +155,7 @@ test('flight track queries run in the editor and saved tracks replay in details'
     element('.flight-track-frame [data-route-zoom="fit"]').click();
     step(6060);
     assert.equal(svg.getAttribute('viewBox'), initialView);
+    assert.ok(svg.querySelector('[data-flight-stopover="ANC"]'));
     play.click();
     assert.equal(first.style.strokeDashoffset, '1');
     element('[data-action=close-modal]').click();

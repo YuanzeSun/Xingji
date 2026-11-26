@@ -20,10 +20,15 @@ function inFlightDirection(track) {
 function mountTrackMap(frame, track, record) {
   const view = frame.ownerDocument.defaultView, svg = frame.querySelector('svg');
   const basemap = createMapBasemap(frame.querySelector('canvas'), view, { provinceContrast: true });
-  const center = longitudeCenter(track.segments.flatMap(line => line.map(point => point[0])));
-  const renderLabels = flightTrackLabelRenderer(record, track.flightStr, center);
+  const stopovers = (record.flightStops?.airports || []).flatMap(code => {
+    const coordinates = AIRPORT_POINTS[code];
+    return coordinates ? [{ code, coordinates }] : [];
+  });
+  const center = longitudeCenter([...track.segments.flat(), ...stopovers.map(stop => stop.coordinates)].map(point => point[0]));
+  const mapStops = stopovers.map(({ code, coordinates }) => ({ code, point: projectPoint(coordinates, center) }));
+  const renderLabels = flightTrackLabelRenderer(record, track.flightStr, center, mapStops);
   const lines = inFlightDirection(track).map(line => line.map(point => projectPoint(point, center)));
-  const points = lines.flat();
+  const points = [...lines.flat(), ...mapStops.map(stop => stop.point)];
   const xs = points.map(point => point[0]), ys = points.map(point => point[1]);
   const bounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
   let distance = 0;

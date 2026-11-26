@@ -59,6 +59,7 @@ test('demo flights have independent boarding codes and cover the aircraft groupi
   assert.deepEqual(counts(true),{'737-800':2,'737 MAX 8':1,A321ceo:1,'A330-300':1});
   assert.deepEqual(counts(false),{'737':3,A321:1,A330:1});
   const mileage = journeyStatistics(rows, { dateTo: '2026-11-17' }, '2026-11-17');
-  assert.equal(mileage.actualFlightDistanceTrips, 1);
+  assert.equal(mileage.actualFlightDistanceTrips, 2);
+  assert.deepEqual(rows.find(record=>record.service==='MU9901').flightStops.airports, ['WUH']);
   assert.ok(mileage.actualFlightDistance > 2000);
 });
