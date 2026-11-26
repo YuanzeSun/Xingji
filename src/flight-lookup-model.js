@@ -5,7 +5,7 @@ import { AIRPORT_TIMEZONES } from './data/airport-timezones.js';
 import { normalizeAircraftRegistration, reconcileAircraft } from './aircraft.js';
 import { flightNumber, flightQuery } from './flight-query.js';
 import { airlineNameForCode } from './airline-codes.js';
-import { airportCode, MAX_FLIGHT_STOPS, normalizeFlightStops } from './flight-stops.js';
+import { airportCode, normalizeFlightStops } from './flight-stops.js';
 
 const clean = value => typeof value === 'string' && !/^(?:-+|null|undefined|n\/?a)$/i.test(value.trim()) ? value.trim().slice(0, 1000) : '';
 const flightIdentity = value => flightNumber(value).replace(/^([A-Z0-9]{2})0+(?=\d)/, '$1');
@@ -42,59 +42,39 @@ function scheduleRow(row, fnum) {
   const arrival = airportTime(row.FlightArrtimePlanDate, AIRPORT_TIMEZONES[arr]);
   const scheduled = [undefined, null, '', '0', 0].includes(row.LegFlag ?? row.legFlag);
   const rawCount = row.StopFlag ?? row.stopFlag;
-  const number = typeof rawCount === 'string' && /^[0-9]$/.test(rawCount) ? Number(rawCount) : rawCount;
-  const count = Number.isInteger(number) && number >= 0 && number <= MAX_FLIGHT_STOPS ? number : undefined;
-  const airports = clean(row.StopAirportCode ?? row.stopAirportCode).toUpperCase().split(/[,，;；|\s]+/).filter(Boolean);
-  return { row, dep, arr, departure, arrival, scheduled, count, airports };
+  const number = typeof rawCount === 'string' && /^\d+$/.test(rawCount.trim()) ? Number(rawCount) : rawCount;
+  const count = Number.isSafeInteger(number) && number >= 0 ? number : undefined;
+  const airport = clean(row.StopAirportCode ?? row.stopAirportCode).toUpperCase();
+  return { row, dep, arr, departure, arrival, scheduled, count, airport };
 }
 
 const localTime = time => time && `${time.date}T${time.time}`;
 
-function airportsFromLegs(whole, legs) {
-  const { dep, arr, departure, arrival, count } = whole;
-  if (!arrival || legs.length < 2) return [];
-  const routes = new Map();
-  let budget = 1000;
-  function follow(from, previousArrival, airports) {
-    if (--budget <= 0 || routes.size > 1) return;
-    for (const leg of legs) {
-      if (leg.dep !== from || leg === whole) continue;
-      const legDeparture = localTime(leg.departure);
-      if (previousArrival ? legDeparture < previousArrival : legDeparture !== localTime(departure)) continue;
-      if (leg.arr === arr) {
-        if (airports.length && (count === undefined || count === airports.length) && localTime(leg.arrival) === localTime(arrival)) {
-          routes.set(airports.join(','), airports);
-        }
-      } else if (leg.arr !== dep && !airports.includes(leg.arr) && airports.length < (count ?? MAX_FLIGHT_STOPS)) {
-        follow(leg.arr, localTime(leg.arrival), [...airports, leg.arr]);
-      }
-    }
-  }
-  follow(dep, '', []);
-  return routes.size === 1 && budget > 0 ? [...routes.values()][0] : [];
+function stopFromLegs({ dep, arr, departure, arrival }, legs) {
+  if (!arrival) return '';
+  const starts = legs.filter(leg => leg.dep === dep && leg.arr !== dep && leg.arr !== arr &&
+    localTime(leg.departure) === localTime(departure));
+  const ends = legs.filter(leg => leg.arr === arr && localTime(leg.arrival) === localTime(arrival));
+  const stops = new Set(starts.filter(first => ends.some(last =>
+    first.arr === last.dep && localTime(first.arrival) <= localTime(last.departure))).map(leg => leg.arr));
+  return stops.size === 1 ? stops.values().next().value : '';
 }
 
 function stopsForSchedule(whole, legs, fnum) {
-  const { dep, arr, departure, count, airports } = whole;
+  const { dep, arr, departure, count, airport } = whole;
   if (!whole.scheduled || dep === arr) return;
-  const codes = new Set(airports);
-  let named = codes.size === airports.length && airports.every(code => airportCode(code) && code !== dep && code !== arr) &&
-    airports.length <= (count ?? MAX_FLIGHT_STOPS) ? airports : [];
-  if (count !== 0 && named.length < (count ?? 1)) {
-    const inferred = airportsFromLegs(whole, legs);
-    if (inferred.length && named.every(code => inferred.includes(code))) named = inferred;
-  }
-  const total = count ?? (named.length || undefined);
-  if (total !== undefined) return { fnum, date: departure.date, dep, arr, count: total, airports: named };
+  const trip = { fnum, date: departure.date, dep, arr };
+  if (count === 0 || count > 1) return { ...trip, count, airports: [] };
+  if (airport && !airportCode(airport)) return;
+  const stop = airport && airport !== dep && airport !== arr ? airport : stopFromLegs(whole, legs);
+  if (count === 1 || stop) return { ...trip, count: 1, airports: stop ? [stop] : [] };
 }
 
 function mergeStopEvidence(values) {
   const [first] = values;
-  if (!first || values.some(value => value.count !== first.count)) return;
-  const mostDetailed = values.reduce((best, value) => value.airports.length > best.airports.length ? value : best);
-  return values.every(value => value.airports.every(code => mostDetailed.airports.includes(code)) &&
-    (value.airports.length !== mostDetailed.airports.length || value.airports.join(',') === mostDetailed.airports.join(',')))
-    ? mostDetailed : { ...first, airports: [] };
+  if (!first || first.count > 1 || values.some(value => value.count !== first.count)) return;
+  const airports = new Set(values.flatMap(value => value.airports));
+  return { ...first, airports: airports.size === 1 ? [...airports] : [] };
 }
 
 export function flightCandidates(result, input) {
@@ -104,7 +84,7 @@ export function flightCandidates(result, input) {
   if (payload.items.length > 100) throw new Error('候选航班过多，请补充起降机场后再查询');
   const candidates = new Map();
   const schedules = payload.items.map(row => scheduleRow(row, query.fnum)).filter(Boolean);
-  const legs = schedules.filter(item => item.scheduled && item.arrival && !item.count && !item.airports.length);
+  const legs = schedules.filter(item => item.scheduled && item.arrival && !item.count && !item.airport);
   for (const item of schedules) {
     const { row, dep, arr, departure, arrival } = item;
     if (departure.date !== query.date || (query.dep && query.dep !== dep) || (query.arr && query.arr !== arr)) continue;
@@ -168,7 +148,7 @@ const scheduleFields = ['departureTime', 'flightDistance', 'airline', 'aircraft'
 const timePairs = [['arrivalDate', 'arrivalTime'], ['actualDepartureDate', 'actualDepartureTime'], ['actualArrivalDate', 'actualArrivalTime']];
 const canFill = (record, field) => !record[field] && !record.lockedFields?.includes(field);
 const needsStops = record => record.fieldSources?.flightStops !== 'manual' &&
-  (!record.flightStops || record.flightStops.airports.length < record.flightStops.count);
+  (!record.flightStops || (record.flightStops.count === 1 && !record.flightStops.airports.length));
 const canCompletePair = (record, [first, second]) =>
   (canFill(record, first) && (record[second] || canFill(record, second))) ||
   (canFill(record, second) && record[first]);
@@ -211,8 +191,7 @@ export function flightCompletion(record, candidate) {
   for (const [date, time] of timePairs) fillTimePair(date, time);
   if (needsStops(record)) {
     const current = record.flightStops, found = normalizeFlightStops({ ...record, ...changes }, candidate.flightStops);
-    if (found && (!current || (current.count === found.count && found.airports.length > current.airports.length &&
-      current.airports.every(code => found.airports.includes(code))))) changes.flightStops = found;
+    if (found && (!current || found.airports.length)) changes.flightStops = found;
   }
   return changes;
 }

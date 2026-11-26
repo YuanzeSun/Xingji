@@ -6,7 +6,7 @@ import { resolvePlace } from './places.js';
 import { escape as e } from './html.js';
 import { geographicLabelMarkup, mapLabelPlacer, mapLabelText } from './map-labels.js';
 
-export function flightTrackLabelRenderer(record, flightStr, center, stopovers) {
+export function flightTrackLabelRenderer(record, flightStr, center, stopover) {
   const [, origin, destination] = flightStr.split('_');
   const endpoints = ['origin', 'destination'].flatMap((side, index) => {
     const name = resolveCity(record, side).city;
@@ -16,22 +16,23 @@ export function flightTrackLabelRenderer(record, flightStr, center, stopovers) {
   });
   const provinces = Object.entries(PROVINCE_LABELS).map(([name, coordinates]) => ({ name, point: projectPoint(coordinates, center) }));
   const cities = FLIGHT_MAP_CITIES.map(([name, lon, lat, rank]) => ({ name, point: projectPoint([lon, lat], center), rank }));
-  const stops = stopovers.map(({ code, point }) => {
-    const airport = resolvePlace({ type: 'flight', origin: code }, 'origin');
-    const name = airport.chineseName || airport.name || code;
-    return { code, point, name: '经停 ' + name, title: `经停 ${name === code ? code : `${name}（${code}）`}` };
-  });
+  const airport = stopover && resolvePlace({ type: 'flight', origin: stopover.code }, 'origin');
+  const airportName = airport?.chineseName || airport?.name;
 
   return (viewport, width, height, unit) => {
     const place = mapLabelPlacer(viewport, width, height, [[width - 62, 8, width - 8, 144]]), seen = new Set();
     const result = { cities: [], provinces: [] };
     const visible = ({ point: [x, y] }) => Math.abs(x - viewport.x) <= width * unit / 2 && Math.abs(y - viewport.y) <= height * unit / 2;
-    const stopMarkup = stops.filter(visible).map(row => {
-      const short = { ...row, name: '经停 ' + row.code };
+    let stopMarkup = '';
+    if (stopover && visible(stopover)) {
+      const { code, point } = stopover;
+      const row = { point, name: '经停 ' + (airportName || code) };
+      const short = { point, name: '经停 ' + code };
       const label = place(row, 12);
       const text = label ? mapLabelText({ ...row, label }, unit) : mapLabelText({ ...short, label: place(short, 12) }, unit);
-      return `<g class="flight-stopover" data-flight-stopover="${e(row.code)}" transform="translate(${row.point})" role="img" aria-label="${e(row.title)}"><title>${e(row.title)}</title><circle r="${4 * unit}" stroke-width="${1.5 * unit}"/>${text}</g>`;
-    }).join('');
+      const title = e(airportName ? `经停 ${airportName}（${code}）` : short.name);
+      stopMarkup = `<g class="flight-stopover" data-flight-stopover="${e(code)}" transform="translate(${point})" role="img" aria-label="${title}"><title>${title}</title><circle r="${4 * unit}" stroke-width="${1.5 * unit}"/>${text}</g>`;
+    }
     function add(row, kind, size) {
       if (seen.has(row.name)) return;
       const label = place(row, size, kind === 'provinces');

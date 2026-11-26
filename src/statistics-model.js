@@ -119,8 +119,8 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     }
     if (record.type !== 'flight') continue;
     flight++;
-    if (options.includeStopoverAirports) for (const code of record.flightStops?.airports || []) {
-      if (airports.has(code)) continue;
+    const code = options.includeStopoverAirports && record.flightStops?.airports[0];
+    if (code && !airports.has(code)) {
       const { name = code, country = '' } = placeGeography({ type: 'flight', origin: code }, 'origin') || {};
       airports.set(code, { id: code, code, name, country });
     }

@@ -14,7 +14,7 @@
 
 机票可附带 `flightTrack`，包含飞常准查询标识 `flightStr`、查询时间 `queriedAt` 和按段保存的经纬度 `segments`。快照仅匹配本票的航班号、出发日期和起降机场。
 
-`flightStops` 按航班号 `fnum`、出发日期 `date` 和起降机场 `dep`、`arr` 保存票据乘坐区间的计划经停。包含经停次数 `count` 和依行程顺序记录的机场三字码 `airports`。`count: 0` 表示已确认直飞。机场三字码缺失时可只记录次数。
+`flightStops` 按航班号 `fnum`、出发日期 `date` 和起降机场 `dep`、`arr` 保存票据乘坐区间的计划经停。`count` 为 `0` 或 `1`，分别表示直飞或经停一次。`airports` 可包含一个机场三字码。
 
 ## GitHub 文件
 

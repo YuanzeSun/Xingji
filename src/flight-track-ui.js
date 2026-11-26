@@ -20,15 +20,15 @@ function inFlightDirection(track) {
 function mountTrackMap(frame, track, record) {
   const view = frame.ownerDocument.defaultView, svg = frame.querySelector('svg');
   const basemap = createMapBasemap(frame.querySelector('canvas'), view, { provinceContrast: true });
-  const stopovers = (record.flightStops?.airports || []).flatMap(code => {
-    const coordinates = AIRPORT_POINTS[code];
-    return coordinates ? [{ code, coordinates }] : [];
-  });
-  const center = longitudeCenter([...track.segments.flat(), ...stopovers.map(stop => stop.coordinates)].map(point => point[0]));
-  const mapStops = stopovers.map(({ code, coordinates }) => ({ code, point: projectPoint(coordinates, center) }));
-  const renderLabels = flightTrackLabelRenderer(record, track.flightStr, center, mapStops);
+  const stopCode = record.flightStops?.airports[0], stopCoordinates = AIRPORT_POINTS[stopCode];
+  const longitudes = track.segments.flatMap(line => line.map(point => point[0]));
+  if (stopCoordinates) longitudes.push(stopCoordinates[0]);
+  const center = longitudeCenter(longitudes);
+  const stopover = stopCoordinates ? { code: stopCode, point: projectPoint(stopCoordinates, center) } : null;
+  const renderLabels = flightTrackLabelRenderer(record, track.flightStr, center, stopover);
   const lines = inFlightDirection(track).map(line => line.map(point => projectPoint(point, center)));
-  const points = [...lines.flat(), ...mapStops.map(stop => stop.point)];
+  const points = lines.flat();
+  if (stopover) points.push(stopover.point);
   const xs = points.map(point => point[0]), ys = points.map(point => point[1]);
   const bounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
   let distance = 0;

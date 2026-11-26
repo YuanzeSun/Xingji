@@ -65,6 +65,7 @@ test('stopovers stay tied to the dated airport pair and preserve confirmed count
   assert.equal(validateRecord({ ...saved, origin: 'PKX', originCode: 'PKX' }).flightStops, undefined);
   assert.equal(validateRecord({ ...saved, departureDate: { year: 2026, dayOfYear: 200 } }).flightStops, undefined);
   assert.equal(validateRecord({ ...saved, deleted: true }).flightStops, undefined);
+  assert.equal(validateRecord({ ...saved, flightStops: { ...stops, count: 2, airports: ['PVG', 'KIX'] } }).flightStops, undefined);
   assert.equal(flightCompletion(record({ origin: '自己的机场' }), candidate).flightStops, undefined);
   const countOnly = matching([row({ StopFlag: '1', StopAirportCode: 'HND' })]);
   assert.deepEqual(countOnly.flightStops, { ...stops, airports: [] });
@@ -73,6 +74,9 @@ test('stopovers stay tied to the dated airport pair and preserve confirmed count
   assert.equal(flightCompletion({ ...record(trip), fieldSources: { flightStops: 'manual' } }, candidate).flightStops, undefined);
   assert.deepEqual(matching([row()]).flightStops, { ...stops, count: 0, airports: [] });
   assert.equal(matching([row({ StopFlag: undefined })]).flightStops, undefined);
+  assert.equal(matching([row({ StopFlag: '2', StopAirportCode: 'KIX' })]).flightStops, undefined);
+  assert.equal(matching([row({ StopFlag: undefined, StopAirportCode: 'PVG,KIX' })]).flightStops, undefined);
+  assert.equal(matching([row({ StopFlag: '2' }), row({ StopFlag: '1', StopAirportCode: 'PVG' })]).flightStops, undefined);
   assert.equal(matching([row({ StopFlag: '1', StopAirportCode: 'KIX', LegFlag: '1' })]).flightStops, undefined);
   assert.deepEqual(matching([row({ StopFlag: '1', StopAirportCode: 'KIX' }), row({ StopFlag: '1', StopAirportCode: 'PVG' })]).flightStops.airports, []);
 });
