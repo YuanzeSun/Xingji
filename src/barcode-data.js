@@ -1,5 +1,6 @@
 import bwip from 'bwip-js/generic';
-const FORMATS = new Map([['QRCode', 'qrcode'], ['MicroQRCode', 'microqrcode'], ['PDF417', 'pdf417'], ['Aztec', 'azteccode'], ['DataMatrix', 'datamatrix'], ['Code128', 'code128']]);
+const FORMATS = new Map([['QRCode', 'qrcode'], ['MicroQRCode', 'microqrcode'], ['PDF417', 'pdf417'], ['Aztec', 'azteccode'], ['DataMatrix', 'datamatrix'], ['Code128', 'code128'], ['ITF', 'interleaved2of5']]);
+const linearFormats = new Set(['Code128', 'ITF']);
 export const MAX_CODE_BYTES = 8192;
 const encode = bytes => btoa(Array.from(bytes, value => String.fromCharCode(value)).join(''));
 export function codeBytes(value) {
@@ -24,6 +25,7 @@ export function normalizeCodeData(value, formats = FORMATS) {
   if (value.format === 'QRCode' && ((symbolVersion && !/^(?:[1-9]|[1-3][0-9]|40)$/.test(symbolVersion)) || (errorCorrectionLevel && !/^[LMQH]$/.test(errorCorrectionLevel)))) throw new Error('二维码生成参数无效');
   if (value.format === 'MicroQRCode' && ((symbolVersion && !/^M[1-4]$/.test(symbolVersion)) || (mask !== null && mask > 3))) throw new Error('二维码生成参数无效');
   if (value.format === 'Code128' && bytes.length > 500) throw new Error('条码原始数据过长');
+  if (value.format === 'ITF' && (bytes.length !== 10 || bytes.some(byte => byte < 48 || byte > 57))) throw new Error('行李牌号须为 10 位数字');
   return { version: 1, format: value.format, rawBytes: value.rawBytes, symbologyIdentifier: value.symbologyIdentifier, gs1: value.gs1, eci, parameters: { symbolVersion, errorCorrectionLevel, mask } };
 }
 export function codeDataFromResult(result) {
@@ -77,14 +79,14 @@ export function symbolFromCodeData(value) {
   cache.set(key, symbol); return symbol;
 }
 export function codeSize(value) {
-  const code = normalizeCodeData(value), symbol = symbolFromCodeData(code), quiet = ['Code128', 'PDF417'].includes(code.format) ? 8 : 4;
+  const code = normalizeCodeData(value), symbol = symbolFromCodeData(code), quiet = linearFormats.has(code.format) || code.format === 'PDF417' ? 8 : 4;
   return { width: symbol.width + quiet * 2, height: symbol.height + quiet * 2, quiet };
 }
 // Only payload and encoding parameters are persisted. Matrices and SVG paths exist in memory at display time.
 export function renderCodeData(value, { x = 0, y = 0, width = '100%', height = '100%', marker = '', className = '', stretch = false } = {}) {
   const code = normalizeCodeData(value); if (!code) return '';
   const symbol = symbolFromCodeData(code), size = codeSize(code), paths = [];
-  const rowHeight = code.format === 'Code128' ? symbol.height : 1;
+  const rowHeight = linearFormats.has(code.format) ? symbol.height : 1;
   for (let row = 0; row < symbol.height; row += rowHeight) for (let col = 0; col < symbol.width;) {
     if ((symbol.data[row * symbol.width + col] ?? 255) >= 128) { col++; continue; }
     const start = col; while (col < symbol.width && symbol.data[row * symbol.width + col] < 128) col++;

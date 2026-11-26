@@ -10,7 +10,7 @@ import { escape as esc } from './html.js';
 // Each historical ticket stock has its own layout and dimensions.
 import { renderMarks } from './ticket-marks.js';
 import { isLinearTicketCode, renderTicketCode } from './ticket-code.js';
-import { codeSize } from './barcode-data.js';
+import { codeSize, renderCodeData } from './barcode-data.js';
 import { uppercaseName } from './uppercase-input.js';
 import { renderBoardingCode, boardingCodeSize } from './boarding-code.js';
 import { airlineLogo } from './airline-logo.js';
@@ -32,7 +32,8 @@ const dim = Object.freeze({
   'rail-refund-receipt': Object.freeze({ width: 856, height: 540 }),
   'air-boarding-pass': Object.freeze({ width: 1230, height: 500 })
 });
-const boardingPassWithSticker = Object.freeze({ width: 1230, height: 614 });
+const baggageOverhang = 171;
+const boardingPassWithSticker = Object.freeze({ width: dim['air-boarding-pass'].width, height: dim['air-boarding-pass'].height + baggageOverhang });
 export function layoutDimensions(template, record) {
   return template === 'air-boarding-pass' && record && hasBoardingBaggage(record) ? boardingPassWithSticker : dim[template];
 }
@@ -282,46 +283,37 @@ function boardingPenCircle(field, x, y, width, height, reverse = false) {
   return `<path data-boarding-pen="${field}" aria-hidden="true" d="${outline}" fill="none" stroke="#394b73" stroke-width="3" stroke-linecap="round" opacity=".79"/>`;
 }
 
-function baggageSticker(record, chinese) {
-  if (!hasBoardingBaggage(record)) return '';
-  const { baggageTagNumbers: tags, checkedBaggageCount: count, freeBaggageAllowance: allowance } = record;
-  const title = chinese ? '行李联' : 'BAGGAGE RECEIPT';
-  const tagLabel = chinese ? '行李牌号' : 'TAG NO.';
-  const allowanceLabel = chinese ? '免费额' : 'ALLOWANCE';
-  const checked = count?.trim() && (chinese ? `托运 ${count} 件` : `CHECKED ${count} PC`);
-  const details = [checked, allowance?.trim() && `${allowanceLabel} ${allowance}`].filter(Boolean).join('  ·  ');
-  const fit = (value, width, size) => {
-    value = value.trim().replace(/\s+/g, ' ');
-    let units = textUnits(value);
-    if (units * 15 > width) {
-      let visible = '';
-      units = 1;
-      for (const char of value) {
-        if ((units + textUnits(char)) * 15 > width) break;
-        visible += char;
-        units += textUnits(char);
-      }
-      value = visible + '…';
-    }
-    return [value, Math.min(size, width / Math.max(1, units))];
-  };
-  const [tagText, tagSize] = fit(tags || '', 617, 25);
-  const [detailText, detailSize] = fit(details, 387, 19);
-  return `<g data-boarding-baggage-sticker="true" transform="translate(536 490) rotate(-.8 333 53)" fill="#3f371d">
-    <title>${esc([title, tags && `${tagLabel} ${tags}`, details].filter(Boolean).join(' · '))}</title>
-    <rect x="2" y="5" width="665" height="106" rx="4" fill="#493a17" opacity=".14"/>
-    <rect width="665" height="106" rx="4" fill="#fff1c8" stroke="#cfb97b"/>
-    <path d="M0 4Q0 0 4 0H661Q665 0 665 4V40H0Z" fill="#f1df9f"/>
-    <path d="M8 40H657" stroke="#9c8448" stroke-dasharray="5 5"/>
-    ${text(23, 27, title, 21, 'TicketHei,TicketLatin', 'font-weight="600"')}
-    ${text(642, 27, detailText, detailSize, 'TicketMono,TicketHei', 'text-anchor="end"')}
-    ${tagText ? text(23, 62, tagLabel, 15, 'TicketHei,TicketLatin') + text(23, 92, tagText, tagSize, 'TicketMono,TicketHei') :
-      text(23, 80, [record.originCode, record.destinationCode].filter(Boolean).join(' → '), 24, 'TicketMono,TicketHei')}
+function baggageSticker(record, departureDate, mark) {
+  const tags = record.baggageTagNumbers?.trim() || '';
+  const barcodeTag = /\b\d{10}\b/.exec(tags)?.[0];
+  const count = record.checkedBaggageCount?.trim();
+  const allowance = record.freeBaggageAllowance?.trim();
+  const code = barcodeTag && renderCodeData({
+    version: 1, format: 'ITF', rawBytes: btoa(barcodeTag), symbologyIdentifier: ']I0',
+    eci: [], gs1: false, parameters: {}
+  }, { x: 8, y: 151, width: 250, height: 33, stretch: true, marker: 'baggage-tag-code' });
+  const outline = 'M1 2H268V191L247 191L241 194L202 192L157 195L151 192L103 194L99 191L57 193L49 190L1 192Z';
+  const number = barcodeTag || ([...tags].length > 36 ? [...tags].slice(0, 35).join('') + '…' : tags);
+  return `<g data-boarding-baggage-sticker="true" transform="translate(570 8) rotate(177 135 98)" fill="#26282a">
+    <title>${esc(['行李提取联', tags, count && `托运 ${count} 件`, allowance && `免费行李额 ${allowance}`].filter(Boolean).join(' · '))}</title>
+    <path d="${outline}" transform="translate(-2 -3)" fill="#273136" opacity=".15"/>
+    <path d="${outline}" fill="#f8f8f5" stroke="#cacdca"/>
+    ${mark ? `<image data-baggage-airline-logo="true" x="16" y="6" width="27" height="27" preserveAspectRatio="xMidYMid meet" href="${mark.image}"/>` : ''}
+    ${text(mark ? 53 : 16, 27, 'BAGGAGE CLAIM', 18, 'TicketMono')}
+    <path d="M15 38H253" stroke="#c0c2be"/>
+    ${text(16, 63, record.service, 19, 'TicketMono')}
+    ${text(253, 63, departureDate, 17, 'TicketMono', 'text-anchor="end"')}
+    ${text(16, 88, record.destinationCode && `TO: ${record.destinationCode}`, 19, 'TicketMono')}
+    ${text(253, 88, count && `BAG:${count.padStart(2, '0')}`, 17, 'TicketMono', 'text-anchor="end"')}
+    ${text(16, 110, allowance && `ALLOWANCE ${allowance.slice(0, 16)}`, 14, 'TicketMono')}
+    ${text(16, code ? 147 : 151, number, Math.min(27, 236 / Math.max(1, textUnits(number))), 'TicketMono', 'font-weight="700"')}
+    ${code || ''}
   </g>`;
 }
 
 function flight(r) {
   const presentation = boardingPresentation(r), words = presentation.words;
+  const hasSticker = hasBoardingBaggage(r);
   const inactive = isInactiveFlight(r), open = r.flightStatus === 'open';
   const statusLabel = presentation.language === 'zh' ? open ? 'OPEN / 未定航班' : 'VOID / 无效票' : open ? 'OPEN / UNDATED' : 'VOID / INVALID';
   const service = r.service || (open ? 'OPEN' : '');
@@ -366,7 +358,7 @@ function flight(r) {
   const code = !codeSize ? '' : portraitCode
     ? `<g data-boarding-code-position="horizontal" transform="translate(35 432) rotate(-90)">${renderBoardingCode(r, 0, 0, 82, 394)}</g>`
     : `<g data-boarding-code-position="horizontal">${renderBoardingCode(r, 35, 350, 394, 82)}</g>`;
-  return `<g data-boarding-language="${presentation.language}" lang="${presentation.language === 'zh' ? 'zh-CN' : 'en'}"><rect width="1230" height="500" rx="3" fill="#fffdf6"/>
+  return `<g data-boarding-language="${presentation.language}" lang="${presentation.language === 'zh' ? 'zh-CN' : 'en'}"><g${hasSticker ? ` transform="translate(0 ${baggageOverhang})"` : ''}><rect width="1230" height="500" rx="3" fill="#fffdf6"/>
   <path data-boarding-header-paper="true" d="M3 0h1224q3 0 3 3v61H0V3q0-3 3-3" fill="#e4f0f7"/>
   <path d="M0 64h1230" stroke="#cbdde6"/>
   ${mark ? `<metadata>Airline mark: ${esc(mark.source || 'Soaring Symbols 0.4.1 (https://github.com/soaring-symbols/soaring-symbols)')}. Marks belong to their respective airlines.</metadata><svg data-airline-watermark="${logo.code}" x="0" y="65" width="1230" height="435" overflow="hidden" aria-hidden="true"><image x="475" y="-150" width="748" height="730" preserveAspectRatio="xMidYMid meet" opacity=".12" href="${mark.image}"/></svg>` : ''}
@@ -404,7 +396,7 @@ function flight(r) {
       ${label(930, 351, words.gate)}${label(1084, 351, words.seat)}${printed(930, 398, r.gate, 35, 125)}${printed(1084, 401, r.seat, 43, 120)}
       ${label(930, 444, words.boarding)}${label(1084, 444, words.terminal)}${printed(930, 477, r.boardingTime, 26, 140)}${printed(1084, 477, r.terminal, 25, 120)}
     </g>
-  </g>${baggageSticker(r, presentation.language === 'zh')}</g>`;
+  </g></g>${hasSticker ? baggageSticker(r, date(r.departureDate), mark) : ''}</g>`;
 }
 
 export function renderTicket(record) {

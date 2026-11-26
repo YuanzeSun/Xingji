@@ -19,7 +19,7 @@ test('A4 packing preserves every ticket in order, ratio and safe printable bound
     for (const page of pages) {
       for (const item of page) {
         const flight = item.record.type === 'flight';
-        const ratio = flight ? 1230 / (item.record.baggageTagNumbers ? 614 : 500) : item.record.template.includes('red') ? 900 / 600 : 856 / 540;
+        const ratio = flight ? 1230 / (item.record.baggageTagNumbers ? 671 : 500) : item.record.template.includes('red') ? 900 / 600 : 856 / 540;
         assert.ok(Math.abs(item.width / item.height - ratio) < 0.00001);
         const a = Math.abs(item.angle) * Math.PI / 180;
         const halfW = (item.width * Math.cos(a) + item.height * Math.sin(a)) / 2;

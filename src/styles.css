@@ -716,6 +716,7 @@ p.flight-local-time{margin:-4px 0 13px}
 .space-sphere-wire{position:absolute;left:0;top:0;width:0;height:0;transform-style:preserve-3d;pointer-events:none}.space-sphere-ring{position:absolute;left:-235px;top:-235px;width:470px;height:470px;border:1px solid #77bab845;border-radius:50%;pointer-events:none}.space-ticket-current .space-ticket-face{box-shadow:0 0 0 1px #d3dfbb99,0 0 25px #d2e6b92b}
 .ticket-face{position:relative;width:100%;margin-bottom:18px;line-height:0}.ticket-face .ticket-preview{margin:0!important}.ticket-face>.card-select{position:absolute;left:5px;top:5px;z-index:1;min-width:22px;min-height:22px;padding:2px;background:#fffefad9;border-radius:4px;line-height:1}.ticket-face>.card-select input{width:16px;height:16px}
 .ticket-face[data-ticket-type=flight]>.card-select{left:auto;right:5px}
+.ticket-face:has(.ticket-preview>svg[data-ticket-has-sticker])>.card-select{top:calc(100% * 171 / 671 + 5px)}
 .ticket-collection[data-faces-only=true] .card-top{display:none}.ticket-collection[data-faces-only=true] .ticket-face{margin:0}
 .ticket-list-date{line-height:1.2;gap:2px}.ticket-list-person,.ticket-list-seat{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .ticket-list-route>span:not(.route-arrow){white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:calc(50% - 12px)}

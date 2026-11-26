@@ -45,7 +45,10 @@ test('individually archived legs retain their barcode metadata and display links
   const withoutBaggage = { ...rows[0], baggageTagNumbers: '', checkedBaggageCount: '', freeBaggageAllowance: '' };
   assert.doesNotMatch(ticketSVG(withoutBaggage), /data-boarding-baggage-sticker/);
   assert.ok(ticketDimensions(rows[0]).height > ticketDimensions(withoutBaggage).height);
-  assert.match(ticketSVG({ ...withoutBaggage, freeBaggageAllowance: '20K' }), /免费额 20K/);
+  assert.match(ticketSVG({ ...withoutBaggage, freeBaggageAllowance: '20K' }), /ALLOWANCE 20K/);
+  assert.match(ticketSVG(rows[0]), /data-baggage-tag-code="reencoded"/);
+  assert.doesNotMatch(ticketSVG({ ...withoutBaggage, freeBaggageAllowance: '20K' }), /data-baggage-tag-code/);
+  assert.match(ticketSVG({ ...rows[0], airline: '中国国际航空' }), /data-baggage-airline-logo="true"/);
   assert.throws(()=>createRecord({...second,boardingLegIndex:'3'}),/航段/);
   assert.throws(()=>createRecord({type:'flight',template:'air-boarding-pass',checkedBaggageCount:'-1'}),/行李件数/);
   assert.throws(()=>createRecord({type:'flight',template:'air-boarding-pass',checkedBaggageCount:'1.5'}),/行李件数/);
