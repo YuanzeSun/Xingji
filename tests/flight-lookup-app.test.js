@@ -18,7 +18,7 @@ test('the editor fills a flight through the provider, preserves private input an
     const result = message.method === 'initialize' ? { protocolVersion: '2025-03-26' } :
       message.params.name === 'getFlightTrackLine' ? { structuredContent: { kind: 'collection', items: [{
         fnum: 'CA181', dep: 'PEK', arr: 'HND', date: '2026-07-18_0', coordinates: '40.08,116.59;35.55,139.78',
-      }] }} : { structuredContent: { kind: 'collection', items: [{ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:45:00', FlightArrtimePlanDate: '2026-07-18 12:50:00', FlightDeptimeDate: '2026-07-18 09:15:00', FlightArrtimeDate: '2026-07-18 13:15:00', distance: 2100, FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', BoardGate: 'E12', scheduledBoardingTime: '2026-07-18 08:05:00', aircraftNumber: 'B306R', aircraftType: '空客', miniAirplaneModels: 'A330-343', generic: 'A333' }] } };
+      }] }} : { structuredContent: { kind: 'collection', items: [{ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:45:00', FlightArrtimePlanDate: '2026-07-18 12:50:00', FlightDeptimeDate: '2026-07-18 09:15:00', FlightArrtimeDate: '2026-07-18 13:15:00', distance: 2100, LegFlag: '0', StopFlag: '1', StopAirportCode: 'KIX', FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', BoardGate: 'E12', scheduledBoardingTime: '2026-07-18 08:05:00', aircraftNumber: 'B306R', aircraftType: '空客', miniAirplaneModels: 'A330-343', generic: 'A333' }] } };
     return Response.json({ id: message.id, result }, { headers: { 'Mcp-Session-Id': 'fixture-session' } });
   };
   const wait = async fn => { for (let i = 0; i < 250; i++) { if (await fn()) return; await new Promise(resolve => setTimeout(resolve, 5)); } assert.fail('Flight lookup did not settle'); };
@@ -33,6 +33,7 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.equal(document.querySelector('[name=originCode]').value, 'PEK'); assert.equal(document.querySelector('[name=destinationCode]').value, 'HND');
     assert.equal(document.querySelector('[name=departureTime]').value, '08:45'); assert.equal(document.querySelector('[name=arrivalDate]').value, '2026-07-18'); assert.equal(document.querySelector('[name=arrivalTime]').value, '12:50');
     assert.equal(document.querySelector('[name=boardingTime]').value, '08:05');
+    assert.match(document.querySelector('[data-flight-stops]').textContent, /经停情况.*KIX/);
     assert.equal(document.querySelector('[name=actualDepartureTime]').value,'09:15');assert.equal(document.querySelector('[name=actualArrivalTime]').value,'13:15');assert.equal(document.querySelector('[name=flightDistance]').value,'2100');
     assert.match(document.querySelector('[name=departureTime]').closest('.field').textContent,/计划起飞时间/);assert.equal(document.querySelector('[name=actualDepartureTime]').required,false);assert.equal(document.querySelector('[name=actualDepartureDateYear]').type,'number');
     assert.equal(document.querySelector('[name=aircraft]').value, 'A330-343'); assert.equal(document.querySelector('[name=gate]').value, 'E12');
@@ -52,9 +53,12 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.equal(saved.actualDepartureTime,'09:15');assert.equal(saved.actualArrivalTime,'13:15');assert.equal(saved.flightDistance,'2100');assert.equal(saved.fieldSources.actualDepartureTime,'variflight');
     assert.equal(saved.fieldSources.departureTime,'variflight');assert.equal(saved.fieldSources.passenger,'manual');
     assert.equal(saved.fieldSources.boardingTime,'variflight');
+    assert.deepEqual(saved.flightStops.airports, ['KIX']);
+    assert.equal(saved.fieldSources.flightStops, 'variflight');
     assert.ok(saved.sources.some(source => source.kind === 'flight-lookup')); assert.ok(saved.sources.some(source => source.kind === 'manual'));
     assert.equal(JSON.stringify(saved).includes('fixture-key-only'), false);
     document.querySelector('[data-action=\"navigate\"][data-page=\"archive\"]').click();await wait(()=>document.querySelector('[data-action=\"view\"]'));document.querySelector('[data-action=\"view\"]').click();await wait(()=>document.querySelector('[data-ticket-detail=journey] .detail-grid'));
     assert.match(document.querySelector('[data-ticket-detail=journey] .detail-grid').textContent,/计划起飞时间08:45/);assert.match(document.querySelector('[data-ticket-detail=actual-times] .detail-grid').textContent,/实际起飞时间09:15/);assert.doesNotMatch(document.querySelector('.detail-preview').textContent,/09:15|13:15/);
+    assert.match(document.querySelector('[data-detail-field=flightStops]').textContent, /经停情况.*KIX/);
   } finally { window.dispatchEvent(new window.Event('offline')); dom.window.close(); }
 });

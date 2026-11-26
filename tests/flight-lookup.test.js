@@ -2,14 +2,14 @@ import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { createRecord } from '../src/model.js';
+import { archive, createRecord, readArchive, validateRecord } from '../src/model.js';
 import { flightCandidates, flightCompletion, flightLookupNeeds, rotationRegistration } from '../src/flight-lookup-model.js';
 import { flightQuery } from '../src/flight-query.js';
 import { bindFlightLookup, flightLookupMarkup } from '../src/flight-lookup.js';
 import { FlightConnector } from '../src/mcp.js';
 
 const input = { type: 'flight', service: 'CA181', departureDate: '2026-07-18' };
-const row = extra => ({ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:00:00', FlightArrtimePlanDate: '2026-07-18 12:20:00', FlightDeptimeDate: '2026-07-18 09:00:00', FlightArrtimeDate: '2026-07-18 13:20:00', distance: 2100, scheduledBoardingTime: '07:25', aircraftNumber: 'B306R', FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', BoardGate: 'E18', aircraftType: 'Airbus A330-300', ...extra });
+const row = extra => ({ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:00:00', FlightArrtimePlanDate: '2026-07-18 12:20:00', FlightDeptimeDate: '2026-07-18 09:00:00', FlightArrtimeDate: '2026-07-18 13:20:00', distance: 2100, scheduledBoardingTime: '07:25', aircraftNumber: 'B306R', FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', BoardGate: 'E18', aircraftType: 'Airbus A330-300', StopFlag: '0', ...extra });
 const payload = items => ({ structuredContent: { kind: 'collection', items } });
 const record = extra => createRecord({ ...input, template: 'air-boarding-pass', ...extra });
 
@@ -51,6 +51,44 @@ test('offset-bearing timestamps convert to airport-local dates, including intern
   assert.equal(candidates.length, 1); assert.equal(candidates[0].departureTime, '17:00'); assert.equal(calendarDate(candidates[0].departureDate), '2026-07-18');
   assert.equal(candidates[0].arrivalTime, '16:00'); assert.equal(calendarDate(candidates[0].arrivalDate), '2026-07-19');
   assert.equal(flightCandidates(payload([row({ FlightDeptimePlanDate: '2026-07-18 00:00:00' })]), input)[0].departureTime, '00:00');
+});
+
+test('stopovers stay tied to the dated airport pair and preserve confirmed counts without guessing airports', () => {
+  const trip = { ...input, origin: 'PEK', destination: 'HND' };
+  const matching = rows => flightCandidates(payload(rows), trip)[0];
+  const candidate = matching([row({ StopFlag: '1', StopAirportCode: 'KIX', LegFlag: '0' })]);
+  const stops = { fnum: 'CA181', date: '2026-07-18', dep: 'PEK', arr: 'HND', count: 1, airports: ['KIX'] };
+  assert.deepEqual(candidate.flightStops, stops);
+  assert.deepEqual(flightCompletion(record(trip), candidate).flightStops, stops);
+  const saved = readArchive(JSON.parse(JSON.stringify(archive([candidate]))))[0];
+  assert.deepEqual(saved.flightStops, stops);
+  assert.equal(validateRecord({ ...saved, origin: 'PKX', originCode: 'PKX' }).flightStops, undefined);
+  assert.equal(validateRecord({ ...saved, departureDate: { year: 2026, dayOfYear: 200 } }).flightStops, undefined);
+  assert.equal(validateRecord({ ...saved, deleted: true }).flightStops, undefined);
+  assert.equal(flightCompletion(record({ origin: '自己的机场' }), candidate).flightStops, undefined);
+  const countOnly = matching([row({ StopFlag: '1', StopAirportCode: 'HND' })]);
+  assert.deepEqual(countOnly.flightStops, { ...stops, airports: [] });
+  assert.deepEqual(flightCompletion(countOnly, candidate).flightStops, stops);
+  assert.deepEqual(matching([row()]).flightStops, { ...stops, count: 0, airports: [] });
+  assert.equal(matching([row({ StopFlag: undefined })]).flightStops, undefined);
+  assert.equal(matching([row({ StopFlag: '1', StopAirportCode: 'KIX', LegFlag: '1' })]).flightStops, undefined);
+  assert.deepEqual(matching([row({ StopFlag: '1', StopAirportCode: 'KIX' }), row({ StopFlag: '1', StopAirportCode: 'PVG' })]).flightStops.airports, []);
+});
+
+test('same-number scheduled legs can identify a stop only inside the matched itinerary', () => {
+  const ticket = { ...input, origin: 'PEK', destination: 'HND' };
+  const whole = row({ StopFlag: '1' });
+  const intoKix = row({ FlightArrcode: 'KIX', FlightArrtimePlanDate: '2026-07-18 10:00:00' });
+  const outOfKix = row({ FlightDepcode: 'KIX', FlightDeptimePlanDate: '2026-07-18 11:00:00' });
+  const [candidate] = flightCandidates(payload([outOfKix, whole, intoKix]), ticket);
+  assert.deepEqual(candidate.flightStops.airports, ['KIX']);
+  const [subLeg] = flightCandidates(payload([outOfKix, whole, intoKix]), { ...ticket, origin: 'KIX' });
+  assert.deepEqual(subLeg.flightStops.airports, []);
+  for (const invalid of [{ FlightNo: 'CA182' }, { LegFlag: '1' }, { LegFlag: '2' },
+    { FlightDeptimePlanDate: '2026-07-18 09:00:00' }, { FlightArrtimePlanDate: '2026-07-19 12:20:00' }]) {
+    const [unverified] = flightCandidates(payload([whole, intoKix, { ...outOfKix, ...invalid }]), ticket);
+    assert.deepEqual(unverified.flightStops.airports, []);
+  }
 });
 
 test('a codeshare keeps the booked flight while identifying the marketing and operating airlines', () => {

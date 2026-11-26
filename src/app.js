@@ -39,6 +39,7 @@ import { seatClassField, bindSeatClassFields } from './seat-class-field.js';
 import { seatField, bindSeatFields } from './seat-field.js';
 import { bindDatePickers,dateControl,ticketDateField,bindTicketDates,readTicketDate,writeTicketDate,barcodeDateDay } from './date-field.js';
 import { flightLookupMarkup, bindFlightLookup } from './flight-lookup.js';
+import { flightStopsText } from './flight-stops.js';
 import { railLookupMarkup, railTimetableMarkup, bindRailLookup, railTrainsetField } from './rail-lookup.js';
 import { RAIL_POINTS_PAGE, railPointsRange, readRailPoints, railPointsRecords } from './rail-points.js';
 import { railJourneyMarkup, railReferenceNotice } from './rail-journey-ui.js';
@@ -86,7 +87,7 @@ const icons = {
   chart: '<path d="M4 3v17h17M7 14l4-5 4 3 5-7"/>'
 };
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.ticket}</svg>`;
-const labels = { ...BOARDING_METADATA_LABELS, ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightTrack: '飞行航迹', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '条码', boardingCode: '机票条码' };
+const labels = { ...BOARDING_METADATA_LABELS, flightStops: '经停情况', ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightTrack: '飞行航迹', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', offsetX: '横向微调', offsetY: '纵向微调', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '条码', boardingCode: '机票条码' };
 const imports = { task: null, backup: null, railPoints: null };
 let importView = 0;
 const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null };
@@ -1123,7 +1124,12 @@ function editRecord(record, {
       return;
     }
     if (lookupContext(previousRecord)!==lookupContext(draft)) {
-      if (rescan) { draft.lookupValues = {}; delete draft.flightTrack; }
+      if (rescan) {
+        draft.lookupValues = {};
+        delete draft.flightTrack;
+        delete draft.flightStops;
+        delete draft.fieldSources.flightStops;
+      }
       else clearEditorLookupValues();
     }
     if (railFields || draft.template !== previousRecord.template) {
@@ -2064,7 +2070,10 @@ async function adoptD1Replacement() {
 function showConflicts(conflicts) {
   state.pendingConflicts = conflicts;
   const valueText = (value, field) => field === 'railJourney' ? value ? `${value.query?.startDate || ''} 始发 · ${value.stops?.length || 0} 个全程站点 · ${(value.trainsets || []).map(stock=>stock.id).join(' / ') || '具体车组未收录'}` : '未收录' : field === 'ticketMarks' ? describeMarks(value) : field === 'deleted' ? value ? '删除票据' : '保留票据' : String(value || '（空白）');
-  const conflictValue = (value, field) => field === 'connections' ? (value ? '访问凭证已隐藏' : '未收录') : field === 'flightMcpKey' ? e(maskedKey(value)) : field === 'profile' ? `<span class="profile-conflict">${e(personalProfileSummary(value))}</span>` : ['ticketCode', 'boardingCode'].includes(field) ? value ? renderCodeData(value, { className: 'conflict-code' }) : '未收录' : e(valueText(value, field));
+  const conflictValue = (value, field) => {
+    if (field === 'flightStops') return e(flightStopsText(value) || '未收录');
+    return field === 'connections' ? (value ? '访问凭证已隐藏' : '未收录') : field === 'flightMcpKey' ? e(maskedKey(value)) : field === 'profile' ? `<span class="profile-conflict">${e(personalProfileSummary(value))}</span>` : ['ticketCode', 'boardingCode'].includes(field) ? value ? renderCodeData(value, { className: 'conflict-code' }) : '未收录' : e(valueText(value, field));
+  };
   const settingLabels = { profile: '个人常用资料', flightMcpKey: '飞常准 MCP Key', connections: '云端账号设置' };
   openModal(modalHead('两台设备修改了同一处', '选择你要保留的内容。未选择之前，不会覆盖远端票库。') + `<form id="conflict-form"><div class="conflicts">${conflicts.map((c, i) => { const r = c.context ? (c.local ? c.context.remote : c.context.local) : state.records.find(r => r.id === c.id); return `<fieldset class="conflict"><legend>${c.kind === 'settings' ? settingLabels[c.field] : e(r?.service) + ' ' + e(r?.origin) + ' → ' + e(r?.destination) + ' · ' + e(labels[c.field])}</legend><label><input type="radio" name="conflict-${i}" value="local" required /><span><small>本机</small>${conflictValue(c.local, c.field)}</span></label><label><input type="radio" name="conflict-${i}" value="remote" required /><span><small>私有仓库</small>${conflictValue(c.remote, c.field)}</span></label></fieldset>`; }).join('')}</div><div class="modal-footer"><button class="button secondary" type="button" data-action="close-modal">稍后处理</button><div class="spacer"></div><button class="button primary" type="submit">保留所选并同步</button></div></form>`);
   document.querySelector('#conflict-form').addEventListener('submit', event => {

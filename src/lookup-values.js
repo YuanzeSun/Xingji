@@ -48,7 +48,8 @@ export function clearLookupValues(record) {
   const changes={};
   for(const key of Object.keys(record.lookupValues || {}))if(isLookupValue(record,key)){record[key]='';changes[key]='';}
   record.lookupValues={};record.railJourney='';record.railRoute='';
+  delete record.flightStops;
   record.fieldSources={...record.fieldSources};
-  for(const key of [...Object.keys(changes),'railJourney','railRoute'])delete record.fieldSources[key];
+  for(const key of [...Object.keys(changes),'railJourney','railRoute','flightStops'])delete record.fieldSources[key];
   return changes;
 }

@@ -14,6 +14,7 @@ import { SUPPLEMENT_FIELDS } from './rail-template.js';
 import { isRefundReceipt } from './record-kind.js';
 import { ticketFieldLabel } from './ticket-form.js';
 import { fieldSourceBadge, RAILGO_REFERENCE_SOURCE } from './field-sources.js';
+import { flightStopsText } from './flight-stops.js';
 
 const values = (record, ...keys) => keys.map(key => [key, record[key]]);
 
@@ -56,6 +57,7 @@ function railSections(record, hasRenderedCode) {
 }
 
 function detailLabel(record, key, labels) {
+  if (key === 'flightStops') return '经停情况';
   if (key === 'price' && isRefundReceipt(record)) return '退票费（元）';
   if (key === 'seat' && record.type === 'flight') return '座位 / 舱位';
   if (key === 'issuer' && record.template === 'rail-supplement') return '出票客运段';
@@ -79,7 +81,8 @@ export function ticketDetailsMarkup(record, labels, hasRenderedCode) {
       ['departureDate', formatDate(record.departureDate)],
       ['departureTime', flight && record.departureTime],
       ['arrivalDate', record.arrivalDate && formatDate(record.arrivalDate)],
-      ...values(record, 'arrivalTime', flight ? 'flightDistance' : 'railMileage')
+      ...values(record, 'arrivalTime', flight ? 'flightDistance' : 'railMileage'),
+      ['flightStops', flight && flightStopsText(record.flightStops)]
     ]],
     ['passenger', flight ? '旅客与登机' : '旅客与乘车', [
       ['passenger', passenger],
