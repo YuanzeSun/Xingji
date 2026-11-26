@@ -142,11 +142,15 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
     const label = `${sourceName(kind)}（资料日期 ${dataDate}${unitsDate ? '，担当单位 ' + calendarDate(unitsDate) : ''}）`;
     applyResult(changes, { kind, label, dataDate, fieldDates, replace: selected });
     renderResult();
-    const count = Object.keys(changes).filter(key => changes[key] && !['railJourney','railRoute'].includes(key)).length;
-    const snapshot = changes.railJourney || changes.railRoute;
+    const changedFields = Object.keys(changes);
+    const labelFor = key => key === 'railRoute' ? '铁路线路' : RAIL_LOOKUP_LABELS[key];
+    const updated = changedFields.filter(key => changes[key]).map(labelFor);
+    const removed = changedFields.filter(key => !changes[key]).map(labelFor);
     const names = [...new Set((result.railRoute?.lineLabels || []).map(item => item.name))];
-    const summary = count ? `已补全或更新 ${count} 项，请核对后保存` :
-      snapshot ? '已取得行程资料，请核对后保存' : '已核查，保留已有资料';
+    const summary = [
+      updated.length && `已补全或更新 ${updated.join('、')}`,
+      removed.length && `已清除 ${removed.join('、')}`
+    ].filter(Boolean).join('。') || '已核查，保留已有资料';
     status.textContent = `${label} · ${summary}`;
     if (names.length) status.textContent += '。线路：' + names.join('、');
     if (result.partial) status.textContent += '。部分附加资料暂不可用';

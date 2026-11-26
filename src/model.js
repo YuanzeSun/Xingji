@@ -28,6 +28,7 @@ export { DEFAULT_RAIL_TEMPLATE, TEMPLATES };
 export const SCHEMA_VERSION = 2;
 const OPTIONAL_FIELDS = ['railInvoice', 'flightTrack', 'flightStop', 'railShowIssuer'];
 export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'flightTrack', 'flightStop', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'railShowIssuer', 'gate', 'terminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'railInvoice', ...Object.keys(SUPPLEMENT_FIELDS), 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'offsetX', 'offsetY', 'deleted'];
+const flightFields = FIELDS.filter(field => field !== 'orderNumber');
 export const now = () => new Date().toISOString();
 export const clone = value => structuredClone(value);
 export const sameRecords = (a, b) => JSON.stringify([...a].sort((x, y) => x.id.localeCompare(y.id))) === JSON.stringify([...b].sort((x, y) => x.id.localeCompare(y.id)));
@@ -55,8 +56,9 @@ export function validateRecord(input) {
   if (!['rail', 'flight'].includes(input.type)) throw new Error('未知交通方式');
   if (!Object.hasOwn(TEMPLATES, input.template)) throw new Error('不支持的票面样式');
   if ((input.type === 'flight') !== input.template.startsWith('air-')) throw new Error('票面与交通方式不匹配');
+  const fields = input.type === 'rail' ? FIELDS : flightFields;
   const out = { id: input.id };
-  for (const field of FIELDS) {
+  for (const field of fields) {
     if (field === 'flightTrack' || field === 'flightStop') continue;
     if (field === 'railShowIssuer') {
       if (!input.deleted && isRailReceiptTemplate(input.template) && input.railShowIssuer === true) out.railShowIssuer = true;
@@ -81,6 +83,7 @@ export function validateRecord(input) {
     if (input[field] !== undefined && typeof input[field] !== 'string') throw new Error(`字段 ${field} 必须为文字`);
     out[field] = (input[field] || '').slice(0, 1000);
   }
+  if (out.type === 'flight') delete out.fieldSources.orderNumber;
   out.seatClass = normalizeSeatClass(out.seatClass, out.type);
   if (out.type === 'rail' && ['无座', '站票'].includes(out.seatClass)) throw new Error('请填写席别，并单独选择无座');
   if (out.railStanding) out.seat = '';
@@ -103,11 +106,11 @@ export function validateRecord(input) {
   out.updatedAt = typeof input.updatedAt === 'string' ? input.updatedAt : now();
   out.sources = (Array.isArray(input.sources) ? input.sources : []).slice(0, 200).filter(s => s && typeof s === 'object').map(s => ({ kind: String(s.kind || 'manual').slice(0, 80), label: String(s.label || '').slice(0, 300), at: String(s.at || now()).slice(0, 40) }));
   out.sources.sort((a, b) => wireOrder(JSON.stringify(a), JSON.stringify(b)));
-  out.lockedFields = [...new Set((Array.isArray(input.lockedFields) ? input.lockedFields : []).filter(f => FIELDS.includes(f) && !['originCity','destinationCity','lookupValues','fieldSources','boardingCodeSource','boardingCodeOperatingFlight'].includes(f)))].sort();
+  out.lockedFields = [...new Set((Array.isArray(input.lockedFields) ? input.lockedFields : []).filter(f => fields.includes(f) && !['originCity','destinationCity','lookupValues','fieldSources','boardingCodeSource','boardingCodeOperatingFlight'].includes(f)))].sort();
   out.mergedIds = [...new Set((Array.isArray(input.mergedIds) ? input.mergedIds : []).filter(id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id) && id !== out.id))].sort();
   if (out.deleted) {
     // Keep only an ID marker for synchronization; there is no recoverable ticket.
-    for (const field of FIELDS) if (!['type', 'template', 'deleted'].includes(field) && !OPTIONAL_FIELDS.includes(field) && !Object.hasOwn(SUPPLEMENT_FIELDS, field)) out[field] = ['lookupValues','fieldSources'].includes(field) ? {} : field === 'ticketMarks' ? [] : field === 'railStanding' ? false : '';
+    for (const field of fields) if (!['type', 'template', 'deleted'].includes(field) && !OPTIONAL_FIELDS.includes(field) && !Object.hasOwn(SUPPLEMENT_FIELDS, field)) out[field] = ['lookupValues','fieldSources'].includes(field) ? {} : field === 'ticketMarks' ? [] : field === 'railStanding' ? false : '';
     out.sources = []; out.lockedFields = [];
     return out;
   }

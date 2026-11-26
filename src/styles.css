@@ -680,6 +680,11 @@ select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-w
 
 .field .field-source,.editor-extra h3 .field-source{margin-left:auto;font-size:11px;font-weight:400;line-height:1.5;white-space:nowrap;color:#687b70;background:#edf2ec;border:1px solid #dce5db;border-radius:4px;padding:1px 6px}.editor-extra h3 .field-source{margin-left:8px;vertical-align:middle}.field .field-source[data-source-kind="manual"]{color:#6c715d;background:#f1f0e7}
 .editor-fields .field{justify-content:space-between}.editor-fields .field>span{column-gap:4px}
+.editor-section{margin-bottom:13px}.editor-section h3{font-size:15px;font-weight:600;color:var(--ink)}
+.flight-local-time{color:var(--muted);font-size:12px;line-height:1.5}
+p.flight-local-time{margin:-4px 0 13px}
+.detail-grid .flight-local-time{display:inline-block;margin-inline-start:4px}
+:is(.ticket-preview,.detail-preview,.editor-preview)>svg[data-ticket-has-sticker]{box-shadow:none}
 
 /* Collection views share selection and ticket actions across all layouts. */
 .ticket-view-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin:20px 0 16px}

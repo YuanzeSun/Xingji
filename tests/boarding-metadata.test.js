@@ -8,7 +8,7 @@ import {boardingJourneyMarkup,boardingMetadataDetails} from '../src/boarding-det
 import {boardingMetadataValues} from '../src/boarding-metadata.js';
 import {markFieldSources} from '../src/field-sources.js';
 import {calendarDate} from '../src/journey-date.js';
-import {ticketSVG} from '../src/tickets.js';
+import {ticketDimensions,ticketSVG} from '../src/tickets.js';
 import {multilegCode,multilegPayload} from './helpers/multileg-boarding-code.js';
 
 test('standard optional sections and up to four legs remain separate with strict length validation',()=>{
@@ -40,6 +40,12 @@ test('individually archived legs retain their barcode metadata and display links
   assert.equal(mergeBackupRecords(rows,rows).length,2);assert.equal(readArchive(archive([second]))[0].frequentFlyerNumber,second.frequentFlyerNumber);
   assert.match(boardingJourneyMarkup(rows[0],rows),new RegExp('data-id="'+rows[1].id+'"'));assert.ok(boardingMetadataDetails(second).some(([key])=>key==='marketingCarrier'));
   assert.equal(ticketSVG({...rows[0],actualBoardingTime:'22:00',frequentFlyerNumber:'OTHER'}),ticketSVG(rows[0]));
+  assert.match(ticketSVG(rows[0]), /data-boarding-baggage-sticker="true"/);
+  assert.match(ticketSVG(rows[0]), /0123456789–0123456790/);
+  const withoutBaggage = { ...rows[0], baggageTagNumbers: '', checkedBaggageCount: '', freeBaggageAllowance: '' };
+  assert.doesNotMatch(ticketSVG(withoutBaggage), /data-boarding-baggage-sticker/);
+  assert.ok(ticketDimensions(rows[0]).height > ticketDimensions(withoutBaggage).height);
+  assert.match(ticketSVG({ ...withoutBaggage, freeBaggageAllowance: '20K' }), /免费额 20K/);
   assert.throws(()=>createRecord({...second,boardingLegIndex:'3'}),/航段/);
   assert.throws(()=>createRecord({type:'flight',template:'air-boarding-pass',checkedBaggageCount:'-1'}),/行李件数/);
   assert.throws(()=>createRecord({type:'flight',template:'air-boarding-pass',checkedBaggageCount:'1.5'}),/行李件数/);

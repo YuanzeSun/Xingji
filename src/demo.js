@@ -66,12 +66,13 @@ export function demoRecords(today=localToday()){
   const marks={'demo-1':[{text:'网',shape:'circle'}],'demo-3':[{text:'网',shape:'plain'}],'demo-4':[{text:'网',shape:'circle'}],'demo-5':[{text:'网',shape:'circle'},{text:'学',shape:'circle'}],'demo-7':[{text:'网',shape:'plain'}]};
   return rows.map((row,index)=>{
     const serial = String(index + 1);
-    const values={passenger:'示例旅客',identity:'110101199001010000',orderNumber:'EX'+serial.padStart(8,'0'),provenance:'commemorative',createdAt:verifiedAt,updatedAt:verifiedAt,...row};
+    const values={passenger:'示例旅客',identity:'110101199001010000',provenance:'commemorative',createdAt:verifiedAt,updatedAt:verifiedAt,...row};
     const syntheticFlight = boeingExamples.includes(row);
     const label = syntheticFlight ? '虚构航班与执飞记录，用于展示机型统计' : '示例行程，部分班次及线路引用公开资料';
     values.sources=[{kind:'demo',label,at:verifiedAt}];
     values.fieldSources={};
     if(row.type==='rail'){
+      values.orderNumber='EX'+serial.padStart(8,'0');
       values.ticketNumber='X'+serial.padStart(6,'0');
       values.saleCode=serial.padStart(21,'0');
       values.ticketMarks=marks[row.id] || [];

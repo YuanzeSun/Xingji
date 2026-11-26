@@ -43,6 +43,7 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     assert.equal(queryHint.hidden,true);
     document.querySelector('[data-rail-lookup]').click();
     await wait(()=>document.querySelector('[data-rail-status]').textContent.includes('已补全'));
+    assert.match(document.querySelector('[data-rail-status]').textContent, /已补全或更新.*车型.*列车时刻表/);
     const resultBox = document.querySelector('[data-rail-result]');
     assert.equal(resultBox.previousElementSibling, document.querySelector('.editor-layout'));
     assert.equal(resultBox.nextElementSibling, document.querySelector('.editor-footer'));

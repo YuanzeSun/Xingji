@@ -3,6 +3,7 @@ import { normalizeSeatClass } from './seat-classes.js';
 import { normalizeAircraft } from './aircraft.js';
 import { railwayStop } from './places.js';
 import { boardingPresentation } from './boarding-language.js';
+import { hasBoardingBaggage } from './boarding-metadata.js';
 import { maskRailIdentity } from './identity.js';
 import { escape as esc } from './html.js';
 // Coordinates follow the 12306 ticket specimens published on 2015-06-24.
@@ -31,7 +32,10 @@ const dim = Object.freeze({
   'rail-refund-receipt': Object.freeze({ width: 856, height: 540 }),
   'air-boarding-pass': Object.freeze({ width: 1230, height: 500 })
 });
-export function layoutDimensions(template) { return dim[template]; }
+const boardingPassWithSticker = Object.freeze({ width: 1230, height: 614 });
+export function layoutDimensions(template, record) {
+  return template === 'air-boarding-pass' && record && hasBoardingBaggage(record) ? boardingPassWithSticker : dim[template];
+}
 
 function paperPattern(id, red) {
   // Fine continuous guilloche for the ticket stock background.
@@ -278,6 +282,44 @@ function boardingPenCircle(field, x, y, width, height, reverse = false) {
   return `<path data-boarding-pen="${field}" aria-hidden="true" d="${outline}" fill="none" stroke="#394b73" stroke-width="3" stroke-linecap="round" opacity=".79"/>`;
 }
 
+function baggageSticker(record, chinese) {
+  if (!hasBoardingBaggage(record)) return '';
+  const { baggageTagNumbers: tags, checkedBaggageCount: count, freeBaggageAllowance: allowance } = record;
+  const title = chinese ? '行李联' : 'BAGGAGE RECEIPT';
+  const tagLabel = chinese ? '行李牌号' : 'TAG NO.';
+  const allowanceLabel = chinese ? '免费额' : 'ALLOWANCE';
+  const checked = count?.trim() && (chinese ? `托运 ${count} 件` : `CHECKED ${count} PC`);
+  const details = [checked, allowance?.trim() && `${allowanceLabel} ${allowance}`].filter(Boolean).join('  ·  ');
+  const fit = (value, width, size) => {
+    value = value.trim().replace(/\s+/g, ' ');
+    let units = textUnits(value);
+    if (units * 15 > width) {
+      let visible = '';
+      units = 1;
+      for (const char of value) {
+        if ((units + textUnits(char)) * 15 > width) break;
+        visible += char;
+        units += textUnits(char);
+      }
+      value = visible + '…';
+    }
+    return [value, Math.min(size, width / Math.max(1, units))];
+  };
+  const [tagText, tagSize] = fit(tags || '', 617, 25);
+  const [detailText, detailSize] = fit(details, 387, 19);
+  return `<g data-boarding-baggage-sticker="true" transform="translate(536 490) rotate(-.8 333 53)" fill="#3f371d">
+    <title>${esc([title, tags && `${tagLabel} ${tags}`, details].filter(Boolean).join(' · '))}</title>
+    <rect x="2" y="5" width="665" height="106" rx="4" fill="#493a17" opacity=".14"/>
+    <rect width="665" height="106" rx="4" fill="#fff1c8" stroke="#cfb97b"/>
+    <path d="M0 4Q0 0 4 0H661Q665 0 665 4V40H0Z" fill="#f1df9f"/>
+    <path d="M8 40H657" stroke="#9c8448" stroke-dasharray="5 5"/>
+    ${text(23, 27, title, 21, 'TicketHei,TicketLatin', 'font-weight="600"')}
+    ${text(642, 27, detailText, detailSize, 'TicketMono,TicketHei', 'text-anchor="end"')}
+    ${tagText ? text(23, 62, tagLabel, 15, 'TicketHei,TicketLatin') + text(23, 92, tagText, tagSize, 'TicketMono,TicketHei') :
+      text(23, 80, [record.originCode, record.destinationCode].filter(Boolean).join(' → '), 24, 'TicketMono,TicketHei')}
+  </g>`;
+}
+
 function flight(r) {
   const presentation = boardingPresentation(r), words = presentation.words;
   const inactive = isInactiveFlight(r), open = r.flightStatus === 'open';
@@ -362,7 +404,7 @@ function flight(r) {
       ${label(930, 351, words.gate)}${label(1084, 351, words.seat)}${printed(930, 398, r.gate, 35, 125)}${printed(1084, 401, r.seat, 43, 120)}
       ${label(930, 444, words.boarding)}${label(1084, 444, words.terminal)}${printed(930, 477, r.boardingTime, 26, 140)}${printed(1084, 477, r.terminal, 25, 120)}
     </g>
-  </g></g>`;
+  </g>${baggageSticker(r, presentation.language === 'zh')}</g>`;
 }
 
 export function renderTicket(record) {

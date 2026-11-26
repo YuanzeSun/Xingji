@@ -5,6 +5,14 @@ import { flightQuery } from './flight-query.js';
 import { FlightConnector } from './mcp.js';
 import { flightTrackRequest, readFlightTrack } from './flight-track.js';
 import { reconcileAircraft } from './aircraft.js';
+import { ticketFieldLabel } from './ticket-form.js';
+import { BOARDING_METADATA_LABELS } from './boarding-metadata.js';
+
+const lookupLabels = {
+  ...BOARDING_METADATA_LABELS, originCode: '出发机场', destinationCode: '到达机场',
+  airline: '航空公司', aircraft: '机型', aircraftRegistration: '飞机编号', terminal: '航站楼',
+  flightDistance: '航程距离', flightStop: '经停机场'
+};
 
 export function flightLookupMarkup() {
   return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><div class="button-row flight-lookup-actions"><button class="button secondary small" type="button" data-flight-track-query>查询航迹</button><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div></div><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><div data-flight-candidates></div></section>`;
@@ -69,13 +77,14 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     const conflicts = candidate.aircraftConflicts ??
       (recordBeforeLookup.aircraft && candidate.aircraft ? reconcileAircraft([recordBeforeLookup.aircraft, candidate.aircraft]).conflicts : []);
     candidates = []; candidateStamp = ''; list.innerHTML = '';
-    const count = Object.keys(changes).filter(field => !field.endsWith('Code')).length;
-    if (count) apply(changes, source());
+    const fields = Object.keys(changes);
+    if (fields.length) apply(changes, source());
     const confirmed = flightQuery(getRecord());
     const matching = previousRows.filter(row => (!confirmed.dep || row.originCode === confirmed.dep) && (!confirmed.arr || row.destinationCode === confirmed.arr));
     const confirmedKey = 'schedule:' + JSON.stringify(confirmed);
     if (!cache.has(confirmedKey)) cache.set(confirmedKey, { value: matching, at: Date.now() });
-    let summary = count ? `已补全 ${count} 项。` : '';
+    const names = [...new Set(fields.map(field => ticketFieldLabel(field, 'flight', lookupLabels[field])))];
+    let summary = names.length ? `已补全 ${names.join('、')}。` : '';
     if (conflicts.length) summary += `机型有出入（${conflicts.join('、')}），请核对。`;
     if (!recordBeforeLookup.boardingTime && !recordBeforeLookup.lockedFields?.includes('boardingTime') && !candidate.boardingTime) {
       summary += '飞常准未提供计划登机时间。';

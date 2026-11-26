@@ -39,10 +39,11 @@ test('archive entries preselect each transport and share a switchable editor',as
     assert.ok(form().querySelector('#code-photo'));
     assert.equal(form().elements.template.value,'air-boarding-pass');
     assert.equal(form().elements.passenger.value,'DOE/JANE');assert.equal(form().elements.identity.value,'');
-    for(const key of ['origin','destination','originCode','destinationCode','service','departureTime','arrivalDate','arrivalTime','seat','orderNumber','gate','price'])assert.equal(form().elements[key].value,'',key);
+    for(const key of ['origin','destination','originCode','destinationCode','service','departureTime','arrivalDate','arrivalTime','seat','gate','price'])assert.equal(form().elements[key].value,'',key);
+    assert.equal(form().elements.orderNumber, undefined);
     assert.equal(form().elements.departureDateYear.value,year);
     assert.equal(form().elements.offsetX.value,'0');assert.equal(document.querySelector('[data-field-source="passenger"]').textContent,'个人资料');
-    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDate:'2026-11-17',departureTime:'09:00',arrivalDate:'2026-11-17',arrivalTime:'13:00',actualDepartureDate:'2026-11-17',actualDepartureTime:'09:10',actualArrivalDate:'2026-11-17',actualArrivalTime:'13:15',passenger:'OLD/NAME',identity:'OLDPASSPORT',seat:'20C',seatClass:'S',airline:'中国国际航空',aircraft:'777-300ER',aircraftRegistration:'B-0001',flightDistance:'8000',pnr:'ABC123',ticketNumber:'1230000000001',terminal:'T3',boardingTime:'08:30',orderNumber:'FLIGHTORDER',gate:'B20',price:'5000',offsetY:'5'});
+    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDate:'2026-11-17',departureTime:'09:00',arrivalDate:'2026-11-17',arrivalTime:'13:00',actualDepartureDate:'2026-11-17',actualDepartureTime:'09:10',actualArrivalDate:'2026-11-17',actualArrivalTime:'13:15',passenger:'OLD/NAME',identity:'OLDPASSPORT',seat:'20C',seatClass:'S',airline:'中国国际航空',aircraft:'777-300ER',aircraftRegistration:'B-0001',flightDistance:'8000',pnr:'ABC123',ticketNumber:'1230000000001',terminal:'T3',boardingTime:'08:30',gate:'B20',price:'5000',offsetY:'5'});
     fill('type','rail');
     assert.deepEqual(controls(),blankRail,'switching back restores a fresh form, including hidden values, marks, dates and layout');
     fillAll({origin:'清河',destination:'天津',service:'G103',departureDate:'2026-11-15',departureTime:'08:00',carriage:'05',seat:'08F',seatClass:'二等座',railTrainsets:'cr400af-0001'});

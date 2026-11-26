@@ -3,9 +3,10 @@ import { escape } from './html.js';
 export function ticketSVG(record) {
   const { width, height } = ticketDimensions(record);
   const content = renderTicket(record);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escape(`${record.origin || '待补充'}至${record.destination || '待补充'} ${record.service}`)}"><title>${escape(`${record.service} ${record.origin} → ${record.destination}`)}</title>${content}</svg>`;
+  const baggageSticker = height > layoutDimensions(record.template).height;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"${baggageSticker ? ' data-ticket-has-sticker="true"' : ''} role="img" aria-label="${escape(`${record.origin || '待补充'}至${record.destination || '待补充'} ${record.service}`)}"><title>${escape(`${record.service} ${record.origin} → ${record.destination}`)}</title>${content}</svg>`;
 }
-export function ticketDimensions(record) { const dimensions = layoutDimensions(record.template); if (!dimensions) throw new Error('不支持的票面样式'); return dimensions; }
+export function ticketDimensions(record) { const dimensions = layoutDimensions(record.template, record); if (!dimensions) throw new Error('不支持的票面样式'); return dimensions; }
 const fontStyles = new Map();
 export async function exportSVG(record) {
   const key = record.template;

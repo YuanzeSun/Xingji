@@ -6,7 +6,7 @@ import { describeMarks } from './ticket-marks.js';
 import { railTrainsetIds } from './rail-journey.js';
 import { readBoardingCode } from './bcbp.js';
 import { flightPassengerName } from './flight-passenger.js';
-import { ACTUAL_FLIGHT_FIELDS } from './flight-times.js';
+import { ACTUAL_FLIGHT_FIELDS, flightTimeZoneLabel } from './flight-times.js';
 import { FLIGHT_STATUSES } from './flight-status.js';
 import { boardingMetadataDetails } from './boarding-details.js';
 import { railInvoiceDetails } from './rail-invoice.js';
@@ -32,7 +32,7 @@ function flightSections(record) {
     ['booking', '票务与条码', [
       ['flightStatus', FLIGHT_STATUSES[record.flightStatus || 'normal']],
       ['price', record.price && `¥${record.price}`],
-      ...values(record, 'pnr', 'orderNumber', 'ticketNumber'),
+      ...values(record, 'pnr', 'ticketNumber'),
       ['boardingCode', record.boardingCode ? '已保存条码数据' : '未收录']
     ]]
   ];
@@ -98,9 +98,11 @@ export function ticketDetailsMarkup(record, labels, hasRenderedCode) {
     const heading = `ticket-detail-${name}`;
     return `<section class="ticket-detail-group" data-ticket-detail="${name}" aria-labelledby="${heading}">
       <h3 id="${heading}">${title}</h3>
-      <dl class="detail-grid">${fields.map(([key, value]) => `<div data-detail-field="${e(key)}">` +
-        `<dt>${e(detailLabel(record, key, labels))}${detailSourceBadge(key, record)}</dt>` +
-        `<dd>${e(value)}</dd></div>`).join('')}</dl>
+      <dl class="detail-grid">${fields.map(([key, value]) => {
+        const timeZone = flight && flightTimeZoneLabel(key);
+        return `<div data-detail-field="${e(key)}"><dt>${e(detailLabel(record, key, labels))}${detailSourceBadge(key, record)}</dt>` +
+          `<dd>${e(value)}${timeZone ? ` <small class="flight-local-time">${e(timeZone)}</small>` : ''}</dd></div>`;
+      }).join('')}</dl>
     </section>`;
   }).join('')}</div>`;
 }

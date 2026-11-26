@@ -31,6 +31,9 @@ test('the editor fills a flight through the provider, preserves private input an
     fill('service', 'CA181'); fill('departureDate', '2026-07-18'); fill('passenger', 'LI/MING'); fill('identity', 'P000001'); fill('seat', '24K'); fill('seatClass', 'Y'); fill('price', '580'); fill('pnr', 'ABC123'); fill('aircraftRegistration', 'B-0001');
     assert.equal(providerCalls.length, 0);
     document.querySelector('[data-flight-lookup]').click(); await wait(() => document.querySelector('[data-flight-status]').textContent.includes('已带入飞行航迹'));
+    const summary = document.querySelector('[data-flight-status]').textContent;
+    assert.match(summary, /已补全.*出发机场.*到达机场.*计划起飞时间.*经停机场/);
+    assert.doesNotMatch(summary, /飞机编号/);
     assert.equal(document.querySelector('[name=originCode]').value, 'PEK'); assert.equal(document.querySelector('[name=destinationCode]').value, 'HND');
     assert.equal(document.querySelector('[name=departureTime]').value, '08:45'); assert.equal(document.querySelector('[name=arrivalDate]').value, '2026-07-18'); assert.equal(document.querySelector('[name=arrivalTime]').value, '12:50');
     assert.equal(document.querySelector('[name=boardingTime]').value, '08:05');
@@ -38,6 +41,7 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.equal(document.querySelector('[data-flight-stop-source]').textContent, '飞常准');
     assert.equal(document.querySelector('[name=actualDepartureTime]').value,'09:15');assert.equal(document.querySelector('[name=actualArrivalTime]').value,'13:15');assert.equal(document.querySelector('[name=flightDistance]').value,'2100');
     assert.match(document.querySelector('[name=departureTime]').closest('.field').textContent,/计划起飞时间/);assert.equal(document.querySelector('[name=actualDepartureTime]').required,false);assert.equal(document.querySelector('[name=actualDepartureDateYear]').type,'number');
+    assert.match(document.querySelector('[name=departureTime]').closest('section').textContent, /起飞、登机按出发地当地时间，落地按到达地当地时间/);
     assert.equal(document.querySelector('[name=aircraft]').value, 'A330-343'); assert.equal(document.querySelector('[name=gate]').value, 'E12');
     assert.equal(document.querySelector('[data-field-source="aircraft"]').textContent,'飞常准');assert.equal(document.querySelector('[data-field-source="passenger"]').textContent,'手动输入');
     assert.equal(document.querySelector('[name=passenger]').value, 'LI/MING'); assert.equal(document.querySelector('[name=price]').value, '580'); assert.equal(document.querySelector('[name=aircraftRegistration]').value, 'B-0001');
@@ -50,6 +54,7 @@ test('the editor fills a flight through the provider, preserves private input an
     ]);
     submit(); await wait(() => !document.querySelector('dialog'));
     const saved = (await db.get('records', []))[0];
+    assert.equal(Object.hasOwn(saved, 'orderNumber'), false);
     assert.equal(saved.departureZone,'Asia/Shanghai');assert.equal(saved.arrivalZone,'Asia/Tokyo');
     assert.equal(saved.departureTime, '08:45'); assert.equal(saved.arrivalTime, '12:50'); assert.equal(saved.seat, '24K'); assert.equal(saved.pnr, 'ABC123');
     assert.equal(saved.actualDepartureTime,'09:15');assert.equal(saved.actualArrivalTime,'13:15');assert.equal(saved.flightDistance,'2100');assert.equal(saved.fieldSources.actualDepartureTime,'variflight');
