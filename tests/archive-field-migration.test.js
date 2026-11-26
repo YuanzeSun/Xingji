@@ -54,10 +54,13 @@ test('GitHub migration previews changes, cancels without writing, and updates on
   try {
     await import('../src/app.js');
     await until(() => button()?.disabled === false && document.querySelector('#connection-state')?.textContent.includes('字段来源包含无效内容'));
+    assert.equal(button().closest('section').querySelector('h2').textContent, '数据迁移');
+    assert.equal(document.querySelector('.backup-panel').querySelector('[data-action="migrate-fields"]'), null);
     button().click();
     await until(preview);
     const text = preview().textContent;
-    assert.match(text, /2025-11-15 · CA181/);
+    assert.equal(preview().querySelector('.migration-records strong').textContent, '2025-11-15 · CA181 · 北京首都 → 东京羽田');
+    assert.doesNotMatch(text, /flight-old/);
     const [removed] = preview().querySelectorAll('dd');
     assert.deepEqual(new Set(removed.textContent.split('、')),
       new Set(['订单号', '字段来源 / 订单号', '旧经停资料', '字段来源 / 旧经停资料', '整张票面的横向偏移', '整张票面的纵向偏移',
@@ -118,6 +121,6 @@ test('a record with an invalid required field is listed and prevents migration',
   const snapshot = { records: [oldFlight, { ...train, template: '' }] };
   const plan = planArchiveFieldMigration(snapshot);
   assert.equal(plan.changes.length, 1);
-  assert.deepEqual(plan.errors, [{ id: train.id, message: '不支持的票面样式' }]);
+  assert.deepEqual(plan.errors, [{ title: '第 2 条票据', message: '不支持的票面样式' }]);
   await assert.rejects(writeArchiveFieldMigration({}, snapshot, plan), /没有可提交的迁移/);
 });

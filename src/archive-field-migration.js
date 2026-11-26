@@ -68,21 +68,21 @@ export function planArchiveFieldMigration(snapshot) {
       count++;
       if (ids.has(row?.id)) throw new Error('云端票库包含重复的票据编号，无法迁移');
       if (row?.id) ids.add(row.id);
-      const change = { id: row?.id || '', added: [], removed: [], updated: [] };
+      const change = { added: [], removed: [], updated: [] };
       try {
         const record = prepareRecord(row);
         if (path && path !== `archive/${yearOf(record)}.json`) throw new Error('票据年份与归档文件不匹配');
         describeChanges(row, record, change);
         if (change.added.length || change.removed.length || change.updated.length) {
           const route = [record.origin, record.destination].filter(Boolean).join(' → ');
-          change.title = record.deleted ? '已删除票据' :
+          change.title = record.deleted ? `已删除票据 · 第 ${count} 条` :
             [dateLabel(record.departureDate, '-'), record.service, route].filter(Boolean).join(' · ');
           changes.push(change);
           if (path) rewritten.add(path);
           records.push(record);
         } else records.push(row);
       } catch (error) {
-        errors.push({ id: change.id || `第 ${count} 条`, message: error.message });
+        errors.push({ title: `第 ${count} 条票据`, message: error.message });
       }
     }
   }
@@ -108,12 +108,12 @@ export function archiveFieldMigrationMarkup(plan, target, labels) {
       <p><strong>${e(target)}</strong> · ${plan.changes.length} 条票据有变更</p>
       <p>${message}</p>
       ${plan.changes.length ? `<ul class="migration-records">${plan.changes.map(change => `<li>
-        <strong>${e(change.title || '票据')} <small>${e(change.id)}</small></strong>
+        <strong>${e(change.title)}</strong>
         <dl>${categories.filter(([key]) => change[key].length).map(([key, label]) =>
           `<div><dt>${label}</dt><dd>${e(change[key].map(name).join('、'))}</dd></div>`).join('')}</dl>
       </li>`).join('')}</ul>` : ''}
       ${plan.errors.length ? `<ul class="migration-records">${plan.errors.map(item =>
-        `<li><strong>${e(item.id)}</strong><p>${e(item.message)}</p></li>`).join('')}</ul>` : ''}
+        `<li><strong>${e(item.title)}</strong><p>${e(item.message)}</p></li>`).join('')}</ul>` : ''}
       <p class="form-error" data-field-migration-error role="alert"></p>
     </div>
     <div class="modal-footer">

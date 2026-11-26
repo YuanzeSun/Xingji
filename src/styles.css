@@ -290,12 +290,12 @@ dialog:is(.ticket-editor-modal,.ticket-detail-modal)::backdrop{backdrop-filter:n
 /* Compact mobile archive; desktop keeps its existing layout. */
 [data-github-backup-status]:empty{display:none}
 .backup-panel{grid-column:1/-1}.backup-panel .backup-actions{display:grid;grid-template-columns:1fr 1fr;gap:15px}
-.backup-panel [data-action="migrate-fields"]{grid-column:1/-1}
-.backup-actions [data-action="migrate-fields"]:disabled{opacity:.55;cursor:default}
+.archive-migration-panel{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px 20px}
+.archive-migration-panel .panel-heading{margin:0}
 .archive-field-migration>p+p{margin-top:6px}
 .migration-records{list-style:none;padding:0;margin:16px 0 0}
 .migration-records>li{padding:12px 0;border-block-start:1px solid var(--line);overflow-wrap:anywhere}
-.migration-records small,.migration-records dt{color:var(--muted);font-size:.875em}
+.migration-records dt{color:var(--muted);font-size:.875em}
 .migration-records dl{margin:6px 0 0;font-size:.9375em}
 .migration-records dl div{display:flex;align-items:baseline;gap:10px}
 .migration-records dt{flex:none}

@@ -72,7 +72,6 @@ const icons = {
   database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
   arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
-  chevron: '<path d="m9 5 7 7-7 7"/>',
   close: '<path d="m6 6 12 12M6 18 18 6"/>',
   download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
   edit: '<path d="m15 4 5 5M4 20l5-1L21 7l-5-5L4 14z"/>',
@@ -284,7 +283,7 @@ function guestDemoNotice() {
   return `<section class="guest-demo-notice" aria-label="示例模式提示"><div>${icon('info')}<p>正在体验<strong>示例模式</strong>，登录后即可开始记录自己的旅程。</p></div><button type="button" class="button primary" data-action="exit-demo">退出示例并登录${icon('arrow')}</button></section>`;
 }
 function connectionPage() {
-  return `<main class="cloud-setup"><div class="cloud-setup-brand">${icon('ticket')} 行迹 ${versionMarkup()}</div><section class="guest-demo-entry" aria-labelledby="guest-demo-title"><div class="guest-demo-heading">${icon('ticket')}<strong id="guest-demo-title">体验示例模式</strong></div><p>直接浏览示例票据与行程。</p><button type="button" class="button primary" data-action="enter-demo">进入示例模式${icon('arrow')}</button></section>${d1ConnectionPanel()}<section class="panel"><h1>连接 GitHub</h1><p class="cloud-setup-description">GitHub 和 D1 都可单独使用。若两个账号已绑定，登录任一账号即可恢复两个连接，并从 D1 读取主票库。</p>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError || (!state.d1 && state.syncMessage) || '')}</p>${githubExtras()}${state.records.some(r => !r.deleted) ? '<button class="text-button" data-action="backup">导出本机票据</button>' : ''}</section>${hasCloud() ? `<div class="backup-actions">${migrationButton()}</div>` : ''}${cloudActions()}${pageFooter()}</main>`;
+  return `<main class="cloud-setup"><div class="cloud-setup-brand">${icon('ticket')} 行迹 ${versionMarkup()}</div><section class="guest-demo-entry" aria-labelledby="guest-demo-title"><div class="guest-demo-heading">${icon('ticket')}<strong id="guest-demo-title">体验示例模式</strong></div><p>直接浏览示例票据与行程。</p><button type="button" class="button primary" data-action="enter-demo">进入示例模式${icon('arrow')}</button></section>${d1ConnectionPanel()}<section class="panel"><h1>连接 GitHub</h1><p class="cloud-setup-description">GitHub 和 D1 都可单独使用。若两个账号已绑定，登录任一账号即可恢复两个连接，并从 D1 读取主票库。</p>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError || (!state.d1 && state.syncMessage) || '')}</p>${githubExtras()}${state.records.some(r => !r.deleted) ? '<button class="text-button" data-action="backup">导出本机票据</button>' : ''}</section>${hasCloud() ? archiveMigrationPanel() : ''}${cloudActions()}${pageFooter()}</main>`;
 }
 function connectionNotice() {
   if (!state.showDemo && state.archiveResetProgress) return '<div class="connection-notice" role="status"><div><strong>上次仓库重置尚未完成</strong></div><button class="button secondary small" data-action="resume-archive-reset">继续重置</button></div>';
@@ -668,8 +667,11 @@ function archiveSyncPanel() {
     <section class="settings-provider"><div class="panel-heading"><span class="panel-icon">${icon('cloud')}</span><div><h3>GitHub 私有仓库</h3><p data-cloud-label>${state.d1 ? '手动备份' : e(syncLabel())}</p></div><span class="status-pill ${state.config && token() ? 'connected' : ''}">${state.config ? '已配置' : '未连接'}</span></div>${connectionForm()}<p class="form-error" role="alert">${e(state.githubError)}</p>${githubExtras()}</section>
   </div></section>`;
 }
-function migrationButton() {
-  return `<button type="button" data-action="migrate-fields" ${canMigrateFields() ? '' : 'disabled'}><span>${icon('database')}</span><strong>迁移数据</strong><small>预览并清理旧字段，补齐当前版本所需字段</small>${icon('chevron')}</button>`;
+function archiveMigrationPanel() {
+  return `<section class="panel archive-migration-panel" aria-labelledby="archive-migration-title">
+    <div class="panel-heading"><span class="panel-icon">${icon('database')}</span><div><h2 id="archive-migration-title">数据迁移</h2><p id="archive-migration-description">预览并清理旧字段，补齐当前版本所需字段。</p></div></div>
+    <button class="button secondary" type="button" data-action="migrate-fields" aria-describedby="archive-migration-description" ${canMigrateFields() ? '' : 'disabled'}>迁移数据</button>
+  </section>`;
 }
 function dataPage() {
   const count = state.records.filter(r => !r.deleted).length;
@@ -678,7 +680,8 @@ function dataPage() {
     ${personalProfilePanel(state.profileDraft || state.settings.profile,state.profileError)}
     ${archiveSyncPanel()}
     ${travelServicesPanel()}
-    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与迁移</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button>${migrationButton()}</div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div><div data-restore-followup>${backupRestoreMarkup()}</div>${queuedBackupButton()}${cloudActions()}</section>
+    ${archiveMigrationPanel()}
+    <section class="panel backup-panel"><div class="panel-heading"><span class="panel-icon">${icon('download')}</span><div><h2>备份与恢复</h2><p>${count} 张票据</p></div></div><div class="backup-actions"><button data-action="backup"><span>${icon('database')}</span><strong>导出 JSON 备份</strong><small>包含票据、个人资料和访问凭证</small>${icon('download')}</button><button type="button" data-action="import-json"><span>${icon('database')}</span><strong>导入 JSON 备份</strong><small>先恢复票库，再选择是否连接账号</small>${icon('upload')}</button></div><input id="import-json-file" type="file" accept=".json,application/json" hidden /><div id="import-status" class="import-status" role="status"></div><div data-restore-followup>${backupRestoreMarkup()}</div>${queuedBackupButton()}${cloudActions()}</section>
   </div>`;
 }
 function render() {
