@@ -85,7 +85,7 @@ test('refresh keeps compatible RailGo details and discards only stale automatic 
     return new Response('', {status:503});
   };
   const initial = await lookupRailDetails(query,{fetcher:response('full')});
-  applyLookupValues(record,railCompletion(record,initial,startDate));
+  applyLookupValues(record,railCompletion(record,initial,startDate),true,{ kind:'rail-lookup',dataDate:startDate });
   assert.equal(record.railMileage,'279');
   assert.ok(record.railRoute.fullRoute);
   const saved = {railJourney:record.railJourney,railRoute:record.railRoute};

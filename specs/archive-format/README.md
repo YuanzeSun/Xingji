@@ -8,6 +8,8 @@
 
 `fieldSources` 逐字段记录 `manual`、`barcode`、`ocr`、`railgo` 等来源。条码确定的字段锁定；出发日期只锁定年内天数。`lockedFields` 和 `lookupValues` 用于保留人工编辑的优先级，不在界面显示“人工矫正”。条码原始字节存 Base64，机票展示统一重建 PDF417。
 
+铁路查询在 `fieldSources` 中记录每个已采用字段的来源，并可在 `railFieldDates` 中按同一字段名记录资料日期（`YYYY-MM-DD`）。同一张票可采用多家服务的字段。当前显示的时刻表保存在 `railJourney`，RailLog 附资料快照日期，Open CRH Tracker 的担当单位可另有资料日期。
+
 铁路电子发票导入可附带 `railInvoice`，其中只保存 `electronicTicketNumber`（电子客票号）。纸票的 `ticketNumber` 与 `saleCode` 分别保存。
 
 纸质报销凭证与退票费报销凭证可保存 `railShowIssuer: true`，表示票面显示售票站。默认省略此字段，售票站本身仍记录在 `issuer`。

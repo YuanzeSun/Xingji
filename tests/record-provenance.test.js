@@ -80,10 +80,12 @@ test('cloud synchronization combines independent ticket edits and writes a match
 });
 
 test('RailGo refresh replaces previous automatic values but preserves original and manually corrected values',()=>{
-  let record=rail({departureTime:'07:00'}),first=result(record);applyLookupValues(record,railCompletion(record,first));record=createRecord(record);
+  const source={kind:'rail-lookup',dataDate:'2026-11-17'};
+  let record=rail({departureTime:'07:00'}),first=result(record);applyLookupValues(record,railCompletion(record,first),true,source);record=createRecord(record);
   assert.equal(record.departureTime,'07:00');assert.equal(record.lockedFields.includes('railModel'),false);assert.equal(isLookupValue(record,'railModel'),true);
+  assert.equal(record.railFieldDates.railModel, source.dataDate);
   record.railBureau='北京局';markManualFields(record,['railBureau']);
-  const fresh={...first,railModel:'CR400AF',railBureau:'哈尔滨局',arrivalTime:'12:00'};applyLookupValues(record,railCompletion(record,fresh));
+  const fresh={...first,railModel:'CR400AF',railBureau:'哈尔滨局',arrivalTime:'12:00'};applyLookupValues(record,railCompletion(record,fresh),true,source);
   assert.equal(record.railModel,'CR400AF');assert.equal(record.railBureau,'北京局');assert.equal(record.arrivalTime,'12:00');assert.equal(record.departureTime,'07:00');
   const noData=railCompletion(record,{...fresh,railModel:''});assert.equal(noData.railModel,undefined);
   assert.ok(isLookupValue(readArchive(archive([createRecord(record)]))[0],'railModel'));

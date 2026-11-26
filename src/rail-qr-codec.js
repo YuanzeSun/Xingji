@@ -2,6 +2,7 @@
 // libJNIEncrypt.so (eaa432dac260a209ed9b62949c60b11dad8dd36f).
 // Field layout checked against Arnie97/moerail, ticket/index.html and ticket.js.
 
+export const RAIL_QR_YEAR_PERIOD = 7;
 const SEED_OFFSETS = [0, 7, 13, 19];
 const TICKET_MASKS = [
   "4746d05a4c2c2ad80098144e2817c7fe",
@@ -202,7 +203,7 @@ function ticketText(values, referenceYear) {
     }
   }
   text[37] = values[95] ? '5' : '0';
-  const saleYear = referenceYear - (referenceYear - 2009 - fields[60]) % 7;
+  const saleYear = referenceYear - (referenceYear - 2009 - fields[60]) % RAIL_QR_YEAR_PERIOD;
   const departureDay = fields[42] * 31 + fields[44], saleDay = fields[64] * 31 + fields[66];
   let departureYear = saleYear;
   if (saleDay > departureDay && 371 - saleDay + departureDay <= 300) departureYear++;
@@ -274,7 +275,7 @@ function packTicket(text) {
         value = value * alphabet.length + digit;
       }
       if (dateOffsets.includes(offset)) value--;
-      if (offset === 60) value = ((value - 2009) % 7 + 7) % 7;
+      if (offset === 60) value = ((value - 2009) % RAIL_QR_YEAR_PERIOD + RAIL_QR_YEAR_PERIOD) % RAIL_QR_YEAR_PERIOD;
       if (value < 0 || (radix && value >= radix)) return null;
       word = word * BigInt(radix) + BigInt(value);
     }

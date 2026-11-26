@@ -3,7 +3,7 @@ import {journeyDate} from './journey-date.js';
 import {DEMO_TICKET_CODE} from './demo-code.js';
 import {DEMO_RAIL_DETAILS} from './data/demo-rail.js';
 import {createBoardingCode} from './bcbp.js';
-import {railCompletion,shiftRailDate} from './rail-lookup-model.js';
+import {railCompletion,railLookupDataDate,shiftRailDate} from './rail-lookup-model.js';
 import {LOOKUP_FIELDS} from './lookup-values.js';
 import {markFieldSources} from './field-sources.js';
 import {flightTrackRequest} from './flight-track.js';
@@ -30,8 +30,10 @@ function railExample(record){
   });
   const values=railCompletion(record,reference);
   if(values.arrivalDate)values.arrivalDate=journeyDate(values.arrivalDate);
+  const lookupValues = Object.fromEntries(Object.entries(values).filter(([key,value]) => LOOKUP_FIELDS.includes(key) && value));
+  const date = railLookupDataDate(reference.railJourney);
   return {...values,railPowerSupply:values.railPowerSupply || (record.service==='Z83' ? 'AC380V' : 'AC25KV'),railMileage:values.railMileage || ({G7602:'256',Z83:'1531'}[record.service]),
-    lookupValues:Object.fromEntries(Object.entries(values).filter(([key,value])=>LOOKUP_FIELDS.includes(key)&&value)),
+    lookupValues, railFieldDates: Object.fromEntries(Object.keys(lookupValues).map(key => [key, date])),
     fieldSources:Object.fromEntries(Object.entries(values).filter(([,value])=>value).map(([key])=>[key,'railgo']))};
 }
 

@@ -111,10 +111,11 @@ async function trackerTrainset(query, journey, timetableId, options) {
   return model ? { id, model } : null;
 }
 
-function referenceJourney(timetable, query, departureTime, timetableReference, queriedAt) {
+function referenceJourney(timetable, query, timetableReference, queriedAt) {
   const { stops, start, end } = timetable;
   const from = stops.findIndex(stop => stop.station === query.origin), to = stops.findIndex(stop => stop.station === query.destination);
-  if (from < 0 || to <= from || offsetTime(stops[from].departure) !== departureTime || !isOffset(stops[to].arrival)) return null;
+  const departureTime = offsetTime(stops[from]?.departure);
+  if (from < 0 || to <= from || !departureTime || !isOffset(stops[to].arrival)) return null;
   const startDay = dayNumber(query.boardingDate) - Math.floor(stops[from].departure / SECONDS_PER_DAY);
   if (startDay < start || startDay >= end) return null;
   const journey = normalizeRailJourney({
@@ -130,13 +131,12 @@ function referenceJourney(timetable, query, departureTime, timetableReference, q
   const arrivalDate = dayDate(startDay + Math.floor(stops[to].arrival / SECONDS_PER_DAY));
   const arrivalTime = journey.stops[to].arrivalTime;
   const railMileage = journey.distanceQueriedAt ? String(Math.round((stops[to].distanceKm - stops[from].distanceKm) * 1000) / 1000) : '';
-  return { result: { query, arrivalDate, arrivalTime, railMileage, railJourney: journey },
-    signature: JSON.stringify([arrivalDate, arrivalTime, stops.slice(from + 1, to).map(stop => stop.station)]) };
+  return { result: { query, departureTime, arrivalDate, arrivalTime, railMileage, railJourney: journey },
+    signature: JSON.stringify(stops.slice(from, to + 1).map(stop => [stop.station, stop.arrival, stop.departure])) };
 }
 
-export async function lookupRailTimetableReference(provider, query, departureTime, { fetcher = globalThis.fetch, signal } = {}) {
+export async function lookupRailTimetableReference(provider, query, departureTime, { fetcher = globalThis.fetch, signal, requireDepartureMatch = Boolean(departureTime) } = {}) {
   const name = RAIL_TIMETABLE_REFERENCES[provider].name;
-  if (!railTime(departureTime)) throw new Error('请先填写票面的出发时间，再查询历史时刻表');
   const tracker = provider === 'open-crh-tracker', options = { fetcher, signal, name };
   const today = Math.floor((Date.now() / 1000 + SHANGHAI_OFFSET) / SECONDS_PER_DAY);
   const boardingDay = dayNumber(query.boardingDate);
@@ -152,15 +152,21 @@ export async function lookupRailTimetableReference(provider, query, departureTim
   const matches = new Map();
   const timetableReference = { provider, ...(snapshotDate && { snapshotDate }) };
   const match = timetable => {
-    try { return referenceJourney(timetable, query, departureTime, timetableReference, queriedAt); }
+    try {
+      const candidate = referenceJourney(timetable, query, timetableReference, queriedAt);
+      return requireDepartureMatch && candidate?.result.departureTime !== departureTime ? null : candidate;
+    }
     catch { return null; }
   };
   for (const timetable of timetables) {
     const candidate = match(timetable);
     if (candidate) matches.set(candidate.signature, { result: candidate.result, timetable });
   }
-  if (matches.size > 1) throw new Error(name + ' 返回的历史时刻表有冲突，请核对后手动填写');
-  const historical = matches.values().next().value;
+  const candidates = [...matches.values()];
+  const exact = candidates.filter(candidate => candidate.result.departureTime === departureTime);
+  const eligible = exact.length ? exact : candidates;
+  if (eligible.length > 1) throw new Error(name + ' 返回的历史时刻表有冲突，请核对后手动填写');
+  const [historical] = eligible;
   const stockRequest = tracker && historical
     ? trackerTrainset(query, historical.result.railJourney, historical.timetable.id, options).catch(() => null) : null;
   const current = await (currentRequest || (tracker && historical ? loadCurrent() : null));

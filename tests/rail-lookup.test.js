@@ -7,8 +7,7 @@ import { railQuery, railDetails, railCompletion } from '../src/rail-lookup-model
 import { lookupRailDetails } from '../src/rail-data.js';
 import { railLookupMarkup, railTimetableMarkup, bindRailLookup } from '../src/rail-lookup.js';
 import { lookupRailTimetableReference } from '../src/rail-timetable-reference.js';
-import { applyLookupValues, lookupContext } from '../src/lookup-values.js';
-import { hasConfirmedRailJourney, railJourneyMatches } from '../src/rail-journey.js';
+import { applyLookupValues } from '../src/lookup-values.js';
 import { fieldSourceLabel } from '../src/field-sources.js';
 import { journeyStatistics } from '../src/statistics-model.js';
 import { mountStatistics } from '../src/statistics.js';
@@ -75,24 +74,24 @@ test('new prefixes pass the lookup and snapshot checks, including combined numbe
   }
 });
 
-test('after RailGo misses, both alternatives can contribute and a successful RailGo lookup supersedes them', async () => {
+test('all three providers can contribute, review differences and preserve their own data dates', async () => {
   const ticket = record({ origin: '南京南', departureTime: '00:05' });
   const dom = new JSDOM('<form>' + railEditor(ticket) + '<button type="submit">保存</button></form>');
   const form = dom.window.document.querySelector('form');
-  const fallback = form.querySelector('[data-rail-fallback]'), railLog = fallback.querySelector('[data-rail-provider="raillog"]');
+  const fallback = form.querySelector('[data-rail-providers]'), railLog = fallback.querySelector('[data-rail-provider="raillog"]');
   const tracker = fallback.querySelector('[data-rail-provider="open-crh-tracker"]');
   const go = form.querySelector('[data-rail-lookup]');
   const calls = [];
   const trainCode = { prefix: 'G', number: 1 };
   const day = Date.parse('2026-11-16') / 86400000;
-  let railGoAvailable = false, trackerArrival = 93660;
+  const metadataDay = day + 1, midnight = metadataDay * 86400 - 8 * 3600;
+  let trackerArrival = 93660;
   const cleanup = bindRailLookup(form, {
     getRecord: () => ticket,
     canQuery: () => true,
     apply: (changes, source) => applyLookupValues(ticket, changes, !!source, source),
     lookup: async query => {
       calls.push('RailGo');
-      if (!railGoAvailable) throw new Error('未查到该日期的列车资料');
       return railDetails(payload({ timetable: [
         { station: '北京南', day: 0, depart: '19:00' },
         { station: '南京南', day: 0, arrive: '23:58', depart: '00:05' },
@@ -106,11 +105,19 @@ test('after RailGo misses, both alternatives can contribute and a successful Rai
         assert.equal(request.credentials, 'omit');
         calls.push(url.pathname);
         if (url.hostname === 'crh.lihugang.top') {
+          if (url.pathname.endsWith('/current')) return Response.json({ ok: true, data: {
+            trainCode, serviceDay: metadataDay, bureauCode: 'B', bureauName: '哈局',
+            stops: [
+              { stationName: '北京南', departAt: midnight + 68400 },
+              { stationName: '南京南', arriveAt: midnight + 86280, departAt: midnight + 86700 },
+              { stationName: '上海虹桥', arriveAt: midnight + trackerArrival }
+            ]
+          } });
           if (url.pathname === '/api/v2/history/train/G1') return Response.json({ ok: true, data: {
             trainCode, items: [{ serviceDay: day, timetableId: 1, emuId: 1, status: 1 }], emuCodeMappings: { 1: 'CR400BF-A-5059' }
           } });
           return Response.json({ ok: true, data: {
-            trainCode, items: [{ serviceDayStart: day, serviceDayEndExclusive: day + 1, timetableId: 1 }],
+            trainCode, items: [{ serviceDayStart: day, serviceDayEndExclusive: day + 2, timetableId: 1 }],
             timetableMappings: { 1: { stops: [
               { stationName: '北京南', departOffset: 68400 },
               { stationName: '南京南', arriveOffset: 86280, departOffset: 86700 },
@@ -130,66 +137,67 @@ test('after RailGo misses, both alternatives can contribute and a successful Rai
     })
   });
   try {
-    assert.equal(fallback.hidden, true);
-    assert.deepEqual(calls, []);
-    go.click();
-    await new Promise(done => setImmediate(done));
-    assert.equal(fallback.hidden, false);
-    assert.equal(tracker.disabled, false);
-    assert.deepEqual(calls, ['RailGo']);
-    railLog.click();
-    railLog.click();
-    await new Promise(done => setImmediate(done));
-    assert.deepEqual(calls, ['RailGo', '/api/train-timetables/versions', '/api/train-timetables']);
-    assert.equal(fallback.hidden, false);
-    const [saved] = readArchive(archive([ticket]));
-    assert.equal(calendarDate(saved.railJourney.query.startDate), '2026-11-16');
-    assert.equal(calendarDate(saved.arrivalDate), '2026-11-17');
-    assert.equal(saved.arrivalTime, '02:00');
-    assert.equal(saved.railMileage, '391');
-    assert.equal(saved.fieldSources.arrivalTime, 'raillog');
-    assert.equal(fieldSourceLabel(saved, 'arrivalTime'), 'RailLog');
-    assert.equal(fieldSourceLabel({ ...saved, fieldSources: { arrivalTime: 'open-crh-tracker' } }, 'arrivalTime'), 'Open CRH Tracker');
-    assert.equal(hasConfirmedRailJourney(saved), false);
-    assert.equal(form.querySelector('[data-rail-query-date]').disabled, false);
-    assert.equal(form.querySelector('[data-rail-reference]').hidden, true);
-    assert.match(form.querySelector('[data-rail-result]').textContent, /RailLog/);
-    const edited = { ...saved, departureTime: '00:06' };
-    assert.notEqual(lookupContext(edited), lookupContext(saved));
-    assert.equal(railJourneyMatches(edited), false);
-
-    tracker.click();
-    await new Promise(done => setImmediate(done));
-    assert.match(form.querySelector('[data-rail-status]').textContent, /两家时刻表不一致/);
-    assert.equal(ticket.railMileage, '391');
-    assert.equal(ticket.railTrainsets, '');
-    assert.equal(fallback.hidden, false);
-
-    trackerArrival = 93600;
-    tracker.click();
-    await new Promise(done => setImmediate(done));
-    const [combined] = readArchive(archive([ticket]));
-    assert.equal(combined.railJourney.timetableReference.alsoFrom, 'open-crh-tracker');
-    assert.equal(combined.railJourney.trainsets[0].id, 'CR400BF-A-5059');
-    assert.equal(combined.railMileage, '391');
-    assert.equal(combined.fieldSources.railMileage, 'raillog');
-    assert.equal(combined.fieldSources.railTrainsets, 'open-crh-tracker');
-    assert.equal(combined.fieldSources.arrivalTime, 'raillog');
-    assert.match(form.querySelector('[data-rail-result]').textContent, /RailLog.*Open CRH Tracker/);
     assert.equal(fallback.hidden, false);
     assert.equal(railLog.disabled, false);
     assert.equal(tracker.disabled, false);
-
-    railGoAvailable = true;
-    form.querySelector('[data-rail-query-date]').value = '2026-11-16';
+    assert.deepEqual(calls, []);
+    const date = form.querySelector('[data-rail-query-date]');
+    date.value = '2026-11-16';
     go.click();
     await new Promise(done => setImmediate(done));
-    assert.equal(hasConfirmedRailJourney(ticket), true);
-    assert.equal(ticket.railJourney.timetableReference, undefined);
-    assert.equal(ticket.railMileage, '');
-    assert.equal(ticket.railTrainsets, '');
+    assert.equal(ticket.fieldSources.railBureau, 'railgo');
+    assert.equal(ticket.railFieldDates.railBureau, '2026-11-16');
+    assert.equal(date.disabled, false);
+    assert.match(railLog.textContent, /核查/);
+    date.value = '2025-12-31';
+    railLog.click();
+    railLog.click();
+    await new Promise(done => setImmediate(done));
+    assert.deepEqual(calls.slice(0, 3), ['RailGo', '/api/train-timetables/versions', '/api/train-timetables']);
+    assert.equal(ticket.railMileage, '391');
+    assert.equal(ticket.fieldSources.railMileage, 'raillog');
+    assert.equal(fieldSourceLabel(ticket, 'railMileage'), 'RailLog · 2026-11-14');
     assert.equal(ticket.fieldSources.arrivalTime, 'railgo');
-    assert.equal(fallback.hidden, true);
+
+    tracker.click();
+    await new Promise(done => setImmediate(done));
+    const review = form.querySelector('[data-rail-review]');
+    assert.equal(review.hidden, false);
+    assert.equal(ticket.arrivalTime, '02:00');
+    assert.equal(ticket.railTrainsets, '');
+    assert.match(review.textContent, /RailGo · 2026-11-16/);
+    assert.match(review.textContent, /Open CRH Tracker · 2026-11-16/);
+    assert.match(review.textContent, /Open CRH Tracker · 2026-11-17/);
+    assert.match(review.textContent, /上海局.*哈尔滨局/s);
+    review.querySelector('[data-rail-review-cancel]').click();
+    assert.equal(ticket.railTrainsets, '');
+    assert.equal(tracker.disabled, false);
+
+    tracker.click();
+    await new Promise(done => setImmediate(done));
+    const arrival = [...review.querySelectorAll('fieldset')].find(field => field.querySelector('legend').textContent === '到达时间');
+    arrival.querySelector('[value=use]').click();
+    const bureau = [...review.querySelectorAll('fieldset')].find(field => field.querySelector('legend').textContent === '担当路局');
+    bureau.querySelector('[value=use]').click();
+    review.querySelector('[data-rail-review-apply]').click();
+    const [saved] = readArchive(archive([ticket]));
+    assert.equal(saved.railJourney.timetableReference, undefined);
+    assert.equal(saved.railJourney.trainsets[0].id, 'CR400BF-A-5059');
+    assert.equal(saved.railMileage, '391');
+    assert.equal(saved.arrivalTime, '02:01');
+    assert.equal(saved.fieldSources.railMileage, 'raillog');
+    assert.equal(saved.fieldSources.railRunner, undefined);
+    assert.equal(saved.fieldSources.departureTime, undefined);
+    assert.equal(saved.fieldSources.railModel, 'railgo');
+    assert.equal(saved.railBureau, '哈尔滨局');
+    assert.equal(fieldSourceLabel(saved, 'railBureau'), 'Open CRH Tracker · 2026-11-17');
+    assert.equal(saved.fieldSources.railTrainsets, 'open-crh-tracker');
+    assert.equal(saved.fieldSources.arrivalTime, 'open-crh-tracker');
+    assert.equal(saved.railFieldDates.arrivalTime, '2026-11-16');
+    assert.match(form.querySelector('[data-rail-result]').textContent, /RailGo.*Open CRH Tracker/);
+    assert.equal(fallback.hidden, false);
+    assert.equal(railLog.disabled, false);
+    assert.equal(tracker.disabled, false);
   } finally { cleanup(); dom.window.close(); }
 });
 
@@ -310,14 +318,15 @@ test('an older D8888 ticket can use dated Tracker units within the same complete
     } });
   const fields = ['railBureau', 'railRunner', 'railCarOwner'];
   const result = await lookup();
-  applyLookupValues(ticket, railCompletion(ticket, result), true, { kind: 'open-crh-tracker' });
+  applyLookupValues(ticket, railCompletion(ticket, result), true, { kind: 'open-crh-tracker', dataDate: '2026-09-30',
+    fieldDates: Object.fromEntries(fields.map(key => [key, '2026-11-26'])) });
   const [saved] = readArchive(archive([ticket]));
   assert.equal(saved.arrivalTime, '12:30');
   assert.equal(calendarDate(saved.railJourney.query.startDate), '2026-09-30');
   assert.equal(calendarDate(saved.railJourney.timetableReference.unitsDate), '2026-11-26');
   assert.deepEqual(fields.map(key => saved[key]), ['兰州局', '银川客运段', '兰州车辆段']);
   assert.deepEqual(fields.map(key => fieldSourceLabel(saved, key)), Array(3).fill('Open CRH Tracker · 2026-11-26'));
-  assert.equal(fieldSourceLabel(saved, 'arrivalTime'), 'Open CRH Tracker');
+  assert.equal(fieldSourceLabel(saved, 'arrivalTime'), 'Open CRH Tracker · 2026-09-30');
 
   const railLog = { query, arrivalDate: result.arrivalDate, arrivalTime: result.arrivalTime,
     railJourney: { ...result.railJourney, timetableReference: { provider: 'raillog', snapshotDate: journeyDate('2026-09-29') } } };
@@ -419,12 +428,11 @@ test('an automatic RailGo miss leaves fields blank until the user selects an ava
     assert.equal(calendarDate(saved.railJourney.stops.at(-1).arrivalDate), '2026-11-17');
     assert.match(railLookupMarkup(saved), /非乘车当日 · 仅供参考/);
     const confirmed = railDetails(payload({ car: 'CR400AF' }), railQuery(saved));
-    const fresh = railCompletion(saved, confirmed);
-    applyLookupValues(saved, fresh, true, { kind: 'rail-lookup' });
-    assert.equal(saved.fieldSources.railModel, 'railgo');
-    assert.equal(saved.railModel, 'CR400AF');
-    assert.doesNotMatch(railLookupMarkup(saved), /非乘车当日/);
-    assert.deepEqual(railCompletion(saved, {query: railQuery(saved, '2026-11-16'), railJourney: ticket.railJourney}), {});
+    const conflicts = [];
+    railCompletion(saved, confirmed, undefined, conflicts);
+    assert.ok(conflicts.some(({ field }) => field === 'railJourney'));
+    assert.ok(conflicts.some(({ field }) => field === 'railModel'));
+    assert.equal(saved.fieldSources.railModel, 'railgo-reference');
     ticket.service = 'G2';
     form.elements.service.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     assert.equal(reference.hidden, true);

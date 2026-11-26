@@ -4,7 +4,7 @@ import {JOURNEY_DATE_FIELDS,journeyDate,storedJourneyDate,dateLabel} from './jou
 import {readBoardingCode} from './bcbp.js';
 export {resolveRecordConflict} from './record-merge-metadata.js';
 import {LOOKUP_FIELDS,normalizeLookupValues,isLookupValue as isAutomatic} from './lookup-values.js';
-import {normalizeFieldSources,markFieldSources,importFieldSource,hasFieldValue,matchedIdentityLocked,railBarcodeFieldLocked,railImportFieldLocked,railInvoiceFieldLocked,sourceFieldValue} from './field-sources.js';
+import {normalizeFieldSources,normalizeRailFieldDates,markFieldSources,importFieldSource,hasFieldValue,matchedIdentityLocked,railBarcodeFieldLocked,railImportFieldLocked,railInvoiceFieldLocked,sourceFieldValue} from './field-sources.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {BOARDING_FIELDS,refreshGeneratedCode,operatingFlight} from './boarding-code-state.js';
 import { normalizeRailRoute, railRouteMatches } from './rail-route-snapshot.js';
@@ -34,7 +34,7 @@ export const sameRecords = (a, b) => JSON.stringify([...a].sort((x, y) => x.id.l
 export function createRecord(values = {}) {
   const record = Object.fromEntries(FIELDS.filter(key => !OPTIONAL_FIELDS.includes(key)).map(k => [k, '']));
   Object.assign(record, { id: crypto.randomUUID(), type: 'rail', template: DEFAULT_RAIL_TEMPLATE, departureZone: 'Asia/Shanghai', arrivalZone: 'Asia/Shanghai', provenance: 'commemorative', offsetX: '0', offsetY: '0', deleted: false, ticketMarks: [], sources: [], mergedIds: [], lockedFields: [], createdAt: now(), updatedAt: now() });
-  for (const k of [...FIELDS, 'id', 'createdAt', 'updatedAt', 'sources', 'mergedIds', 'lockedFields']) if (Object.hasOwn(values, k)) record[k] = JOURNEY_DATE_FIELDS.includes(k) ? journeyDate(values[k]) : clone(values[k]);
+  for (const k of [...FIELDS, 'id', 'createdAt', 'updatedAt', 'sources', 'mergedIds', 'lockedFields', 'railFieldDates']) if (Object.hasOwn(values, k)) record[k] = JOURNEY_DATE_FIELDS.includes(k) ? journeyDate(values[k]) : clone(values[k]);
   record.fieldSources=normalizeFieldSources(record.fieldSources,FIELDS);
   const source=importFieldSource(values.sources?.[0]?.kind);
   if(source && !Object.hasOwn(values,'fieldSources'))markFieldSources(record,Object.keys(values).filter(key=>FIELDS.includes(key)),source);
@@ -145,6 +145,8 @@ export function validateRecord(input) {
     const source=out.fieldSources[key];if(source&&source!=='barcode')out.fieldSources[key+'Year']=source;
   }
   out.fieldSources=Object.fromEntries(Object.entries(out.fieldSources).filter(([key,kind])=>kind==='manual' || hasFieldValue(sourceFieldValue(out,key))));
+  const dates = normalizeRailFieldDates(out, input.railFieldDates);
+  if (Object.keys(dates).length) out.railFieldDates = dates;
   return out;
 }
 export function archive(records) { return { format: 'xingji-archive', schemaVersion: SCHEMA_VERSION, exportedAt: now(), records: records.map(validateRecord) }; }

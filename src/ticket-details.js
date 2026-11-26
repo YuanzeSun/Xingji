@@ -3,7 +3,7 @@ import { formatDate } from './model.js';
 import { cityLabel } from './locations.js';
 import { maskIdentity } from './identity.js';
 import { describeMarks } from './ticket-marks.js';
-import { RAIL_TIMETABLE_REFERENCES, railTrainsetIds } from './rail-journey.js';
+import { railTrainsetIds } from './rail-journey.js';
 import { readBoardingCode } from './bcbp.js';
 import { flightPassengerName } from './flight-passenger.js';
 import { ACTUAL_FLIGHT_FIELDS } from './flight-times.js';
@@ -13,7 +13,7 @@ import { railInvoiceDetails } from './rail-invoice.js';
 import { SUPPLEMENT_FIELDS } from './rail-template.js';
 import { isRefundReceipt } from './record-kind.js';
 import { ticketFieldLabel } from './ticket-form.js';
-import { fieldSourceBadge, RAILGO_REFERENCE_SOURCE } from './field-sources.js';
+import { fieldSourceBadge, isRailLookupSource } from './field-sources.js';
 import { flightStopText } from './flight-stop.js';
 
 const values = (record, ...keys) => keys.map(key => [key, record[key]]);
@@ -78,7 +78,7 @@ export function ticketDetailsMarkup(record, labels, hasRenderedCode) {
       ['originCity', cityLabel(record, 'origin') || '待补充'],
       ['destinationCity', cityLabel(record, 'destination') || '待补充'],
       ['departureDate', formatDate(record.departureDate)],
-      ['departureTime', flight && record.departureTime],
+      ['departureTime', (flight || isRailLookupSource(record.fieldSources?.departureTime)) && record.departureTime],
       ['arrivalDate', record.arrivalDate && formatDate(record.arrivalDate)],
       ...values(record, 'arrivalTime', flight ? 'flightDistance' : 'railMileage'),
       ['flightStop', flight && flightStopText(record.flightStop)]
@@ -107,6 +107,6 @@ export function ticketDetailsMarkup(record, labels, hasRenderedCode) {
 
 function detailSourceBadge(key, record) {
   const source = record.fieldSources?.[key];
-  return source && (key === 'flightStop' || source === RAILGO_REFERENCE_SOURCE || Object.hasOwn(RAIL_TIMETABLE_REFERENCES, source))
+  return source && (key === 'flightStop' || isRailLookupSource(source))
     ? fieldSourceBadge(key, record) : '';
 }

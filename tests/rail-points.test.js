@@ -165,7 +165,8 @@ test('12306 sends the selected dates and holds results for individual review', a
   await until(() => document.querySelector('#editor-form'));
   const reopened = document.querySelector('#editor-form');
   assert.equal(reopened.elements.service.readOnly, true);
-  assert.equal(reopened.elements.departureTime.readOnly, true);
+  assert.equal(reopened.elements.departureTime.readOnly, false);
+  assert.match(reopened.querySelector('[data-field-source="departureTime"]').textContent, /RailGo · \d{4}-\d{2}-\d{2}/);
   assert.equal(reopened.querySelector('[data-code-start]').disabled, true);
   assert.deepEqual(railRequests, ['G25', 'G21']);
 });

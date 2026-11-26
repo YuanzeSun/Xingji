@@ -4,7 +4,7 @@ import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
-import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railFieldFullyLocked,refreshFieldSources} from './field-sources.js';
+import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railImportFieldLocked,refreshFieldSources} from './field-sources.js';
 import { bindIdentityInput, maskIdentity, printedIdentityHint } from './identity.js';
 import {markManualFields,applyLookupValues,lookupContext,clearLookupValues} from './lookup-values.js';
 import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } from './arithmetic-confirm.js';
@@ -44,7 +44,7 @@ import { bindFlightStopEditor, flightStopField } from './flight-stop-editor.js';
 import { railLookupMarkup, railTimetableMarkup, bindRailLookup, railTrainsetField } from './rail-lookup.js';
 import { RAIL_POINTS_PAGE, railPointsRange, readRailPoints, railPointsRecords } from './rail-points.js';
 import { railJourneyMarkup, railReferenceNotice } from './rail-journey-ui.js';
-import { railJourneyMatches, railService, RAIL_TIMETABLE_REFERENCES } from './rail-journey.js';
+import { railJourneyMatches, railService } from './rail-journey.js';
 import { openRailCamera } from './rail-camera.js';
 import { parseScanText, railPhotoChanges } from './scan-engine.js';
 import { normalizePlaces, resolvePlace } from './places.js';
@@ -956,7 +956,7 @@ function viewRecord(id) {
     : boardingJourneyMarkup(record, records) + (record.flightTrack ? '<section class="rail-route flight-track" data-flight-track aria-label="飞行航迹"></section>' : '');
   const sources = record.sources.length ? `<details class="source-details">
     <summary>数据来源 · ${record.sources.length} 条</summary>
-    ${record.sources.map(source => `<p>${e(Object.hasOwn(RAIL_TIMETABLE_REFERENCES, source.kind) ? RAIL_TIMETABLE_REFERENCES[source.kind].name : source.label)}<span>${e(source.at.slice(0, 10))}</span></p>`).join('')}
+    ${record.sources.map(source => `<p>${e(source.label)}<span>${e(source.at.slice(0, 10))}</span></p>`).join('')}
   </details>` : '';
   const service = record.service || (record.flightStatus === 'open' ? 'OPEN' : '班次待补充');
   const heading = `<span class="heading-service">${e(service)}</span><span class="heading-route">${e(record.origin || '出发地')} <span class="muted">→</span> ${e(record.destination || '到达地')}</span>`;
@@ -1165,7 +1165,7 @@ function editRecord(record, {
     autoRead:draft.type==='rail' && !!localFileURL && !draft.ticketCode
   });
   form.addEventListener('input', event => {
-    if (event.target.matches('[data-rail-query-date]') || event.target.closest('[data-code-editor],[data-flight-stop-editor]')) return;
+    if (event.target.matches('[data-rail-query-date]') || event.target.closest('[data-code-editor],[data-flight-stop-editor],[data-rail-review]')) return;
     const target=event.target;
     const dateKey=target.closest('[data-journey-date]')?.dataset.journeyDate;
     const changedKey=target.name || (target.matches('[data-seat-preset]') ? 'seatClass'
@@ -1180,7 +1180,7 @@ function editRecord(record, {
       }
     }
     if (!lookupApplying && ((serviceFixed && changedKey === 'service') || ticketFieldLocked(draft, changedKey) ||
-        (dateKey && railFieldFullyLocked(draft, dateKey)))) {
+        (dateKey && railImportFieldLocked(draft, dateKey)))) {
       refreshTicketFieldLocks(form,draft);return;
     }
     if (target.matches('[data-rail-standing]')) {
@@ -1251,6 +1251,8 @@ function editRecord(record, {
       }
       if (!form.isConnected) return;
     }
+    const railReview = form.querySelector('[data-rail-review]:not([hidden])');
+    if (railReview) { railReview.querySelector('h3').focus(); return; }
     let release = () => {};
     try {
       if (!isArchiveContext(context)) throw new Error('票库已变化，请保留输入并重新打开票据。');
@@ -1307,9 +1309,6 @@ function editRecord(record, {
         }
         normalizePlaces(draft);
         if (changes.flightStop) flightStopEditor.refresh();
-      }
-      if (changes.railJourney && !changes.railJourney.timetableReference) {
-        draft.sources = draft.sources.filter(item => !Object.hasOwn(RAIL_TIMETABLE_REFERENCES, item.kind));
       }
       if (!draft.sources.length) draft.sources.push({ kind: 'manual', label: '录入', at: now() });
       if (source && !draft.sources.some(item => item.kind === source.kind && item.label === source.label)) draft.sources.push(source);

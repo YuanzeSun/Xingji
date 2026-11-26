@@ -1,11 +1,12 @@
-import {calendarDate,journeyDate} from './journey-date.js';
+import {calendarDate,journeyDate,sameDate} from './journey-date.js';
 import {isLookupValue} from './lookup-values.js';
-import { RAILGO_REFERENCE_SOURCE } from './field-sources.js';
+import { importFieldSource, isRailLookupSource, railTimetableSource } from './field-sources.js';
+import { ticketFieldLocked } from './barcode-fields.js';
 import { railRouteNeedsSave } from './rail-route-snapshot.js';
 import { validDate } from './model.js';
 import { resolvePlace } from './places.js';
 import { bureauFromCode, normalizeRailBureau, parseRailGoModel, RAIL_UNIT_FIELDS } from './rail-details.js';
-import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, hasConfirmedRailJourney, railJourneyMatches, railJourneyRange, sameRailTimetable, RAIL_TIMETABLE_REFERENCES } from './rail-journey.js';
+import { railText as clean, railStation as stationName, railService as service, railTime, normalizeRailJourney, normalizeRailTrainsets, railJourneyMatches, railJourneyRange, sameRailTimetable } from './rail-journey.js';
 import { isRailService } from './rail-service.js';
 
 export const shiftRailDate = (date, days) => { const result = new Date(calendarDate(date) + 'T00:00:00Z'); result.setUTCDate(result.getUTCDate() + days); return result.toISOString().slice(0, 10); };
@@ -71,75 +72,81 @@ export function railDetails(payload, query, queriedAt = new Date().toISOString()
   const model=parseRailGoModel(clean(row.car));
   return { query, railBureau:codeBureau || shortBureau, railModel:model.model, railPowerSupply:model.powerSupply, railRunner:clean(row.runner), railCarOwner:clean(row.carOwner), departureTime:stops[from].departureTime, arrivalDate:calendarDate(stops[to].arrivalDate), arrivalTime:stops[to].arrivalTime, railJourney };
 }
+export const RAIL_LOOKUP_LABELS = {
+  railBureau: '担当路局', railRunner: '担当客运段', railCarOwner: '车辆归属单位',
+  railModel: '车型', railTrainsets: '车组编号', railPowerSupply: '供电制式', railMileage: '铁路里程',
+  gate: '检票口', railPlatform: '上车站台', departureTime: '出发时间', arrivalDate: '到达日期',
+  arrivalTime: '到达时间', railJourney: '列车时刻表'
+};
+const railFields = Object.keys(RAIL_LOOKUP_LABELS).filter(field => field !== 'railJourney');
+const invalidatedDetails = new Set(['railMileage', 'railTrainsets', 'gate', 'railPlatform']);
 
-function combineTimetables(saved, incoming) {
-  const interval = journey => {
-    const { stops } = railJourneyRange(journey);
-    const arrival = stops.at(-1);
-    return JSON.stringify([calendarDate(journey.query.startDate), arrival.arrivalDate, arrival.arrivalTime, stops.map(stop => stop.station)]);
-  };
-  if (interval(saved) !== interval(incoming)) throw new Error('两家时刻表不一致，已保留原结果');
-  const incomingIsRailLog = incoming.timetableReference.provider === 'raillog';
-  const timetable = incomingIsRailLog ? incoming : saved;
-  const { unitsDate } = (incomingIsRailLog ? saved : incoming).timetableReference;
-  const timetableReference = { ...timetable.timetableReference, alsoFrom: 'open-crh-tracker' };
-  delete timetableReference.unitsDate;
-  if (unitsDate) timetableReference.unitsDate = unitsDate;
-  return {
-    ...timetable,
-    timetableReference,
-    trainsets: incomingIsRailLog ? saved.trainsets : incoming.trainsets,
-    queriedAt: incoming.queriedAt
-  };
+export function railLookupDataDate(journey, field) {
+  const reference = journey.timetableReference;
+  if (RAIL_UNIT_FIELDS.includes(field) && reference?.unitsDate) return calendarDate(reference.unitsDate);
+  return calendarDate(reference?.snapshotDate || journey.query.startDate);
 }
 
-export function railCompletion(record, result, startDate) {
-  const journey = result.railJourney, referenceFor = journey?.query.referenceFor;
-  const timetableReference = journey?.timetableReference;
-  const query = railQuery(record, startDate);
-  if (JSON.stringify(query) !== JSON.stringify(result.query)) return {};
-  if ((referenceFor || timetableReference) && hasConfirmedRailJourney(record)) return {};
-  const saved = railJourneyMatches(record) && record.railJourney;
-  const savedReference = saved?.timetableReference;
-  const combined = !!(timetableReference && savedReference &&
-    (savedReference.alsoFrom || savedReference.provider !== timetableReference.provider));
-  let nextJourney = combined ? combineTimetables(saved, journey) : journey;
-  const values={...result,railTrainsets:(journey?.trainsets || []).map(stock=>stock.id).join(' / ')};
-  if (referenceFor) {
-    const overnightDays = (Date.parse(result.arrivalDate) - Date.parse(calendarDate(journey.query.boardingDate))) / 86400000;
-    values.arrivalDate = shiftRailDate(referenceFor, overnightDays);
+function segmentTimetable(journey) {
+  const day = Date.parse(calendarDate(journey.query.boardingDate));
+  return JSON.stringify(railJourneyRange(journey).stops.map(({ station, arrivalDate, arrivalTime, departureDate, departureTime }, index, stops) => [
+    station, index && arrivalTime ? [(Date.parse(calendarDate(arrivalDate)) - day) / 86400000, arrivalTime] : null,
+    index < stops.length - 1 && departureTime ? [(Date.parse(calendarDate(departureDate)) - day) / 86400000, departureTime] : null
+  ]));
+}
+
+function sameRailValue(field, first, second) {
+  if (field === 'arrivalDate') return sameDate(first, second);
+  if (field === 'railMileage') return Number(first) === Number(second);
+  if (field === 'railBureau') return normalizeRailBureau(first) === normalizeRailBureau(second);
+  if (field === 'railTrainsets') return normalizeRailTrainsets(first) === normalizeRailTrainsets(second);
+  return first === second;
+}
+
+export function railCompletion(record, result, startDate, conflicts) {
+  const journey = result.railJourney;
+  if (JSON.stringify(railQuery(record, startDate)) !== JSON.stringify(result.query)) return {};
+  const saved = railJourneyMatches(record) ? record.railJourney : null;
+  const kind = railTimetableSource(journey);
+  const fieldSource = importFieldSource(kind);
+  const sameDataset = saved && railTimetableSource(saved) === kind && railLookupDataDate(saved) === railLookupDataDate(journey);
+  const timetableChanged = sameDataset && !sameRailTimetable(saved, journey);
+  const values = { ...result, railTrainsets: journey.trainsets.map(stock => stock.id).join(' / ') };
+  if (journey.query.referenceFor) {
+    const overnight = (Date.parse(result.arrivalDate) - Date.parse(calendarDate(journey.query.boardingDate))) / 86400000;
+    values.arrivalDate = shiftRailDate(journey.query.referenceFor, overnight);
   }
-  const fields = ['railBureau','railModel','railTrainsets','railPowerSupply','railMileage','railRunner','railCarOwner','gate','railPlatform','departureTime','arrivalDate','arrivalTime'];
-  const sameServiceDay = saved && journey && calendarDate(saved.query.startDate) === calendarDate(journey.query.startDate);
-  const keepUnits = sameServiceDay && timetableReference?.provider === 'open-crh-tracker' &&
-    RAIL_UNIT_FIELDS.some(field => record[field] && record.fieldSources?.[field] === 'open-crh-tracker') &&
-    (!RAIL_UNIT_FIELDS.some(field => Object.hasOwn(result, field)) ||
-      (timetableReference.unitsDate && !savedReference?.unitsDate));
-  if (keepUnits) {
-    const keptReference = { ...nextJourney.timetableReference };
-    delete keptReference.unitsDate;
-    if (savedReference?.unitsDate) keptReference.unitsDate = savedReference.unitsDate;
-    nextJourney = { ...nextJourney, timetableReference: keptReference };
-  }
+
   const changes = {};
-  for (const field of fields) {
-    const previousSource = record.fieldSources?.[field];
-    const fromTimetableReference = Object.hasOwn(RAIL_TIMETABLE_REFERENCES, previousSource);
-    if (combined && fromTimetableReference && previousSource !== timetableReference.provider) continue;
-    if (keepUnits && RAIL_UNIT_FIELDS.includes(field)) continue;
-    const fromLookup = isLookupValue(record,field);
-    if (values[field] && (!record[field] || fromLookup) && !record.lockedFields?.includes(field)) changes[field] = values[field];
-    if (!values[field] && fromLookup && (previousSource === RAILGO_REFERENCE_SOURCE || fromTimetableReference)) changes[field] = '';
-  }
-  const differentTimetable = !combined && record.railJourney && nextJourney && !sameRailTimetable(record.railJourney, nextJourney);
-  if (differentTimetable) {
-    for (const field of ['railMileage', 'railTrainsets', 'gate', 'railPlatform']) {
-      if (!values[field] && isLookupValue(record, field)) changes[field] = '';
+  for (const field of railFields) {
+    if (ticketFieldLocked(record, field)) continue;
+    const current = record[field], next = values[field], previousSource = record.fieldSources?.[field];
+    const automatic = isLookupValue(record, field);
+    if (!next) {
+      if (automatic && timetableChanged && previousSource === fieldSource && invalidatedDetails.has(field)) changes[field] = '';
+      continue;
+    }
+    if (!current && !record.lockedFields?.includes(field)) {
+      changes[field] = next;
+      continue;
+    }
+    if (sameRailValue(field, current, next)) continue;
+    const previousDate = record.railFieldDates?.[field];
+    const differentDate = previousDate && previousDate !== railLookupDataDate(journey, field);
+    if (previousSource === fieldSource && automatic && !differentDate) {
+      changes[field] = next;
+    } else if (current && (isRailLookupSource(previousSource) || previousSource === 'manual')) {
+      conflicts?.push({ field, current, proposed: next });
     }
   }
-  const route = result.railRoute || '';
-  if (railRouteNeedsSave(record, route)) changes.railRoute = route;
-  else if (differentTimetable && record.railRoute && !route) changes.railRoute = '';
-  if (nextJourney && JSON.stringify(record.railJourney) !== JSON.stringify(nextJourney)) changes.railJourney = nextJourney;
+
+  if (result.railRoute && railRouteNeedsSave(record, result.railRoute)) changes.railRoute = result.railRoute;
+  else if (timetableChanged && fieldSource === 'railgo' && record.railRoute && !result.railRoute) changes.railRoute = '';
+
+  if (!saved || sameDataset) {
+    if (JSON.stringify(saved) !== JSON.stringify(journey)) changes.railJourney = journey;
+  } else if (segmentTimetable(saved) !== segmentTimetable(journey)) {
+    conflicts?.push({ field: 'railJourney', current: saved, proposed: journey });
+  }
   return changes;
 }

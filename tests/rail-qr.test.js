@@ -257,7 +257,11 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(field('departureDateMonth').disabled, true);
     assert.equal(field('departureDateDay').disabled, true);
     assert.equal(field('departureDateYear').readOnly, false);
+    assert.equal(field('departureDateYear').step, '7');
+    fill('departureDateYear', '2019');
+    assert.match(field('departureDateYear').validationMessage, /按 7 年调整/);
     fill('departureDateYear', '2018');
+    assert.equal(field('departureDateYear').validationMessage, '');
     fill('departureDateDay', '01');
     fill('service', 'G998');
     fill('gate', 'A9');
