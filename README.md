@@ -25,7 +25,7 @@
 
 ### 票面
 
-![火车票票面预览，包括四版红色软纸票、蓝色磁介质票、列车移动补票和报销凭证](docs/images/rail-ticket-matrix.png)
+![火车票票面预览，包括四版红色软纸票、蓝色磁介质票、列车移动补票、纸质报销凭证和退票费凭证](docs/images/rail-ticket-matrix.png)
 
 ![带行李贴纸的登机牌](docs/images/boarding-pass.png)
 
@@ -37,8 +37,6 @@
 
 ### 行程地图与路线播放
 
-![从行程地图上打开一条航线的相关票据](docs/images/map-related-tickets.jpg)
-
 ![跨年行程逐段播放](docs/images/journey-map-playback.gif)
 
 ![G21 从北京南到南京南，沿京沪高速线播放](docs/images/rail-route-playback.gif)
@@ -47,7 +45,7 @@
 
 ### 数据统计
 
-![数据统计及计入经停机场选项](docs/images/statistics.jpg)
+![数据统计、落地延误折线图与铁路线足迹](docs/images/statistics.jpg)
 
 ### 旅行纪念册
 

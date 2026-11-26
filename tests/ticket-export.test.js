@@ -2,7 +2,7 @@ import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { unzipSync } from 'fflate';
-import { PDFDocument, PDFName } from 'pdf-lib';
+import { PDFDocument, PDFName, decodePDFRawStream } from 'pdf-lib';
 import { albumPages, A4 } from '../src/album-layout.js';
 import { exportTicketImages, exportTicketZIP, exportTicketAlbum } from '../src/ticket-export.js';
 import { createRecord } from '../src/model.js';
@@ -70,6 +70,23 @@ test('album is an A4 PDF with the requested title and all tickets exactly once',
   const imageRefs=pdf.getPages().map(page=>new Set(page.node.Resources().lookup(PDFName.of('XObject')).entries().map(([,ref])=>ref.toString())));
   assert.equal([...imageRefs[0]].filter(ref=>imageRefs.every(refs=>refs.has(ref))).length,2,'the running heading and author credit are reused on every page');
   assert.equal(pdf.catalog.getViewerPreferences().getPrintScaling(), 'None');
+});
+
+test('a baggage sticker retains the PNG alpha mask without a rectangle in its transparent area', async () => {
+  const sticker = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAYAAACddGYaAAAAF0lEQVR4nGNgYGBgkAuI+g+iGWEMEAcAMswDkJIhmjEAAAAASUVORK5CYII=', 'base64');
+  const sample = demoRecords().find(record => record.id === 'demo-8');
+  const album = await exportTicketAlbum([sample], {
+    cover: false,
+    renderTicket: async () => new Blob([sticker], { type: 'image/png' }),
+    renderText: async () => pixel,
+  });
+  const pdf = await PDFDocument.load(await album.arrayBuffer());
+  const page = pdf.getPage(0);
+  const operators = Buffer.from(decodePDFRawStream(page.node.Contents().lookup(0)).decode()).toString('ascii');
+  assert.equal([...operators.matchAll(/^f$/gm)].length, 1, 'only the album page background is filled');
+  const images = page.node.Resources().lookup(PDFName.of('XObject')).entries().map(([,ref]) => pdf.context.lookup(ref));
+  const ticket = images.find(image => image.dict.get(PDFName.of('Width')).asNumber() === 3);
+  assert.ok(ticket?.dict.has(PDFName.of('SMask')));
 });
 
 test('both exports stop after cancellation, reject empty selections and propagate rendering errors without partial downloads', async () => {

@@ -2,6 +2,7 @@ import {calendarDate,dateLabel} from './journey-date.js';
 import { exportPNG } from './tickets.js';
 import { albumPages, A4 } from './album-layout.js';
 import { drawAlbumCover, drawRailNote } from './album-decoration.js';
+import { hasBoardingBaggage } from './boarding-metadata.js';
 
 export function ticketFileName(record) {
   return `${calendarDate(record.departureDate) || '未定日期'}_${record.service || '票据'}_${record.origin}-${record.destination}`
@@ -113,12 +114,17 @@ export async function exportTicketAlbum(records, { title = '我的行迹', cover
       const w = mm(item.width), h = mm(item.height), radians = item.angle * Math.PI / 180;
       const x = mm(item.x + item.width / 2) - w * Math.cos(radians) / 2 + h * Math.sin(radians) / 2;
       const y = mm(297 - item.y - item.height / 2) - w * Math.sin(radians) / 2 - h * Math.cos(radians) / 2;
-      for (const [offset, opacity] of [[0.8, 0.035], [0.4, 0.06]]) {
-        page.drawRectangle({ x: x + mm(offset), y: y - mm(offset), width: w, height: h, rotate: degrees(item.angle), color: rgb(0.1, 0.2, 0.16), opacity });
+      // The space beside a protruding baggage sticker is part of the transparent image canvas.
+      const decorate = item.record.type !== 'flight' || !hasBoardingBaggage(item.record);
+      if (decorate) {
+        for (const [offset, opacity] of [[0.8, 0.035], [0.4, 0.06]]) {
+          page.drawRectangle({ x: x + mm(offset), y: y - mm(offset), width: w, height: h, rotate: degrees(item.angle), color: rgb(0.1, 0.2, 0.16), opacity });
+        }
       }
       page.drawImage(image, { x, y, width: w, height: h, rotate: degrees(item.angle) });
-      // The tape overlaps only the outermost edge, leaving ticket text and codes clear.
-      page.drawRectangle({ x: mm(item.x + item.width / 2 - 8), y: mm(297 - item.y - 0.8), width: mm(16), height: mm(4.5), rotate: degrees(-2), color: rgb(0.87, 0.83, 0.69), opacity: 0.30 });
+      if (decorate) {
+        page.drawRectangle({ x: mm(item.x + item.width / 2 - 8), y: mm(297 - item.y - 0.8), width: mm(16), height: mm(4.5), rotate: degrees(-2), color: rgb(0.87, 0.83, 0.69), opacity: 0.30 });
+      }
       const caption = await pdf.embedPng(await renderText([{ text: String(item.index + 1).padStart(2,'0') + '  /  ' + (item.record.departureDate ? dateLabel(item.record.departureDate,'-') : '日期未收录'), y: 0, size: 2.5, color: '#69796f' }], item.width, 5));
       page.drawImage(caption, { x: mm(item.x), y: mm(297 - item.y - item.height - 7), width: mm(item.width), height: mm(5) });
       if (item.solo && item.record.type === 'rail') {
