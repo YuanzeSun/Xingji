@@ -74,7 +74,7 @@ function importMatch(existing, incoming) {
 }
 
 const excluded = new Set(['type', 'template', 'flightStatus', 'provenance', 'deleted', 'fieldSources',
-  'lookupValues', 'ticketMarks', 'offsetX', 'offsetY', ...BOARDING_FIELDS]);
+  'lookupValues', 'ticketMarks', ...BOARDING_FIELDS]);
 
 function supplement(existing, incoming) {
   const record = clone(existing);

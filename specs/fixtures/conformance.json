@@ -553,13 +553,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -638,13 +634,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -725,13 +717,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -815,13 +803,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -901,13 +885,9 @@
             "arrivalZone": "default",
             "departureZone": "default",
             "gate": "manual",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -991,13 +971,9 @@
             "arrivalZone": "default",
             "departureZone": "default",
             "gate": "manual",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -1085,13 +1061,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -1170,13 +1142,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -1257,13 +1225,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -1342,13 +1306,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -1432,13 +1392,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -1517,13 +1473,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -1604,13 +1556,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -1689,13 +1637,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -1779,13 +1723,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -1864,13 +1804,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -1951,13 +1887,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2036,13 +1968,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2126,13 +2054,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2211,13 +2135,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2298,13 +2218,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2383,13 +2299,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2473,13 +2385,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2558,13 +2466,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2645,13 +2549,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2737,13 +2637,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2822,13 +2718,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2907,13 +2799,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -2994,13 +2882,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -3079,13 +2963,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -3164,13 +3044,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -3256,13 +3132,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -3344,13 +3216,9 @@
             "arrivalZone": "default",
             "departureZone": "default",
             "gate": "manual",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -3433,13 +3301,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -3521,13 +3385,9 @@
             "arrivalZone": "default",
             "departureZone": "default",
             "gate": "manual",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -3614,13 +3474,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -3701,13 +3557,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -3788,13 +3640,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -3875,13 +3723,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -3971,13 +3815,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -4058,13 +3898,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -4145,13 +3981,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -4232,13 +4064,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -4323,13 +4151,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -4406,8 +4230,6 @@
           "lookupValues": {},
           "fieldSources": {},
           "provenance": "",
-          "offsetX": "",
-          "offsetY": "",
           "deleted": true,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -4488,13 +4310,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -4571,8 +4389,6 @@
           "lookupValues": {},
           "fieldSources": {},
           "provenance": "",
-          "offsetX": "",
-          "offsetY": "",
           "deleted": true,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -4657,13 +4473,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -4740,8 +4552,6 @@
           "lookupValues": {},
           "fieldSources": {},
           "provenance": "",
-          "offsetX": "",
-          "offsetY": "",
           "deleted": true,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -4822,13 +4632,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -4909,13 +4715,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": true,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -5006,13 +4808,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -5093,13 +4891,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -5180,13 +4974,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -5274,13 +5064,9 @@
             "arrivalZone": "default",
             "departureZone": "default",
             "gate": "railgo",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -5362,13 +5148,9 @@
             "arrivalZone": "default",
             "departureZone": "default",
             "gate": "manual",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -5454,13 +5236,9 @@
             "arrivalZone": "default",
             "departureZone": "default",
             "gate": "railgo",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -5542,13 +5320,9 @@
             "arrivalZone": "default",
             "departureZone": "default",
             "gate": "manual",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -5640,13 +5414,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -5727,13 +5497,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -5816,13 +5582,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
@@ -5903,13 +5665,9 @@
           "fieldSources": {
             "arrivalZone": "default",
             "departureZone": "default",
-            "offsetX": "default",
-            "offsetY": "default",
             "provenance": "default"
           },
           "provenance": "commemorative",
-          "offsetX": "0",
-          "offsetY": "0",
           "deleted": false,
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",

@@ -21,10 +21,13 @@ const flight = createRecord({
 });
 const flightWithStop = createRecord({ ...flight, flightStop: { ...flightQuery(flight), airport: 'KIX' },
   fieldSources: { ...flight.fieldSources, flightStop: 'variflight' } });
-const train = createRecord({ id: 'train-current', service: 'G21', departureDate: '2026-01-01', orderNumber: 'E123456' });
+const train = createRecord({ id: 'train-current', service: 'G21', departureDate: '2026-01-01', orderNumber: 'E123456',
+  ticketMarks: [{ text: '网', shape: 'circle', offsetX: 6, offsetY: -4 }] });
 const oldFlight = {
   ...structuredClone(flight), orderNumber: 'TRAVEL-ORDER', flightStops: { ...flightQuery(flight), count: 1, airports: ['KIX'] },
-  fieldSources: { ...flight.fieldSources, orderNumber: 'manual', flightStops: 'variflight' }, lockedFields: ['orderNumber']
+  offsetX: '5', offsetY: '0', fieldSources: {
+    ...flight.fieldSources, orderNumber: 'manual', flightStops: 'variflight', offsetX: 'manual', offsetY: 'default'
+  }, lockedFields: ['orderNumber', 'offsetX']
 };
 for (const field of ['actualBoardingTime', 'boardingCodeSource', 'boardingLegIndex']) delete oldFlight[field];
 
@@ -44,18 +47,21 @@ test('GitHub migration previews changes, cancels without writing, and updates on
   const server = await prepareCloud([flight, train], { profile: { chineseName: '测试' } });
   const button = () => document.querySelector('[data-action="migrate-fields"]');
   const preview = () => document.querySelector('[data-field-migration-form]');
+  const files = replaceOldShard(server);
+  const previewHead = server.head;
+  await db.setMany([['records', [oldFlight, train]], ['base', [oldFlight, train]],
+    ['syncMeta', { revision: 1, head: previewHead, verified: true, pending: false }]]);
   try {
     await import('../src/app.js');
-    await until(() => button()?.disabled === false);
-    const files = replaceOldShard(server);
-    const previewHead = server.head;
+    await until(() => button()?.disabled === false && document.querySelector('#connection-state')?.textContent.includes('字段来源包含无效内容'));
     button().click();
     await until(preview);
     const text = preview().textContent;
     assert.match(text, /2025-11-15 · CA181/);
     const [removed] = preview().querySelectorAll('dd');
     assert.deepEqual(new Set(removed.textContent.split('、')),
-      new Set(['订单号', '字段来源 / 订单号', '旧经停资料', '字段来源 / 旧经停资料']));
+      new Set(['订单号', '字段来源 / 订单号', '旧经停资料', '字段来源 / 旧经停资料', '整张票面的横向偏移', '整张票面的纵向偏移',
+        '字段来源 / 整张票面的横向偏移', '字段来源 / 整张票面的纵向偏移']));
     assert.match(text, /补齐.*实际登机时间/);
     assert.match(text, /补齐.*条码来源.*条码航段/);
     assert.doesNotMatch(text, /TRAVEL-ORDER/);

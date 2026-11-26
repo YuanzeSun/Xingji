@@ -204,9 +204,15 @@ export function mountJourneyMap(container, records, { icon, options = {} }) {
       zoom(Math.exp(-clamp(delta,-120,120)*.008),anchor,viewport,anchor,true);
       window.clearTimeout(wheelTimer);wheelTimer=window.setTimeout(()=>{wheelTimer=0;scheduleDraw(true);},120);
     };
+    function clearSelection() {
+      if (!alive || (!selected && !node)) return;
+      options.selected = options.node = '';
+      selected = node = undefined;
+      draw();
+    }
     function openMapTickets(title, tickets) {
       draw();
-      showRelatedTickets(container, title, tickets, svg);
+      showRelatedTickets(container, title, tickets, svg, clearSelection);
     }
     const click = event => {
       if (dragged) { dragged = false; if (event.target.closest('svg')) return; }
@@ -226,7 +232,9 @@ export function mountJourneyMap(container, records, { icon, options = {} }) {
         options.node = node.id;
         options.selected = '';
         openMapTickets(node.name, visibleRecords.filter(record => node.trips.has(record.id)));
-      } else if (savedRoutes.length && event.type === 'click') {
+      } else if (event.type === 'click') {
+        clearSelection();
+        if (!savedRoutes.length) return;
         const rect = svg.getBoundingClientRect(), unit = 1000 / viewport.zoom / width;
         const point = [viewport.x + (event.clientX - rect.left - width / 2) * unit,
           viewport.y + (event.clientY - rect.top - height / 2) * unit];
@@ -240,7 +248,7 @@ export function mountJourneyMap(container, records, { icon, options = {} }) {
       if (event.key === 'Escape') {
         event.preventDefault();
         if (playback?.running) playback.stop();
-        else { options.selected = ''; options.node = ''; selected = node = undefined; draw(); svg.focus(); }
+        else { clearSelection(); svg.focus(); }
         return;
       }
       if (event.target !== svg) return;

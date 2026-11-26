@@ -41,15 +41,16 @@ test('the timeline and related map tickets omit names, and map tickets open the 
   click('.ticket-detail-modal [data-action=close-modal]');
   await wait(() => !document.querySelector('.ticket-detail-modal'));
   assert.equal(related().open, true);
-  related().dispatchEvent(new window.Event('cancel', { cancelable: true }));
+  related().dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   const map = document.querySelector('.journey-map-canvas');
   assert.equal(related(), null);
   assert.equal(document.activeElement, map);
-  map.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(document.querySelector('.map-route.selected'), null);
+  assert.equal(document.querySelector('.map-route.dimmed'), null);
   document.querySelector('[data-map-node="airport:PEK"]').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   assert.equal(related().querySelector('[data-action=view]').dataset.id, 'b');
   click('.related-tickets-dialog [data-close-related]');
+  assert.equal(document.querySelector('.map-node.selected'), null);
   assert.deepEqual(await db.get('records'), records);
   dom.window.close();
 });

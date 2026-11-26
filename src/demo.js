@@ -44,17 +44,17 @@ export function demoRecords(today=localToday()){
     airline: '中国东方航空', marketingCarrier: 'MU', departureTime: '09:15', arrivalTime: '12:30', boardingTime: '08:35',
     actualDepartureTime: '09:23', actualArrivalTime: '12:37', actualBoardingTime: '08:41', flightDistance: '1667',
     seat: '32A', seatClass: 'Y', terminal: 'T2', gate: 'D21', price: '860.00',
-    checkedBaggageCount: '1', freeBaggageAllowance: '20K', frequentFlyerCarrier: 'MU', frequentFlyerNumber: '000012345678'
+    frequentFlyerCarrier: 'MU', frequentFlyerNumber: '000012345678'
   };
   const boeingExamples = [['737-8Q8', 'B-DEMO1'], ['737-800', 'B-DEMO1'], ['737-8', 'B-DEMO3']].map(([aircraft, aircraftRegistration], index) => ({
     ...domesticFlight, id: `demo-${8 + index}`, service: `MU990${1 + index}`, departureDate: recent(4 + index),
-    aircraft, aircraftRegistration, pnr: `DEMO0${3 + index}`,
-    baggageTagNumbers: `781000010${2 + index}`, ticketNumber: `781000000000${2 + index}`
+    aircraft, aircraftRegistration, pnr: `DEMO0${3 + index}`, ticketNumber: `781000000000${2 + index}`,
+    ...(index === 0 ? { baggageTagNumbers: '7810000102', checkedBaggageCount: '1', freeBaggageAllowance: '20K' } : {})
   }));
   const g21 = {id:'demo-1',type:'rail',template:'rail-receipt',departureDate:recent(1),origin:'北京南',destination:'南京南',service:'G21',carriage:'05',seat:'08F',seatClass:'二等座',price:'503.0',issuer:'北京南',railShowIssuer:true,gate:'16A',railPlatform:'8'};
   const rows=[
     g21,
-    {...domesticFlight,id:'demo-2',departureDate:recent(1),service:'MU5403',aircraft:'A321-200',aircraftRegistration:'B-1813',pnr:'DEMO01',baggageTagNumbers:'7810000101',ticketNumber:'7810000000001'},
+    {...domesticFlight,id:'demo-2',departureDate:recent(1),service:'MU5403',aircraft:'A321-200',aircraftRegistration:'B-1813',pnr:'DEMO01',ticketNumber:'7810000000001'},
     {id:'demo-3',type:'rail',template:'rail-blue',departureDate:'2018-10-01',origin:'杭州东',destination:'南京南',service:'G7602',carriage:'03',seat:'12A',seatClass:'二等座',price:'117.5',issuer:'杭州东',gate:'7',railPlatform:'7',provenance:'reconstruction'},
     {id:'demo-4',type:'rail',template:'rail-red-classic',departureDate:'2014-07-12',origin:'北京',destination:'齐齐哈尔',service:'Z83',carriage:'09',seat:'015号下铺',seatClass:'硬卧',price:'363.0',issuer:'北京',gate:'2',railPlatform:'5',provenance:'reconstruction'},
     {id:'demo-5',type:'rail',template:'rail-receipt',departureDate:recent(2),origin:'广州南',destination:'深圳北',service:'G6203',carriage:'07',seat:'06C',seatClass:'二等座',price:'74.5',issuer:'广州南',gate:'B18',railPlatform:'18'},

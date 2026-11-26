@@ -9,6 +9,7 @@ import {railJourneyMarkup} from '../src/rail-journey-ui.js';
 import {readBoardingCode} from '../src/bcbp.js';
 import {validateTicketForm} from '../src/ticket-form.js';
 import {journeyStatistics} from '../src/statistics-model.js';
+import {ticketSVG} from '../src/tickets.js';
 
 test('four sample journeys stay recent across month and year boundaries while historical ticket styles keep their dates',()=>{
   for(const today of ['2026-11-17','2027-01-02']){
@@ -50,8 +51,10 @@ test('demo flights have independent boarding codes and cover the aircraft groupi
   const rows=demoRecords('2026-11-17').filter(record=>record.type==='flight');
   for(const record of rows){
     const code=readBoardingCode(record.boardingCode);assert.equal(record.boardingCodeSource,'generated');assert.equal(code.service,record.service);assert.equal(code.originCode,record.originCode);assert.equal(code.destinationCode,record.destinationCode);assert.equal(code.seat,record.seat);assert.equal(code.cabin,record.seatClass);assert.equal(code.pnr,record.pnr);assert.equal(code.electronic,'');
-    for(const key of ['airline','aircraft','aircraftRegistration','terminal','boardingTime','pnr','flightStatus','flightDistance','actualDepartureDate','actualDepartureTime','actualArrivalDate','actualArrivalTime','actualBoardingTime','baggageTagNumbers','checkedBaggageCount','freeBaggageAllowance','frequentFlyerCarrier','frequentFlyerNumber','marketingCarrier'])assert.ok(record[key],record.service+' '+key);
+    for(const key of ['airline','aircraft','aircraftRegistration','terminal','boardingTime','pnr','flightStatus','flightDistance','actualDepartureDate','actualDepartureTime','actualArrivalDate','actualArrivalTime','actualBoardingTime','frequentFlyerCarrier','frequentFlyerNumber','marketingCarrier'])assert.ok(record[key],record.service+' '+key);
+    assert.equal(ticketSVG(record).includes('data-boarding-baggage-sticker'), Boolean(record.checkedBaggageCount));
   }
+  assert.deepEqual(rows.filter(record => record.checkedBaggageCount).map(record => record.service), ['CA181', 'MU9901']);
   assert.equal(rows.find(record=>record.service==='MU5403').destinationCode,'CTU');assert.equal(rows.find(record=>record.service==='CA181').destinationCode,'HND');assert.equal(rows.find(record=>record.service==='CA181').passenger,'EXAMPLE/TRAVELER');
   assert.equal(new Set(rows.map(record=>record.boardingCode.rawBytes)).size, rows.length);
   assert.deepEqual(rows.slice(2).map(record=>record.aircraft),['737-8Q8','737-800','737-8']);

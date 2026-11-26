@@ -195,7 +195,7 @@ function blue(r) {
   const origin = railwayStop(r, 'origin'), destination = railwayStop(r, 'destination');
   const pattern = `fine-${esc(r.id)}`;
   const issuer = r.issuer && (!thermal || r.railShowIssuer === true) ? r.issuer.replace(/站$/, '') + '站售' : '';
-  const printed = `<g fill="#172226" stroke="#172226" stroke-width="${thermal ? '.5' : '.65'}" paint-order="stroke" transform="translate(${Number(r.offsetX) || 0} ${Number(r.offsetY) || 0})">
+  const printed = `<g fill="#172226" stroke="#172226" stroke-width="${thermal ? '.5' : '.65'}" paint-order="stroke">
     ${text(48, 57, r.ticketNumber, 44, 'TicketOCR', 'fill="#c45766" letter-spacing="2" stroke="none"')}
     ${text(803, 52, r.gate ? `检票:${r.gate}` : '', 29, body, 'text-anchor="end"')}
     ${station(origin.name, 83, 128, 222, { thermal })}${station(destination.name, 551, 128, 227, { thermal })}
@@ -236,7 +236,7 @@ function red(r) {
     ? text(56, 422, r.passenger, 33) + text(56, 473, maskRailIdentity(r.identity), 32, 'TicketOCR')
     : passenger(r, 56, 427, 440);
   return `<defs>${paperPattern(pattern, true)}</defs><rect width="900" height="600" fill="#f8f3e6"/><rect x="30" y="30" width="840" height="540" fill="#efd3ce"/><rect x="30" y="30" width="840" height="540" fill="url(#${pattern})"/>
-  <g fill="#152022" stroke="#152022" stroke-width=".65" paint-order="stroke" transform="translate(${Number(r.offsetX) || 0} ${Number(r.offsetY) || 0})">
+  <g fill="#152022" stroke="#152022" stroke-width=".65" paint-order="stroke">
     ${text(59, 83, r.ticketNumber, 46, 'TicketOCR', 'fill="#b83c4d" letter-spacing="3" stroke="none"')}
     ${classic ? oldIssuer : text(822, 82, r.gate ? '检票口' + r.gate : '', 31, 'TicketSong', 'text-anchor="end"')}
     ${station(origin.name, 86, 153, 231, { classic, red: true })}${station(destination.name, 585, 153, 236, { classic, red: true })}
@@ -263,7 +263,7 @@ function supplement(r) {
   ].filter(Boolean).join('　');
   const issuer = r.issuer && (r.issuer.endsWith('补') ? r.issuer : r.issuer + '补');
   return `<defs>${paperPattern(pattern, true)}</defs><rect width="900" height="600" fill="#f1eee2"/><rect x="34" y="26" width="834" height="548" fill="#e6d8cc"/><rect x="34" y="26" width="834" height="548" fill="url(#${pattern})" opacity=".55"/>
-  <g fill="#242422" stroke="#242422" stroke-width=".25" paint-order="stroke" transform="translate(${Number(r.offsetX) || 0} ${Number(r.offsetY) || 0})">
+  <g fill="#242422" stroke="#242422" stroke-width=".25" paint-order="stroke">
     ${text(54, 85, r.ticketNumber, 48, 'TicketOCR', 'fill="#a74c4d" letter-spacing="4" stroke="none"')}
     ${station(origin.name, 121, 136, 218)}${station(destination.name, 617, 136, 223)}
     ${trainService(r.service, 455, 132, 50)}<path d="M360 145h190" fill="none" stroke-width="2"/>
@@ -373,7 +373,7 @@ function flight(r) {
   <g fill="#203b49" data-boarding-header="true">
     ${mark ? `<g data-airline-logo="${logo.code}" role="img" aria-label="${esc(logo.name)} 标志"><title>${esc(logo.name)}</title><image x="32" y="11" width="42" height="42" preserveAspectRatio="xMidYMid meet" href="${mark.image}"/></g>` : ''}
     ${mainHeading.markup}${headerAirline}${text(869, 42, words.title, 20, 'TicketHei', 'text-anchor="end"')}${stubHeading.markup}${text(1065, stubHeading.multiline ? 61 : 49, words.title, stubHeading.multiline ? 9 : 12, 'TicketHei', 'text-anchor="middle"')}</g>
-  <g fill="#1a2022" transform="translate(${Number(r.offsetX) || 0} ${Number(r.offsetY) || 0})">
+  <g fill="#1a2022">
     <g data-boarding-section="main">
       ${label(35, 100, words.name)}${printed(35, 135, presentation.passenger, 28, 410)}
       ${label(35, 181, words.flight)}${printed(35, 215, service, 29, 165)}

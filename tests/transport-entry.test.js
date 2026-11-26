@@ -31,9 +31,11 @@ test('archive entries preselect each transport and share a switchable editor',as
     assert.equal(form().elements.departureDateYear.value,'');
     assert.equal(form().elements.departureTime.required,true);
     assert.ok(form().querySelector('[data-rail-photo]'));
+    assert.equal(form().elements.offsetX, undefined);
+    assert.equal(form().elements.offsetY, undefined);
     const blankRail=controls();
-    fillAll({origin:'北京南',destination:'南京南',service:'G21',departureDate:'2026-11-16',departureTime:'08:00',arrivalDate:'2026-11-16',arrivalTime:'12:00',passenger:'旧姓名',identity:'OLD123',carriage:'03',seat:'08A',seatClass:'二等座',railTrainsets:'CR400BF-B-5099',railBureau:'北京局',railModel:'CR400BF-B',railMileage:'1020',orderNumber:'OLDORDER',gate:'A10',price:'400',offsetX:'4'});
-    document.querySelector('[data-mark-add]').click();fill('markText-0','孩');
+    fillAll({origin:'北京南',destination:'南京南',service:'G21',departureDate:'2026-11-16',departureTime:'08:00',arrivalDate:'2026-11-16',arrivalTime:'12:00',passenger:'旧姓名',identity:'OLD123',carriage:'03',seat:'08A',seatClass:'二等座',railTrainsets:'CR400BF-B-5099',railBureau:'北京局',railModel:'CR400BF-B',railMileage:'1020',orderNumber:'OLDORDER',gate:'A10',price:'400'});
+    document.querySelector('[data-mark-add]').click();fill('markText-0','孩');fill('markX-0','4');fill('markY-0','-3');
     fill('type','flight','change');
     assert.equal(form().querySelector('[data-rail-photo]'),null);
     assert.ok(form().querySelector('#code-photo'));
@@ -42,8 +44,8 @@ test('archive entries preselect each transport and share a switchable editor',as
     for(const key of ['origin','destination','originCode','destinationCode','service','departureTime','arrivalDate','arrivalTime','seat','gate','price'])assert.equal(form().elements[key].value,'',key);
     assert.equal(form().elements.orderNumber, undefined);
     assert.equal(form().elements.departureDateYear.value,year);
-    assert.equal(form().elements.offsetX.value,'0');assert.equal(document.querySelector('[data-field-source="passenger"]').textContent,'个人资料');
-    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDate:'2026-11-17',departureTime:'09:00',arrivalDate:'2026-11-17',arrivalTime:'13:00',actualDepartureDate:'2026-11-17',actualDepartureTime:'09:10',actualArrivalDate:'2026-11-17',actualArrivalTime:'13:15',passenger:'OLD/NAME',identity:'OLDPASSPORT',seat:'20C',seatClass:'S',airline:'中国国际航空',aircraft:'777-300ER',aircraftRegistration:'B-0001',flightDistance:'8000',pnr:'ABC123',ticketNumber:'1230000000001',terminal:'T3',boardingTime:'08:30',gate:'B20',price:'5000',offsetY:'5'});
+    assert.equal(form().elements.offsetX, undefined);assert.equal(form().elements.offsetY, undefined);assert.equal(document.querySelector('[data-field-source="passenger"]').textContent,'个人资料');
+    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDate:'2026-11-17',departureTime:'09:00',arrivalDate:'2026-11-17',arrivalTime:'13:00',actualDepartureDate:'2026-11-17',actualDepartureTime:'09:10',actualArrivalDate:'2026-11-17',actualArrivalTime:'13:15',passenger:'OLD/NAME',identity:'OLDPASSPORT',seat:'20C',seatClass:'S',airline:'中国国际航空',aircraft:'777-300ER',aircraftRegistration:'B-0001',flightDistance:'8000',pnr:'ABC123',ticketNumber:'1230000000001',terminal:'T3',boardingTime:'08:30',gate:'B20',price:'5000'});
     fill('type','rail');
     assert.deepEqual(controls(),blankRail,'switching back restores a fresh form, including hidden values, marks, dates and layout');
     fillAll({origin:'清河',destination:'天津',service:'G103',departureDate:'2026-11-15',departureTime:'08:00',carriage:'05',seat:'08F',seatClass:'二等座',railTrainsets:'cr400af-0001'});

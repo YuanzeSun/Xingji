@@ -13,7 +13,7 @@ test('the app saves generated code edits immediately, persists provenance, and k
   window.scrollTo=()=>{};window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){this.open=false;};
   const values={passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:'2026-11-17',cabin:'Y',seat:'12A',sequence:'25',status:'1'};
   const base={type:'flight',template:'air-boarding-pass',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-11-17',departureTime:'08:00',passenger:'DOE/JANE',identity:'P000001',pnr:'ABC123',seat:'12A',seatClass:'S',boardingCode:createBoardingCode(values),boardingLegIndex:'0'};
-  const generated=createRecord({...base,id:'generated',boardingCodeSource:'generated',lockedFields:['type','template','flightStatus','provenance','offsetX','offsetY','seat'],fieldSources:{type:'manual',template:'default',flightStatus:'default',seat:'manual',boardingCode:'generated'}}),original=createRecord({...base,id:'original',service:'CA5678',seatClass:'Y',fieldSources:Object.fromEntries(['origin','destination','service','passenger','seat','seatClass','pnr'].map(key=>[key,'barcode'])),boardingCode:createBoardingCode({...values,flightNumber:'5678'}),boardingCodeSource:'original'});
+  const generated=createRecord({...base,id:'generated',boardingCodeSource:'generated',lockedFields:['type','template','flightStatus','provenance','seat'],fieldSources:{type:'manual',template:'default',flightStatus:'default',seat:'manual',boardingCode:'generated'}}),original=createRecord({...base,id:'original',service:'CA5678',seatClass:'Y',fieldSources:Object.fromEntries(['origin','destination','service','passenger','seat','seatClass','pnr'].map(key=>[key,'barcode'])),boardingCode:createBoardingCode({...values,flightNumber:'5678'}),boardingCodeSource:'original'});
   const server=await prepareCloud([generated,original]);
   const wait=async predicate=>{for(let i=0;i<300;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('Boarding editor did not settle');};
   const open=async id=>{document.querySelector(`[data-action="view"][data-id="${id}"]`).click();await wait(()=>document.querySelector('[data-action="edit"]:not(:disabled)'));document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));};
@@ -23,7 +23,7 @@ test('the app saves generated code edits immediately, persists provenance, and k
   try{
     await import('../src/app.js');await wait(()=>document.querySelector('[data-action="view"][data-id="generated"]'));
     await open('generated');
-    for(const key of ['type','flightStatus','offsetX','offsetY'])assert.equal(document.querySelector(`[name="${key}"]`).closest('.field').querySelector('[data-field-source]'),null,key);
+    for(const key of ['type','flightStatus'])assert.equal(document.querySelector(`[name="${key}"]`).closest('.field').querySelector('[data-field-source]'),null,key);
     assert.equal(document.querySelector('[data-field-source="seat"]').textContent,'手动输入');assert.doesNotMatch(document.querySelector('#editor-form').textContent,/已手动校正/);
     assert.match(document.querySelector('[data-code-editor] h3').textContent,/登机牌条码或电子登机牌二维码/);
     assert.equal(document.querySelector('[data-code-examples]').hidden, true);

@@ -1,7 +1,7 @@
 import { escape as e } from './html.js';
 import { calendarDate, dateLabel } from './journey-date.js';
 
-export function showRelatedTickets(container, title, records, trigger) {
+export function showRelatedTickets(container, title, records, trigger, onClose) {
   const tickets = [...new Map(records.map(record => [record.id, record])).values()];
   if (!tickets.length || container.querySelector('.related-tickets-dialog[open]')) return;
   const doc = container.ownerDocument;
@@ -28,6 +28,7 @@ export function showRelatedTickets(container, title, records, trigger) {
   });
   dialog.addEventListener('close', () => {
     dialog.remove();
+    onClose?.();
     trigger.focus({ preventScroll: true });
   }, { once: true });
   container.append(dialog);

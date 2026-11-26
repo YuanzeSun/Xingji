@@ -73,8 +73,6 @@
     "lookupValues",
     "fieldSources",
     "provenance",
-    "offsetX",
-    "offsetY",
     "deleted"
   ],
   "lookupFields": [
