@@ -5,7 +5,7 @@ import { createRecord } from '../src/model.js';
 import { createBoardingCode } from '../src/bcbp.js';
 import { flightQuery } from '../src/flight-query.js';
 import { D1Store } from '../src/d1.js';
-import { planArchiveFieldMigration, writeArchiveFieldMigration } from '../src/archive-field-migration.js';
+import { archiveFieldMigrationMarkup, planArchiveFieldMigration, writeArchiveFieldMigration } from '../src/archive-field-migration.js';
 import { prepareCloud } from './helpers/cloud.js';
 import { browser, until } from './helpers/d1-app.js';
 import { endpoint, memoryD1, token } from './helpers/d1.js';
@@ -59,12 +59,11 @@ test('GitHub migration previews changes, cancels without writing, and updates on
     button().click();
     await until(preview);
     const text = preview().textContent;
-    assert.equal(preview().querySelector('.migration-records strong').textContent, '2025-11-15 · CA181 · 北京首都 → 东京羽田');
+    assert.equal(preview().querySelector('.migration-ticket-list li').textContent, '2025-11-15 · CA181 · 北京首都 → 东京羽田');
     assert.doesNotMatch(text, /flight-old/);
     const [removed] = preview().querySelectorAll('dd');
     assert.deepEqual(new Set(removed.textContent.split('、')),
-      new Set(['订单号', '字段来源 / 订单号', '旧经停资料', '字段来源 / 旧经停资料', '整张票面的横向偏移', '整张票面的纵向偏移',
-        '字段来源 / 整张票面的横向偏移', '字段来源 / 整张票面的纵向偏移']));
+      new Set(['订单号', '旧经停资料', '整张票面的位置微调（横向和纵向）']));
     assert.match(text, /补齐.*实际登机时间/);
     assert.match(text, /补齐.*条码来源.*条码航段/);
     assert.doesNotMatch(text, /TRAVEL-ORDER/);
@@ -123,4 +122,20 @@ test('a record with an invalid required field is listed and prevents migration',
   assert.equal(plan.changes.length, 1);
   assert.deepEqual(plan.errors, [{ title: '第 2 条票据', message: '不支持的票面样式' }]);
   await assert.rejects(writeArchiveFieldMigration({}, snapshot, plan), /没有可提交的迁移/);
+});
+
+test('the preview groups matching ticket changes and summarizes previously deleted tickets separately', () => {
+  const second = { ...oldFlight, id: 'second-flight', service: 'CA182',
+    fieldSources: { ...oldFlight.fieldSources, orderNumber: undefined } };
+  const deleted = createRecord({ ...flight, id: 'previously-deleted', deleted: true });
+  const plan = planArchiveFieldMigration({ records: [
+    oldFlight, { ...second, flightStops: { ...second.flightStops, fnum: second.service } },
+    { ...deleted, offsetX: '0', offsetY: '0' }
+  ] });
+  const markup = archiveFieldMigrationMarkup(plan, 'Cloudflare D1 主票库', { orderNumber: '订单号' });
+  assert.match(markup, /将整理 2 张票据的字段，以及 1 条已删除票据的同步记录/);
+  assert.match(markup, /涉及 2 张票据<\/summary>\s*<ul[^>]*>.*CA181.*CA182.*?<\/li><\/ul>/s);
+  assert.match(markup, /涉及 1 条已删除票据的同步记录/);
+  assert.equal(markup.match(/订单号/g)?.length, 1);
+  assert.doesNotMatch(markup, /previously-deleted|second-flight/);
 });

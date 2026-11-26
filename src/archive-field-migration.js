@@ -75,8 +75,8 @@ export function planArchiveFieldMigration(snapshot) {
         describeChanges(row, record, change);
         if (change.added.length || change.removed.length || change.updated.length) {
           const route = [record.origin, record.destination].filter(Boolean).join(' → ');
-          change.title = record.deleted ? `已删除票据 · 第 ${count} 条` :
-            [dateLabel(record.departureDate, '-'), record.service, route].filter(Boolean).join(' · ');
+          change.deleted = record.deleted;
+          if (!record.deleted) change.title = [dateLabel(record.departureDate, '-'), record.service, route].filter(Boolean).join(' · ');
           changes.push(change);
           if (path) rewritten.add(path);
           records.push(record);
@@ -97,20 +97,58 @@ export async function writeArchiveFieldMigration(store, snapshot, plan) {
   return store.write(plan.records, { ...snapshot, records: plan.records, contents }, snapshot.settings, 'Migrate Xingji ticket fields');
 }
 
+const changeCategories = [['removed', '移除字段'], ['added', '补齐字段'], ['updated', '调整字段']];
+const fieldMetadata = new Set(['fieldSources', 'lookupValues', 'railFieldDates']);
+
+function fieldNames(paths, labels) {
+  const fields = new Set(paths), names = new Set();
+  const wholeFaceOffset = fields.has('offsetX') && fields.has('offsetY');
+  for (const path of fields) {
+    const parts = path.split('.'), [field, key] = parts;
+    if (fieldMetadata.has(field) && fields.has(key)) continue;
+    if (wholeFaceOffset && (path === 'offsetX' || path === 'offsetY')) {
+      names.add('整张票面的位置微调（横向和纵向）');
+    } else names.add(parts.map(part => Object.hasOwn(labels, part) ? labels[part] : part).join(' / '));
+  }
+  return [...names].sort();
+}
+
+function groupChanges(changes, labels) {
+  const groups = new Map();
+  for (const change of changes) {
+    const fields = changeCategories.filter(([key]) => change[key].length)
+      .map(([key, label]) => [label, fieldNames(change[key], labels)]);
+    const key = JSON.stringify(fields);
+    if (!groups.has(key)) groups.set(key, { fields, tickets: [], deleted: 0 });
+    const group = groups.get(key);
+    if (change.deleted) group.deleted++;
+    else group.tickets.push(change.title);
+  }
+  return [...groups.values()].sort((a, b) => b.tickets.length - a.tickets.length);
+}
+
 export function archiveFieldMigrationMarkup(plan, target, labels) {
-  const name = path => path.split('.').map(field => Object.hasOwn(labels, field) ? labels[field] : field).join(' / ');
-  const categories = [['removed', '删除'], ['added', '补齐'], ['updated', '调整']];
+  const groups = groupChanges(plan.changes, labels);
   const hasChanges = plan.changes.length > 0;
-  const message = plan.errors.length ? '部分票据无法整理，请核对下方原因。' :
-    hasChanges ? '请核对各条票据的字段变更，确认后写入主票库。' : '票库已符合当前版本。';
+  const deleted = plan.changes.filter(change => change.deleted).length;
+  const tickets = plan.changes.length - deleted;
+  const affected = [
+    tickets && `${tickets} 张票据的字段`,
+    deleted && `${deleted} 条已删除票据的同步记录`
+  ].filter(Boolean).join('，以及 ');
+  const message = plan.errors.length ? '部分票据无法迁移，请先核对下方原因。' :
+    hasChanges ? '确认后会更新下列字段，现有票据会保留。' + (deleted ? '已删除的票据仍保持删除状态。' : '') : '票库已符合当前版本。';
   return `<form data-field-migration-form>
     <div class="detail-body archive-field-migration">
-      <p><strong>${e(target)}</strong> · ${plan.changes.length} 条票据有变更</p>
+      <p class="migration-target">${e(target)}</p>
+      ${hasChanges ? `<p><strong>将整理 ${affected}</strong></p>` : ''}
       <p>${message}</p>
-      ${plan.changes.length ? `<ul class="migration-records">${plan.changes.map(change => `<li>
-        <strong>${e(change.title)}</strong>
-        <dl>${categories.filter(([key]) => change[key].length).map(([key, label]) =>
-          `<div><dt>${label}</dt><dd>${e(change[key].map(name).join('、'))}</dd></div>`).join('')}</dl>
+      ${hasChanges ? `<ul class="migration-records">${groups.map(group => `<li>
+        <dl>${group.fields.map(([label, fields]) =>
+          `<div><dt>${label}</dt><dd>${e(fields.join('、'))}</dd></div>`).join('')}</dl>
+        ${group.tickets.length ? `<details open><summary>涉及 ${group.tickets.length} 张票据</summary>
+          <ul class="migration-ticket-list">${group.tickets.map(title => `<li>${e(title)}</li>`).join('')}</ul></details>` : ''}
+        ${group.deleted ? `<p class="migration-deleted">涉及 ${group.deleted} 条已删除票据的同步记录</p>` : ''}
       </li>`).join('')}</ul>` : ''}
       ${plan.errors.length ? `<ul class="migration-records">${plan.errors.map(item =>
         `<li><strong>${e(item.title)}</strong><p>${e(item.message)}</p></li>`).join('')}</ul>` : ''}
@@ -118,7 +156,7 @@ export function archiveFieldMigrationMarkup(plan, target, labels) {
     </div>
     <div class="modal-footer">
       <button type="button" class="button secondary" data-action="close-modal">${hasChanges && !plan.errors.length ? '取消' : '关闭'}</button>
-      ${hasChanges && !plan.errors.length ? '<button type="submit" class="button primary">确认迁移</button>' : ''}
+      ${hasChanges && !plan.errors.length ? '<button type="submit" class="button primary">应用字段变更</button>' : ''}
     </div>
   </form>`;
 }

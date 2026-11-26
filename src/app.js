@@ -1982,8 +1982,9 @@ async function showFieldMigration() {
     const { captured, store, snapshot, plan } = preview;
     const target = captured.d1 ? 'Cloudflare D1 主票库' : `GitHub · ${captured.config.owner}/${captured.config.repo}`;
     const focus = modalFocus;
-    openModal(modalHead('迁移数据') + migration.archiveFieldMigrationMarkup(plan, target, {
-      ...FLIGHT_TIME_LABELS, ...labels, fieldSources: '字段来源', lookupValues: '自动补全快照', lockedFields: '锁定字段',
+    openModal(modalHead('迁移预览') + migration.archiveFieldMigrationMarkup(plan, target, {
+      ...FLIGHT_TIME_LABELS, ...labels, fieldSources: '字段来源', lookupValues: '自动补全记录', lockedFields: '锁定字段',
+      railFieldDates: '查询日期',
       boardingCodeSource: '条码来源', boardingLegIndex: '条码航段', flightStops: '旧经停资料', sources: '资料来源',
       createdAt: '归档创建时间', updatedAt: '最近修改时间', mergedIds: '合并记录编号',
       offsetX: '整张票面的横向偏移', offsetY: '整张票面的纵向偏移'
@@ -2013,7 +2014,7 @@ async function showFieldMigration() {
           announce();
         }
         closeModal(true);
-        toast(`迁移已写入主票库 · ${plan.changes.length} 条票据有变更`);
+        toast('字段变更已应用到主票库');
         if (!accepted) void doSync();
       } catch (error) {
         errorOutput.textContent = error.message;
