@@ -2,7 +2,7 @@ import {BOARDING_METADATA_LABELS,BOARDING_METADATA_FIELDS,BOARDING_BAGGAGE_FIELD
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
-import {ACTUAL_FLIGHT_FIELDS, FLIGHT_LOCAL_TIMES, FLIGHT_TIME_LABELS} from './flight-times.js';
+import {ACTUAL_FLIGHT_FIELDS, FLIGHT_LOCAL_TIMES} from './flight-times.js';
 import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
 import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railImportFieldLocked,refreshFieldSources} from './field-sources.js';
 import { bindIdentityInput, maskIdentity, printedIdentityHint } from './identity.js';
@@ -996,14 +996,13 @@ function viewRecord(id) {
 function field(key, r, options = {}) {
   if (key === 'seatClass') return seatClassField(r);
   if (key === 'seat' && r.type === 'rail') return seatField(r);
-  const type = options.type || (['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime', 'actualBoardingTime'].includes(key) ? 'time' : 'text');
-  const airportField = r.type === 'flight' && ['origin', 'destination', 'originCode', 'destinationCode'].includes(key);
-  const placeholders = { railBureau: '如：上海局', railModel: '如：25T、CR400BF-S', railPowerSupply:'如：DC600V、AC380V', railMileage:'如：1463', departureDate: '如 2026-11-15', arrivalDate: '如 2026-11-15', origin: r.type === 'rail' ? '如：北京南' : '如：PEK / 北京首都', destination: r.type === 'rail' ? '如：上海虹桥' : '如：HND / 东京羽田', service: r.type === 'rail' ? '如：G103' : '如：CA181', originCode: r.type === 'rail' ? '如：Beijingnan' : '如：PEK', destinationCode: r.type === 'rail' ? '如：Shanghaihongqiao' : '如：HND', identity: '请输入完整证件号', departureZone: '如：Asia/Shanghai', arrivalZone: '如：Asia/Tokyo' };
   const required = requiredRecordFields(r).includes(key) || ['type', 'template'].includes(key);
-  const requiredAttrs = required ? 'required aria-required="true"' : '';
   if(JOURNEY_DATE_FIELDS.includes(key))return ticketDateField(key,r,{label:ticketFieldLabel(key,r.type,labels[key]),required});
-  const control = options.options ? `<select name="${key}" ${requiredAttrs}>${selectOptions(options.options, r[key])}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${options.type === 'number' ? 'min="-30" max="30" step="1"' : ''} ${['price','railMileage','flightDistance','railSupplementFee','railSupplementSurcharge'].includes(key) ? 'inputmode="decimal"' : ''} ${key === 'identity' ? 'autocomplete="off" spellcheck="false"' : ''} />`;
-  const content = airportField || ['origin','destination','airline'].includes(key) ? `<span class="airport-picker">${control}<span class="airport-suggestions" role="listbox" hidden></span></span>` : control;
+  const type = ['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime', 'actualBoardingTime'].includes(key) ? 'time' : 'text';
+  const placeholders = { railBureau: '如：上海局', railModel: '如：25T、CR400BF-S', railPowerSupply:'如：DC600V、AC380V', railMileage:'如：1463', origin: r.type === 'rail' ? '如：北京南' : '如：PEK / 北京首都', destination: r.type === 'rail' ? '如：上海虹桥' : '如：HND / 东京羽田', service: r.type === 'rail' ? '如：G103' : '如：CA181', identity: '请输入完整证件号' };
+  const requiredAttrs = required ? 'required aria-required="true"' : '';
+  const control = options.options ? `<select name="${key}" ${requiredAttrs}>${selectOptions(options.options, r[key])}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${['price','railMileage','flightDistance','railSupplementFee','railSupplementSurcharge'].includes(key) ? 'inputmode="decimal"' : ''} ${key === 'identity' ? 'autocomplete="off" spellcheck="false"' : ''} />`;
+  const content = ['origin','destination','airline'].includes(key) ? `<span class="airport-picker">${control}<span class="airport-suggestions" role="listbox" hidden></span></span>` : control;
   const label = key === 'price' && isRefundReceipt(r) ? '退票费（元）'
     : key === 'issuer' && r.template === 'rail-supplement' ? '出票客运段'
     : ticketFieldLabel(key, r.type, labels[key]);
@@ -1035,10 +1034,10 @@ function marksEditor(record) {
   return `<section class="editor-extra"><h3>票面标识${fieldSourceBadge('ticketMarks',record)}</h3><div id="mark-rows">${markRows(record.ticketMarks)}</div><button class="button small secondary" type="button" data-mark-add>＋ 添加标识</button></section>`;
 }
 function markRows(marks) {
-  return marks.map((mark, i) => `<div class="ticket-mark-row" data-mark-index="${i}"><div class="mark-main"><label class="field"><span>标识文字</span><input name="markText-${i}" value="${e(mark.text)}" placeholder="如：网" maxlength="2" /></label><label class="field"><span>外框</span><select name="markShape-${i}">${Object.entries(MARK_SHAPES).map(([value, label]) => `<option value="${value}" ${mark.shape === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><button type="button" class="icon-button danger" data-mark-remove="${i}" aria-label="删除第${i + 1}个标识">${icon('trash')}</button></div><div class="mark-adjust"><div class="form-grid"><label class="field"><span>横向偏移</span><input type="number" name="markX-${i}" value="${Number(mark.offsetX) || 0}" min="-100" max="100" step="1" /></label><label class="field"><span>纵向偏移</span><input type="number" name="markY-${i}" value="${Number(mark.offsetY) || 0}" min="-100" max="100" step="1" /></label></div></div></div>`).join('');
+  return marks.map((mark, i) => `<div class="ticket-mark-row"><div class="mark-main"><label class="field"><span>标识文字</span><input name="markText-${i}" value="${e(mark.text)}" placeholder="如：网" maxlength="2" /></label><label class="field"><span>外框</span><select name="markShape-${i}">${Object.entries(MARK_SHAPES).map(([value, label]) => `<option value="${value}" ${mark.shape === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label><button type="button" class="icon-button danger" data-mark-remove="${i}" aria-label="删除第${i + 1}个标识">${icon('trash')}</button></div><div class="mark-adjust"><div class="form-grid"><label class="field"><span>横向偏移</span><input type="number" name="markX-${i}" value="${Number(mark.offsetX) || 0}" min="-100" max="100" step="1" /></label><label class="field"><span>纵向偏移</span><input type="number" name="markY-${i}" value="${Number(mark.offsetY) || 0}" min="-100" max="100" step="1" /></label></div></div></div>`).join('');
 }
 function collectMarks(form) {
-  return [...form.querySelectorAll('.ticket-mark-row')].map((row, i) => ({ text: form.elements[`markText-${i}`].value.trim(), shape: form.elements[`markShape-${i}`].value, offsetX: Number(form.elements[`markX-${i}`].value), offsetY: Number(form.elements[`markY-${i}`].value) }));
+  return [...form.querySelectorAll('.ticket-mark-row')].map((_, i) => ({ text: form.elements[`markText-${i}`].value.trim(), shape: form.elements[`markShape-${i}`].value, offsetX: Number(form.elements[`markX-${i}`].value), offsetY: Number(form.elements[`markY-${i}`].value) }));
 }
 function railTicketOptions(draft) {
   const refund = isRefundReceipt(draft);
@@ -1982,13 +1981,7 @@ async function showFieldMigration() {
     const { captured, store, snapshot, plan } = preview;
     const target = captured.d1 ? 'Cloudflare D1 主票库' : `GitHub · ${captured.config.owner}/${captured.config.repo}`;
     const focus = modalFocus;
-    openModal(modalHead('迁移预览') + migration.archiveFieldMigrationMarkup(plan, target, {
-      ...FLIGHT_TIME_LABELS, ...labels, fieldSources: '字段来源', lookupValues: '自动补全记录', lockedFields: '锁定字段',
-      railFieldDates: '查询日期',
-      boardingCodeSource: '条码来源', boardingLegIndex: '条码航段', flightStops: '旧经停资料', sources: '资料来源',
-      createdAt: '归档创建时间', updatedAt: '最近修改时间', mergedIds: '合并记录编号',
-      offsetX: '整张票面的横向偏移', offsetY: '整张票面的纵向偏移'
-    }));
+    openModal(modalHead('迁移预览') + migration.archiveFieldMigrationMarkup(plan, target, labels));
     modalFocus = focus;
     const form = modalRoot.querySelector('[data-field-migration-form]');
     form.addEventListener('submit', async event => {

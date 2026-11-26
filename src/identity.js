@@ -1,6 +1,6 @@
 const normalizedIdentity = value => String(value || '').normalize('NFKC').trim();
 const nationalId = /^\d{17}[\dXx]$/;
-export const hasMaskedIdentity = value => /[*•●]/u.test(normalizedIdentity(value));
+const hasMaskedIdentity = value => /[*•●]/u.test(normalizedIdentity(value));
 
 export const identityPattern = value => normalizedIdentity(value).replace(/\s+/gu, '').replace(/[•●]/gu, '*').toUpperCase();
 

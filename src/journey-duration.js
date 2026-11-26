@@ -30,20 +30,21 @@ function localInstant(date, time, zone) {
   return candidates.length === 1 ? local - candidates[0] : NaN;
 }
 
-export function journeyMinutes(record) {
-  const { departureZone, arrivalZone } = record;
-  const duration = (departureDate, departureTime, arrivalDate, arrivalTime) => {
-    const start = localInstant(departureDate, departureTime, departureZone);
-    const end = localInstant(arrivalDate, arrivalTime, arrivalZone);
-    return end > start ? Math.round((end - start) / MINUTE) : 0;
-  };
-  const actual = record.type === 'flight' && duration(record.actualDepartureDate, record.actualDepartureTime, record.actualArrivalDate, record.actualArrivalTime);
-  return actual || duration(record.departureDate, record.departureTime, record.arrivalDate, record.arrivalTime);
-}
+const durationMinutes = (departure, arrival) => arrival > departure ? Math.round((arrival - departure) / MINUTE) : 0;
 
-export function arrivalDifferenceMinutes(record) {
-  const { arrivalDate, arrivalTime, actualArrivalDate, actualArrivalTime, arrivalZone } = record;
-  const planned = localInstant(arrivalDate, arrivalTime, arrivalZone);
-  const actual = localInstant(actualArrivalDate, actualArrivalTime, arrivalZone);
-  return Math.round((actual - planned) / MINUTE);
+export function journeyTiming(record) {
+  const { departureZone, arrivalZone } = record;
+  const plannedArrival = localInstant(record.arrivalDate, record.arrivalTime, arrivalZone);
+  let minutes = 0, arrivalDifference = NaN;
+  if (record.type === 'flight') {
+    const actualArrival = localInstant(record.actualArrivalDate, record.actualArrivalTime, arrivalZone);
+    const actualDeparture = localInstant(record.actualDepartureDate, record.actualDepartureTime, departureZone);
+    minutes = durationMinutes(actualDeparture, actualArrival);
+    arrivalDifference = Math.round((actualArrival - plannedArrival) / MINUTE);
+  }
+  if (!minutes) {
+    const plannedDeparture = localInstant(record.departureDate, record.departureTime, departureZone);
+    minutes = durationMinutes(plannedDeparture, plannedArrival);
+  }
+  return { minutes, arrivalDifference };
 }

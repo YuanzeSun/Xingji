@@ -2,7 +2,7 @@ export const RAIL_UNIT_FIELDS = ['railBureau', 'railRunner', 'railCarOwner'];
 
 // Railway bureau abbreviations used by the timetable providers.
 // https://api.railgo.dev/9408882m0
-export const RAIL_BUREAUS = [
+const RAIL_BUREAUS = [
   ['B','哈尔滨局','哈局'], ['C','呼和浩特局','呼局'], ['F','郑州局','郑局'], ['G','南昌局','南局'],
   ['H','上海局','上局'], ['J','兰州局','兰局'], ['K','济南局','济局'], ['M','昆明局','昆局'],
   ['N','武汉局','武局'], ['O','青藏铁路公司','青藏','青藏集团'], ['P','北京局','京局'], ['Q','广铁集团','广铁','广州局'],

@@ -2,6 +2,7 @@ import { dateLabel } from './journey-date.js';
 import { fieldsForTransport, SCHEMA_VERSION, validateRecord, yearOf } from './model.js';
 import { normalizeFieldSources } from './field-sources.js';
 import { LOOKUP_FIELDS } from './lookup-values.js';
+import { FLIGHT_TIME_LABELS } from './flight-times.js';
 import { escape as e } from './html.js';
 
 const plainObject = value => value && typeof value === 'object' && !Array.isArray(value);
@@ -99,6 +100,12 @@ export async function writeArchiveFieldMigration(store, snapshot, plan) {
 
 const changeCategories = [['removed', '移除字段'], ['added', '补齐字段'], ['updated', '调整字段']];
 const fieldMetadata = new Set(['fieldSources', 'lookupValues', 'railFieldDates']);
+const migrationFieldLabels = {
+  fieldSources: '字段来源', lookupValues: '自动补全记录', lockedFields: '锁定字段', railFieldDates: '查询日期',
+  boardingCodeSource: '条码来源', boardingLegIndex: '条码航段', flightStops: '旧经停资料', sources: '资料来源',
+  createdAt: '归档创建时间', updatedAt: '最近修改时间', mergedIds: '合并记录编号',
+  offsetX: '整张票面的横向偏移', offsetY: '整张票面的纵向偏移'
+};
 
 function fieldNames(paths, labels) {
   const fields = new Set(paths), names = new Set();
@@ -127,9 +134,10 @@ function groupChanges(changes, labels) {
   return [...groups.values()].sort((a, b) => b.tickets.length - a.tickets.length);
 }
 
-export function archiveFieldMigrationMarkup(plan, target, labels) {
-  const groups = groupChanges(plan.changes, labels);
+export function archiveFieldMigrationMarkup(plan, target, ticketLabels) {
+  const groups = groupChanges(plan.changes, { ...FLIGHT_TIME_LABELS, ...ticketLabels, ...migrationFieldLabels });
   const hasChanges = plan.changes.length > 0;
+  const canApply = hasChanges && !plan.errors.length;
   const deleted = plan.changes.filter(change => change.deleted).length;
   const tickets = plan.changes.length - deleted;
   const affected = [
@@ -155,8 +163,8 @@ export function archiveFieldMigrationMarkup(plan, target, labels) {
       <p class="form-error" data-field-migration-error role="alert"></p>
     </div>
     <div class="modal-footer">
-      <button type="button" class="button secondary" data-action="close-modal">${hasChanges && !plan.errors.length ? '取消' : '关闭'}</button>
-      ${hasChanges && !plan.errors.length ? '<button type="submit" class="button primary">应用字段变更</button>' : ''}
+      <button type="button" class="button secondary" data-action="close-modal">${canApply ? '取消' : '关闭'}</button>
+      ${canApply ? '<button type="submit" class="button primary">应用字段变更</button>' : ''}
     </div>
   </form>`;
 }

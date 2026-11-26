@@ -4,7 +4,6 @@ import { applyReviewedTicket } from './ticket-import-review.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings } from './shared-settings.js';
 
 const keys = ['records', 'base', 'settings', 'settingsBase', 'github', 'd1', 'syncMeta', 'lastSync', 'archiveResetProgress'];
-export { sameRecords };
 const binding = config => config ? `${config.id}:${config.branch}` : '';
 export const activeBinding = ({ d1, config }) => d1 ? `d1:${d1.id}:${d1.url}` : binding(config);
 const sessionKeys = [...keys, 'githubToken', 'd1Token', 'showDemo', 'githubBackupReceipt'];

@@ -13,7 +13,7 @@ import { normalizeRailBureau } from './rail-details.js';
 import { railModelsForRecord } from './rail-model-statistics.js';
 import { railText, railTrainsetIds } from './rail-journey.js';
 import { railRouteMatches } from './rail-route-snapshot.js';
-import { arrivalDifferenceMinutes, journeyMinutes } from './journey-duration.js';
+import { journeyTiming } from './journey-duration.js';
 
 const CONTINENTS = Object.freeze({ AF: '非洲', AN: '南极洲', AS: '亚洲', EU: '欧洲', NA: '北美洲', OC: '大洋洲', SA: '南美洲' });
 const airportContinents = new Map(Object.entries(CONTINENT_AIRPORT_CODES).flatMap(([continent, codes]) => codes.split(' ').filter(Boolean).map(code => [code, continent])));
@@ -106,7 +106,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
       fare.cents += Math.round(Number(record.price) * 100);
       fare.trips++;
     }
-    const minutes = journeyMinutes(record);
+    const { minutes, arrivalDifference: delay } = journeyTiming(record);
     if (minutes) {
       travelTime[record.type].minutes += minutes;
       travelTime[record.type].trips++;
@@ -141,7 +141,6 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     }
     if (record.type !== 'flight') continue;
     flight++;
-    const delay = arrivalDifferenceMinutes(record);
     if (Number.isFinite(delay)) {
       arrivalDelayTrips++;
       arrivalDelays[arrivalDelayBands.findIndex(([, max]) => delay <= max)].count++;

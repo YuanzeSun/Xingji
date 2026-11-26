@@ -1,7 +1,7 @@
 import { alignMergedIds, archive, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings, unlinkedSettings } from './shared-settings.js';
 
-export class GitHubError extends Error { constructor(message, status, retryAt = 0) { super(message); this.status = status; this.retryAt = retryAt; } }
+class GitHubError extends Error { constructor(message, status, retryAt = 0) { super(message); this.status = status; this.retryAt = retryAt; } }
 export class ArchiveResetError extends Error {
   constructor(snapshot, remoteReset = false) {
     super(remoteReset ? '云端票库已被重置，本机旧缓存已停止上传' : '检测到云端票库索引或数据文件已被删除，已停止写入');
