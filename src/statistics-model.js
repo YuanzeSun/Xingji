@@ -82,8 +82,8 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   const options = statisticsOptions(input, today), range = filterStatisticsRange(records, options), rows = range.records;
   const airports = new Map(), stations = new Map(), countries = new Map(), continents = new Set(), routes = new Map(), aircraft = new Map();
   const railModels = new Map(), railBureaus = new Map(), airlines = new Map(), railLines = new Map();
-  const trainsets = new Map(), registrations = new Map();
-  let unknownAircraft = 0, unknownAirlines = 0;
+  const trainsets = new Map(), registrations = new Map(), unknownAircraftCounts = new Map();
+  let unknownAirlines = 0;
   let actualFlightDistance = 0, actualFlightDistanceTrips = 0;
   let rail = 0, flight = 0, railMileage = 0, railMileageTrips = 0;
   let railLineTrips = 0, arrivalDelayTrips = 0;
@@ -162,7 +162,10 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     if (classification) {
       const model = options.aircraftSubtypes ? classification.label : classification.series;
       aircraft.set(model, (aircraft.get(model) || 0) + 1);
-    } else unknownAircraft++;
+    } else {
+      const name = String(record.aircraft ?? '').trim();
+      unknownAircraftCounts.set(name, (unknownAircraftCounts.get(name) || 0) + 1);
+    }
     if (endpoints.some(place => !place)) continue;
     const pair = options.mergeDirections ? [...endpoints].sort((a,b)=>a.code.localeCompare(b.code)) : endpoints, id=pair.map(place=>place.code).join('-');
     if (!routes.has(id)) routes.set(id, { id, from: pair[0], to: pair[1], count: 0 });
@@ -172,17 +175,19 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   const byName = values => [...values].sort((a, b) => compare(a.name, b.name));
   const years = [...new Set(rows.map(record => calendarDate(record.departureDate).slice(0, 4)))].sort();
   const ranked = collection => [...collection].map(([name, count]) => ({ name, count })).sort(rankOrder);
+  const unidentifiedAircraft = ranked(unknownAircraftCounts);
   return { ...range, rail, flight,
     years, airports: byName(airports.values()), stations: byName(stations.values()), countries: byName(countries.values()),
     continents: [...continents].sort().map(code => ({ code, name: CONTINENTS[code] })),
-    aircraft: ranked(aircraft), airlines: ranked(airlines),
+    aircraft: ranked(aircraft), airlines: ranked(airlines), unidentifiedAircraft,
     railMileage: Math.round(railMileage * 1000) / 1000,
     railMileageTrips, actualFlightDistance, actualFlightDistanceTrips, travelTime, fares,
     railModels: ranked(railModels), railBureaus: ranked(railBureaus),
     railLines: ranked(railLines), railLineTrips, arrivalDelayTrips,
     arrivalDelays: [...arrivalDelays].sort(([a], [b]) => a - b).map(([minutes, count]) => ({ minutes, count })),
     repeatedTrainsets: repeatedVehicleTrips(trainsets), repeatedAircraft: repeatedVehicleTrips(registrations),
-    routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)), unknownAircraft, unknownAirlines };
+    routes: [...routes.values()].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)),
+    unknownAircraft: unidentifiedAircraft.reduce((sum, { count }) => sum + count, 0), unknownAirlines };
 }
 
 export function tripSeries(records, { period = 'year' } = {}) {

@@ -35,10 +35,18 @@ function repeatedVehiclesPanel(title, type, rows) {
 const rankings = {
   'rail-models': { title: '乘坐车型', data: 'railModels', unit: '种', option: 'railSubtypes', label: '细分子型号' },
   'rail-bureaus': { title: '担当路局', data: 'railBureaus', unit: '个', option: 'railUnits', label: '细分车辆归属单位' },
-  aircraft: { title: '乘坐机型', data: 'aircraft', unit: '种', option: 'aircraftSubtypes', label: '细分子型号', unknown: 'unknownAircraft', unknownLabel: '未识别机型' },
+  aircraft: { title: '乘坐机型', data: 'aircraft', unit: '种', option: 'aircraftSubtypes', label: '细分子型号', unknown: 'unknownAircraft', unknownLabel: '未识别机型', unknownDetails: 'unidentifiedAircraft' },
   airlines: { title: '乘坐航司', data: 'airlines', unit: '家', unknown: 'unknownAirlines', unknownLabel: '未识别航司' },
   'rail-lines': { title: '铁路线足迹', data: 'railLines', unit: '条线路', emptyText: '暂无已识别的铁路线' }
 };
+
+function unknownRankingMarkup(label, count, details) {
+  if (!count) return '';
+  const summary = `${label} · ${count} 次`;
+  if (!details) return `<p class="fine-print">${summary}</p>`;
+  const items = details.map(({ name, count }) => `<li><span>${e(name || '未填写')}</span><span>${count} 次</span></li>`).join('');
+  return `<details class="statistics-unidentified"><summary>${summary}</summary><ul>${items}</ul></details>`;
+}
 
 export function mountStatistics(container, records, { options = {} } = {}) {
   Object.assign(options, statisticsOptions(options), { dateTo: options.dateTo || '' });
@@ -53,13 +61,13 @@ export function mountStatistics(container, records, { options = {} } = {}) {
     return !rows.length && emptyText ? empty(emptyText) : rankingChartMarkup(title, rows, view);
   }
   function rankingPanel(kind) {
-    const { title, data, unit, option, label, unknown, unknownLabel } = rankings[kind];
+    const { title, data, unit, option, label, unknown, unknownLabel, unknownDetails } = rankings[kind];
     const rows = statistics[data], view = rankingCharts[kind] || 'donut';
     const chooser = Object.entries(rankingViews).map(([value, name]) => `<button type="button" data-stat-view="${value}" aria-pressed="${view === value}">${name}</button>`).join('');
     const grouping = kind === 'airlines'
       ? `<div class="statistics-airline-basis" role="radiogroup" aria-labelledby="statistics-airline-basis-label"><span id="statistics-airline-basis-label">代码共享航班</span>${[['operating', '按实际承运'], ['marketing', '按购票航司']].map(([value, name]) => `<label><input type="radio" name="airline-basis" value="${value}" data-stat-option="marketingAirlines" ${options.marketingAirlines === (value === 'marketing') ? 'checked' : ''}/>${name}</label>`).join('')}</div>`
       : option ? `<label><input type="checkbox" data-stat-option="${option}" ${options[option] ? 'checked' : ''}/>${label}</label>` : '';
-    const unidentified = statistics[unknown] ? `<p class="fine-print">${unknownLabel} · ${statistics[unknown]} 次</p>` : '';
+    const unidentified = unknownRankingMarkup(unknownLabel, statistics[unknown], statistics[unknownDetails]);
     const coverage = kind === 'rail-lines'
       ? `<p class="statistics-coverage">${statistics.railLineTrips} / ${statistics.rail} 程已识别线路</p>` : '';
     return `<section class="statistics-panel statistics-ranking" data-stat-ranking="${kind}"><header><h2>${title}</h2><span>${rows.length} ${unit}</span></header><div class="statistics-ranking-controls"><div class="statistics-view-picker" role="group" aria-label="${title}图表样式">${chooser}</div>${grouping}</div><div data-stat-plot>${rankingPlot(kind, view)}</div>${unidentified}${coverage}</section>`;

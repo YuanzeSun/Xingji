@@ -632,7 +632,7 @@ test('each ranking switches charts independently and keeps its grouping and date
   const rows = [
     rail({ railModel: '25GDC600V', railBureau: '上海局', railCarOwner: '上海动车段' }),
     rail({ railModel: '25GAC380V', railBureau: '上海局', railCarOwner: '南京动车段' }),
-    ...['737-800', '737-200', 'A320', 'A321', 'A380', '787-9', 'DHC-8-400', '未知型号'].map(aircraft => flight({ aircraft }))
+    ...['737-800', '737-200', 'A320', 'A321', 'A380', '787-9', 'DHC-8-400', '未知型号', '未知型号', '实验机型 <X>', ''].map(aircraft => flight({ aircraft }))
   ];
   const dom = new JSDOM('<div id="root"></div>'), root = dom.window.document.querySelector('#root');
   const options = { ...range };
@@ -656,7 +656,13 @@ test('each ranking switches charts independently and keeps its grouping and date
     const entries = [...aircraft.querySelectorAll('.statistics-ring-entry')];
     const colors = entries.map(entry => entry.querySelector('.statistics-ring-swatch').style.getPropertyValue('--slice'));
     const slices = aircraft.querySelector('.statistics-ring').style.getPropertyValue('--slices');
-    assert.match(card('aircraft').textContent, /未识别机型 · 1 次/);
+    const unknown = aircraft.querySelector('.statistics-unidentified');
+    assert.equal(unknown.open, false);
+    assert.equal(unknown.querySelector('summary').textContent, '未识别机型 · 4 次');
+    unknown.querySelector('summary').click();
+    assert.equal(unknown.open, true);
+    const unknownRows = [...unknown.querySelectorAll('li')].map(row => [...row.children].map(cell => cell.textContent));
+    assert.deepEqual(Object.fromEntries(unknownRows), { '未知型号': '2 次', '实验机型 <X>': '1 次', '未填写': '1 次' });
     assert.doesNotMatch(aircraft.textContent, /其他（/);
     assert.equal(entries.length, 7);
     assert.equal(new Set(colors).size, entries.length);
@@ -674,6 +680,7 @@ test('each ranking switches charts independently and keeps its grouping and date
     applyStatisticsDate(root, '[data-stat-to]', '2024-02-29');
     assert.equal(picked('aircraft'), 'donut');
     assert.match(card('aircraft').textContent, /暂无记录/);
+    assert.equal(card('aircraft').querySelector('.statistics-unidentified'), null);
     cleanup();
     cleanup = mountStatistics(root, rows, { options });
     assert.equal(picked('rail-models'), 'columns');

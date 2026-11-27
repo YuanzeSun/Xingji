@@ -515,6 +515,11 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 .statistics-bar{height:7px;border-radius:4px;background:#edf0e6;overflow:hidden}
 .statistics-bar>span{height:100%;display:block;border-radius:4px;background:#6a8970}
 .statistics-coverage{margin-top:12px;color:var(--muted);font-size:13px}
+.statistics-unidentified{margin-top:12px;font-size:13px;color:var(--muted)}
+.statistics-unidentified summary{padding:6px 0;cursor:pointer;color:var(--green)}
+.statistics-unidentified ul{list-style:none;margin:0;padding:0 0 0 12px;border-left:1px solid var(--line)}
+.statistics-unidentified li{display:flex;justify-content:space-between;gap:12px;padding:3px 0;overflow-wrap:anywhere}
+.statistics-unidentified li span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}
 .statistics-delay-plot{margin:0}
 .statistics-delay-chart{display:block;width:100%;height:auto}
 .statistics-delay-zero{fill:none;stroke:#9bac9d;stroke-dasharray:4 4}

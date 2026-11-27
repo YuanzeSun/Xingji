@@ -45,7 +45,7 @@
 
 ### 数据统计
 
-![数据统计、落地延误折线图与铁路线足迹](docs/images/statistics.jpg)
+![数据统计、落地延误分布、未识别机型明细与铁路线足迹](docs/images/statistics.jpg)
 
 ### 旅行纪念册
 
