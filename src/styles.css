@@ -31,6 +31,7 @@
 .personal-profile{grid-column:1/-1}
 .personal-profile .profile-basics{margin-top:22px;grid-template-columns:repeat(4,minmax(0,1fr))}
 .personal-profile h3{font-size:15px;margin:18px 0 12px}
+.personal-profile .button-row{margin-block-start:16px}
 .profile-documents{display:grid;gap:14px;margin-bottom:14px}
 .profile-document{min-width:0;margin:0;padding:12px 15px;border:1px solid #e0e6dc;border-radius:8px}
 .profile-document legend{padding:0 5px;color:#788970;font-size:13px}
