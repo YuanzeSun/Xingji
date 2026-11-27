@@ -13,6 +13,7 @@ test('rail and flight require their visible essential fields, with carriage limi
       assert.equal(ticketFieldLabel('seat', type), '座位号');
       assert.doesNotThrow(() => validateTicketForm({ ...record, departureTime: '' }));
       assert.throws(() => validateTicketForm({ ...record, departureDate: { year: 2026, dayOfYear: null } }), /计划起飞日期/);
+      assert.throws(() => validateTicketForm({ ...record, departureDate: { year: null, dayOfYear: 322 } }), /计划起飞日期/);
     }
   }
 });

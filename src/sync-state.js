@@ -3,7 +3,7 @@ import { clone, deduplicateRecords, mergeBackupRecords, mergeThreeWay, now, same
 import { applyReviewedTicket } from './ticket-import-review.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings } from './shared-settings.js';
 import { FLIGHT_SHARED_FIELDS, prefillFlightTicket, syncFlightTicket } from './flight-ticket-shared.js';
-import { validateFlightTimeDifferences } from './flight-times.js';
+import { validateFlightTimes } from './flight-times.js';
 
 const keys = ['records', 'base', 'settings', 'settingsBase', 'github', 'd1', 'syncMeta', 'lastSync', 'archiveResetProgress'];
 const binding = config => config ? `${config.id}:${config.branch}` : '';
@@ -164,7 +164,7 @@ export function stageTicket(candidate, context, decision, sharedEdits) {
     if (result.enriched) {
       const before = records.find(record => record.id === decision.id);
       const after = result.records.find(record => record.id === decision.id);
-      validateFlightTimeDifferences(after);
+      validateFlightTimes(after);
       const fields = FLIGHT_SHARED_FIELDS.filter(key => before[key] !== after[key]);
       result.records = syncFlightTicket(result.records, after, fields);
     }
@@ -178,7 +178,7 @@ export function stageTicketEdit(original, candidate, context, sharedEdits) {
     if (!saved || saved.deleted) throw new Error('这张票已删除，请重新打开票夹。');
     const [merged] = mergedRecords([original], [candidate], [saved]);
     const ticket = prefillFlightTicket(merged, records, sharedEdits);
-    validateFlightTimeDifferences(ticket);
+    validateFlightTimes(ticket);
     return { records: syncFlightTicket(records.map(record => record.id === ticket.id ? ticket : record), ticket) };
   });
 }

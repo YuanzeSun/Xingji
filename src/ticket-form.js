@@ -1,5 +1,5 @@
-import {FLIGHT_TIME_LABELS,validateFlightTimeDifferences} from './flight-times.js';
-import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
+import {FLIGHT_TIME_LABELS,validateFlightTimes} from './flight-times.js';
+import {JOURNEY_DATE_FIELDS,fullDate,journeyDate} from './journey-date.js';
 import { requireCompleteIdentity } from './identity.js';
 import { isAnonymousRedTemplate } from './rail-template.js';
 import { railQRNeedsField } from './rail-ticket-qr.js';
@@ -26,7 +26,7 @@ const passengerFields = ['passenger', 'seat', 'seatClass'];
 const flightFields = [...journeyFields, ...passengerFields];
 const railFields = [...journeyFields, 'departureTime', ...passengerFields];
 export function requiredTicketFields(type, template, flightStatus = 'normal', railStanding = false) {
-  if (type === 'flight') return ['open', 'invalid'].includes(flightStatus) ? ['origin', 'destination', 'passenger'] : flightFields;
+  if (type === 'flight') return ['open', 'invalid'].includes(flightStatus) ? ['origin', 'destination', 'departureDate', 'passenger'] : flightFields;
   if (template === 'rail-supplement') return ['origin', 'destination', 'service', 'departureDate'];
   const fields = template === 'rail-refund-receipt'
     ? ['origin', 'destination', 'service', 'departureDate', 'passenger', 'price']
@@ -48,13 +48,17 @@ export function ticketFieldLabel(key, type, fallback = key) {
   return ({ origin: flight ? '出发机场' : '出发站', destination: flight ? '到达机场' : '到达站', service: flight ? '航班号' : '车次', seat: flight ? '座位号' : '座位 / 铺位', seatClass: flight ? '舱位代码' : '席别', gate: flight ? '登机口' : '检票口', carriage: '车厢', passenger: '旅客姓名', identity: '证件号', departureDate: '出发日期', departureTime: '出发时间' })[key] || fallback;
 }
 
-const datePresent=value=>{try{return !!journeyDate(value)?.dayOfYear;}catch{return false;}};
-export const missingTicketFields = record => requiredRecordFields(record).filter(key => JOURNEY_DATE_FIELDS.includes(key) ? !datePresent(record[key]) : !record[key]?.trim());
+const datePresent = (value, requireYear) => {
+  try { return requireYear ? fullDate(value) : !!journeyDate(value)?.dayOfYear; }
+  catch { return false; }
+};
+export const missingTicketFields = record => requiredRecordFields(record).filter(key =>
+  JOURNEY_DATE_FIELDS.includes(key) ? !datePresent(record[key], record.type === 'flight') : !record[key]?.trim());
 
 export function validateTicketForm(record) {
   requireCompleteIdentity(record.identity);
   const fields = missingTicketFields(record);
-  if (!fields.length) return validateFlightTimeDifferences(record);
+  if (!fields.length) return validateFlightTimes(record);
   const key = fields[0], error = new Error('请填写' + (key === 'price' && record.template === 'rail-refund-receipt' ? '退票费' : ticketFieldLabel(key, record.type)));
   error.fields = fields;
   throw error;

@@ -13,10 +13,11 @@ import { GitHubStore, synchronize } from '../src/github.js';
 import { MemoryGitHub } from './helpers/cloud.js';
 const flight = extra => createRecord({type:'flight',template:'air-boarding-pass',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2023-11-18',departureTime:'08:00',passenger:'TEST/USER',identity:'P000001',seat:'12A',seatClass:'Y',aircraft:'DHC-8',...extra});
 
-test('open and invalid flights can archive undetermined details while ordinary flights retain their required fields',()=>{
+test('open and invalid flights require a departure date and can archive other undetermined details',()=>{
  for(const flightStatus of ['open','invalid']){
   const r=flight({flightStatus,service:'',departureDate:'',departureTime:'',seat:'',identity:'',seatClass:''});
-  assert.doesNotThrow(()=>validateTicketForm(r));assert.equal(r.flightStatus,flightStatus);
+  assert.throws(()=>validateTicketForm(r),/计划起飞日期/);
+  assert.doesNotThrow(()=>validateTicketForm({...r,departureDate:'2023-11-18'}));assert.equal(r.flightStatus,flightStatus);
  }
  assert.throws(()=>validateTicketForm(flight({service:''})),/航班号/);
  for(const obsolete of ['invented','正常机票','OPEN 票','void'])assert.throws(()=>flight({flightStatus:obsolete}),/状态/);

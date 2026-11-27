@@ -73,6 +73,9 @@ test('editing a scanned flight preserves the locked ordinal and validates the ch
     assert.deepEqual(server.records().find(ticket => ticket.id === 'day-366').departureDate, { year: 2024, dayOfYear: 366 });
     fillYear('');
     assert.doesNotMatch(field('Year').closest('fieldset').textContent, /第 366 天|闰年/);
+    form().requestSubmit();
+    assert.match(form().querySelector('#editor-error').textContent, /计划起飞日期/);
+    assert.deepEqual(server.records().find(ticket => ticket.id === 'day-366').departureDate, { year: 2024, dayOfYear: 366 });
     fillYear('2000');
     assert.equal(field('Year').validationMessage, '');
     assert.equal(field('').value, '2000-12-31');

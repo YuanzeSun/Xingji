@@ -61,14 +61,20 @@ test('archive entries preselect each transport and share a switchable editor',as
     assert.equal(form().elements.departureDateYear.value,'');
     assert.equal(form().elements.departureDateMonth.value,'');
     assert.equal(form().elements.departureDateDay.value,'');
+    assert.equal(form().elements.departureDate.required,true);
+    assert.equal(form().elements.departureDateMonth.inputMode,'numeric');
+    assert.equal(form().elements.departureDateDay.tagName,'INPUT');
     assert.equal(form().elements.departureTime.required,false);
     assert.equal(form().querySelector('[data-field-source="departureDateYear"]').textContent,'未填写');
     assert.equal(form().querySelector('[data-field-source="departureDate"]').textContent,'未填写');
     fill('flightStopAirport','法兰克福机场');
-    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDateYear:'2026',departureDateMonth:'06',departureDateDay:'30',seat:'20C',seatClass:'Y'});
+    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDateYear:'2026',departureDateMonth:'x０６a',departureDateDay:'30',seat:'20C',seatClass:'Y'});
+    assert.equal(form().elements.departureDateMonth.value,'06');
+    const reference = key => form().querySelector(`[data-journey-date="${key}"] [data-flight-departure-reference]`);
     for (const key of ['arrivalDate', 'actualDepartureDate', 'actualArrivalDate']) {
       assert.deepEqual(['Year','Month','Day',''].map(part => form().elements[key + part].value), ['2026','06','','']);
       assert.equal(form().querySelector(`[data-field-source="${key}Year"]`).textContent, '默认值');
+      assert.equal(reference(key).textContent,'计划起飞日期 2026-06-30');
     }
     const expectIncomplete = key => {
       form().dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
@@ -78,13 +84,14 @@ test('archive entries preselect each transport and share a switchable editor',as
     fill('actualDepartureTime','09:00');
     expectIncomplete('actualDepartureDate');
     fill('actualDepartureTime','');
-    fill('arrivalDateMonth','07');
+    fill('arrivalDateMonth','7');
     fill('departureDateMonth','05');
-    assert.equal(form().elements.arrivalDateMonth.value,'07');
+    assert.equal(form().elements.arrivalDateMonth.value,'7');
     assert.equal(form().elements.actualArrivalDateMonth.value,'05');
+    assert.equal(reference('arrivalDate').textContent,'计划起飞日期 2026-05-30');
     fill('departureDateMonth','06');
     expectIncomplete('arrivalDate');
-    fill('arrivalDateDay','01');
+    fill('arrivalDateDay','1');
     expectIncomplete('arrivalTime');
     fill('arrivalTime','13:00');
     await submit();
@@ -109,17 +116,22 @@ test('archive entries preselect each transport and share a switchable editor',as
         assert.equal(form().elements.arrivalDateDay.value,'01');
         assert.equal(form().elements.actualArrivalDateMonth.value,'06');
         assert.equal(form().elements.actualArrivalDateDay.value,'');
-        const expectTimeGap = (field, label) => {
+        const expectSaveError = (field, message) => {
           form().dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
-          assert.match(form().querySelector('#editor-error').textContent, new RegExp(label + '.*超过 24 小时'));
+          assert.match(form().querySelector('#editor-error').textContent, message);
           assert.equal(form().elements[field].getAttribute('aria-invalid'), 'true');
-          assert.equal(server.records().find(row=>row.id===ticket.id)[field], '');
+          assert.equal(server.records().find(row=>row.id===ticket.id)[field], ticket[field]);
         };
+        fillAll({departureTime:'09:00',arrivalDate:'2026-06-30',arrivalTime:'01:59'});
+        expectSaveError('arrivalTime',/计划到达时间不能早于计划起飞时间/);
+        fillAll({arrivalDate:'2026-07-01',arrivalTime:'13:00'});
         fillAll({departureTime:'09:00',actualDepartureDate:'2026-07-01',actualDepartureTime:'09:01'});
-        expectTimeGap('actualDepartureTime','起飞');
+        expectSaveError('actualDepartureTime',/起飞.*超过 24 小时/);
         fill('actualDepartureTime','09:00');
         fillAll({actualArrivalDate:'2026-06-30',actualArrivalTime:'12:59'});
-        expectTimeGap('actualArrivalTime','到达');
+        expectSaveError('actualArrivalTime',/实际到达时间不能早于实际起飞时间/);
+        fillAll({actualArrivalDate:'2026-07-02',actualArrivalTime:'13:01'});
+        expectSaveError('actualArrivalTime',/到达.*超过 24 小时/);
         fillAll({arrivalDateYear:'',arrivalDateMonth:'',arrivalDateDay:'',arrivalTime:'',
           actualArrivalDateYear:'',actualArrivalDateMonth:'',actualArrivalDateDay:'',actualArrivalTime:''});
       }

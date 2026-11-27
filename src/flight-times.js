@@ -1,4 +1,4 @@
-import { localInstant } from './journey-duration.js';
+import { flightTiming, localInstant } from './journey-duration.js';
 
 const actualFlightTimes = { actualDepartureDate: 'actualDepartureTime', actualArrivalDate: 'actualArrivalTime' };
 export const ACTUAL_FLIGHT_FIELDS = Object.entries(actualFlightTimes).flat();
@@ -15,22 +15,26 @@ export const FLIGHT_TIME_LABELS = {
   actualDepartureDate: '实际起飞日期', actualDepartureTime: '实际起飞时间', actualArrivalDate: '实际到达日期', actualArrivalTime: '实际到达时间'
 };
 
-const flightTimePairs = [
-  ['起飞', 'departureZone', 'departureDate', 'departureTime', 'actualDepartureDate', 'actualDepartureTime'],
-  ['到达', 'arrivalZone', 'arrivalDate', 'arrivalTime', 'actualArrivalDate', 'actualArrivalTime'],
-];
 const oneDay = 24 * 60 * 60 * 1000;
 
-export function validateFlightTimeDifferences(record) {
+export function validateFlightTimes(record) {
   if (record.type !== 'flight') return;
-  for (const [label, zoneKey, plannedDate, plannedTime, actualDate, actualTime] of flightTimePairs) {
-    if (!record[plannedDate] || !record[plannedTime] || !record[actualDate] || !record[actualTime]) continue;
-    const differenceIn = zone => localInstant(record[actualDate], record[actualTime], zone) -
-      localInstant(record[plannedDate], record[plannedTime], zone);
-    const zone = record[zoneKey] || 'UTC';
-    let difference = differenceIn(zone);
+  const { plannedDeparture, plannedArrival, actualDeparture, actualArrival } = flightTiming(record);
+  for (const [label, departure, arrival, fields] of [
+    ['计划', plannedDeparture, plannedArrival, ['arrivalDate', 'arrivalTime']],
+    ['实际', actualDeparture, actualArrival, ['actualArrivalDate', 'actualArrivalTime']],
+  ]) {
+    if (arrival < departure) {
+      throw Object.assign(new Error(`${label}到达时间不能早于${label}起飞时间。`), { fields });
+    }
+  }
+  for (const [label, elapsed, plannedDate, plannedTime, actualDate, actualTime] of [
+    ['起飞', actualDeparture - plannedDeparture, 'departureDate', 'departureTime', 'actualDepartureDate', 'actualDepartureTime'],
+    ['到达', actualArrival - plannedArrival, 'arrivalDate', 'arrivalTime', 'actualArrivalDate', 'actualArrivalTime'],
+  ]) {
     // Both times use the same airport clock. Compare its readings if an instant cannot be resolved.
-    if (!Number.isFinite(difference) && zone !== 'UTC') difference = differenceIn('UTC');
+    const difference = Number.isFinite(elapsed) ? elapsed :
+      localInstant(record[actualDate], record[actualTime], 'UTC') - localInstant(record[plannedDate], record[plannedTime], 'UTC');
     if (Math.abs(difference) > oneDay) {
       throw Object.assign(new Error(`计划${label}与实际${label}时间相差超过 24 小时，请核对日期和时间。`), {
         fields: [actualDate, actualTime]
