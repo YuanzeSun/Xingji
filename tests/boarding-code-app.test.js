@@ -4,6 +4,7 @@ import {JSDOM} from 'jsdom';
 import {indexedDB} from 'fake-indexeddb';
 import {createRecord} from '../src/model.js';
 import {createBoardingCode,readBoardingCode} from '../src/bcbp.js';
+import { searchTickets } from '../src/search.js';
 import {prepareCloud} from './helpers/cloud.js';
 
 test('the app saves generated code edits immediately, persists provenance, and keeps an original code when its seat changes',async()=>{
@@ -13,10 +14,10 @@ test('the app saves generated code edits immediately, persists provenance, and k
   window.scrollTo=()=>{};window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){this.open=false;};
   const values={passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:'2026-11-17',cabin:'Y',seat:'12A',sequence:'25',status:'1'};
   const base={type:'flight',template:'air-boarding-pass',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-11-17',departureTime:'08:00',passenger:'DOE/JANE',identity:'P000001',pnr:'ABC123',seat:'12A',seatClass:'S',boardingCode:createBoardingCode(values),boardingLegIndex:'0'};
-  const generated=createRecord({...base,id:'generated',boardingCodeSource:'generated',lockedFields:['type','template','flightStatus','provenance','seat'],fieldSources:{type:'manual',template:'default',flightStatus:'default',seat:'manual',boardingCode:'generated'}}),original=createRecord({...base,id:'original',service:'CA5678',seatClass:'Y',fieldSources:Object.fromEntries(['origin','destination','service','passenger','seat','seatClass','pnr'].map(key=>[key,'barcode'])),boardingCode:createBoardingCode({...values,flightNumber:'5678'}),boardingCodeSource:'original'});
+  const generated=createRecord({...base,id:'generated',boardingCodeSource:'generated',lockedFields:['type','template','flightStatus','provenance','seat'],fieldSources:{type:'manual',template:'default',flightStatus:'default',seat:'manual',boardingCode:'generated'}}),original=createRecord({...base,id:'original',service:'CA5678',seatClass:'Y',marketingCarrier:'MU',fieldSources:Object.fromEntries(['origin','destination','service','passenger','seat','seatClass','pnr','marketingCarrier'].map(key=>[key,'barcode'])),boardingCode:createBoardingCode({...values,flightNumber:'5678'}),boardingCodeSource:'original'});
   const server=await prepareCloud([generated,original]);
   const wait=async predicate=>{for(let i=0;i<300;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('Boarding editor did not settle');};
-  const open=async id=>{document.querySelector(`[data-action="view"][data-id="${id}"]`).click();await wait(()=>document.querySelector('[data-action="edit"]:not(:disabled)'));document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));};
+  const open=async (id, inspect)=>{document.querySelector(`[data-action="view"][data-id="${id}"]`).click();await wait(()=>document.querySelector('[data-action="edit"]:not(:disabled)'));inspect?.();document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));};
   const fill=(key,value)=>{const input=document.querySelector(`[name="${key}"]`);input.value=value;input.dispatchEvent(new window.Event('input',{bubbles:true}));};
   const fillExtra=(key,value)=>{const input=document.querySelector(`[data-bcbp="${key}"]`);input.value=value;input.dispatchEvent(new window.Event('input',{bubbles:true}));};
   const submit=()=>document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
@@ -32,6 +33,7 @@ test('the app saves generated code edits immediately, persists provenance, and k
     assert.ok(document.querySelector('[name="pnr"]').compareDocumentPosition(document.querySelector('[data-bcbp-generator]')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
     fill('seat','20C');submit();await wait(()=>!document.querySelector('dialog'));
     let saved=server.records().find(record=>record.id==='generated');assert.equal(saved.seat,'20C');assert.equal(saved.boardingCodeSource,'generated');assert.equal(readBoardingCode(saved.boardingCode).seat,'20C');
+    assert.equal(Object.hasOwn(saved,'marketingFlightNumber'),false);
     assert.equal(saved.fieldSources.seat,'manual');assert.equal(saved.fieldSources.boardingCode,'generated');
     await open('generated');assert.equal(document.querySelector('[data-bcbp="sequence"]').value,'0025');assert.equal(document.querySelector('[data-bcbp="status"]').value,'1');
     assert.equal(document.querySelector('[data-bcbp-generate]'),null);
@@ -46,9 +48,27 @@ test('the app saves generated code edits immediately, persists provenance, and k
     submit();await wait(()=>!document.querySelector('dialog'));saved=server.records().find(record=>record.id==='generated');assert.equal(readBoardingCode(saved.boardingCode).pnr,'XYZ789');
     await open('original');
     assert.equal(document.querySelector('[data-bcbp-fields]').disabled,true);
+    const purchase = document.querySelector('[name="marketingFlightNumber"]');
+    assert.equal(purchase.closest('details').open, true);
+    assert.equal(purchase.readOnly, false);
+    assert.equal(purchase.value, '');
+    assert.equal(purchase.closest('.field').previousElementSibling.querySelector('input').name, 'marketingCarrier');
+    assert.equal(document.querySelector('[name="marketingCarrier"]').readOnly, true);
+    assert.match(document.getElementById(purchase.getAttribute('aria-describedby')).textContent, /购票订单.*CA7941/);
+    fill('marketingFlightNumber','7941');submit();await wait(()=>/完整号码/.test(document.querySelector('#editor-error').textContent));
+    fill('marketingFlightNumber','mu 7941');
     fill('seat','30C');submit();await wait(()=>!document.querySelector('dialog'));
     saved=server.records().find(record=>record.id==='original');assert.equal(saved.seat,'12A');assert.deepEqual(saved.boardingCode,original.boardingCode);assert.equal(saved.boardingCodeSource,'original');
-    await open('original');assert.equal(document.querySelector('[name="type"]').disabled,true);assert.equal(document.querySelector('[name="service"]').readOnly,true);assert.equal(document.querySelector('[data-seat-preset]').disabled,true);assert.equal(document.querySelector('[name="departureDate"]').readOnly,false);
+    assert.equal(saved.marketingFlightNumber,'MU7941');
+    assert.equal(saved.fieldSources.marketingFlightNumber,'manual');
+    assert.equal(saved.service,'CA5678');
+    assert.equal(searchTickets(server.records(),{query:'MU7941'}).records[0]?.id,'original');
+    await open('original', () => {
+      const field = document.querySelector('[data-ticket-detail="aircraft"] [data-detail-field="marketingFlightNumber"]');
+      assert.match(field.textContent,/购票航班号.*MU7941/);
+    });
+    assert.equal(document.querySelector('[name="marketingFlightNumber"]').value,'MU7941');
+    assert.equal(document.querySelector('[name="type"]').disabled,true);assert.equal(document.querySelector('[name="service"]').readOnly,true);assert.equal(document.querySelector('[data-seat-preset]').disabled,true);assert.equal(document.querySelector('[name="departureDate"]').readOnly,false);
     assert.equal(document.querySelector('#code-remove'),null);
     assert.ok(document.querySelector('[data-code-start]:not(:disabled)'));
     assert.ok(document.querySelector('[data-code-upload]:not(:disabled)'));

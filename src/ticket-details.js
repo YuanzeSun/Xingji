@@ -30,13 +30,14 @@ function flightAirport(record, side, terminal) {
 
 function flightSections(record) {
   const metadata = boardingMetadataDetails(record);
+  const codeshare = key => key === 'marketingCarrier' || key === 'marketingFlightNumber';
   return [
     ['aircraft', '航司与飞机', [
       ...values(record, 'airline'),
-      ...metadata.filter(([key]) => key === 'marketingCarrier'),
+      ...metadata.filter(([key]) => codeshare(key)),
       ...values(record, 'aircraft', 'aircraftRegistration')
     ]],
-    ['baggage', '行李与常旅客', metadata.filter(([key]) => key !== 'marketingCarrier')],
+    ['baggage', '行李与常旅客', metadata.filter(([key]) => !codeshare(key))],
     ['booking', '票务与条码', [
       ['flightStatus', FLIGHT_STATUSES[record.flightStatus || 'normal']],
       ['price', record.price && `¥${record.price}`],

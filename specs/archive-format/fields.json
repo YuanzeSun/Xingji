@@ -70,6 +70,7 @@
     "frequentFlyerCarrier",
     "frequentFlyerNumber",
     "marketingCarrier",
+    "marketingFlightNumber",
     "lookupValues",
     "fieldSources",
     "provenance",

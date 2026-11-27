@@ -243,7 +243,7 @@ test('a boarding QR fills available baggage, loyalty and marketing fields and le
       for (const key of BOARDING_METADATA_FIELDS) {
         assert.equal(form.elements[key].value, expected[key] ?? '', key);
         assert.equal(form.elements[key].readOnly, key in expected, key);
-        assert.equal(saved[key], expected[key] ?? '', key);
+        assert.equal(saved[key], expected[key] ?? (key === 'marketingFlightNumber' ? undefined : ''), key);
       }
     } finally { dispose(); dom.window.close(); }
   }

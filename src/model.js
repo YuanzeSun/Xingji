@@ -21,13 +21,14 @@ import { normalizeRailBureau, splitRailModel, normalizeRailPowerSupply } from '.
 import { cityLabel } from './locations.js';
 import { isStoredTimeZone } from './data/time-zone-ids.js';
 import { normalizeFlightStatus } from './flight-status.js';
+import { flightNumber } from './flight-query.js';
 import { normalizeRailJourney, railJourneyMatches, normalizeRailTrainsets } from './rail-journey.js';
 import { requireCompleteIdentity } from './identity.js';
 import { normalizeRailInvoice } from './rail-invoice.js';
 import { DEFAULT_RAIL_TEMPLATE, SUPPLEMENT_FIELDS, TEMPLATES, isRailReceiptTemplate } from './rail-template.js';
 export { DEFAULT_RAIL_TEMPLATE, TEMPLATES };
 export const SCHEMA_VERSION = 2;
-const OPTIONAL_FIELDS = ['railInvoice', 'flightTrack', 'flightStop', 'railShowIssuer'];
+const OPTIONAL_FIELDS = ['railInvoice', 'flightTrack', 'flightStop', 'railShowIssuer', 'marketingFlightNumber'];
 export const FIELDS = ['type', 'template', 'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'service', 'departureDate', 'departureTime', 'arrivalDate', 'arrivalTime', ...ACTUAL_FLIGHT_FIELDS, 'flightDistance', 'flightTrack', 'flightStop', 'departureZone', 'arrivalZone', 'passenger', 'identity', 'carriage', 'seat', 'seatClass', 'railStanding', 'price', 'orderNumber', 'ticketNumber', 'saleCode', 'issuer', 'railShowIssuer', 'gate', 'departureTerminal', 'arrivalTerminal', 'boardingTime', 'airline', 'flightStatus', 'aircraft', 'aircraftRegistration', 'railBureau', 'railModel', 'railTrainsets', 'railPowerSupply', 'railMileage', 'railRunner', 'railCarOwner', 'railPlatform', 'railRoute', 'railJourney', 'railInvoice', ...Object.keys(SUPPLEMENT_FIELDS), 'pnr', 'ticketMarks', 'ticketCode', 'boardingCode', 'boardingCodeSource', 'boardingCodeOperatingFlight', 'boardingLegIndex', ...BOARDING_METADATA_FIELDS, 'lookupValues', 'fieldSources', 'provenance', 'deleted'];
 const flightFields = FIELDS.filter(field => field !== 'orderNumber');
 export const fieldsForTransport = type => type === 'rail' ? FIELDS : flightFields;
@@ -102,6 +103,10 @@ export function validateRecord(input) {
   out.railPowerSupply=normalizeRailPowerSupply(out.railPowerSupply || railModel.powerSupply);
   for (const [field,label] of [['railMileage','铁路里程'],['flightDistance','航程距离']]) if(out[field] && (!/^(?:0|[1-9]\d{0,5})(?:\.\d{1,3})?$/.test(out[field]) || Number(out[field])>100000))throw new Error(label+'须为 0 至 100000 km，可保留三位小数');
   if (out.type === 'flight') {
+    out.marketingFlightNumber = flightNumber(out.marketingFlightNumber);
+    if (out.marketingFlightNumber && !/^(?:[A-Z]{2,3}|[A-Z]\d|\d[A-Z])\d{1,5}[A-Z]?$/.test(out.marketingFlightNumber)) {
+      throw Object.assign(new Error('购票航班号请填完整号码，如 CA7941。'), { fields: ['marketingFlightNumber'] });
+    }
     const count = out.checkedBaggageCount.normalize('NFKC').trim();
     const weight = out.checkedBaggageWeight.normalize('NFKC').trim();
     if (count && (!/^\d{1,4}$/.test(count) || Number(count) > 2997)) throw new Error('托运行李件数须为 0 至 2997 的整数');
@@ -109,6 +114,7 @@ export function validateRecord(input) {
     out.checkedBaggageCount = count ? String(Number(count)) : '';
     out.checkedBaggageWeight = weight ? String(Number(weight)) : '';
   }
+  if (out.type !== 'flight' || !out.marketingFlightNumber) delete out.marketingFlightNumber;
   for (const field of ['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime']) if (out[field] && !/^([01]\d|2[0-3]):[0-5]\d$/.test(out[field])) throw new Error('时间请填写 HH:mm');
   for (const field of ['departureZone', 'arrivalZone']) if (out[field] && !isStoredTimeZone(out[field])) throw new Error('请填写有效时区，例如 Asia/Shanghai');
   if (out.price && !/^\d{1,9}(\.\d{1,2})?$/.test(out.price)) throw new Error('票价请填写正数，最多两位小数');

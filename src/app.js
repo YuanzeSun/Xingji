@@ -1007,12 +1007,14 @@ function field(key, r, options = {}) {
   const decimal = ['price', 'railMileage', 'flightDistance', 'railSupplementFee', 'railSupplementSurcharge', 'checkedBaggageWeight'].includes(key);
   const inputMode = decimal ? 'inputmode="decimal"' : key === 'checkedBaggageCount' ? 'inputmode="numeric"' : '';
   const noSuggestions = key === 'identity' ? 'autocomplete="off" spellcheck="false"' : '';
-  const control = options.options ? `<select name="${key}" ${requiredAttrs}>${selectOptions(options.options, r[key])}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${inputMode} ${noSuggestions} />`;
+  const description = options.hint ? `aria-describedby="${key}-hint"` : '';
+  const control = options.options ? `<select name="${key}" ${requiredAttrs} ${description}>${selectOptions(options.options, r[key])}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${inputMode} ${noSuggestions} ${description} />`;
   const content = ['origin','destination','airline'].includes(key) ? `<span class="airport-picker">${control}<span class="airport-suggestions" role="listbox" hidden></span></span>` : control;
   const label = key === 'price' && isRefundReceipt(r) ? '退票费（元）'
     : key === 'issuer' && r.template === 'rail-supplement' ? '出票客运段'
     : ticketFieldLabel(key, r.type, labels[key]);
-  return `<label class="field ${options.full ? 'full-field' : ''}"><span>${e(label)}${ticketRequiredMark(r, key, required)}${fieldSourceBadge(key,r)}</span>${content}</label>`;
+  const hint = options.hint ? `<small class="field-hint" id="${key}-hint">${e(options.hint)}</small>` : '';
+  return `<label class="field ${options.full ? 'full-field' : ''}"><span>${e(label)}${ticketRequiredMark(r, key, required)}${fieldSourceBadge(key,r)}</span>${content}${hint}</label>`;
 }
 function bindPlaceFields(container) {
   for (const input of container.querySelectorAll('[name="origin"], [name="destination"]')) {
@@ -1069,7 +1071,8 @@ function editorSection(title, content, note = '') {
 }
 
 function flightEditorSections(record) {
-  const fields = (...keys) => keys.map(key => field(key, record)).join('');
+  const hints = { marketingFlightNumber: '按购票订单填完整航班号，如 CA7941。' };
+  const fields = (...keys) => keys.map(key => field(key, record, { hint: hints[key] })).join('');
   const metadata = (title, key, keys) => `<details class="editor-extra" data-boarding-fields="${key}" ${keys.some(field => record[field]) ? 'open' : ''}>
     <summary>${e(title)}</summary>${key === 'baggage' ? '<p class="flight-local-time" data-baggage-later-leg hidden>行李牌随首段登机牌展示。</p><p class="flight-local-time" data-baggage-occupied hidden></p>' : ''}<div class="form-grid">${fields(...keys)}</div>
   </details>`;
