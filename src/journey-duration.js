@@ -13,7 +13,7 @@ function offsetAt(formatter, instant) {
   return (sign === '-' ? -1 : 1) * (Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds)) * 1000;
 }
 
-function localInstant(date, time, zone) {
+export function localInstant(date, time, zone) {
   const day = calendarDate(date);
   if (day.length !== 10 || !time || !zone) return NaN;
   const local = Date.parse(`${day}T${time}:00Z`);

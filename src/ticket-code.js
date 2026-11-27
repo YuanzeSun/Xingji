@@ -14,6 +14,5 @@ export function railTicketFaceCode(record) {
 
 export function renderTicketCode(record, x, y, width, height = width) {
   const code = railTicketFaceCode(record);
-  if (!code) return '';
-  return renderCodeData(normalizeTicketCode(code), { x, y, width, height, stretch: isLinearTicketCode(code), marker: 'ticket-code' });
+  return renderCodeData(code, { x, y, width, height, stretch: isLinearTicketCode(code), marker: 'ticket-code', formats: FORMATS });
 }

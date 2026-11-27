@@ -1,6 +1,6 @@
 import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
 import { symbolImage } from './barcode-symbols.js';
-import { codeDataFromResult, codeBytes, MAX_CODE_BYTES, normalizeCodeData, symbolFromCodeData } from './barcode-data.js';
+import { codeDataFromResult, MAX_CODE_BYTES, normalizeCodeData, symbolFromCodeData } from './barcode-data.js';
 import { readBCBP } from './bcbp-reader.js';
 import { RAIL_TICKET_CODE_FORMATS } from './ticket-code.js';
 
@@ -31,8 +31,9 @@ async function rebuildResults(results, type, boardingPass) {
     try {
       const compact = pdfFormats.includes(result.format) && result.format !== 'PDF417';
       const source = codeDataFromResult(compact ? { ...result, format: 'PDF417', symbologyIdentifier: ']L2' } : result);
-      const expected=codeBytes(source.rawBytes);
-      if(boardingPass && readBCBP(String.fromCharCode(...expected))){
+      let expected = result.bytes;
+      if (boardingPass && expected[22] !== 32 && isBoardingResult(result)) {
+        expected = expected.slice();
         expected[22]=32;
         source.rawBytes=btoa(String.fromCharCode(...expected));
       }

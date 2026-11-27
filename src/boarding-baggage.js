@@ -1,10 +1,11 @@
 import { BOARDING_BAGGAGE_FIELDS, flightTicketNumber } from './boarding-metadata.js';
 import { isInactiveFlight } from './flight-status.js';
 import { journeyDate } from './journey-date.js';
-import { flightTiming } from './journey-duration.js';
+import { localInstant } from './journey-duration.js';
 
 const hasBags = data => BOARDING_BAGGAGE_FIELDS.some(key => data[key]?.trim());
 const activeFlight = record => record.type === 'flight' && !record.deleted && !isInactiveFlight(record);
+const destination = record => record.destinationCode || record.destination || '';
 
 export function boardingBaggage(record) {
   if (Object.hasOwn(record, 'boardingSticker')) return record.boardingSticker;
@@ -19,7 +20,7 @@ function departureOrder(record) {
   const date = journeyDate(record.departureDate);
   return {
     record,
-    instant: flightTiming(record).plannedDeparture,
+    instant: localInstant(date, record.departureTime, record.departureZone),
     year: date?.year ?? 0,
     ordinal: date?.dayOfYear ?? 367
   };
@@ -49,9 +50,8 @@ export function boardingBaggageIndex(records) {
     const legs = group.length > 1 ? group.map(departureOrder).sort(compareDeparture).map(entry => entry.record) : group;
     const fields = Object.fromEntries(BOARDING_BAGGAGE_FIELDS.map(key =>
       [key, legs.find(record => record[key]?.trim())?.[key] || '']));
-    const destinations = legs.map(record => record.destinationCode || record.destination || '');
-    const sticker = hasBags(fields) ? {
-      ...fields, to: destinations.at(-1), via: destinations.slice(0, -1).filter(Boolean).join(' / ')
+    const sticker = Object.values(fields).some(Boolean) ? {
+      ...fields, to: destination(legs.at(-1)), via: legs.slice(0, -1).map(destination).filter(Boolean).join(' / ')
     } : null;
     legs.forEach((record, index) => result.set(record.id, { sticker: index === 0 ? sticker : null, laterLeg: index > 0 }));
   }
@@ -64,7 +64,6 @@ export function otherBaggageLegs(record, records) {
     flightTicketNumber(other.ticketNumber) === number) : [];
 }
 
-export function occupiedBaggageFields(record, records) {
-  const legs = otherBaggageLegs(record, records);
+export function occupiedBaggageFields(legs) {
   return BOARDING_BAGGAGE_FIELDS.filter(key => legs.some(other => other[key]?.trim()));
 }

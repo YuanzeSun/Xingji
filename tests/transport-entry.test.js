@@ -70,21 +70,22 @@ test('archive entries preselect each transport and share a switchable editor',as
       assert.deepEqual(['Year','Month','Day',''].map(part => form().elements[key + part].value), ['2026','06','','']);
       assert.equal(form().querySelector(`[data-field-source="${key}Year"]`).textContent, '默认值');
     }
-    const expectIncomplete = message => {
+    const expectIncomplete = key => {
       form().dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
-      assert.match(form().querySelector('#editor-error').textContent, message);
+      assert.equal(form().querySelector('#editor-error').textContent, '完整填写或清空全部');
+      assert.ok(form().elements[key].closest('.field').classList.contains('field-invalid'));
     };
     fill('actualDepartureTime','09:00');
-    expectIncomplete(/实际起飞日期和时间/);
+    expectIncomplete('actualDepartureDate');
     fill('actualDepartureTime','');
     fill('arrivalDateMonth','07');
     fill('departureDateMonth','05');
     assert.equal(form().elements.arrivalDateMonth.value,'07');
     assert.equal(form().elements.actualArrivalDateMonth.value,'05');
     fill('departureDateMonth','06');
-    expectIncomplete(/计划到达日期和时间/);
+    expectIncomplete('arrivalDate');
     fill('arrivalDateDay','01');
-    expectIncomplete(/计划到达日期和时间/);
+    expectIncomplete('arrivalTime');
     fill('arrivalTime','13:00');
     await submit();
     const flight=server.records().find(row=>row.type==='flight');

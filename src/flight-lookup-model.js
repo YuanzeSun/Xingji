@@ -7,6 +7,7 @@ import { flightNumber, flightQuery } from './flight-query.js';
 import { airlineNameForCode } from './airline-codes.js';
 import { airportCode, normalizeFlightStop } from './flight-stop.js';
 import { ticketFieldLocked } from './barcode-fields.js';
+import { OPTIONAL_FLIGHT_TIMES } from './flight-times.js';
 
 const clean = value => typeof value === 'string' && !/^(?:-+|null|undefined|n\/?a)$/i.test(value.trim()) ? value.trim().slice(0, 1000) : '';
 const flightIdentity = value => flightNumber(value).replace(/^([A-Z0-9]{2})0+(?=\d)/, '$1');
@@ -151,7 +152,7 @@ export function rotationRegistration(result, query) {
 // Public schedules cannot supply a passenger, fare, seat, cabin, PNR or barcode.
 const scheduleFields = ['departureTime', 'flightDistance', 'airline', 'aircraft', 'gate', 'boardingTime'];
 const airportTerminals = [['origin', 'departureTerminal'], ['destination', 'arrivalTerminal']];
-const timePairs = [['arrivalDate', 'arrivalTime'], ['actualDepartureDate', 'actualDepartureTime'], ['actualArrivalDate', 'actualArrivalTime']];
+const timePairs = Object.entries(OPTIONAL_FLIGHT_TIMES);
 const canFill = (record, field) => !record[field] && !record.lockedFields?.includes(field) && !ticketFieldLocked(record, field);
 const canFillFlightStop = record => canFill(record, 'flightStop') && record.fieldSources?.flightStop !== 'manual';
 const canCompletePair = (record, [first, second]) =>
@@ -173,29 +174,26 @@ export function flightLookupNeeds(record) {
 
 export function flightCompletion(record, candidate) {
   if (record.type !== 'flight' || candidate.type !== 'flight' || flightIdentity(record.service) !== flightIdentity(candidate.service) || !sameDate(record.departureDate,candidate.departureDate)) return {};
-  for (const side of ['origin', 'destination']) {
-    const existing = resolvePlace(record, side), found = resolvePlace(candidate, side);
-    if (existing.status === 'matched' && (found.status !== 'matched' || existing.code !== found.code)) return {};
-  }
   const changes = {};
   const fill = (field, value) => { if (canFill(record, field) && value) changes[field] = value; };
-  const fillTimePair = (date, time) => {
-    if (!candidate[date] || !candidate[time]) return;
-    if ((record[date] && !sameDate(record[date],candidate[date])) || (record[time] && record[time] !== candidate[time])) return;
-    if (!canCompletePair(record, [date, time])) return;
-    fill(date, candidate[date]); fill(time, candidate[time]);
-  };
   for (const [side, terminal] of airportTerminals) {
     const code = side + 'Code', existing = resolvePlace(record, side), found = resolvePlace(candidate, side);
+    if (existing.status === 'matched' && (found.status !== 'matched' || existing.code !== found.code)) return {};
     const blank = !record[side]?.trim() && !record[code]?.trim();
-    if (blank || (existing.status === 'matched' && found.status === 'matched' && existing.code === found.code)) {
-      // Never attach a provider airport code to an unrelated handwritten name.
-      if (canCompletePair(record, [side, code])) { fill(side, candidate[side]); fill(code, candidate[code]); }
-      if (found.status === 'matched') fill(terminal, candidate[terminal]);
-    }
+    // Never attach a provider airport code to an unrelated handwritten name.
+    if (!blank && existing.status !== 'matched') continue;
+    if (canCompletePair(record, [side, code])) { fill(side, candidate[side]); fill(code, candidate[code]); }
+    if (found.status === 'matched') fill(terminal, candidate[terminal]);
   }
   for (const field of [...scheduleFields, 'aircraftRegistration', 'marketingCarrier']) fill(field, candidate[field]);
-  for (const [date, time] of timePairs) fillTimePair(date, time);
+  for (const pair of timePairs) {
+    const [date, time] = pair;
+    if (!candidate[date] || !candidate[time]) continue;
+    if ((record[date] && !sameDate(record[date], candidate[date])) || (record[time] && record[time] !== candidate[time])) continue;
+    if (!canCompletePair(record, pair)) continue;
+    fill(date, candidate[date]);
+    fill(time, candidate[time]);
+  }
   if (canFillFlightStop(record)) {
     const stop = normalizeFlightStop({ ...record, ...changes }, candidate.flightStop);
     if (stop) changes.flightStop = stop;

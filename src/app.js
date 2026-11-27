@@ -1,4 +1,4 @@
-import {BOARDING_METADATA_LABELS,BOARDING_METADATA_FIELDS,BOARDING_BAGGAGE_FIELDS} from './boarding-metadata.js';
+import {BOARDING_METADATA_LABELS,BOARDING_LOYALTY_FIELDS,BOARDING_BAGGAGE_FIELDS} from './boarding-metadata.js';
 import {boardingBaggageIndex,occupiedBaggageFields,otherBaggageLegs,withBoardingBaggage} from './boarding-baggage.js';
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
@@ -1068,8 +1068,6 @@ function editorSection(title, content, note = '') {
   </section>`;
 }
 
-const flightLoyaltyFields = BOARDING_METADATA_FIELDS.filter(key => !BOARDING_BAGGAGE_FIELDS.includes(key));
-
 function flightEditorSections(record) {
   const fields = (...keys) => keys.map(key => field(key, record)).join('');
   const metadata = (title, key, keys) => `<details class="editor-extra" data-boarding-fields="${key}" ${keys.some(field => record[field]) ? 'open' : ''}>
@@ -1085,9 +1083,9 @@ function flightEditorSections(record) {
     editorSection('航司与票务', fields('airline', 'aircraft', 'aircraftRegistration', 'flightDistance', 'pnr', 'ticketNumber', 'price')),
     `<details class="editor-extra" ${ACTUAL_FLIGHT_FIELDS.some(key => record[key]) ? 'open' : ''}>
       <summary>实际起降</summary><p class="flight-local-time">${e(FLIGHT_LOCAL_TIMES)}</p>
-      <div class="form-grid">${fields('actualDepartureDate', 'actualDepartureTime', 'actualArrivalDate', 'actualArrivalTime')}</div>
+      <div class="form-grid">${fields(...ACTUAL_FLIGHT_FIELDS)}</div>
     </details>`,
-    metadata('常旅客与代码共享', 'loyalty', flightLoyaltyFields)
+    metadata('常旅客与代码共享', 'loyalty', BOARDING_LOYALTY_FIELDS)
   ].join('');
 }
 
@@ -1160,12 +1158,13 @@ function editRecord(record, {
   // openModal replaces the DOM, but keeps the editor state deliberately.
   const form = document.querySelector('#editor-form');
   form.closest('dialog').classList.add('ticket-editor-modal');
+  const baggageFieldsInUse = record => occupiedBaggageFields(otherBaggageLegs(record, state.records));
   function refreshPreview() {
     if (!flight) { form.querySelector('#editor-preview').innerHTML = ticketSVG(draft); return; }
     const related = otherBaggageLegs(draft, state.records);
     const index = boardingBaggageIndex([draft, ...related]);
     form.querySelector('[data-baggage-later-leg]').hidden = !index.get(draft.id)?.laterLeg;
-    const occupied = occupiedBaggageFields(draft, related);
+    const occupied = occupiedBaggageFields(related);
     const note = form.querySelector('[data-baggage-occupied]');
     note.hidden = occupied.length === 0;
     note.textContent = occupied.length ? '联程其他航段已填写' + occupied.map(key => BOARDING_METADATA_LABELS[key]).join('、') + '。' : '';
@@ -1246,7 +1245,7 @@ function editRecord(record, {
     editor.dirty=true;
     refreshFieldSources(form,draft);
     refreshTicketFieldLocks(form,draft);
-    for (const [group, keys] of [['baggage', BOARDING_BAGGAGE_FIELDS], ['loyalty', flightLoyaltyFields]]) {
+    for (const [group, keys] of [['baggage', BOARDING_BAGGAGE_FIELDS], ['loyalty', BOARDING_LOYALTY_FIELDS]]) {
       const section = form.querySelector(`[data-boarding-fields="${group}"]`);
       if (section && keys.some(key => draft[key])) section.open = true;
     }
@@ -1255,7 +1254,7 @@ function editRecord(record, {
     refreshPreview();
   }, {
     onCameraStart:stopRailCamera,
-    baggageFieldsInUse: record => occupiedBaggageFields(record, state.records),
+    baggageFieldsInUse,
     profile:state.settings.profile, preserveGenerator:!!generatorSettings, referenceURL:localFileURL, editingSaved,
     savedService: serviceFixed ? original.service : '',
     isCurrent:() => form.isConnected && !form.dataset.pending && canWrite() && isArchiveContext(context),
@@ -1269,7 +1268,7 @@ function editRecord(record, {
       : target.matches('[data-seat-number],[data-berth]') ? 'seat'
       : target.matches('[data-rail-standing]') ? 'railStanding' : '');
     if (flight && BOARDING_BAGGAGE_FIELDS.includes(changedKey) && target.value.trim() &&
-        occupiedBaggageFields(draft, state.records).includes(changedKey)) {
+        baggageFieldsInUse(draft).includes(changedKey)) {
       target.value = draft[changedKey];
       return;
     }
@@ -1370,7 +1369,7 @@ function editRecord(record, {
       }
       validateTicketForm(draft);
       if (flight) {
-        const fields = occupiedBaggageFields(draft, state.records).filter(key => draft[key]?.trim());
+        const fields = baggageFieldsInUse(draft).filter(key => draft[key]?.trim());
         if (fields.length) {
           form.querySelector('[data-boarding-fields="baggage"]').open = true;
           throw Object.assign(new Error('联程其他航段已填写' + fields.map(key => BOARDING_METADATA_LABELS[key]).join('、') + '，请清空本段重复项。'), { fields });

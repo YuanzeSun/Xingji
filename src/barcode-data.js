@@ -9,9 +9,16 @@ export function codeBytes(value) {
   if (bytes.length > MAX_CODE_BYTES || encode(bytes) !== value) throw new Error('条码原始数据编码无效');
   return bytes;
 }
-export function normalizeCodeData(value, formats = FORMATS) {
+export function decodeCodeText(bytes, fallbackEncoding) {
+  for (const encoding of fallbackEncoding ? ['utf-8', fallbackEncoding] : ['utf-8']) {
+    try { return new TextDecoder(encoding, { fatal: true, ignoreBOM: true }).decode(bytes); }
+    catch { /* A failed decode can be retried with the issuer's alternate encoding. */ }
+  }
+  return null;
+}
+export function normalizeCodeData(value, formats) {
   if (value === undefined || value === null || value === '') return '';
-  if (typeof value !== 'object' || Array.isArray(value) || value.version !== 1 || !FORMATS.has(value.format) || !formats.has(value.format)) throw new Error('条码需保存为可重建的原始数据');
+  if (typeof value !== 'object' || Array.isArray(value) || value.version !== 1 || !FORMATS.has(value.format) || (formats && !formats.has(value.format))) throw new Error('条码需保存为可重建的原始数据');
   const bytes = codeBytes(value.rawBytes);
   if (typeof value.symbologyIdentifier !== 'string' || !/^\][A-Za-z][0-9A-Za-z]$/.test(value.symbologyIdentifier) || typeof value.gs1 !== 'boolean' || !Array.isArray(value.eci) || value.eci.length > 128) throw new Error('条码编码参数无效');
   let previous = -1;
@@ -47,13 +54,18 @@ export function codeDataFromResult(result) {
 }
 const cache = new Map();
 export function symbolFromCodeData(value) {
-  const code = normalizeCodeData(value); if (!code) return null;
-  const key = JSON.stringify(code); if (cache.has(key)) return cache.get(key);
-  const bytes = codeBytes(code.rawBytes), parts = new Map(code.eci.map(part => [part.offset, part.value]));
+  return codeSymbol(normalizeCodeData(value));
+}
+function codeSymbol(code) {
+  if (!code) return null;
+  const key = JSON.stringify(code), cached = cache.get(key);
+  if (cached) return cached;
+  const bytes = atob(code.rawBytes), parts = new Map(code.eci.map(part => [part.offset, part.value]));
   let text = code.gs1 ? '^FNC1' : '';
   for (let i = 0; i < bytes.length; i++) {
     if (parts.has(i)) text += '^ECI' + String(parts.get(i)).padStart(6, '0');
-    text += code.gs1 && bytes[i] === 29 ? '^FNC1' : bytes[i] === 94 ? '^^' : String.fromCharCode(bytes[i]);
+    const byte = bytes[i];
+    text += code.gs1 && byte === '\x1d' ? '^FNC1' : byte === '^' ? '^^' : byte;
   }
   const options = { bcid: FORMATS.get(code.format), text, binarytext: true, parsefnc: true, includetext: false };
   const { symbolVersion, errorCorrectionLevel, mask } = code.parameters;
@@ -78,14 +90,18 @@ export function symbolFromCodeData(value) {
   if (cache.size >= 100) cache.delete(cache.keys().next().value);
   cache.set(key, symbol); return symbol;
 }
-export function codeSize(value) {
-  const code = normalizeCodeData(value), symbol = symbolFromCodeData(code), quiet = linearFormats.has(code.format) || code.format === 'PDF417' ? 8 : 4;
+function symbolSize(format, symbol) {
+  const quiet = linearFormats.has(format) || format === 'PDF417' ? 8 : 4;
   return { width: symbol.width + quiet * 2, height: symbol.height + quiet * 2, quiet };
 }
+export function codeSize(value, formats) {
+  const code = normalizeCodeData(value, formats);
+  return symbolSize(code.format, codeSymbol(code));
+}
 // Only payload and encoding parameters are persisted. Matrices and SVG paths exist in memory at display time.
-export function renderCodeData(value, { x = 0, y = 0, width = '100%', height = '100%', marker = '', className = '', stretch = false } = {}) {
-  const code = normalizeCodeData(value); if (!code) return '';
-  const symbol = symbolFromCodeData(code), size = codeSize(code), paths = [];
+export function renderCodeData(value, { x = 0, y = 0, width = '100%', height = '100%', marker = '', className = '', stretch = false, formats } = {}) {
+  const code = normalizeCodeData(value, formats); if (!code) return '';
+  const symbol = codeSymbol(code), size = symbolSize(code.format, symbol), paths = [];
   const rowHeight = linearFormats.has(code.format) ? symbol.height : 1;
   for (let row = 0; row < symbol.height; row += rowHeight) for (let col = 0; col < symbol.width;) {
     if ((symbol.data[row * symbol.width + col] ?? 255) >= 128) { col++; continue; }
