@@ -47,6 +47,8 @@ test('regional, turboprop and mainline aircraft share canonical names without lo
     for (const name of variants) {
       assert.equal(normalizeAircraft(name), name, name);
       assert.equal(aircraftClassification(name)?.label, model, name);
+      const suffix = /^A(\d{3}-\d{3})([A-Z]+)$/.exec(name);
+      if (suffix) assert.equal(normalizeAircraft(`${suffix[1]}（${suffix[2]}）`), name, name);
     }
   }
   for (const value of ['CRJ7', 'CRJ9', 'E135']) assert.equal(normalizeAircraft(value), value);
@@ -164,8 +166,23 @@ test('bilingual manufacturer names, winglet markers and full-width inputs retain
     ['波音　７３７－８６Ｊ（ＢＷ）', '737-86J(BW)', '737-800'],
     ['boeing 737–8q8 (wl)', '737-8Q8(WL)', '737-800'],
     ['737-87L（WL）', '737-87L(WL)', '737-800'],
+    ['B737-881 (BW)', '737-881(BW)', '737-800'],
+    ['737-852', '737-852', '737-800'],
+    ['737-9B5（ER）', '737-9B5ER', '737-900ER'],
+    ['747-422', '747-422', '747-400'],
+    ['757-232', '757-232', '757-200'],
+    ['767-322（ER）', '767-322ER', '767-300'],
+    ['767-300ER', '767-300ER', '767-300'],
+    ['777-222(ER)', '777-222ER', '777-200ER'],
     ['330-343（X）', 'A330-343X', 'A330-300'],
+    ['330-323（X）', 'A330-323X', 'A330-300'],
+    ['330-243（E）', 'A330-243E', 'A330-200'],
+    ['A330-343 (E)', 'A330-343E', 'A330-300'],
     ['Airbus A330-343X', 'A330-343X', 'A330-300'],
+    ['319-153（N）', 'A319-153N', 'A319neo'],
+    ['320-271(N)', 'A320-271N', 'A320neo'],
+    ['321-253(NX)', 'A321-253NX', 'A321neo'],
+    ['321-253N（Y）', 'A321-253NY', 'A321neo'],
     ['AIRBUS-320-214', 'A320-214', 'A320ceo'],
     ['巴航工业１９０', 'E190', 'E190'],
     ['EMBRAER-195-E2', 'E195-E2', 'E195-E2'],
@@ -173,7 +190,7 @@ test('bilingual manufacturer names, winglet markers and full-width inputs retain
     assert.equal(normalizeAircraft(input), name, input);
     assert.equal(aircraftClassification(input)?.label, label, input);
   }
-  for (const input of ['737-8ZZ', '737-8Q9', '737-8100', 'A321-111N', 'A330-999(X)', '737-87L(X)', 'COMAC', '']) {
+  for (const input of ['737-8ZZ', '737-8100', '737-87L(ER)', '787-8Q8', 'A321-111(N)', 'A330-399(X)', 'A330-941(E)', '737-87L(X)', 'COMAC', '']) {
     assert.equal(aircraftClassification(input), null, input);
   }
 });
@@ -207,6 +224,7 @@ test('verified registration variants survive provider completion, saving, render
     ['A321-253NY', 'A21N', 'A321-253NY'],
     ['330-343（X）', 'A333', 'A330-343X'],
     ['737-87L（WL）', 'B738', '737-87L(WL)'],
+    ['319-153（N）', 'A19N', 'A319-153N'],
   ];
   const records = lookupRows.map(([miniAirplaneModels, generic, expected], index) => {
     const service = 'CA123' + index, departureDate = '2023-11-18';
@@ -228,8 +246,8 @@ test('verified registration variants survive provider completion, saving, render
     dom.window.close();
   }
   for (const [aircraftSubtypes, expected] of [
-    [true, { '737-800': 3, '737 MAX 8': 1, A321neo: 1, 'A330-300': 1 }],
-    [false, { '737': 4, A321: 1, A330: 1 }],
+    [true, { '737-800': 3, '737 MAX 8': 1, A319neo: 1, A321neo: 1, 'A330-300': 1 }],
+    [false, { '737': 4, A319: 1, A321: 1, A330: 1 }],
   ]) {
     const { aircraft, unknownAircraft } = journeyStatistics(restored, { aircraftSubtypes, dateTo: '2023-12-31' });
     assert.deepEqual(Object.fromEntries(aircraft.map(({ name, count }) => [name, count])), expected);

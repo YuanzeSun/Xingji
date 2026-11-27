@@ -3,6 +3,7 @@ import { AIRCRAFT_MODELS, AIRCRAFT_SERIES, SCOPED_AIRCRAFT_CODES, SHARED_AIRCRAF
 const key = text => text.toUpperCase().replace(/[\s.-]/g, '');
 const manufacturer = /^(?:AIRBUS|空中客车|空客|BOEING|波音|DE\s*HAVILLAND(?:\s*CANADA)?|(?:加拿大)?德[·・\s-]?哈维兰|BOMBARDIER|庞巴迪|CANADAIR|EMBRAER|巴西航空工业(?:公司)?|巴航工业|巴航|COMAC|中国商飞|商飞|MCDONNELL[\s-]*DOUGLAS|麦道)\s*/i;
 const configuration = /\((?:BW|WL|SHARKLETS?)\)$/;
+const boeingCustomerDesignation = /^(7[34567]7)([1-9])([A-Z0-9]{2})(ER|LR)?$/;
 const seriesPrefixes = [/^(A\d{3}|7\d{2})/, /^(DHC-[678])/, /^(ATR (?:42|72))/, /^(E(?:170|175|190|195))/,
   /^(ERJ|CRJ)-/, /^(SAAB (?:340|2000))/, /^(BAe 146)/, /^((?:MD|DC|IL|TU|AN|YAK)-\d{1,3})(?:-|$)/];
 
@@ -22,6 +23,7 @@ function aircraftSeries(model) {
 
 const aircraftByName = new Map();
 const aircraftByIcaoCode = new Map();
+const boeingCustomerCodes = new Set();
 function addAircraft(name, aliases, models, icaoCodes = []) {
   const series = aircraftSeries(models[0] || name);
   const label = models.length === 1 ? models[0] : name + '（子型号未确认）';
@@ -37,11 +39,34 @@ function addAircraft(name, aliases, models, icaoCodes = []) {
 for (const [name, { aliases = [], variants = [], icao = [] }] of Object.entries(AIRCRAFT_MODELS)) {
   const models = [name];
   addAircraft(name, aliases, models, icao);
-  for (const variant of variants) addAircraft(variant, [], models);
+  for (const variant of variants) {
+    addAircraft(variant, [], models);
+    const customer = boeingCustomerDesignation.exec(key(variant))?.[3];
+    if (customer) boeingCustomerCodes.add(customer);
+  }
 }
 for (const [name, aliases] of Object.entries(AIRCRAFT_SERIES)) addAircraft(name, aliases, []);
 for (const [name, { aliases = [], models, icao }] of Object.entries(SHARED_AIRCRAFT_CODES)) {
   addAircraft(name, aliases, models, icao ? [name] : []);
+}
+
+function boeingVariant(code) {
+  const designation = boeingCustomerDesignation.exec(code);
+  if (!designation) return null;
+  const [, family, series, customer, extension = ''] = designation;
+  if (customer !== '00' && !boeingCustomerCodes.has(customer)) return null;
+  const base = `${family}${series}00`;
+  const aircraft = aircraftByName.get(base + extension) ??
+    (family === '767' && extension === 'ER' ? aircraftByName.get(base) : null);
+  return aircraft ? { ...aircraft, name: `${family}-${series}${customer}${extension}` } : null;
+}
+
+function airbusVariant(code) {
+  const designation = /^(A?330[23]\d{2})([EX])$/.exec(code);
+  if (!designation) return null;
+  const [, base, suffix] = designation;
+  const aircraft = aircraftByName.get(base);
+  return aircraft ? { ...aircraft, name: aircraft.name + suffix } : null;
 }
 
 export function aircraftClassification(value) {
@@ -59,8 +84,9 @@ export function aircraftClassification(value) {
 
   const code = key(text);
   const suffix = configuration.exec(code)?.[0] || '';
-  const base = code.replace(configuration, '').replace(/\(X\)$/, 'X');
-  const aircraft = aircraftByName.get(base) || (/^B7\d{2}/.test(base) ? aircraftByName.get(base.slice(1)) : null);
+  const base = code.replace(configuration, '').replace(/\(([A-Z]+)\)$/, '$1');
+  const boeing = base.replace(/^B(?=7\d{2})/, '');
+  const aircraft = aircraftByName.get(base) || aircraftByName.get(boeing) || airbusVariant(base) || boeingVariant(boeing);
   if (!aircraft) return null;
   return suffix ? { ...aircraft, name: aircraft.name + suffix } : aircraft;
 }
