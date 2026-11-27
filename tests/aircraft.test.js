@@ -163,6 +163,9 @@ test('bilingual manufacturer names, winglet markers and full-width inputs retain
   for (const [input, name, label] of [
     ['波音　７３７－８６Ｊ（ＢＷ）', '737-86J(BW)', '737-800'],
     ['boeing 737–8q8 (wl)', '737-8Q8(WL)', '737-800'],
+    ['737-87L（WL）', '737-87L(WL)', '737-800'],
+    ['330-343（X）', 'A330-343X', 'A330-300'],
+    ['Airbus A330-343X', 'A330-343X', 'A330-300'],
     ['AIRBUS-320-214', 'A320-214', 'A320ceo'],
     ['巴航工业１９０', 'E190', 'E190'],
     ['EMBRAER-195-E2', 'E195-E2', 'E195-E2'],
@@ -170,7 +173,7 @@ test('bilingual manufacturer names, winglet markers and full-width inputs retain
     assert.equal(normalizeAircraft(input), name, input);
     assert.equal(aircraftClassification(input)?.label, label, input);
   }
-  for (const input of ['737-8ZZ', '737-8Q9', '737-8100', 'A321-111N', 'COMAC', '']) {
+  for (const input of ['737-8ZZ', '737-8Q9', '737-8100', 'A321-111N', 'A330-999(X)', '737-87L(X)', 'COMAC', '']) {
     assert.equal(aircraftClassification(input), null, input);
   }
 });
@@ -202,6 +205,8 @@ test('verified registration variants survive provider completion, saving, render
     ['737-8Q8', 'B738', '737-8Q8'],
     ['737-8-200', 'B38M', '737-8-200'],
     ['A321-253NY', 'A21N', 'A321-253NY'],
+    ['330-343（X）', 'A333', 'A330-343X'],
+    ['737-87L（WL）', 'B738', '737-87L(WL)'],
   ];
   const records = lookupRows.map(([miniAirplaneModels, generic, expected], index) => {
     const service = 'CA123' + index, departureDate = '2023-11-18';
@@ -223,8 +228,8 @@ test('verified registration variants survive provider completion, saving, render
     dom.window.close();
   }
   for (const [aircraftSubtypes, expected] of [
-    [true, { '737-800': 2, '737 MAX 8': 1, A321neo: 1 }],
-    [false, { '737': 3, A321: 1 }],
+    [true, { '737-800': 3, '737 MAX 8': 1, A321neo: 1, 'A330-300': 1 }],
+    [false, { '737': 4, A321: 1, A330: 1 }],
   ]) {
     const { aircraft, unknownAircraft } = journeyStatistics(restored, { aircraftSubtypes, dateTo: '2023-12-31' });
     assert.deepEqual(Object.fromEntries(aircraft.map(({ name, count }) => [name, count])), expected);

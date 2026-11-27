@@ -59,7 +59,7 @@ export function aircraftClassification(value) {
 
   const code = key(text);
   const suffix = configuration.exec(code)?.[0] || '';
-  const base = code.replace(configuration, '');
+  const base = code.replace(configuration, '').replace(/\(X\)$/, 'X');
   const aircraft = aircraftByName.get(base) || (/^B7\d{2}/.test(base) ? aircraftByName.get(base.slice(1)) : null);
   if (!aircraft) return null;
   return suffix ? { ...aircraft, name: aircraft.name + suffix } : aircraft;
