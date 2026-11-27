@@ -9,7 +9,7 @@ import {flightTicketNumber} from './boarding-metadata.js';
 
 const identifiers={PDF417:']L2',Aztec:']z0',QRCode:']Q1',DataMatrix:']d1'};
 export const BCBP_FORMATS = Object.keys(identifiers);
-export const BOARDING_FLIGHT_PATTERN = /^([A-Z]{2,3}|[A-Z]\d|\d[A-Z])\s*(\d{1,4}[A-Z]?)$/;
+const BOARDING_FLIGHT_PATTERN = /^([A-Z]{2,3}|[A-Z]\d|\d[A-Z])\s*(\d{1,4}[A-Z]?)$/;
 const upper=value=>String(value ?? '').normalize('NFKC').trim().toUpperCase();
 const romanName=/^[A-Z][A-Z /.'-]*$/;
 export function boardingFlightParts(value) {

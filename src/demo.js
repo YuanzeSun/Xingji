@@ -1,5 +1,5 @@
 import {createRecord,FIELDS} from './model.js';
-import {journeyDate} from './journey-date.js';
+import {JOURNEY_DATE_FIELDS, journeyDate} from './journey-date.js';
 import {DEMO_TICKET_CODE} from './demo-code.js';
 import {DEMO_RAIL_DETAILS} from './data/demo-rail.js';
 import {boardingCodeDefaults,createBoardingCode} from './bcbp.js';
@@ -102,7 +102,8 @@ export function demoRecords(today=localToday()){
       values.boardingCodeSource='generated';values.boardingLegIndex='0';values.fieldSources.boardingCode='generated';
       if (!syntheticFlight) values.sources.push({kind:'reference',label:`航班参考：${values.airline} ${values.service}，${values.origin}—${values.destination}`,at:verifiedAt});
     }
-    markFieldSources(values,FIELDS.filter(key=>!values.fieldSources[key]),'default');
+    const fields = [...FIELDS, ...JOURNEY_DATE_FIELDS.map(key => key + 'Year')];
+    markFieldSources(values, fields.filter(key => !values.fieldSources[key]), 'default');
     return createRecord(values);
   });
 }

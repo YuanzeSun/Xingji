@@ -4,8 +4,9 @@ import {fieldSourceBadge,railBarcodeFieldLocked,railImportFieldLocked} from './f
 import {ticketRequiredMark} from './ticket-form.js';
 import { RAIL_QR_YEAR_PERIOD } from './rail-qr-codec.js';
 import { FLIGHT_DATE_DEFAULT_ATTR, OPTIONAL_FLIGHT_TIMES } from './flight-times.js';
+import { hasOriginalBoardingCode } from './boarding-metadata.js';
 
-export const barcodeDateDay=(record,key)=>key==='departureDate'&&record.type==='flight'&&record.boardingCodeSource==='original' &&
+export const barcodeDateDay=(record,key)=>key==='departureDate'&&record.type==='flight'&&hasOriginalBoardingCode(record) &&
   record.fieldSources?.departureDate === 'barcode' ? journeyDate(record.departureDate)?.dayOfYear : null;
 const dateFromBarcodeYear = (value, dayOfYear) => journeyDate({ year: value ? Number(value) : null, dayOfYear });
 const options=(count,current,unit)=>'<option value="">'+unit+'</option>'+Array.from({length:count},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}" ${Number(current)===i+1?'selected':''}>${i+1}${unit}</option>`).join('');

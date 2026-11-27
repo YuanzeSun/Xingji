@@ -30,6 +30,10 @@ test('all planned and actual dates and cached railway stop dates remain ordinal 
   assert.deepEqual(saved.actualDepartureDate,{year:2025,dayOfYear:1});assert.deepEqual(saved.actualArrivalDate,{year:2025,dayOfYear:2});
   const restored = readArchive(archive([record]))[0];
   for(const key of ['departureDate','arrivalDate','actualDepartureDate','actualArrivalDate'])assert.deepEqual(restored[key],record[key]);
+  const imported = createRecord({ type:'flight', template:'air-boarding-pass', departureDate: record.departureDate, sources:[{ kind:'flight-lookup' }] });
+  assert.equal(imported.fieldSources.departureDateYear, 'variflight');
+  const [storedWithoutYearSource] = readArchive(archive([{ ...imported, fieldSources: { departureDate: 'manual' } }]));
+  assert.equal(storedWithoutYearSource.fieldSources.departureDateYear, undefined);
   const rail=readArchive(archive([demoRecords('2026-11-18')[0]]))[0];assert.equal(typeof rail.railJourney.query.startDate,'object');
   assert.ok(rail.railJourney.stops.every(stop=>[stop.arrivalDate,stop.departureDate].every(date=>!date||Number.isInteger(date.year)&&Number.isInteger(date.dayOfYear))));
   assert.equal(archive([record]).schemaVersion,2);

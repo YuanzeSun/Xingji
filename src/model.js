@@ -45,7 +45,11 @@ export function createRecord(values = {}) {
   for (const k of [...FIELDS, 'id', 'createdAt', 'updatedAt', 'sources', 'lockedFields', 'railFieldDates']) if (Object.hasOwn(values, k)) record[k] = JOURNEY_DATE_FIELDS.includes(k) ? journeyDate(values[k]) : clone(values[k]);
   record.fieldSources=normalizeFieldSources(record.fieldSources);
   const source=importFieldSource(values.sources?.[0]?.kind);
-  if(source && !Object.hasOwn(values,'fieldSources'))markFieldSources(record,Object.keys(values).filter(key=>FIELDS.includes(key)),source);
+  if (source && !Object.hasOwn(values, 'fieldSources')) {
+    const provided = Object.keys(values).filter(key => FIELDS.includes(key));
+    const years = JOURNEY_DATE_FIELDS.filter(key => record[key]?.year).map(key => key + 'Year');
+    markFieldSources(record, [...provided, ...years], source);
+  }
   for(const key of ['type','template','departureZone','arrivalZone','provenance'])if(!record.fieldSources[key] && !Object.hasOwn(values,key))record.fieldSources[key]='default';
   if(record.type==='flight' && !values.flightStatus)record.fieldSources.flightStatus='default';
   return validateRecord(record);
@@ -129,8 +133,7 @@ export function validateRecord(input) {
   if (out.type !== 'flight' || out.boardingCodeSource === 'original') out.boardingCodeOperatingFlight = '';
   else if (out.boardingCodeOperatingFlight) {
     out.boardingCodeOperatingFlight = flightNumber(out.boardingCodeOperatingFlight);
-    try { operatingFlight(out.boardingCodeOperatingFlight); }
-    catch (error) { error.fields = ['boardingCodeOperatingFlight']; throw error; }
+    operatingFlight(out.boardingCodeOperatingFlight);
   }
   if (out.type !== 'flight' || !out.boardingCode) {
     for (const field of BOARDING_CODE_FIELDS) out[field] = '';
@@ -157,9 +160,6 @@ export function validateRecord(input) {
   }
   out.lookupValues=Object.fromEntries(Object.entries(out.lookupValues).filter(([key,value])=>JSON.stringify(out[key])===JSON.stringify(value) && !out.lockedFields.includes(key) && out[key]).map(([key])=>[key,out[key]]));
   refreshGeneratedCode(out);
-  for(const key of JOURNEY_DATE_FIELDS)if(out[key]?.year&&!out.fieldSources[key+'Year']){
-    const source=out.fieldSources[key];if(source!=='barcode' && isFieldSourceEntry(key,source,fields))out.fieldSources[key+'Year']=source;
-  }
   out.fieldSources=Object.fromEntries(Object.entries(out.fieldSources).filter(([key,kind])=>
     !isFieldSourceEntry(key,kind,fields) || kind==='manual' || hasFieldValue(sourceFieldValue(out,key))));
   const dates = normalizeRailFieldDates(out, input.railFieldDates);

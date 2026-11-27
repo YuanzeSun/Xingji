@@ -35,6 +35,9 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
   const isOpen = () => !disposed && form.isConnected;
   const validContext = original => isOpen() && canQuery() && desktop() && stamp() === original && getKey() === selectedKey;
   const changed = () => { if (isOpen()) status.textContent = '航班或连接已改变，请重新查询。'; };
+  function clearCandidates() {
+    candidates = []; candidateStamp = ''; list.replaceChildren();
+  }
   function refreshButton() {
     button.disabled = Boolean(activeRequest) || !desktop() || !canQuery();
   }
@@ -101,12 +104,16 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     status.textContent = summary || empty;
   }
   async function accept(index, connector) {
-    if (!validContext(candidateStamp) || !candidates[index]) { list.innerHTML = ''; status.textContent = '查询条件已改变，请重新查询'; return; }
+    if (!validContext(candidateStamp) || !candidates[index]) {
+      clearCandidates();
+      status.textContent = '查询条件已改变，请重新查询';
+      return;
+    }
     const previousRows = candidates, candidate = candidates[index], recordBeforeLookup = getRecord();
     const changes = flightCompletion(recordBeforeLookup, candidate);
     const conflicts = candidate.aircraftConflicts ??
       (recordBeforeLookup.aircraft && candidate.aircraft ? reconcileAircraft([recordBeforeLookup.aircraft, candidate.aircraft]).conflicts : []);
-    candidates = []; candidateStamp = ''; list.innerHTML = '';
+    clearCandidates();
     const fields = Object.keys(changes);
     if (fields.length) apply(changes, source());
     const confirmed = flightQuery(getRecord());
@@ -122,7 +129,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
   }
   async function query(signal) {
     calledTools.clear(); apiStatus.textContent = '';
-    list.innerHTML = ''; candidates = []; candidateStamp = '';
+    clearCandidates();
     const record = getRecord(), request = flightQuery(record), needs = flightLookupNeeds(record);
     const needsSchedule = needs.schedule || needs.stopover || (needs.registration && (!request.dep || !request.arr));
     if (!needsSchedule && !needs.registration && !missingTrackRequest()) {
@@ -171,7 +178,10 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     else run(signal => accept(Number(target.dataset.flightCandidate), new FlightConnector(selectedKey, signal, connectorOptions)));
   };
   const input = () => {
-    if (candidateStamp && stamp() !== candidateStamp) { candidates = []; list.innerHTML = ''; status.textContent = '航班或机场已改变，请重新查询'; }
+    if (candidateStamp && stamp() !== candidateStamp) {
+      clearCandidates();
+      status.textContent = '航班或机场已改变，请重新查询';
+    }
     refreshButton();
   };
   section.addEventListener('click', click); form.addEventListener('input', input);

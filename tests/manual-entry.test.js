@@ -99,7 +99,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.ok(document.querySelector('section[data-boarding-fields="baggage"] [name="baggageTagNumbers"]'));
   assert.equal(document.querySelector('[name="marketingCarrier"], [name="marketingFlightNumber"]'), null);
   const program = document.querySelector('[name="frequentFlyerCarrier"]');
-  assert.match(document.getElementById(program.getAttribute('aria-describedby')).textContent, /国航 CA、厦航 MF、深航 ZH、汉莎 LH/);
+  assert.match(document.getElementById(program.getAttribute('aria-describedby')).textContent, /凤凰知音 CA（国航、深航共用）、厦航白鹭 MF、汉莎 LH/);
   fill('boardingCodeOperatingFlight', 'nh 964');
   fill('baggageTagNumbers', '0123456789');
   fill('checkedBaggageCount', '01');

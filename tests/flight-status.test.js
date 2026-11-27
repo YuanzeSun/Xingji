@@ -19,7 +19,7 @@ test('open and invalid flights can archive undetermined details while ordinary f
   assert.doesNotThrow(()=>validateTicketForm(r));assert.equal(r.flightStatus,flightStatus);
  }
  assert.throws(()=>validateTicketForm(flight({service:''})),/航班号/);
- assert.throws(()=>flight({flightStatus:'invented'}),/状态/);
+ for(const obsolete of ['invented','正常机票','OPEN 票','void'])assert.throws(()=>flight({flightStatus:obsolete}),/状态/);
  assert.equal(flight({}).flightStatus,'normal');
 });
 test('main coupon and stub visibly mark special tickets in both boarding languages',()=>{

@@ -1,5 +1,5 @@
 import {journeyDate} from './journey-date.js';
-import {boardingCodeDefaults,readBoardingCode,createBoardingCode,BOARDING_FLIGHT_PATTERN} from './bcbp.js';
+import {boardingCodeDefaults,boardingFlightParts,readBoardingCode,createBoardingCode} from './bcbp.js';
 import {hasChineseName} from './flight-passenger.js';
 import {markFieldSources} from './field-sources.js';
 
@@ -7,11 +7,11 @@ export const BOARDING_CODE_FIELDS=['boardingCode','boardingCodeSource','boarding
 export const BOARDING_FIELDS=[...BOARDING_CODE_FIELDS,'boardingCodeOperatingFlight'];
 export const BOARDING_SHARED_FIELDS=['passenger','pnr','origin','destination','originCode','destinationCode','service','departureDate','seat','seatClass','identity','ticketNumber','gate','boardingTime'];
 export function operatingFlight(value) {
-  const text=String(value || '').trim().toUpperCase();
-  if(!text)return null;
-  const match=BOARDING_FLIGHT_PATTERN.exec(text);
-  if(!match)throw new Error('请填写完整的实际承运航班，如 CA1234');
-  return {carrier:match[1],flightNumber:match[2]};
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  const flight = boardingFlightParts(text);
+  if (!flight) throw Object.assign(new Error('请填写完整的实际承运航班，如 CA1234'), { fields: ['boardingCodeOperatingFlight'] });
+  return flight;
 }
 export function generatedCodeSettings(record,decoded) {
   if(record.boardingCodeSource!=='generated' || !record.boardingCode)return null;

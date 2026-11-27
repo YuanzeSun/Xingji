@@ -1,6 +1,6 @@
 import { airlineLogo } from './airline-logo.js';
 import { readBoardingCode } from './bcbp.js';
-import { BOARDING_METADATA_LABELS, boardingMetadataValues } from './boarding-metadata.js';
+import { BOARDING_METADATA_LABELS, boardingMetadataValues, hasOriginalBoardingCode } from './boarding-metadata.js';
 import { daysInYear, journeyDate, dateLabel } from './journey-date.js';
 import { resolvePlace } from './places.js';
 import { identityPattern, maskIdentity } from './identity.js';
@@ -34,7 +34,7 @@ export function boardingScanReview(record, read, rescan, profile) {
     ticketNumber: read.ticketNumber, gate: read.gate, boardingTime: read.boardingTime,
     identity: document?.identity, ...boardingMetadataValues(read)
   };
-  const previous = rescan && record.boardingCodeSource === 'original' ? readBoardingCode(record.boardingCode, record.boardingLegIndex) : null;
+  const previous = rescan && hasOriginalBoardingCode(record) ? readBoardingCode(record.boardingCode, record.boardingLegIndex) : null;
   const airports = rescan ? { origin: airportCode(record, 'origin'), destination: airportCode(record, 'destination') } : {};
   const same = (key, old, value) => {
     if (key === 'departureDate') return currentDate?.dayOfYear === value.dayOfYear;

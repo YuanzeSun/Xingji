@@ -53,7 +53,7 @@ import { normalizePlaces, resolvePlace } from './places.js';
 import { bindReferenceFields } from './reference-suggestions.js';
 import { bindAirportPicker } from './airport-picker.js';
 import { bindStationPicker } from './station-picker.js';
-import { FLIGHT_STATUSES, normalizeFlightStatus } from './flight-status.js';
+import { FLIGHT_STATUSES } from './flight-status.js';
 import { isRefundReceipt, isJourneyRecord } from './record-kind.js';
 import { bindUppercaseInputs } from './uppercase-input.js';
 import { applyProfileDefaults, applyTicketIdentity } from './personal-profile.js';
@@ -1074,7 +1074,7 @@ function boardingLoyaltyEditor(record) {
   const scanned = hasOriginalBoardingCode(record);
   const keys = scanned ? [...BOARDING_LOYALTY_FIELDS, ...BOARDING_MARKETING_FIELDS] : BOARDING_LOYALTY_FIELDS;
   const hints = {
-    frequentFlyerCarrier: '按会员账户所属航司填代码，如国航 CA、厦航 MF、深航 ZH、汉莎 LH。',
+    frequentFlyerCarrier: '按订座记录填计划代码，如凤凰知音 CA（国航、深航共用）、厦航白鹭 MF、汉莎 LH。',
     marketingFlightNumber: '按购票订单填完整航班号，如 CA7941。'
   };
   return `<details class="editor-extra" data-boarding-fields="loyalty" ${scanned || keys.some(key => record[key]) ? 'open' : ''}>
@@ -1131,7 +1131,6 @@ function editRecord(record, {
   const draft = normalizePlaces(clone(record));
   const generatorSettings = preserve && draft.type==='flight' ? readBoardingGenerator(modalRoot) : undefined;
   const flightStopInput = preserve && draft.type === 'flight' ? editor?.flightStopInput : undefined;
-  draft.flightStatus = draft.type === 'flight' ? normalizeFlightStatus(draft.flightStatus) : '';
   const passengerEdited = preserve ? !!editor?.passengerEdited : !!record.lockedFields?.includes('passenger');
   const editingSaved = state.records.some(record => record.id === draft.id);
   const typeFixed = imported || editingSaved;

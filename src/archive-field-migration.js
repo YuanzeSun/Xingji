@@ -58,16 +58,16 @@ export function planArchiveFieldMigration(snapshot) {
         const record = prepareRecord(row);
         if (path && path !== `archive/${yearOf(record)}.json`) throw new Error('票据年份与归档文件不匹配');
         describeChanges(row, record, change);
-        if (change.added.length || change.removed.length || change.updated.length) {
-          change.deleted = record.deleted;
-          if (!record.deleted) {
-            const route = [record.origin, record.destination].filter(Boolean).join(' → ');
-            change.title = [dateLabel(record.departureDate, '-'), record.service, route].filter(Boolean).join(' · ');
-          }
-          changes.push(change);
-          if (path) rewritten.add(path);
-          records.push(record);
-        } else records.push(row);
+        const changed = change.added.length || change.removed.length || change.updated.length;
+        records.push(changed ? record : row);
+        if (!changed) continue;
+        change.deleted = record.deleted;
+        if (!record.deleted) {
+          const route = [record.origin, record.destination].filter(Boolean).join(' → ');
+          change.title = [dateLabel(record.departureDate, '-'), record.service, route].filter(Boolean).join(' · ');
+        }
+        changes.push(change);
+        if (path) rewritten.add(path);
       } catch (error) {
         errors.push({ title: `第 ${count} 条票据`, message: error.message });
       }

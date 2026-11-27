@@ -2,8 +2,9 @@ import {refreshTicketDateLocks} from './date-field.js';
 import {matchedIdentityLocked, railBarcodeFieldLocked, railImportFieldLocked, railInvoiceFieldLocked, railPointsFieldLocked} from './field-sources.js';
 import {splitBerth} from './seat-field.js';
 import {refreshRailQRMarks} from './ticket-form.js';
+import {hasOriginalBoardingCode} from './boarding-metadata.js';
 export const ticketFieldLocked = (record, key) => matchedIdentityLocked(record,key) || railImportFieldLocked(record,key) || railBarcodeFieldLocked(record,key) ||
-  (key!=='departureDate' && record.type === 'flight' && !!record.boardingCode && record.boardingCodeSource === 'original' && (key === 'type' || record.fieldSources?.[key]==='barcode'));
+  (key!=='departureDate' && record.type === 'flight' && hasOriginalBoardingCode(record) && (key === 'type' || record.fieldSources?.[key]==='barcode'));
 
 export function refreshTicketFieldLocks(root, record) {
   refreshTicketDateLocks(root,record);

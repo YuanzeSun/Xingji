@@ -112,9 +112,7 @@ export class GitHubStore {
     let settings=preservedSettings(fallbackSettings), generation = '', recordCount;
 
     if(index){
-      const blob=await this.request('/git/blobs/'+index.sha);
-      if(blob.encoding!=='base64' || typeof blob.content!=='string')throw new Error('无法读取要保留的个人资料和 MCP 设置');
-      const text=new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(atob(blob.content.replace(/\s/g,'')),c=>c.charCodeAt(0)));
+      const text=await this.readBlob(index.sha);
       let manifest;try{manifest=JSON.parse(text);}catch{throw new Error('无法读取索引中的个人资料和 MCP 设置，请先备份');}
       settings=preservedSettings(manifest.settings || {});
       generation = manifest.generation || '';

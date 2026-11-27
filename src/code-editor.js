@@ -3,7 +3,7 @@ import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import {readTicketDate,writeTicketDate} from './date-field.js';
 import {readBoardingCode} from './bcbp.js';
 import {boardingScanReview} from './boarding-rescan.js';
-import {BOARDING_MARKETING_FIELDS} from './boarding-metadata.js';
+import {BOARDING_MARKETING_FIELDS,hasOriginalBoardingCode} from './boarding-metadata.js';
 import {normalizePlaces} from './places.js';
 import {railService} from './rail-journey.js';
 import {markManualFields} from './lookup-values.js';
@@ -90,7 +90,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
   function updateGenerated() {
     clearTimeout(updateTimer);
     if(disposed || !flight || loading || pending)return;
-    if(draft.boardingCode && draft.boardingCodeSource!=='generated'){
+    if(hasOriginalBoardingCode(draft)){
       showDifferences();
       return;
     }
@@ -119,7 +119,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
     if (!isCurrent()) return;
     const data = normalize(code.data), index = String(code.legIndex ?? 0);
     const read = code.boarding;
-    const rescan = editingSaved || draft.boardingCodeSource === 'original';
+    const rescan = editingSaved || hasOriginalBoardingCode(draft);
     const previousRecord = currentRecord();
     const review = read ? boardingScanReview(previousRecord, read, rescan, profile) : null;
     const mismatchedService = savedService && review?.conflicts.some(({ key }) => key === 'service');
@@ -374,7 +374,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
     form.addEventListener('change',inputChanged);
     if(preserveGenerator)setBoardingGeneratorAvailability(form,draft);
     else refreshBoardingGenerator(form,draft,{profile});
-    if(draft.boardingCode && draft.boardingCodeSource!=='generated')showDifferences();
+    if(hasOriginalBoardingCode(draft))showDifferences();
     else updateGenerated();
   }
   refreshTicketFieldLocks(form,draft);

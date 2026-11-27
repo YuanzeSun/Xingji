@@ -10,12 +10,14 @@ export function flightNameLanguage(record) {
 }
 
 export function flightPassengerName(record,code={}) {
-  const current=record.passenger || '',language=flightNameLanguage(record);
+  const current=record.passenger || '', currentKey=nameKey(current);
   // A manual correction must not be replaced by a different passenger from a scan.
-  if(current && record.boardingCodeSource!=='generated' && ![code.passenger,code.passengerChinese].some(name=>name && nameKey(name)===nameKey(current)))return current;
+  if(current && record.boardingCodeSource!=='generated' && ![code.passenger,code.passengerChinese].some(name=>name && nameKey(name)===currentKey))return current;
   if(code.passengerChinese)return code.passengerChinese;
-  const chinese=hasChineseName(current) ? current : code.passengerChinese || '';
-  const english=current && !hasChineseName(current) ? current : code.passenger || '';
+  const isChinese=hasChineseName(current);
+  const chinese=isChinese ? current : '';
+  const english=!isChinese && current || code.passenger || '';
+  const language=flightNameLanguage(record);
   return language==='zh' ? chinese || english : language==='en' ? english || chinese : current || english || chinese;
 }
 
