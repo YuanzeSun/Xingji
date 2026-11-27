@@ -35,6 +35,29 @@ test('single-leg BCBP round-trips fixed-width fields and rejects invalid values 
   }
 });
 
+test('domestic BCBP reads the NI extension and only writes masked resident IDs',()=>{
+  const identity='200000200001010018', mask='2'+'*'.repeat(16)+'8';
+  const domestic={...values(),origin:'DQA',destination:'PEK',carrier:'CA',identity};
+  const payload=encodeBCBP(domestic);
+  assert.equal(payload.slice(58),'1A>80000NI'+mask);
+  assert.equal(readBCBP(payload).identityHint,mask);
+  assert.equal(payload.includes(identity),false);
+  assert.equal(encodeBCBP({...domestic,destination:'HKG'}).slice(58),'00');
+  assert.equal(encodeBCBP({...domestic,origin:'NRT'}).slice(58),'00');
+  assert.equal(encodeBCBP({...domestic,identity:'P12345678'}).slice(58),'00');
+
+  const header=payload.slice(0,58);
+  const appendix='#90示例旅客#91大庆#92北京#932#9415:20';
+  const carrierBlock='>1030MM0E78400000000010';
+  const original=readBCBP(header+'2B'+carrierBlock+'NI'+mask+appendix);
+  assert.equal(original.ticketNumber,'7840000000001');
+  assert.equal(original.passengerChinese,'示例旅客');
+  assert.equal(original.identityHint,mask);
+  assert.equal(readBCBP(header+'2B'+carrierBlock+'NI'+identity).identityHint,identity);
+  assert.equal(readBCBP(header+'2B'+carrierBlock+'PP'+mask).identityHint,undefined);
+  assert.equal(readBCBP(header+'17'+carrierBlock+'NI'+mask).identityHint,undefined);
+});
+
 test('new generators default to check-in status 1, no electronic marker and economy Y while saved codes retain their values',()=>{
   const defaults=boardingCodeDefaults(flight({seatClass:''}));
   assert.equal(defaults.electronic,'');assert.equal(defaults.cabin,'Y');assert.equal(defaults.status,'1');
@@ -49,9 +72,10 @@ test('new generators default to check-in status 1, no electronic marker and econ
 test('all generated symbologies decode to the complete BCBP and survive metadata exports',async()=>{
   await prepareZXingModule({overrides:{wasmBinary:await readFile('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm')},fireImmediately:true});
   for(const format of BCBP_FORMATS){
-    const code=createBoardingCode(values(),format),image=symbolImage(symbolFromCodeData(code),'flight');
+    const input={...values(),origin:'DQA',destination:'PEK',carrier:'CA',identity:'200000200001010018'};
+    const code=createBoardingCode(input,format),image=symbolImage(symbolFromCodeData(code),'flight');
     const result=(await readBarcodes(image,{formats:[format],textMode:'Plain',tryHarder:true})).find(result=>result.isValid);
-    assert.ok(result,format);assert.equal(result.text,encodeBCBP(values()));assert.deepEqual(result.bytes,codeBytes(code.rawBytes));
+    assert.ok(result,format);assert.equal(result.text,encodeBCBP(input));assert.deepEqual(result.bytes,codeBytes(code.rawBytes));
     assert.equal(result.symbologyIdentifier,code.symbologyIdentifier);
     const record=flight({boardingCode:code});assert.deepEqual(readArchive(archive([record]))[0].boardingCode,code);
     assert.equal(Object.hasOwn(createRecord({...record,deleted:true}), 'boardingCode'), false);

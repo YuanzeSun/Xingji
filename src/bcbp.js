@@ -4,6 +4,7 @@ import {readBCBP} from './bcbp-reader.js';
 import {hasChineseName} from './flight-passenger.js';
 import {airlineNameForCode} from './airline-codes.js';
 import {journeyDate} from './journey-date.js';
+import {maskBoardingIdentity} from './identity.js';
 
 export const BCBP_FORMATS = ['PDF417','Aztec','QRCode','DataMatrix'];
 const identifiers={PDF417:']L2',Aztec:']z0',QRCode:']Q1',DataMatrix:']d1'};
@@ -19,7 +20,7 @@ function flightDay(value) {
   return String(date.dayOfYear).padStart(3,'0');
 }
 
-// Single-leg Format M mandatory block. The empty conditional section is exactly "00".
+// Single-leg Format M, with the NI extension found on domestic boarding passes.
 // IATA Resolution 792 / BCBP Implementation Guide, plus independent decoder fixtures.
 export function encodeBCBP(input) {
   const passenger=field(input.passenger,/^[A-Z][A-Z .'-]*\/[A-Z .'-]+$/,'请按“姓/名”填写英文姓名，最多 20 个字符','passenger');
@@ -36,7 +37,12 @@ export function encodeBCBP(input) {
   const status=field(input.status,/^[0-9]$/,'请填写一位旅客状态代码，如 1 表示已值机');
   const electronic=upper(input.electronic);
   if(!['','E'].includes(electronic))throw new Error('电子客票标记须为 E 或空白');
-  return 'M1'+passenger.padEnd(20,' ')+(electronic || ' ')+pnr.padEnd(7,' ')+origin+destination+carrier.padEnd(3,' ')+flight[1].padStart(4,'0')+(flight[2] || ' ')+flightDay(input.date || '')+cabin+(/^\d+[A-Z]?$/.test(seat) ? seat.padStart(4,'0') : seat.padEnd(4,' '))+(/^\d+$/.test(sequence) ? sequence.padStart(5,'0') : sequence.padEnd(5,' '))+status+'00';
+  const identity=maskBoardingIdentity(input.identity);
+  const route={type:'flight',origin,destination};
+  const domestic=identity && ['origin','destination'].every(side=>resolvePlace(route,side).country==='CN');
+  const variable=domestic ? '>80000NI'+identity : '';
+  const length=variable.length.toString(16).toUpperCase().padStart(2,'0');
+  return 'M1'+passenger.padEnd(20,' ')+(electronic || ' ')+pnr.padEnd(7,' ')+origin+destination+carrier.padEnd(3,' ')+flight[1].padStart(4,'0')+(flight[2] || ' ')+flightDay(input.date || '')+cabin+(/^\d+[A-Z]?$/.test(seat) ? seat.padStart(4,'0') : seat.padEnd(4,' '))+(/^\d+$/.test(sequence) ? sequence.padStart(5,'0') : sequence.padEnd(5,' '))+status+length+variable;
 }
 
 export function createBoardingCode(input,format='PDF417') {
@@ -63,5 +69,5 @@ export function boardingCodeDefaults(record,{useSaved=true,profile}={}) {
   const profileName=record.passenger && record.passenger===profile?.chineseName ? [profile.lastName,profile.firstName].filter(Boolean).join('/') : '';
   const name=upper(hasChineseName(record.passenger) ? original.passenger || profileName : record.passenger),cabins={'经济舱':'Y','超级经济舱':'W','公务舱':'C','头等舱':'F'};
   const recordedCabin=upper(record.seatClass),cabin=recordedCabin ? cabins[recordedCabin] || recordedCabin : 'Y';
-  return {format:saved.format || 'PDF417',electronic:saved.electronic ?? '',passenger:/^[A-Z][A-Z .'-]*\/[A-Z .'-]+$/.test(name) ? name : saved.passenger || '',pnr:record.pnr || saved.pnr || '',origin:airport('origin') || saved.origin || '',destination:airport('destination') || saved.destination || '',carrier:saved.carrier || flight?.[1] || '',flightNumber:saved.flightNumber || flight?.[2] || '',date:journeyDate(record.departureDate),cabin:saved.cabin || cabin,seat:record.seat || saved.seat || '',sequence:saved.sequence || '',status:saved.status || '1'};
+  return {format:saved.format || 'PDF417',electronic:saved.electronic ?? '',passenger:/^[A-Z][A-Z .'-]*\/[A-Z .'-]+$/.test(name) ? name : saved.passenger || '',pnr:record.pnr || saved.pnr || '',origin:airport('origin') || saved.origin || '',destination:airport('destination') || saved.destination || '',carrier:saved.carrier || flight?.[1] || '',flightNumber:saved.flightNumber || flight?.[2] || '',date:journeyDate(record.departureDate),cabin:saved.cabin || cabin,seat:record.seat || saved.seat || '',sequence:saved.sequence || '',status:saved.status || '1',identity:record.identity};
 }

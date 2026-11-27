@@ -117,7 +117,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
     const original = draft.boardingCodeSource === 'original';
     const rescan = editingSaved || original;
     const previousRecord = currentRecord();
-    const review = read ? boardingScanReview(previousRecord, read, rescan) : null;
+    const review = read ? boardingScanReview(previousRecord, read, rescan, profile) : null;
     const mismatchedService = savedService && review?.conflicts.some(({ key }) => key === 'service');
     if (rescan && (!review || review.rejected || mismatchedService)) {
       reset();
@@ -148,7 +148,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
       }
     }
     const adopted = review?.conflicts.filter(({ key }) => selection?.choices[key] === 'scanned') || [];
-    const replaceCode = !draft.boardingCode || !rescan || review?.added || adopted.length;
+    const replaceCode = !draft.boardingCode || !rescan || review?.added || review?.values.identity || adopted.length;
     reset();
     status.textContent = !rescan ? '已读取并重建 ' + code.format :
       review?.added ? `已补充 ${review.added} 项资料` : review?.conflicts.length ? '已按选择核对扫码资料' : '扫码资料一致';
@@ -166,6 +166,11 @@ export function bindTicketCodeEditor(form, draft, changed, {
     Object.assign(draft, values);
     markFieldSources(draft, filled, 'barcode');
     draft.lockedFields = draft.lockedFields.filter(key => !Object.hasOwn(values, key));
+    if (values.identity) {
+      draft.lockedFields.push('identity');
+      draft.lockedFields.sort();
+      markFieldSources(draft, ['identity'], review.identitySource);
+    }
     for (const key of filled) delete draft.lookupValues[key];
     normalizePlaces(draft);
     for (const key of filled) {
@@ -311,7 +316,12 @@ export function bindTicketCodeEditor(form, draft, changed, {
     if(!flight)draft.lockedFields=draft.lockedFields.filter(key=>!railBarcodeFieldLocked(draft,key));
     draft[field]='';
     if(flight){
+      const unlockIdentity = draft.fieldSources?.identity === 'profile-match' || draft.fieldSources?.identity === 'barcode';
       for(const key of BOARDING_FIELDS)draft[key]='';
+      if (unlockIdentity) {
+        draft.lockedFields = draft.lockedFields.filter(key => key !== 'identity');
+        markFieldSources(draft, ['identity'], 'manual');
+      }
       refreshBoardingGenerator(form,draft,{profile});
     }
     markManualFields(draft,[field]);

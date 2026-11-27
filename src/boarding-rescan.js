@@ -3,12 +3,15 @@ import { readBoardingCode } from './bcbp.js';
 import { BOARDING_METADATA_LABELS, boardingMetadataValues } from './boarding-metadata.js';
 import { daysInYear, journeyDate, dateLabel } from './journey-date.js';
 import { resolvePlace } from './places.js';
+import { identityPattern, maskIdentity } from './identity.js';
+import { resolveTicketIdentity } from './personal-profile.js';
+import { ticketFieldLocked } from './barcode-fields.js';
 
 const labels = {
   ...BOARDING_METADATA_LABELS, service: '航班号', departureDate: '出发日期',
   origin: '出发机场', destination: '到达机场', passenger: '旅客姓名',
   pnr: '订座编号 PNR', seat: '座位号', seatClass: '舱位代码', airline: '航空公司',
-  ticketNumber: '票号', gate: '登机口', actualBoardingTime: '实际登机时间'
+  ticketNumber: '票号', gate: '登机口', actualBoardingTime: '实际登机时间', identity: '证件号'
 };
 const compact = value => String(value || '').normalize('NFKC').replace(/\s+/gu, '').toUpperCase();
 const nameKey = value => compact(value).replace(/[^\p{L}]/gu, '');
@@ -19,15 +22,16 @@ const airportCode = (record, key) => {
   return place.status === 'matched' ? place.code : compact(record[key + 'Code']) || (/^[A-Z]{3}$/.test(compact(record[key])) ? compact(record[key]) : '');
 };
 
-export function boardingScanReview(record, read, rescan) {
+export function boardingScanReview(record, read, rescan, profile) {
   const currentDate = journeyDate(record.departureDate);
   const year = rescan || read.legCount === 1 || serviceKey(record.service) === serviceKey(read.service) ? currentDate?.year : null;
   const date = { year: year && read.dayOfYear <= daysInYear(year) ? year : null, dayOfYear: read.dayOfYear };
+  const document = resolveTicketIdentity(read.identityHint, profile, 'national-id');
   const incoming = {
     service: read.service, departureDate: date, origin: read.originCode, destination: read.destinationCode,
     passenger: read.passengerChinese || read.passenger,
     pnr: read.pnr, seat: read.seat, seatClass: read.cabin, airline: read.airline,
-    ticketNumber: read.ticketNumber, gate: read.gate, ...boardingMetadataValues(read)
+    ticketNumber: read.ticketNumber, gate: read.gate, identity: document?.identity, ...boardingMetadataValues(read)
   };
   const previous = rescan && record.boardingCodeSource === 'original' ? readBoardingCode(record.boardingCode, record.boardingLegIndex) : null;
   const airports = rescan ? { origin: airportCode(record, 'origin'), destination: airportCode(record, 'destination') } : {};
@@ -36,6 +40,7 @@ export function boardingScanReview(record, read, rescan) {
     if (isAirport(key)) return airports[key] === value;
     if (key === 'service') return serviceKey(old) === serviceKey(value);
     if (key === 'seat') return compact(old).replace(/^0+/, '') === compact(value).replace(/^0+/, '');
+    if (key === 'identity') return identityPattern(old) === identityPattern(value);
     if (key === 'passenger') {
       const name = nameKey(old);
       return [read.passenger, read.passengerChinese].some(value => value && nameKey(value) === name) ||
@@ -48,7 +53,11 @@ export function boardingScanReview(record, read, rescan) {
     }
     return false;
   };
-  const describe = (key, value, code) => key === 'departureDate' ? dateLabel(value, '-') : isAirport(key) && code && value !== code ? `${value}（${code}）` : value;
+  const describe = (key, value, code) => {
+    if (key === 'departureDate') return dateLabel(value, '-');
+    if (key === 'identity') return maskIdentity(value);
+    return isAirport(key) && code && value !== code ? `${value}（${code}）` : value;
+  };
   const values = {}, conflicts = [];
   let added = 0;
   for (const [key, value] of Object.entries(incoming)) {
@@ -65,10 +74,12 @@ export function boardingScanReview(record, read, rescan) {
       conflicts.push({ key, label: labels[key], existing: describe(key, old, oldCode), scanned: describe(key, value), update });
     } else if (key === 'departureDate') {
       values.departureDate = value;
+    } else if (key === 'identity' && !ticketFieldLocked(record, key)) {
+      values.identity = value;
     }
   }
   const conflicting = key => conflicts.some(conflict => conflict.key === key);
   const rejected = (conflicting('service') && conflicting('departureDate')) ||
     (conflicting('origin') && conflicting('destination') && !!airports.origin && !!airports.destination);
-  return { values, conflicts, rejected, added };
+  return { values, conflicts, rejected, added, identitySource: document?.masked ? 'profile-match' : 'barcode' };
 }

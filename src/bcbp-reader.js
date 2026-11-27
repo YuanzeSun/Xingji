@@ -46,6 +46,8 @@ function readConditional(value,first,shared) {
   const length=value.slice(offset,offset+2);if(!hexadecimal(length))return {};
   const end=offset+2+parseInt(length,16);if(end>value.length)return {};
   const repeated=value.slice(offset+2,end),extra={},ticket=repeated.slice(0,13);
+  const identity=value.slice(end).match(/^NI(\d(?:\*{16}|\d{16})[\dX])(?=$|[ #])/i)?.[1];
+  if(identity)extra.identityHint=identity;
   if(/^\d{13}$/.test(ticket)&&!/^0+$/.test(ticket))extra.ticketNumber=ticket;
   const marketing=repeated.slice(15,18).trim(),program=repeated.slice(18,21).trim();
   if(repeated.length>=18&&carrier(marketing))extra.marketingCarrier=marketing;

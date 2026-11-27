@@ -20,9 +20,9 @@ function editor(draft,options={}){
   return {dom,form,draft,get saves(){return saves;},set(key,value){const input=form.elements[key];input.value=value;input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));},submit(){form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));},dispose(){cleanup();dom.window.close();}};
 }
 
-function savedEditor(draft) {
+function savedEditor(draft, options = {}) {
   let data;
-  const page = editor(draft, { editingSaved: true, loadRebuilder: async () => async () => ({ codes: [{ data, format: data.format }], issues: [] }) });
+  const page = editor(draft, { editingSaved: true, ...options, loadRebuilder: async () => async () => ({ codes: [{ data, format: data.format }], issues: [] }) });
   const upload = page.form.querySelector('#code-photo');
   Object.defineProperty(upload, 'files', { value: [new Blob(['synthetic boarding pass'])] });
   return Object.assign(page, { async scan(code) {
@@ -31,6 +31,52 @@ function savedEditor(draft) {
     await new Promise(resolve => setTimeout(resolve, 0));
   } });
 }
+
+test('scanned resident IDs use a unique profile match and protect existing identity data', async () => {
+  const identity = '200000200001010018';
+  const document = { type: 'national-id', number: identity };
+  const code = createBoardingCode({ ...values, identity }, 'QRCode');
+  const original = createBoardingCode(values, 'QRCode');
+  const open = (documents, starting = {}) => savedEditor(flight({
+    boardingCode: original, boardingCodeSource: 'original', seatClass: 'Y', airline: '中国国际航空', ...starting
+  }), { profile: { documents } });
+
+  for (const documents of [[], [{ ...document, type: 'passport' }], [document, { ...document, number: '210000200001010018' }]]) {
+    const page = open(documents, { identity: 'P12345678' });
+    try {
+      await page.scan(code);
+      assert.equal(page.draft.identity, 'P12345678');
+      assert.deepEqual(page.draft.boardingCode, original);
+      assert.equal(page.form.elements.identity.readOnly, false);
+    } finally { page.dispose(); }
+  }
+
+  const page = open([document], { identity: 'P12345678' });
+  try {
+    await page.scan(code);
+    const conflict = page.form.querySelector('[data-scan-conflict="identity"]');
+    assert.ok(conflict);
+    assert.doesNotMatch(conflict.textContent, new RegExp(identity));
+    conflict.querySelector('[value="scanned"]').click();
+    page.form.querySelector('[data-scan-confirm]').click();
+    const [saved] = readArchive(archive([page.draft]));
+    assert.equal(saved.identity, identity);
+    assert.equal(saved.fieldSources.identity, 'profile-match');
+    assert.ok(saved.lockedFields.includes('identity'));
+    assert.equal(page.form.elements.identity.readOnly, true);
+    assert.deepEqual(saved.boardingCode, code);
+    await page.scan(original);
+    assert.equal(page.draft.identity, identity);
+    assert.equal(page.form.elements.identity.readOnly, true);
+  } finally { page.dispose(); }
+
+  const draft = open([document], { identity });
+  try {
+    await draft.scan(code);
+    assert.equal(draft.form.elements.identity.readOnly, true);
+    assert.deepEqual(draft.draft.boardingCode, code);
+  } finally { draft.dispose(); }
+});
 
 test('rescanning an electronic pass with a paper pass fills missing fields and replaces the original only when values change', async () => {
   const facts = {...values, passenger:'ZHANG/SAN', date:'2026-05-18', cabin:'Z'};
@@ -145,6 +191,11 @@ test('generated codes update after edits, preserve adopted settings, and synchro
     page.set('service','CA5678');page.set('departureDate','2024-12-31');page.set('pnr','XYZ789');page.submit();assert.equal(page.saves,1);
     const read=readBoardingCode(draft.boardingCode);assert.equal(read.service,'CA5678');assert.equal(read.dayOfYear,366);assert.equal(read.pnr,'XYZ789');assert.equal(read.status,'3');assert.equal(read.cabin,'S');assert.equal(read.sequence,'00025');
     page.set('seatClass','Z');page.set('seat','30A');page.submit();assert.equal(readBoardingCode(draft.boardingCode).cabin,'Z','the generated code follows the main booking code');
+    const identity='200000200001010018';
+    page.set('identity',identity);page.submit();
+    assert.equal(readBoardingCode(draft.boardingCode).identityHint,'2'+'*'.repeat(16)+'8');
+    assert.equal(atob(draft.boardingCode.rawBytes).includes(identity),false);
+    page.set('identity','');page.submit();assert.equal(readBoardingCode(draft.boardingCode).identityHint,undefined);
   }finally{page.dispose();}
 });
 

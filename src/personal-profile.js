@@ -67,22 +67,28 @@ export function personalProfile(value = {}) {
 }
 export const hasPersonalProfile = profile => Boolean(profile.documents.length || profile.memberships?.length || PROFILE_FIELDS.some(([key]) => profile[key]));
 
-export function matchProfileIdentity(hint, profile) {
+export function matchProfileIdentity(hint, profile, documentType) {
   const pattern = identityPattern(hint);
   if (!pattern.includes('*') || !/^[A-Z0-9*]{3,128}$/.test(pattern) || !/[A-Z0-9]/.test(pattern)) return '';
   const matches = (profile?.documents || []).filter(doc => {
     const number = identityPattern(doc.number);
-    return /^[A-Z0-9]+$/.test(number) && number.length === pattern.length &&
+    return (!documentType || doc.type === documentType) && /^[A-Z0-9]+$/.test(number) && number.length === pattern.length &&
       Array.from(pattern).every((char, index) => char === '*' || char === number[index]);
   });
   return matches.length === 1 ? matches[0].number : '';
 }
 
-export function applyTicketIdentity(record, hint, profile, source) {
+export function resolveTicketIdentity(hint, profile, documentType) {
   const pattern = identityPattern(hint);
   const masked = pattern.includes('*');
-  const identity = masked ? matchProfileIdentity(pattern, profile) : /^[A-Z0-9]{3,128}$/.test(pattern) ? pattern : '';
-  if (!identity) return;
+  const identity = masked ? matchProfileIdentity(pattern, profile, documentType) : /^[A-Z0-9]{3,128}$/.test(pattern) ? pattern : '';
+  return identity ? { identity, masked } : null;
+}
+
+export function applyTicketIdentity(record, hint, profile, source) {
+  const match = resolveTicketIdentity(hint, profile);
+  if (!match) return;
+  const { identity, masked } = match;
   record.identity = identity;
   if (masked || source === 'pdf' || source === 'barcode') record.lockedFields = [...new Set([...record.lockedFields, 'identity'])].sort();
   markFieldSources(record, ['identity'], masked ? 'profile-match' : source);

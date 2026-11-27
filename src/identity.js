@@ -41,6 +41,11 @@ export function maskIdentity(value) {
   return characters.slice(0, 2).join('') + '*'.repeat(characters.length - 4) + characters.slice(-2).join('');
 }
 
+export function maskBoardingIdentity(value) {
+  const number = identityPattern(value);
+  return nationalId.test(number) ? number[0] + '*'.repeat(16) + number.at(-1) : '';
+}
+
 export function maskRailIdentity(value, { isNationalId } = {}) {
   const supplied = normalizedIdentity(value);
   if (!supplied || supplied.includes('*')) return '';

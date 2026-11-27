@@ -4,7 +4,7 @@ import {hasChineseName} from './flight-passenger.js';
 import {markFieldSources} from './field-sources.js';
 
 export const BOARDING_FIELDS=['boardingCode','boardingCodeSource','boardingCodeOperatingFlight','boardingLegIndex'];
-export const BOARDING_SHARED_FIELDS=['passenger','pnr','origin','destination','originCode','destinationCode','service','departureDate','seat','seatClass'];
+export const BOARDING_SHARED_FIELDS=['passenger','pnr','origin','destination','originCode','destinationCode','service','departureDate','seat','seatClass','identity'];
 export function operatingFlight(value) {
   const text=String(value || '').trim().toUpperCase();
   if(!text)return null;
