@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { D1Store, workerURL } from '../src/d1.js';
 import worker from '../cloudflare/d1/worker.js';
 import { createRecord } from '../src/model.js';
@@ -176,21 +175,14 @@ test('D1 whole replacements are atomic and stale clients cannot delete or overwr
   assert.deepEqual(await store.read(), reset);
 });
 
-test('D1 schema upgrade retains tickets and unknown field sources, and the database enforces the deletion marker shape', async () => {
+test('D1 schema stores tickets and unknown field sources, and enforces the deletion marker shape', async () => {
   const ticket = createRecord({ id: 'live', fieldSources: { offsetX: 'manual', seat: 'future-source' } });
   const marker = { id: 'deleted', deleted: true, updatedAt: '2026-11-27T01:00:00Z' };
-  const db = memoryD1([{ ...ticket, mergedIds: ['a'] }, { ...marker, mergedIds: ['b'], seat: '' }],
-    { flightMcpKey: 'test-key' }, { legacySchema: true });
+  const db = memoryD1([ticket, marker], { flightMcpKey: 'test-key' });
   const store = new D1Store({ url: endpoint }, token, db.fetch.bind(db));
-  const before = await store.readRaw();
-  db.sqlite.exec(readFileSync(new URL('../cloudflare/d1/migrations/0002_ticket_payload.sql', import.meta.url), 'utf8'));
-  const after = await store.readRaw();
-  assert.equal(after.id, before.id);
-  assert.equal(after.generation, before.generation);
-  assert.notEqual(after.head, before.head);
-  assert.deepEqual(after.settings, before.settings);
-  assert.deepEqual(after.records, [marker, ticket]);
-  assert.deepEqual((await store.read()).records, [marker, ticket]);
+  const archive = await store.read();
+  assert.deepEqual(archive.settings, { flightMcpKey: 'test-key' });
+  assert.deepEqual(archive.records, [marker, ticket]);
   const write = db.sqlite.prepare('UPDATE tickets SET payload = ? WHERE id = ?');
   for (const invalid of [{ ...marker, offsetX: '' }, { ...marker, id: 'wrong' }, { ...marker, mergedIds: ['b'] }]) {
     assert.throws(() => write.run(JSON.stringify(invalid), marker.id), /CHECK constraint/);

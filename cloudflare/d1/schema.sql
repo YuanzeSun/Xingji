@@ -1,4 +1,12 @@
-CREATE TABLE tickets_next (
+CREATE TABLE archive_state (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+  id TEXT NOT NULL,
+  head TEXT NOT NULL,
+  generation TEXT NOT NULL,
+  settings TEXT NOT NULL
+);
+
+CREATE TABLE tickets (
   id TEXT PRIMARY KEY NOT NULL CHECK (length(id) BETWEEN 1 AND 100 AND id NOT GLOB '*[^a-zA-Z0-9_-]*'),
   payload TEXT NOT NULL CHECK (
     json_valid(payload)
@@ -14,13 +22,5 @@ CREATE TABLE tickets_next (
   )
 );
 
-INSERT INTO tickets_next (id, payload)
-SELECT id, CASE WHEN json_type(payload, '$.deleted') = 'true' THEN
-  json_object('id', id, 'deleted', json('true'), 'updatedAt', json_extract(payload, '$.updatedAt'))
-ELSE json_remove(payload, '$.mergedIds') END
-FROM tickets;
-
-DROP TABLE tickets;
-ALTER TABLE tickets_next RENAME TO tickets;
-
-UPDATE archive_state SET head = lower(hex(randomblob(16))) WHERE singleton = 1;
+INSERT INTO archive_state (singleton, id, head, generation, settings)
+VALUES (1, lower(hex(randomblob(16))), lower(hex(randomblob(16))), '', '{}');

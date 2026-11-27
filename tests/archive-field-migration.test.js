@@ -97,7 +97,11 @@ test('GitHub migration previews changes, cancels without writing, and updates on
 test('D1 migration aborts on a stale preview and updates only changed records after a new preview', async () => {
   const marker = { id: 'old-deletion', deleted: true, updatedAt: train.updatedAt };
   const oldMarker = { ...marker, type: 'rail', template: train.template, offsetX: '', offsetY: '', fieldSources: {} };
-  const server = memoryD1([oldFlight, train, oldMarker], { flightMcpKey: 'test-key' }, { legacySchema: true });
+  const server = memoryD1([oldFlight, train, marker], { flightMcpKey: 'test-key' });
+  // Seed a preexisting deletion marker that predates the current database constraint.
+  server.sqlite.exec('PRAGMA ignore_check_constraints = ON');
+  server.sqlite.prepare('UPDATE tickets SET payload = ? WHERE id = ?').run(JSON.stringify(oldMarker), marker.id);
+  server.sqlite.exec('PRAGMA ignore_check_constraints = OFF');
   const store = new D1Store({ url: endpoint }, token, server.fetch.bind(server));
   const snapshot = await store.readRaw();
   const plan = planArchiveFieldMigration(snapshot);
