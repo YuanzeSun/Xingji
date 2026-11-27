@@ -8,7 +8,7 @@ import { bindDetailMapControls, detailMapControls, ROUTE_PLAYBACK_MS } from './d
 import { LAND_PATH, COUNTRY_PATH, PROVINCE_PATH } from './data/map-reference.js';
 import { escape as e } from './html.js';
 import {RAIL_LINE_SOURCE} from './rail-line-names.js';
-import { bindRailElevation, railElevationMarkup } from './rail-elevation-ui.js';
+import { bindRailElevation } from './rail-elevation-ui.js';
 
 function bindRailPlayback(container, svg, segments, route, followElevation) {
   const button = container.querySelector('[data-rail-play-route]');
@@ -57,7 +57,7 @@ function bindRailPlayback(container, svg, segments, route, followElevation) {
       segment.offset = offset;
     }
     updateStations();
-    followElevation(distance, distance < total);
+    followElevation?.(distance, distance < total);
   }
   function animate(timestamp) {
     startedAt ??= timestamp;
@@ -118,10 +118,10 @@ function mountMap(container, route, lineLabels) {
   let markerPoint, mapUnit;
   function drawMarker() {
     marker.toggleAttribute('data-active', Boolean(markerPoint));
-    if (markerPoint) marker.setAttribute('transform', `translate(${markerPoint.join(' ')}) scale(${mapUnit})`);
+    if (markerPoint && mapUnit) marker.setAttribute('transform', `translate(${markerPoint.join(' ')}) scale(${mapUnit})`);
   }
   const elevation = bindRailElevation(container, route, segments, point => { markerPoint = point; drawMarker(); });
-  const playback = bindRailPlayback(container, svg, segments, route, elevation.follow);
+  const playback = bindRailPlayback(container, svg, segments, route, elevation?.follow);
   function fitViewport(width, height) {
     const [left, top, right, bottom] = context.bounds;
     return { x: (left + right) / 2, y: (top + bottom) / 2, zoom: Math.min(1000 / Math.max(.02, right - left) * .72, 1000 * height / width / Math.max(.02, bottom - top) * .65) };
@@ -143,8 +143,8 @@ function mountMap(container, route, lineLabels) {
     playback.setStations(annotations.stops, stationLayer.children);
     drawMarker();
   }
-  const unbind = bindDetailMapControls(frame, { fitViewport, draw, onTap: elevation.pick });
-  return () => { unbind(); playback.dispose(); elevation.dispose(); };
+  const unbind = bindDetailMapControls(frame, { fitViewport, draw, onTap: elevation?.pick });
+  return () => { unbind(); playback.dispose(); elevation?.dispose(); };
 }
 
 export function mountRailRoute(container, record) {
@@ -157,7 +157,7 @@ export function mountRailRoute(container, record) {
   const lineCredit = lineNames ? ` · ${e(lineNames)} · <a href="${RAIL_LINE_SOURCE}" target="_blank" rel="noopener noreferrer">线路名称：迷雾资料库</a>` : '';
   container.innerHTML = `<div class="rail-route-heading"><h3>铁路线路</h3><div class="rail-route-actions"><span>按现行线路推定</span><button type="button" class="button secondary small" data-rail-play-route>播放行程</button></div><span class="visually-hidden" role="status" data-rail-play-status></span></div>
     <div class="rail-route-frame"><canvas aria-hidden="true"></canvas><svg tabindex="0" role="group" aria-label="${e(`${route.service} ${route.origin}至${route.destination}`)}铁路线路图，可拖动及缩放"></svg>${detailMapControls('铁路线路')}<div class="rail-route-legend"><span>乘坐区间</span>${full ? '<span class="rail-full-line">区间外</span>' : ''}<span class="rail-border">省界</span></div></div>
-    <p class="rail-route-caption">${fullTrip}${e(route.origin)} → ${e(route.destination)} · <a href="${RAIL_ROUTE_SOURCE}" target="_blank" rel="noopener noreferrer">线路数据：RailGo</a>${lineCredit} · 查询于 ${e(route.queriedAt.slice(0, 10))}</p>${railElevationMarkup}`;
+    <p class="rail-route-caption">${fullTrip}${e(route.origin)} → ${e(route.destination)} · <a href="${RAIL_ROUTE_SOURCE}" target="_blank" rel="noopener noreferrer">线路数据：RailGo</a>${lineCredit} · 查询于 ${e(route.queriedAt.slice(0, 10))}</p>`;
   container.hidden = false;
   return mountMap(container, route, lineLabels);
 }

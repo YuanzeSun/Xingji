@@ -25,7 +25,7 @@ test('terrain sampling stays within one request, uses WGS84 and does not join ga
   assert.deepEqual(atMapDistance(Infinity).mapPoint, secondEnd);
 });
 
-test('the rail detail queries elevation on demand and synchronizes the map with the profile', async () => {
+test('saved elevation is visible offline and synchronizes the map with the profile', () => {
   const dom = new JSDOM('<section hidden></section>', { pretendToBeVisual: true });
   const { window } = dom;
   window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -40,36 +40,22 @@ test('the rail detail queries elevation on demand and synchronizes the map with 
   }
   const root = window.document.querySelector('section');
   const segments = [[[116.38, 39.86], [116.52, 39.79], [116.72, 39.66]]];
+  const { samples } = sampleRailElevation(segments);
+  const queriedAt = '2026-11-27T00:00:00.000Z';
   const record = { type: 'rail', service: 'G1', origin: '北京南', destination: '天津南', railRoute: {
-    service: 'G1', origin: '北京南', destination: '天津南', queriedAt: '2026-11-27T00:00:00Z', segments,
-    stops: [{ name: '北京南', coordinates: segments[0][0] }, { name: '天津南', coordinates: segments[0][2] }]
+    service: 'G1', origin: '北京南', destination: '天津南', queriedAt, segments,
+    stops: [{ name: '北京南', coordinates: segments[0][0] }, { name: '天津南', coordinates: segments[0][2] }],
+    elevation: { samplingVersion: 1, queriedAt, values: samples.map((_, i) => 40 + i) }
   } };
   const requests = [], previousFetch = globalThis.fetch;
-  globalThis.fetch = async (url, options) => {
-    requests.push([new URL(url), options]);
-    if (requests.length === 1) return new Response(null, { status: 503 });
-    const count = requests.at(-1)[0].searchParams.get('latitude').split(',').length;
-    return Response.json({ elevation: Array.from({ length: count }, (_, i) => 40 + i) });
-  };
+  globalThis.fetch = async url => { requests.push(url); throw new Error('offline'); };
   const unmount = mountRailRoute(root, record);
-  async function waitFor(selector) {
-    for (let i = 0; i < 20; i++) {
-      const element = root.querySelector(selector);
-      if (element) return element;
-      await new Promise(resolve => setTimeout(resolve, 5));
-    }
-    assert.fail('Missing ' + selector);
-  }
   try {
-    assert.equal(requests.length, 0);
-    const details = root.querySelector('[data-rail-elevation]');
-    details.open = true;
-    (await waitFor('[data-retry-rail-elevation]')).click();
-    const slider = await waitFor('[data-rail-elevation] input');
+    const section = root.querySelector('[data-rail-elevation]');
+    assert.equal(section.tagName, 'SECTION');
+    assert.equal(section.querySelector('output').textContent, '0 公里 · 40 米');
+    const slider = section.querySelector('input');
     const marker = root.querySelector('[data-rail-elevation-marker]');
-    assert.equal(requests.length, 2);
-    assert.deepEqual([...requests[1][0].searchParams.keys()], ['latitude', 'longitude']);
-    assert.equal(requests[1][1].credentials, 'omit');
     assert.equal(marker.hasAttribute('data-active'), true);
     const start = marker.getAttribute('transform');
     slider.value = slider.max;
@@ -86,24 +72,10 @@ test('the rail detail queries elevation on demand and synchronizes the map with 
     }
     assert.equal(slider.value, '0');
     assert.equal(marker.getAttribute('transform'), start);
-    details.open = false;
-    await new Promise(resolve => setTimeout(resolve, 0));
-    assert.equal(marker.hasAttribute('data-active'), false);
-    details.open = true;
-    await new Promise(resolve => setTimeout(resolve, 0));
-    assert.equal(marker.hasAttribute('data-active'), true);
-    assert.equal(requests.length, 2);
-
-    details.open = false;
-    await new Promise(resolve => setTimeout(resolve, 0));
     const play = root.querySelector('[data-rail-play-route]');
     play.click();
     advance(0);
     advance(1500);
-    assert.equal(marker.hasAttribute('data-active'), false);
-    assert.equal(requests.length, 2);
-    details.open = true;
-    await new Promise(resolve => setTimeout(resolve, 0));
     const initialProgress = Number(slider.value);
     const cursor = root.querySelector('[data-elevation-cursor]');
     const initialCursor = cursor.getAttribute('transform');
@@ -122,6 +94,7 @@ test('the rail detail queries elevation on demand and synchronizes the map with 
     play.click();
     assert.equal(slider.value, '0');
     assert.equal(marker.getAttribute('transform'), start);
+    assert.equal(requests.length, 0);
   } finally {
     unmount();
     globalThis.fetch = previousFetch;

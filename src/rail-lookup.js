@@ -59,7 +59,7 @@ export function railTimetableMarkup(record) {
       <div data-rail-journey-preview>${railJourneyMarkup(record)}</div>
     </section>`;
 }
-export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = lookupRailDetails, lookupReference = lookupRailTimetableReference, scannedRail, scannedRailQR, railPointsTrip, onAutomaticPending }) {
+export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = lookupRailDetails, lookupReference = lookupRailTimetableReference, scannedRail, scannedRailQR, railPointsTrip, onPending }) {
   const section = form.querySelector('.rail-lookup');
   if (!section) return () => {};
   const button = section.querySelector('[data-rail-lookup]'), date = section.querySelector('[data-rail-query-date]'), status = section.querySelector('[data-rail-status]');
@@ -124,6 +124,7 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
   function finishLookup(result, changes, selected = []) {
     const journey = result.railJourney;
     const record = getRecord(), saved = railJourneyMatches(record) ? record.railJourney : null;
+    const previousElevation = record.railRoute?.elevation;
     const timetable = changes.railJourney || saved;
     if (timetable && changes.railTrainsets) {
       changes.railJourney = { ...timetable, trainsets: journey.trainsets, coupling: journey.coupling };
@@ -145,6 +146,8 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
     const changedFields = Object.keys(changes);
     const labelFor = key => key === 'railRoute' ? '铁路线路' : RAIL_LOOKUP_LABELS[key];
     const updated = changedFields.filter(key => changes[key]).map(labelFor);
+    const elevation = changes.railRoute?.elevation;
+    if (elevation && elevation !== previousElevation) updated.push('沿线地表海拔');
     const removed = changedFields.filter(key => !changes[key]).map(labelFor);
     const names = [...new Set((result.railRoute?.lineLabels || []).map(item => item.name))];
     const summary = [
@@ -153,6 +156,7 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
     ].filter(Boolean).join('。') || '已核查，保留已有资料';
     status.textContent = `${label} · ${summary}`;
     if (names.length) status.textContent += '。线路：' + names.join('、');
+    if (result.railElevationUnavailable) status.textContent += '。沿线海拔未查询到';
     if (result.partial) status.textContent += '。部分附加资料暂不可用';
   }
 
@@ -203,8 +207,7 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
     for (const field of Object.keys(changes)) if (!['railJourney','railRoute'].includes(field)) filled.set(field, getRecord()[field]);
     appliedTrip = tripStamp();
   };
-  async function query({ automatic = false } = {}) {
-    if (busy || review || disposed || !canQuery()) return;
+  async function query(automatic) {
     let otherRunDay = false;
     const trip = tripStamp(), selectedDate = date.value;
     try {
@@ -252,6 +255,12 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
       }
     }
   }
+  function startQuery(automatic = false) {
+    if (busy || review || disposed || !canQuery()) return;
+    const pending = query(automatic);
+    onPending?.(pending);
+  }
+  const queryOnClick = () => startQuery();
   async function queryHistorical(event) {
     const trip = tripStamp();
     if (busy || review || disposed || !canQuery()) return;
@@ -308,17 +317,14 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
   showRaw.addEventListener('click', openDiagnostics);
   reviewBox.addEventListener('click', chooseReview);
   for (const provider of providers) provider.addEventListener('click', queryHistorical);
-  button.addEventListener('click',query); form.addEventListener('input',input); form.addEventListener('change',input); renderResult();refresh();
+  button.addEventListener('click',queryOnClick); form.addEventListener('input',input); form.addEventListener('change',input); renderResult();refresh();
   const sameTime = automaticRecord?.departureTime ? automaticRecord.departureTime === getRecord().departureTime : !!(scannedRailQR || railPointsTrip);
   if (!button.disabled && sameTime) {
     let sameTrip = false;
     try {
       sameTrip = JSON.stringify(railQuery(automaticRecord)) === JSON.stringify(railQuery(getRecord()));
     } catch { /* Leave incomplete imports for review. */ }
-    if (sameTrip) {
-      const pending = query({ automatic: true });
-      onAutomaticPending?.(pending);
-    }
+    if (sameTrip) startQuery(true);
   }
   return () => {
     disposed = true;
@@ -327,7 +333,7 @@ export function bindRailLookup(form, { getRecord, canQuery, apply, lookup = look
     clearReview();
     showRaw.removeEventListener('click', openDiagnostics);
     for (const provider of providers) provider.removeEventListener('click', queryHistorical);
-    button.removeEventListener('click', query);
+    button.removeEventListener('click', queryOnClick);
     form.removeEventListener('input', input);
     form.removeEventListener('change', input);
   };

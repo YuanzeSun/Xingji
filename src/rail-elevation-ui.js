@@ -1,9 +1,5 @@
 import { escape as e } from './html.js';
-import { readRailElevation, sampleRailElevation } from './rail-elevation.js';
-
-export const railElevationMarkup = `<details class="rail-elevation" data-rail-elevation>
-  <summary>沿线地表海拔</summary><div class="rail-elevation-content" data-rail-elevation-content></div>
-</details>`;
+import { sampleRailElevation } from './rail-elevation.js';
 
 const viewHeight = 176, left = 52, right = 16, top = 16, bottom = 139;
 const meters = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 });
@@ -116,72 +112,35 @@ function bindProfile(content, route, { samples, total }, elevation, { markLocati
   else window.addEventListener('resize', draw, { signal });
 
   return {
-    select, follow, show() { markLocation(selection.point.mapPoint); },
+    select, follow,
     dispose() { observer?.disconnect(); }
   };
 }
 
 export function bindRailElevation(container, route, projected, markLocation) {
-  const details = container.querySelector('[data-rail-elevation]');
-  const content = details.querySelector('[data-rail-elevation-content]');
+  if (!route.elevation) return null;
+  const sampling = sampleRailElevation(route.segments, projected);
+  const values = route.elevation.values;
+  if (sampling?.samples.length !== values.length) return null;
+  container.insertAdjacentHTML('beforeend', `<section class="rail-elevation" data-rail-elevation aria-label="沿线地表海拔">
+    <h4>沿线地表海拔</h4><div class="rail-elevation-content"></div>
+  </section>`);
+  const content = container.querySelector('.rail-elevation-content');
   const listeners = new container.ownerDocument.defaultView.AbortController();
-  const { signal } = listeners;
-  let sampling, profile, request, pendingDistance, playing = false;
-  function applyPlayback() {
-    profile.follow(sampling.atMapDistance(pendingDistance));
-    pendingDistance = undefined;
-  }
-  async function load() {
-    if (request) return;
-    sampling ??= sampleRailElevation(route.segments, projected);
-    if (!sampling) { content.textContent = '暂无可绘制的乘坐轨迹。'; return; }
-    const active = request = new AbortController();
-    content.innerHTML = '<p role="status">正在读取沿线海拔…</p>';
-    try {
-      const elevation = await readRailElevation(sampling.samples, active.signal);
-      if (!active.signal.aborted && details.open) {
-        profile = bindProfile(content, route, sampling, elevation, {
-          markLocation: point => { if (details.open) markLocation(point); },
-          isPlaying: () => playing,
-          signal
-        });
-        if (pendingDistance !== undefined) applyPlayback();
-      }
-    } catch {
-      if (!active.signal.aborted) {
-        content.innerHTML = '<p role="status">暂时无法加载沿线海拔。 <button class="text-button" type="button" data-retry-rail-elevation>重试</button></p>';
-      }
-    } finally {
-      if (request === active) request = null;
-    }
-  }
-  function toggle() {
-    if (details.open) {
-      if (!profile) void load();
-      else if (pendingDistance !== undefined) applyPlayback();
-      else profile.show();
-    } else {
-      request?.abort();
-      request = null;
-      markLocation(null);
-    }
-  }
-  details.addEventListener('toggle', toggle, { signal });
-  content.addEventListener('click', event => {
-    if (event.target.closest('[data-retry-rail-elevation]')) void load();
-  }, { signal });
+  let playing = false;
+  const profile = bindProfile(content, route, sampling, values, {
+    markLocation, isPlaying: () => playing, signal: listeners.signal
+  });
   return {
     follow(distance, active) {
-      pendingDistance = distance;
       playing = active;
-      if (details.open && profile) applyPlayback();
+      profile.follow(sampling.atMapDistance(distance));
     },
     pick(point, unit) {
-      if (details.open && profile && !playing) profile.select(sampling.pick(point, 12 * unit));
+      if (!playing) profile.select(sampling.pick(point, 12 * unit));
     },
     dispose() {
-      request?.abort();
-      profile?.dispose();
+      profile.dispose();
       listeners.abort();
       markLocation(null);
     }

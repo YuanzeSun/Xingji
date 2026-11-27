@@ -1396,7 +1396,7 @@ function editRecord(record, {
   });
   else railLookupCleanup = bindRailLookup(form, {
     getRecord: () => draft, canQuery: canWrite, scannedRail, scannedRailQR, railPointsTrip, apply: applyEditorLookup,
-    onAutomaticPending: railPointsTrip ? trackLookup : undefined
+    onPending: trackLookup
   });
   applyAccessPolicy();
 }

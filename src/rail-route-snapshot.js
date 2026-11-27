@@ -1,4 +1,5 @@
 import { resolvePlace } from './places.js';
+import { normalizeRailElevation } from './rail-elevation.js';
 
 export const railStationKey = value => String(value || '').trim().replace(/\s/g, '').replace(/站$/, '');
 const service = value => String(value || '').trim().toUpperCase();
@@ -23,7 +24,8 @@ export function normalizeRailRoute(value) {
     const keys=fullRoute.segments.map(line=>JSON.stringify(line)),segment=keys.indexOf(JSON.stringify(selected.segments[0]));
     if(from<0 || to<=from || fullRoute.stops.slice(from,to+1).map(stop=>stop.name).join('\0')!==selected.stops.map(stop=>stop.name).join('\0') || segment<0 || selected.segments.some((line,i)=>JSON.stringify(line)!==keys[segment+i]))throw new Error('列车全程线路与乘坐区间不一致');
   }
-  return { service:service(value.service), origin:railStationKey(value.origin).slice(0,100), destination:railStationKey(value.destination).slice(0,100), ...selected,...(fullRoute ? {fullRoute} : {}), queriedAt:value.queriedAt.slice(0,40) };
+  return { service:service(value.service), origin:railStationKey(value.origin).slice(0,100), destination:railStationKey(value.destination).slice(0,100), ...selected,...(fullRoute ? {fullRoute} : {}), queriedAt:value.queriedAt.slice(0,40),
+    ...(value.elevation === undefined ? {} : { elevation: normalizeRailElevation(value.elevation) }) };
 }
 
 export const savedRailRoute = record => railRouteMatches(record) ? normalizeRailRoute(record.railRoute) : null;

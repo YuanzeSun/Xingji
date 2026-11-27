@@ -2,6 +2,7 @@ import {calendarDate} from './journey-date.js';
 import { fetchRailRoute } from './rail-route.js';
 import { railRouteMatches } from './rail-route-snapshot.js';
 import { loadRailLineNames } from './rail-line-names.js';
+import { queryRailElevation } from './rail-elevation.js';
 import { railDepartureDay, railDetails, shiftRailDate } from './rail-lookup-model.js';
 import {resolvePlace} from './places.js';
 import { railText as clean, railService, railTime, railStation, isEmuModel, normalizeRailJourney, railJourneyRange, sameRailTimetable, validRailDistances } from './rail-journey.js';
@@ -170,11 +171,22 @@ export async function lookupRailDetails(query, { fetcher = globalThis.fetch, sig
   const extras = await Promise.allSettled([stocks(),coaches(),mileage(),access(), (async () => {
     const route = await fetchRailRoute(routeRecord, options);
     if (route) {
-      result.railRoute = await loadRailLineNames(retainFullRoute(route, savedRoute, journey.stops),options);
+      const sameGeometry = previousRoute && JSON.stringify(route.segments) === JSON.stringify(previousRoute.segments);
+      const savedElevation = sameGeometry ? previousRoute.elevation : undefined;
+      const [namedRoute, elevation] = await Promise.all([
+        loadRailLineNames(retainFullRoute(route, savedRoute, journey.stops), options),
+        savedElevation ?? queryRailElevation(route.segments, options).catch(() => undefined)
+      ]);
+      if (elevation) namedRoute.elevation = elevation;
+      else result.railElevationUnavailable = true;
+      result.railRoute = namedRoute;
       // A name-source outage must not erase labels already verified for this geometry.
       for (const section of ['', 'fullRoute']) {
         const current=section ? result.railRoute[section] : result.railRoute, savedGeometry=section ? previousRoute?.[section] : previousRoute;
-        if(current && !current.lineLabels?.length && savedGeometry?.lineLabels?.length && JSON.stringify(current.segments)===JSON.stringify(savedGeometry.segments)) current.lineLabels=structuredClone(savedGeometry.lineLabels);
+        if (current && !current.lineLabels?.length && savedGeometry?.lineLabels?.length &&
+            (section ? JSON.stringify(current.segments) === JSON.stringify(savedGeometry.segments) : sameGeometry)) {
+          current.lineLabels = structuredClone(savedGeometry.lineLabels);
+        }
       }
     }
   })()]);

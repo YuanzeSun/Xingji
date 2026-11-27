@@ -132,7 +132,13 @@ test('a selected first-station date fills only the actual overnight boarding int
   assert.equal(result.railRunner,'上海客运段');assert.equal(result.railCarOwner,'上海动车段');
   assert.equal(result.railJourney.trainsets[0].id,'CR400BF-5033');assert.equal(result.railJourney.trainsets[0].manufactureMonth,'2018-04');
   assert.equal(result.railJourney.coaches.cars[1].number,'03');
-  for(const call of calls){assert.equal(call.options.credentials,'omit');assert.equal(call.options.referrerPolicy,'no-referrer');assert.ok([...call.url.searchParams.keys()].every(key=>['trainNum','date','keyword','id','train','stationTelecode','kind'].includes(key)));}
+  for (const { url, options } of calls) {
+    assert.equal(options.credentials, 'omit');
+    assert.equal(options.referrerPolicy, 'no-referrer');
+    const keys = [...url.searchParams.keys()];
+    if (url.hostname === 'api.open-meteo.com') assert.deepEqual(keys, ['latitude', 'longitude']);
+    else assert.ok(keys.every(key => ['trainNum','date','keyword','id','train','stationTelecode','kind'].includes(key)));
+  }
   const changes=railCompletion({...record,departureTime:'00:06',railRunner:'手动担当段',lockedFields:['railCarOwner']},result,startDate);
   assert.equal(changes.departureTime,undefined);assert.equal(changes.railRunner,undefined);assert.equal(changes.railCarOwner,undefined);assert.equal(changes.arrivalTime,'02:00');
 });
@@ -273,4 +279,40 @@ test('a temporary line-name source outage retains saved names only for identical
   const changed=structuredClone(saved.railRoute);changed.segments[0][0][0]+=.001;
   const fresh=await lookupRailDetails(railQuery(saved,startDate),{fetcher:fetcher([]),railRoute:changed});
   assert.equal(fresh.railRoute.lineLabels,undefined);
+});
+
+test('a successful RailGo route query saves its elevation, and a failure keeps the new track', async () => {
+  const record = ticket(), query = railQuery(record, startDate);
+  const requests = [];
+  const base = fetcher([]);
+  let elevationAvailable = true;
+  const providers = (url, options) => {
+    const address = new URL(url);
+    if (address.hostname !== 'api.open-meteo.com') return base(url, options);
+    requests.push({ address, options });
+    if (!elevationAvailable) return new Response(null, { status: 503 });
+    const count = address.searchParams.get('latitude').split(',').length;
+    return Response.json({ elevation: Array.from({ length: count }, (_, i) => i === 5 ? null : 40 + i) });
+  };
+  const result = await lookupRailDetails(query, { fetcher: providers });
+  assert.equal(requests.length, 1);
+  assert.deepEqual([...requests[0].address.searchParams.keys()], ['latitude', 'longitude']);
+  assert.equal(requests[0].options.credentials, 'omit');
+  assert.equal(result.railRoute.elevation.values.length, 100);
+  assert.equal(result.railRoute.elevation.values[5], null);
+  const [saved] = readArchive(archive([createRecord({ ...record, ...railCompletion(record, result, startDate) })]));
+  assert.deepEqual(saved.railRoute.elevation, result.railRoute.elevation);
+  assert.throws(() => createRecord({ ...saved, railRoute: { ...saved.railRoute, elevation: { ...saved.railRoute.elevation, values: [null, 10] } } }), /海拔/);
+
+  const refreshed = await lookupRailDetails(query, { fetcher: providers, railJourney: saved.railJourney, railRoute: saved.railRoute });
+  assert.deepEqual(refreshed.railRoute.elevation, saved.railRoute.elevation);
+  assert.equal(requests.length, 1);
+  const oldRoute = structuredClone(saved.railRoute);
+  oldRoute.segments[0][0][0] += .01;
+  elevationAvailable = false;
+  const changed = await lookupRailDetails(query, { fetcher: providers, railRoute: oldRoute });
+  assert.equal(requests.length, 2);
+  assert.equal(changed.railElevationUnavailable, true);
+  assert.equal(changed.railRoute.elevation, undefined);
+  assert.deepEqual(changed.railRoute.segments, result.railRoute.segments);
 });

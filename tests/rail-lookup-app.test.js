@@ -12,12 +12,25 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
   for(const key of ['window','document','location','history','sessionStorage','FormData','Image'])Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true});
   Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});
   window.scrollTo=()=>{};window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){this.open=false;};
+  window.HTMLCanvasElement.prototype.getContext = () => null;
   const ticket=createRecord({id:'rail',origin:'北京南',destination:'上海虹桥',service:'G1',departureDate:'2026-11-17',departureTime:'06:30',passenger:'示例旅客',identity:'P000001',carriage:'03',seat:'08A',seatClass:'二等座'});
   const server=await prepareCloud([ticket]),fetcher=globalThis.fetch,requests=[];let currentModel='CR400BF-S';
-  let runDay='20261117';
+  let runDay='20261117', elevationRequests = 0;
   globalThis.fetch=async(url,options)=>{
+    const address = new URL(url);
+    if (address.hostname === 'api.open-meteo.com') {
+      elevationRequests++;
+      const count = address.searchParams.get('latitude').split(',').length;
+      return Response.json({ elevation: Array.from({ length: count }, (_, i) => 65 + i) });
+    }
+    if (address.hostname === 'fog.vicc.wang') return new Response(null, { status: 503 });
     if(new URL(url).hostname==='emu.railgo.zenglingkun.cn')return Response.json(new URL(url).pathname==='/api/query' ? {success:true,data:[{runDate:'2026-11-17',trainNum:'G1',trainCode:[currentModel+'-0001'],coupling:false}]} : {success:true,data:{id:currentModel+'-0001',model:currentModel}});
     if(new URL(url).hostname!=='rg-api.zenglingkun.cn')return fetcher(url,options);
+    if (address.pathname === '/api/v2/mapLine') {
+      const start = [116.38, 39.86], finish = [121.3, 31.2];
+      return Response.json({ success: true, data: { stations: [{ 北京南: start }, { 上海虹桥: finish }],
+        train: { '北京南-上海虹桥': { index: 1, line: [start, finish] } } } });
+    }
     if(new URL(url).pathname!=='/api/v2/getTrainMain')return Response.json({success:false});
     requests.push(url);assert.equal(new URL(url).searchParams.get('trainNum'),'G1');
     return Response.json({success:true,data:{bureau:'H',bureauShortName:'上局',car:currentModel,runner:'上海客运段',carOwner:'上海动车段',numberFull:['G1'],rundays:[runDay],timetable:[{station:'北京南',day:0,arrive:'06:30',depart:'06:30'},{station:'上海虹桥',day:0,arrive:'11:24',depart:'11:24'}]}});
@@ -44,6 +57,8 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     document.querySelector('[data-rail-lookup]').click();
     await wait(()=>document.querySelector('[data-rail-status]').textContent.includes('已补全'));
     assert.match(document.querySelector('[data-rail-status]').textContent, /已补全或更新.*车型.*列车时刻表/);
+    assert.match(document.querySelector('[data-rail-status]').textContent, /铁路线路、.*沿线地表海拔/);
+    assert.equal(elevationRequests, 1);
     const resultBox = document.querySelector('[data-rail-result]');
     assert.equal(resultBox.previousElementSibling, document.querySelector('.editor-layout'));
     assert.equal(resultBox.nextElementSibling, document.querySelector('.editor-footer'));
@@ -77,6 +92,9 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     fill(destination,'上海虹桥');
     fill(arrival,'11:25');
     document.querySelector('[data-rail-lookup]').click();
+    const form = document.querySelector('#editor-form');
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(form.querySelector('[type=submit]').textContent, '正在补全行程…');
     await wait(()=>document.querySelector('[data-rail-review]:not([hidden])'));
     document.querySelector('[data-rail-review-apply]').click();
     await wait(()=>document.querySelector('[name=railModel]').value==='CR400BF-S');
@@ -93,11 +111,14 @@ test('the rail editor fetches, saves, reopens and counts rail metadata without c
     assert.equal(server.records()[0].arrivalTime,'11:25');assert.equal(server.records()[0].railJourney.stops.length,2);
     assert.equal(server.records()[0].railJourney.trainsets[0].id,'CR400BF-S-0001');
     assert.equal(server.records()[0].railTrainsets,'CR400BF-S-0001');
+    assert.equal(server.records()[0].railRoute.elevation.values[0], 65);
     assert.ok(server.records()[0].sources.some(source=>source.kind==='rail-lookup'));
     document.querySelector('[data-action="view"][data-id="rail"]').click();await wait(()=>document.querySelector('[data-ticket-detail=train] .detail-grid'));
     assert.equal(requests.length,2);
     assert.match(document.querySelector('[data-ticket-detail=train] .detail-grid').textContent,/担当路局RailGo · 2026-11-17上海局.*车型RailGo · 2026-11-17CR400BF-S.*担当客运段.*上海客运段.*车辆归属单位.*上海动车段/);
     assert.match(document.querySelector('[data-detail-field=railTrainsets] dd').textContent,/CR400BF-S-0001/);
+    await wait(() => document.querySelector('[data-rail-elevation] output')?.textContent === '0 公里 · 65 米');
+    assert.equal(elevationRequests, 2);
     document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('[name="railModel"]'));
     assert.equal(document.querySelector('[data-rail-result]').hidden, false);
     assert.equal(document.querySelector('[data-rail-diagnostics]').hidden, true);

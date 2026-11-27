@@ -30,6 +30,7 @@ test('every sample train has an offline route with line names, a complete timeta
   for(const record of rows){
     assert.equal(railRouteMatches(record),true,record.service);assert.equal(railJourneyMatches(record),true,record.service);
     assert.ok(record.railRoute.lineLabels?.length || record.railRoute.fullRoute?.lineLabels?.length);
+    assert.ok(record.railRoute.elevation.values.length > 1);
     for(const key of ['carriage','seat','seatClass','issuer','saleCode','railBureau','railModel','railPowerSupply','railMileage','railRunner','railCarOwner','railPlatform','ticketCode'])assert.ok(record[key],record.service+' '+key);
     const range=railJourneyRange(record.railJourney);assert.equal(calendarDate(record.railJourney.stops[range.from].departureDate),calendarDate(record.departureDate));assert.equal(calendarDate(record.railJourney.stops[range.to].arrivalDate),calendarDate(record.arrivalDate));
     assert.match(railJourneyMarkup(record,rows),/列车全程/);
