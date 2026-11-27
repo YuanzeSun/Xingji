@@ -8,7 +8,6 @@ import { flightTiming } from './journey-duration.js';
 import { solarTerminator } from './solar-terminator.js';
 
 const clamp = value => Math.max(0, Math.min(1, value));
-let daylightId = 0;
 
 function playbackPeriod(record) {
   const { actualDeparture, actualArrival, plannedDeparture, plannedArrival } = flightTiming(record);
@@ -56,18 +55,15 @@ function mountTrackMap(frame, track, record) {
   }
   const markup = lines.map(line => `<path pathLength="1" d="M${line.join('L')}"/>`).join('');
   const period = playbackPeriod(record);
-  const shadeId = `flight-daylight-${++daylightId}`;
   const daylight = period ? `<g class="flight-daylight" aria-hidden="true">
-    <defs><g id="${shadeId}"><path data-flight-night/><path data-flight-terminator vector-effect="non-scaling-stroke"/></g></defs>
-    <use href="#${shadeId}" x="-1000"/><use href="#${shadeId}"/><use href="#${shadeId}" x="1000"/>
+    ${[0, -1000, 1000].map(offset => `<g transform="translate(${offset} 0)"><path data-flight-night/><path data-flight-terminator/></g>`).join('')}
   </g>` : '';
   const background = basemap ? '' : `<defs><g id="flight-track-world" class="rail-base"><path class="rail-land" d="${LAND_PATH}"/><path class="rail-countries" d="${COUNTRY_PATH}"/><path class="rail-provinces" d="${PROVINCE_PATH}"/></g></defs><use href="#flight-track-world" x="-1000"/><use href="#flight-track-world"/><use href="#flight-track-world" x="1000"/>`;
   svg.innerHTML = `${background}${daylight}<g class="flight-track-line">${markup}</g><g class="flight-track-highlight" aria-hidden="true">${markup}</g><g data-flight-track-labels></g><g data-flight-track-aircraft aria-hidden="true"><path d="M10 0 1-2-3-9H-6l2 7-5-1v6l5-1-2 7h3l4-7z"/></g>`;
   const overlay = [...svg.querySelector('.flight-track-highlight').children];
   const labelLayer = svg.querySelector('[data-flight-track-labels]');
   const aircraft = svg.querySelector('[data-flight-track-aircraft]');
-  const nightPath = svg.querySelector('[data-flight-night]');
-  const terminatorPath = svg.querySelector('[data-flight-terminator]');
+  const daylightPaths = svg.querySelector('.flight-daylight')?.children;
   const daylightSteps = ROUTE_PLAYBACK_MS / 50;
   let daylightStep;
   let unit = 1, animation = 0, started, traveled = 0, edgeIndex = 0, playing = false;
@@ -110,8 +106,10 @@ function mountTrackMap(frame, track, record) {
     daylightStep = step;
     const instant = period.start + (period.end - period.start) * step / daylightSteps;
     const { night, boundary } = solarTerminator(instant, center);
-    nightPath.setAttribute('d', night);
-    terminatorPath.setAttribute('d', boundary);
+    for (const { children: [nightPath, terminatorPath] } of daylightPaths) {
+      nightPath.setAttribute('d', night);
+      terminatorPath.setAttribute('d', boundary);
+    }
   }
 
   function play(finished) {

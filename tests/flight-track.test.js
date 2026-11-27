@@ -151,6 +151,8 @@ test('flight track queries run in the editor and saved tracks replay in details'
     assert.match(marker?.querySelector('title').textContent ?? '', /经停.*ANC/);
     assert.match(marker?.querySelector('text').textContent ?? '', /经停/);
     assert.equal(svg.hasAttribute('data-flight-track-played'), false);
+    const shades = [...svg.querySelectorAll('.flight-daylight > g')];
+    assert.deepEqual(shades.map(shade => shade.getAttribute('transform')), ['translate(0 0)', 'translate(-1000 0)', 'translate(1000 0)']);
     const boundary = element('[data-flight-terminator]');
     const center = longitudeCenter([...coordinates.flat(), AIRPORT_POINTS.ANC].map(point => point[0]));
     assert.equal(boundary.hasAttribute('d'), false);
@@ -158,7 +160,11 @@ test('flight track queries run in the editor and saved tracks replay in details'
     assert.equal(boundary.getAttribute('d'), solarTerminator(Date.parse('2026-11-23T09:10:00Z'), center).boundary);
     step(0);
     step(1950);
-    assert.equal(boundary.getAttribute('d'), solarTerminator(Date.parse('2026-11-23T12:28:15Z'), center).boundary);
+    const daylight = solarTerminator(Date.parse('2026-11-23T12:28:15Z'), center);
+    for (const shade of shades) {
+      assert.equal(shade.querySelector('[data-flight-night]').getAttribute('d'), daylight.night);
+      assert.equal(shade.querySelector('[data-flight-terminator]').getAttribute('d'), daylight.boundary);
+    }
     assert.ok(Number(first.style.strokeDashoffset) < 1);
     assert.equal(second.style.strokeDashoffset, '1');
     assert.ok(svg.querySelector('[data-flight-track-aircraft]').hasAttribute('transform'));
