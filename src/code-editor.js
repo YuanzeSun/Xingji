@@ -116,9 +116,8 @@ export function bindTicketCodeEditor(form, draft, changed, {
   function useFlight(code, selection) {
     if (!isCurrent()) return;
     const data = normalize(code.data), index = String(code.legIndex ?? 0);
-    const read = readBoardingCode(data, index);
-    const original = draft.boardingCodeSource === 'original';
-    const rescan = editingSaved || original;
+    const read = code.boarding;
+    const rescan = editingSaved || draft.boardingCodeSource === 'original';
     const previousRecord = currentRecord();
     const review = read ? boardingScanReview(previousRecord, read, rescan, profile) : null;
     const mismatchedService = savedService && review?.conflicts.some(({ key }) => key === 'service');
@@ -265,9 +264,12 @@ export function bindTicketCodeEditor(form, draft, changed, {
         if (source === 'manual' || options?.cameraFrame === 0 || result.issues.length) error.textContent = result.issues[0] || '未识别到条码';
         return;
       }
-      let available=result.codes.flatMap(code=>{
-        const read=flight&&readBoardingCode(code.data);
-        return read?.legCount>1 ? read.legs.map((leg,index)=>({...code,legIndex:index,label:`第 ${index+1} 段 · ${leg.service} ${leg.origin} → ${leg.destination}`})) : [code];
+      let available = result.codes;
+      if (flight) available = available.flatMap(code => {
+        const boarding = readBoardingCode(code.data);
+        if (!boarding || boarding.legCount === 1) return [{ ...code, boarding }];
+        return boarding.legs.map((leg, index) => ({ ...code, boarding: leg, legIndex: index,
+          label: `第 ${index + 1} 段 · ${leg.service} ${leg.origin} → ${leg.destination}` }));
       });
       if (readRailTicketScan) {
         const year = journeyDate(draft.departureDate)?.year ?? undefined;

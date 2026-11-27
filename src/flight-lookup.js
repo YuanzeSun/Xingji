@@ -14,6 +14,8 @@ const lookupLabels = {
   departureTerminal: '出发航站楼', arrivalTerminal: '到达航站楼',
   flightDistance: '航程距离', flightStop: '经停机场'
 };
+const scheduleKey = request => 'schedule:' + JSON.stringify(request);
+const matchesRoute = (row, { dep, arr }) => (!dep || row.originCode === dep) && (!arr || row.destinationCode === arr);
 
 export function flightLookupMarkup() {
   return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div><p class="flight-lookup-note">飞常准提供的机型等信息可能有误，建议用航旅纵横核对。</p><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><div data-flight-candidates></div></section>`;
@@ -104,9 +106,8 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     const fields = Object.keys(changes);
     if (fields.length) apply(changes, source());
     const confirmed = flightQuery(getRecord());
-    const matching = previousRows.filter(row => (!confirmed.dep || row.originCode === confirmed.dep) && (!confirmed.arr || row.destinationCode === confirmed.arr));
-    const confirmedKey = 'schedule:' + JSON.stringify(confirmed);
-    if (!cache.has(confirmedKey)) cache.set(confirmedKey, { value: matching, at: Date.now() });
+    const confirmedKey = scheduleKey(confirmed);
+    if (!cache.has(confirmedKey)) cache.set(confirmedKey, { value: previousRows.filter(row => matchesRoute(row, confirmed)), at: Date.now() });
     const names = [...new Set(fields.map(field => ticketFieldLabel(field, 'flight', lookupLabels[field])))];
     let summary = names.length ? `已补全 ${names.join('、')}。` : '';
     if (conflicts.length) summary += `机型有出入（${conflicts.join('、')}），请核对。`;
@@ -128,7 +129,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     status.textContent = '正在查询飞常准…';
     let fetched;
     try {
-      fetched = await fromCache('schedule:' + JSON.stringify(request), async () =>
+      fetched = await fromCache(scheduleKey(request), async () =>
         lookup ? lookup(request, selectedKey) : flightCandidates(await connector.flightStatus(request), request));
     } catch (error) {
       if (!validContext(original)) return changed();
@@ -136,7 +137,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
       return fillMissing(connector, error.message + '。');
     }
     if (!validContext(original)) return changed();
-    const rows = fetched.filter(row => row.service === request.fnum && sameDate(row.departureDate,request.date) && (!request.dep || row.originCode === request.dep) && (!request.arr || row.destinationCode === request.arr));
+    const rows = fetched.filter(row => row.service === request.fnum && sameDate(row.departureDate, request.date) && matchesRoute(row, request));
     if (!rows.length) return fillMissing(connector, '未查到可核对日期与机场的航班信息。');
     candidates = rows; candidateStamp = original;
     if (rows.length === 1) { await accept(0, connector); return; }

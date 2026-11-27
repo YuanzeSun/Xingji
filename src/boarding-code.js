@@ -1,5 +1,6 @@
 import { normalizeCodeData, renderCodeData, codeSize } from './barcode-data.js';
-const FORMATS = new Set(['PDF417', 'Aztec', 'QRCode', 'DataMatrix', 'Code128']);
+import { BCBP_FORMATS } from './bcbp.js';
+const FORMATS = new Set(BCBP_FORMATS);
 export const normalizeBoardingCode = value => normalizeCodeData(value, FORMATS);
 export const boardingCodeSize = value => codeSize(value, FORMATS);
 export function renderBoardingCode(record, x, y, width, height) {

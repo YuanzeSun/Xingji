@@ -10,18 +10,6 @@ function prepareRecord(row) {
   if (!plainObject(row)) throw new Error('票据格式无效');
   if (row.deleted === true) return validateRecord(row);
   const draft = { ...row };
-  if (row.type === 'flight') {
-    if (row.boardingCode) {
-      draft.boardingCodeSource ||= 'original';
-      draft.boardingLegIndex ||= '0';
-    }
-    if (!row.flightStop && row.flightStops?.count === 1 && row.flightStops.airports?.length === 1 &&
-        Array.isArray(row.flightStops.airports)) {
-      const { fnum, date, dep, arr, airports: [airport] } = row.flightStops;
-      draft.flightStop = { fnum, date, dep, arr, airport };
-      if (row.fieldSources?.flightStops) draft.fieldSources = { ...row.fieldSources, flightStop: row.fieldSources.flightStops };
-    }
-  }
   const fields = fieldsForTransport(row.type);
   draft.fieldSources = Object.fromEntries(Object.entries(normalizeFieldSources(draft.fieldSources))
     .filter(([field, source]) => isFieldSourceEntry(field, source, fields)));

@@ -3,7 +3,7 @@ import {journeyDate,calendarDate,monthDay,dateFromMonthDay} from './journey-date
 import {fieldSourceBadge,railBarcodeFieldLocked,railImportFieldLocked} from './field-sources.js';
 import {ticketRequiredMark} from './ticket-form.js';
 import { RAIL_QR_YEAR_PERIOD } from './rail-qr-codec.js';
-import { OPTIONAL_FLIGHT_TIMES } from './flight-times.js';
+import { FLIGHT_DATE_DEFAULT_ATTR, OPTIONAL_FLIGHT_TIMES } from './flight-times.js';
 
 export const barcodeDateDay=(record,key)=>key==='departureDate'&&record.type==='flight'&&record.boardingCodeSource==='original' &&
   record.fieldSources?.departureDate === 'barcode' ? journeyDate(record.departureDate)?.dayOfYear : null;
@@ -15,7 +15,6 @@ function writeMonthDay(year, month, day, value) {
   month.value = value.slice(0, 2);
   day.innerHTML = options(daysInMonth(year, month.value), value.slice(3), '日');
 }
-const defaultDatePart = 'data-flight-date-default';
 function refreshFlightDateDefaults(form) {
   const departureYear = form?.elements.departureDateYear;
   if (!departureYear) return;
@@ -24,8 +23,8 @@ function refreshFlightDateDefaults(form) {
     const [monthInput, dayInput] = wrapper.querySelectorAll('select'), yearInput = wrapper.querySelector('input[type="number"]');
     if (dayInput.value) continue;
     const previousYear = yearInput.value, previousMonth = monthInput.value;
-    if (yearInput.hasAttribute(defaultDatePart)) yearInput.value = year;
-    if (monthInput.hasAttribute(defaultDatePart)) monthInput.value = month;
+    if (yearInput.hasAttribute(FLIGHT_DATE_DEFAULT_ATTR)) yearInput.value = year;
+    if (monthInput.hasAttribute(FLIGHT_DATE_DEFAULT_ATTR)) monthInput.value = month;
     if (yearInput.value !== previousYear || monthInput.value !== previousMonth) {
       dayInput.innerHTML = options(daysInMonth(yearInput.value, monthInput.value), '', '日');
     }
@@ -37,7 +36,7 @@ export function ticketDateField(key,record,{label,required=false}={}) {
   const date=journeyDate(record[key]),md=monthDay(date),ordinal=barcodeDateDay(record,key),locked=!!ordinal||railBarcodeFieldLocked(record,key)||railImportFieldLocked(record,key);
   const qrYear = railQRYear(record, key);
   const optionalFlight = flightTimeForDate(record, key);
-  const useDefault = optionalFlight && !date ? ` ${defaultDatePart}` : '';
+  const useDefault = optionalFlight && !date ? ` ${FLIGHT_DATE_DEFAULT_ATTR}` : '';
   return `<fieldset class="field journey-date-field" data-journey-date="${key}"${optionalFlight ? ' data-optional-flight-date' : ''}><legend>${e(label)}${ticketRequiredMark(record, key, required)}</legend><input type="hidden" name="${key}" ${required?'required':''} value="${e(calendarDate(date))}"/><div class="ticket-date-parts"><label><span>年份${fieldSourceBadge(key+'Year',record)}</span><input name="${key}Year" type="number" inputmode="numeric" min="${yearMinimum(qrYear)}" max="2200" step="${qrYear ? RAIL_QR_YEAR_PERIOD : 1}" placeholder="年份" value="${date?.year??''}" aria-label="${e(label)}年份"${useDefault}/></label><div class="month-day-part"><span>月日${fieldSourceBadge(key,record)}</span><div class="month-day-selects"><select name="${key}Month" aria-label="${e(label)}月份" ${locked?'disabled':''}${useDefault}>${options(12,md.slice(0,2),'月')}</select><select name="${key}Day" aria-label="${e(label)}日" ${locked?'disabled':''}>${options(daysInMonth(date?.year,md.slice(0,2)),md.slice(3),'日')}</select></div></div></div></fieldset>`;
 }
 export function readTicketDate(form,key,record,{strict=false}={}) {
@@ -57,7 +56,7 @@ export function readTicketDate(form,key,record,{strict=false}={}) {
     const timeKey = flightTimeForDate(record, key), hasMonthDay = month.value && day.value;
     if (timeKey) {
       const time = form.elements[timeKey];
-      const entered = time?.value || time?.validity.badInput || day.value || [year, month].some(part => part.value && !part.hasAttribute(defaultDatePart));
+      const entered = time?.value || time?.validity.badInput || day.value || [year, month].some(part => part.value && !part.hasAttribute(FLIGHT_DATE_DEFAULT_ATTR));
       if (!entered) return '';
       if (strict) {
         const fields = [];
@@ -84,7 +83,7 @@ export function writeTicketDate(root,key,value) {
   writeMonthDay(year.value, month, day, md);
   wrapper.querySelector(`[name="${key}"]`).value=calendarDate(date);
   const optionalFlight = wrapper.hasAttribute('data-optional-flight-date');
-  if (optionalFlight) for (const part of [year, month]) part.toggleAttribute(defaultDatePart, !date);
+  if (optionalFlight) for (const part of [year, month]) part.toggleAttribute(FLIGHT_DATE_DEFAULT_ATTR, !date);
   if (key === 'departureDate' || (optionalFlight && !date)) refreshFlightDateDefaults(wrapper.closest('form'));
 }
 export function refreshTicketDateLocks(root,record) {
@@ -96,7 +95,7 @@ export function refreshTicketDateLocks(root,record) {
     year.min = String(yearMinimum(qrYear));
     year.step = qrYear ? String(RAIL_QR_YEAR_PERIOD) : '1';
     year.readOnly=fullyLocked;
-    year.closest('.field').toggleAttribute('data-barcode-locked',fullyLocked);
+    wrapper.toggleAttribute('data-barcode-locked',fullyLocked);
     year.parentElement.querySelector('[data-field-source]')?.toggleAttribute('data-source-locked',fullyLocked);
     if(fullyLocked)writeTicketDate(root,key,record[key]);
     else if(railLocked){
@@ -124,7 +123,7 @@ export function bindTicketDates(form,getRecord) {
       try{writeMonthDay(year.value, month, day, monthDay(dateFromBarcodeYear(year.value,ordinal)));year.setCustomValidity('');}
       catch(error){month.value='';day.value='';year.setCustomValidity(error.message);}
     }else if(event.target===month||event.target===year){
-      event.target.removeAttribute(defaultDatePart);
+      event.target.removeAttribute(FLIGHT_DATE_DEFAULT_ATTR);
       day.innerHTML=options(daysInMonth(year.value,month.value),day.value,'日');
     }
     if (key === 'departureDate') refreshFlightDateDefaults(form);

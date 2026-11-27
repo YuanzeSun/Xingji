@@ -1,6 +1,6 @@
 import {operatingFlight} from './boarding-code-state.js';
 import {escape as e} from './html.js';
-import {boardingCodeDefaults,createBoardingCode,BCBP_FORMATS} from './bcbp.js';
+import {boardingCodeDefaults,boardingFlightParts,createBoardingCode,BCBP_FORMATS} from './bcbp.js';
 import {hasChineseName} from './flight-passenger.js';
 import {fieldSourceBadge} from './field-sources.js';
 import {barcodeRequiredMark} from './ticket-form.js';
@@ -26,16 +26,12 @@ export function readBoardingGenerator(section) {
 }
 
 export function automaticBoardingCode(record,settings,{profile}={}) {
-  try {
-    const values={...boardingCodeDefaults(record,{useSaved:false,profile}),operatingFlight:'',...settings};
-    Object.assign(values,operatingFlight(values.operatingFlight));
-    return {
-      code:createBoardingCode(values,values.format),
-      operatingFlight:values.operatingFlight.trim().toUpperCase().replace(/\s/g,''),
-    };
-  } catch {
-    return null;
-  }
+  const values={...boardingCodeDefaults(record,{useSaved:false,profile}),operatingFlight:'',...settings};
+  const operated=operatingFlight(values.operatingFlight);
+  return {
+    code:createBoardingCode({...values,...operated},values.format),
+    operatingFlight:operated ? operated.carrier+operated.flightNumber : '',
+  };
 }
 
 export function editBoardingGeneratorField(input) {
@@ -44,19 +40,24 @@ export function editBoardingGeneratorField(input) {
 }
 
 function boardingGeneratorValues(record,{profile}={}) {
-  const values=boardingCodeDefaults(record,{profile}),current=boardingCodeDefaults(record,{useSaved:false,profile});
+  const values=boardingCodeDefaults(record,{profile});
   values.operatingFlight='';
   if(record.boardingCodeSource==='generated')values.operatingFlight=record.boardingCodeOperatingFlight || '';
-  else if(values.carrier && current.carrier && values.carrier+values.flightNumber!==current.carrier+current.flightNumber)values.operatingFlight=values.carrier+values.flightNumber;
+  else {
+    const current=boardingFlightParts(record.service), encoded=values.carrier+values.flightNumber;
+    if(values.carrier && current && encoded!==current.carrier+current.flightNumber)values.operatingFlight=encoded;
+  }
   return values;
 }
 export function refreshBoardingPassenger(section,record,{profile,resetName=false}={}) {
   const panel=section.querySelector('[data-bcbp-generator]');if(!panel)return;
   const previous=panel.querySelector('[data-bcbp-passenger-field]');
   if(!hasChineseName(record.passenger)){previous?.remove();return;}
-  const values=boardingGeneratorValues(resetName ? {...record,boardingCode:''} : record,{profile});
   if(resetName && previous)previous.remove();
-  if(resetName || !previous)panel.querySelector('.form-grid').insertAdjacentHTML('afterbegin',englishPassengerField(values,record,{profile}));
+  if(resetName || !previous) {
+    const values=boardingGeneratorValues(resetName ? {...record,boardingCode:''} : record,{profile});
+    panel.querySelector('.form-grid').insertAdjacentHTML('afterbegin',englishPassengerField(values,record,{profile}));
+  }
   setBoardingGeneratorAvailability(section,record);
 }
 export function refreshBoardingGenerator(section,record,{profile}={}) {

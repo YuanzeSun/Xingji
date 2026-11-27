@@ -42,8 +42,9 @@ export function boardingBaggageIndex(records) {
       if (hasBags(record)) result.set(record.id, { sticker: record, laterLeg: false });
       continue;
     }
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(record);
+    const group = groups.get(key);
+    if (group) group.push(record);
+    else groups.set(key, [record]);
   }
 
   for (const group of groups.values()) {

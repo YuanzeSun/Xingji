@@ -19,8 +19,6 @@ const flight = createRecord({
   }),
   boardingCodeSource: 'original', boardingLegIndex: '0'
 });
-const flightWithStop = createRecord({ ...flight, flightStop: { ...flightQuery(flight), airport: 'KIX' },
-  fieldSources: { ...flight.fieldSources, flightStop: 'variflight' } });
 const train = createRecord({ id: 'train-current', service: 'G21', departureDate: '2026-01-01', orderNumber: 'E123456',
   ticketMarks: [{ text: '网', shape: 'circle', offsetX: 6, offsetY: -4 }] });
 const oldFlight = {
@@ -29,15 +27,14 @@ const oldFlight = {
     ...flight.fieldSources, orderNumber: 'manual', flightStops: 'variflight', offsetX: 'manual', offsetY: 'default'
   }, lockedFields: ['orderNumber', 'offsetX']
 };
-for (const field of ['arrivalTerminal', 'boardingCodeSource', 'boardingLegIndex']) delete oldFlight[field];
-const oldFlightWithCode = { ...oldFlight, boardingCodeSource: flight.boardingCodeSource, boardingLegIndex: flight.boardingLegIndex };
+delete oldFlight.arrivalTerminal;
 
 function replaceOldShard(server) {
   const files = { ...server.trees.get(server.commits.get(server.head).tree) };
   const manifest = JSON.parse(server.blobs.get(files['archive/index.json']));
   const path = 'archive/2025.json';
   const file = JSON.parse(server.blobs.get(files[path]));
-  files[path] = manifest.files[path] = server.blob(JSON.stringify({ ...file, records: [oldFlightWithCode] }));
+  files[path] = manifest.files[path] = server.blob(JSON.stringify({ ...file, records: [oldFlight] }));
   files['archive/index.json'] = server.blob(JSON.stringify(manifest));
   server.head = server.commit(server.tree(files));
   return files;
@@ -68,8 +65,7 @@ test('GitHub migration previews changes, cancels without writing, and updates on
     assert.deepEqual([...fieldNames('删除字段')].map(code => code.textContent),
       ['fieldSources.flightStops', 'fieldSources.offsetX', 'fieldSources.offsetY', 'fieldSources.orderNumber',
         'flightStops', 'offsetX', 'offsetY', 'orderNumber']);
-    assert.deepEqual([...fieldNames('补充字段')].map(code => code.textContent),
-      ['arrivalTerminal', 'fieldSources.flightStop', 'flightStop']);
+    assert.deepEqual([...fieldNames('补充字段')].map(code => code.textContent), ['arrivalTerminal']);
     assert.deepEqual([...fieldNames('调整字段')].map(code => code.textContent), ['lockedFields']);
     assert.doesNotMatch(text, /TRAVEL-ORDER|订单号|实际登机时间|位置微调/);
     preview().querySelector('[data-action="close-modal"]').click();
@@ -82,8 +78,8 @@ test('GitHub migration previews changes, cancels without writing, and updates on
     preview().querySelector('[type="submit"]').click();
     await until(() => !preview() && server.head !== previewHead);
     await until(() => button()?.disabled === false);
-    assert.deepEqual(server.records(), [flightWithStop, train]);
-    assert.deepEqual(await db.get('records'), [flightWithStop, train]);
+    assert.deepEqual(server.records(), [flight, train]);
+    assert.deepEqual(await db.get('records'), [flight, train]);
     assert.equal(server.settings().profile.chineseName, '测试');
     assert.deepEqual(server.calls.find(call => call.method === 'POST' && call.path === '/git/trees').body.tree.map(item => item.path),
       ['archive/2025.json', 'archive/index.json']);
@@ -119,9 +115,9 @@ test('D1 migration aborts on a stale preview and updates only changed records af
 
   const fresh = await store.readRaw();
   await writeArchiveFieldMigration(store, fresh, planArchiveFieldMigration(fresh));
-  assert.deepEqual(server.calls.filter(call => call.method === 'POST').at(-1).body.records, [flightWithStop, marker]);
+  assert.deepEqual(server.calls.filter(call => call.method === 'POST').at(-1).body.records, [flight, marker]);
   const migrated = await store.read();
-  assert.deepEqual(migrated.records, [flightWithStop, marker, newerTrain]);
+  assert.deepEqual(migrated.records, [flight, marker, newerTrain]);
   assert.equal(migrated.generation, snapshot.generation);
   assert.equal(migrated.settings.flightMcpKey, 'test-key');
   assert.equal(planArchiveFieldMigration(await store.readRaw()).changes.length, 0);

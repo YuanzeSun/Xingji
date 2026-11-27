@@ -3,7 +3,7 @@ import {boardingBaggageIndex,occupiedBaggageFields,otherBaggageLegs,withBoarding
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
-import {ACTUAL_FLIGHT_FIELDS, FLIGHT_LOCAL_TIMES} from './flight-times.js';
+import {ACTUAL_FLIGHT_FIELDS, FLIGHT_DATE_DEFAULT_ATTR, FLIGHT_LOCAL_TIMES} from './flight-times.js';
 import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
 import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railImportFieldLocked,refreshFieldSources} from './field-sources.js';
 import { bindIdentityInput, maskIdentity, printedIdentityHint } from './identity.js';
@@ -1317,7 +1317,7 @@ function editRecord(record, {
       if (dateKey) {
         if (!barcodeDateDay(previousRecord, dateKey)) markManualFields(draft, [dateKey]);
         const year = form.elements[dateKey + 'Year'];
-        markFieldSources(draft, [year.name], year.hasAttribute('data-flight-date-default') ? 'default' : 'manual');
+        markFieldSources(draft, [year.name], year.hasAttribute(FLIGHT_DATE_DEFAULT_ATTR) ? 'default' : 'manual');
       }
       else if(FIELDS.includes(key))markManualFields(draft,[key,...(['origin','destination'].includes(key) ? [key+'Code'] : [])]);
       if (previousQuery!==lookupContext(draft)) clearEditorLookupValues();

@@ -2,6 +2,7 @@ import {escape as e} from './html.js';
 import {calendarDate,JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import {hasRailQRCode} from './ticket-code.js';
 import {RAIL_TIMETABLE_REFERENCES} from './rail-journey.js';
+import { FLIGHT_DATE_DEFAULT_ATTR } from './flight-times.js';
 export const sourceFieldValue=(record,key)=>key.endsWith('DateYear') ? journeyDate(record[key.slice(0,-4)])?.year : record[key];
 export const railBarcodeFieldLocked=(record,key)=>hasRailQRCode(record) &&
   key!=='ticketCode' && record.fieldSources?.[key]==='barcode' && !!record.lockedFields?.includes(key);
@@ -94,7 +95,7 @@ export function fieldSourceBadge(key,record) {
 export function refreshFieldSources(root,record) {
   for(const badge of root.querySelectorAll('[data-field-source]')){
     const key=badge.dataset.fieldSource;if(key.startsWith('bcbp:'))continue;
-    const defaultYear = key.endsWith('DateYear') && badge.closest('label')?.querySelector('[data-flight-date-default]')?.value;
+    const defaultYear = key.endsWith('DateYear') && badge.closest('label')?.querySelector(`[${FLIGHT_DATE_DEFAULT_ATTR}]`)?.value;
     const label=defaultYear ? FIELD_SOURCES.default : fieldSourceLabel(record,key);
     badge.textContent=label;badge.title='信息来源：'+label;badge.dataset.sourceKind=defaultYear ? 'default' : fieldSourceKind(record,key);
   }

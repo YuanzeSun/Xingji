@@ -1,4 +1,4 @@
-import { codeBytes, normalizeCodeData, symbolFromCodeData } from './barcode-data.js';
+import { codeBytes, symbolFromCodeData } from './barcode-data.js';
 import { resolvePlace } from './places.js';
 import {readBCBP} from './bcbp-reader.js';
 import {hasChineseName} from './flight-passenger.js';
@@ -7,10 +7,15 @@ import {journeyDate} from './journey-date.js';
 import {maskBoardingIdentity} from './identity.js';
 import {flightTicketNumber} from './boarding-metadata.js';
 
-export const BCBP_FORMATS = ['PDF417','Aztec','QRCode','DataMatrix'];
 const identifiers={PDF417:']L2',Aztec:']z0',QRCode:']Q1',DataMatrix:']d1'};
+export const BCBP_FORMATS = Object.keys(identifiers);
+export const BOARDING_FLIGHT_PATTERN = /^([A-Z]{2,3}|[A-Z]\d|\d[A-Z])\s*(\d{1,4}[A-Z]?)$/;
 const upper=value=>String(value ?? '').normalize('NFKC').trim().toUpperCase();
 const romanName=/^[A-Z][A-Z /.'-]*$/;
+export function boardingFlightParts(value) {
+  const match = BOARDING_FLIGHT_PATTERN.exec(upper(value));
+  return match && { carrier: match[1], flightNumber: match[2] };
+}
 function field(value,pattern,label,key) {
   const text=upper(value);
   if(!pattern.test(text)){const error=new Error(label);if(key)error.fields=[key];throw error;}
@@ -60,7 +65,7 @@ export function encodeBCBP(input) {
 export function createBoardingCode(input,format='PDF417') {
   if(!BCBP_FORMATS.includes(format))throw new Error('请选择支持的登机牌二维条码格式');
   const payload=new TextEncoder().encode(encodeBCBP(input));
-  const code=normalizeCodeData({version:1,format,rawBytes:btoa(String.fromCharCode(...payload)),symbologyIdentifier:identifiers[format],gs1:false,eci:[],parameters:{symbolVersion:'',errorCorrectionLevel:'',mask:null}});
+  const code={version:1,format,rawBytes:btoa(String.fromCharCode(...payload)),symbologyIdentifier:identifiers[format],gs1:false,eci:[],parameters:{symbolVersion:'',errorCorrectionLevel:'',mask:null}};
   symbolFromCodeData(code);
   return code;
 }
@@ -75,8 +80,8 @@ export function readBoardingCode(code,legIndex=0) {
     return {...legs[Number(legIndex)],legs};
   }catch{return null;}
 }
-export function boardingCodeDefaults(record,{useSaved=true,profile}={}) {
-  const original=readBoardingCode(record.boardingCode,record.boardingLegIndex) || {},saved=useSaved ? original : {},flight=upper(record.service).match(/^([A-Z]{2,3}|[A-Z]\d|\d[A-Z])\s*(\d{1,4}[A-Z]?)$/);
+export function boardingCodeDefaults(record,{useSaved=true,profile,decoded=readBoardingCode(record.boardingCode,record.boardingLegIndex)}={}) {
+  const original=decoded || {},saved=useSaved ? original : {},flight=boardingFlightParts(record.service);
   const airport=side=>{const place=resolvePlace(record,side);return place.status==='matched' ? place.code : /^[A-Z]{3}$/.test(upper(record[side+'Code'])) ? upper(record[side+'Code']) : '';};
   const profileName=record.passenger && record.passenger===profile?.chineseName ? [profile.lastName,profile.firstName].filter(Boolean).join('/') : '';
   const name=upper(hasChineseName(record.passenger) ? original.passenger || profileName : record.passenger),cabins={'经济舱':'Y','超级经济舱':'W','公务舱':'C','头等舱':'F'};
@@ -84,7 +89,7 @@ export function boardingCodeDefaults(record,{useSaved=true,profile}={}) {
   return {format:saved.format || 'PDF417',
     passenger:romanName.test(name) ? name : saved.passenger || '', passengerChinese:hasChineseName(record.passenger) ? record.passenger : '',
     pnr:record.pnr || saved.pnr || '',origin:airport('origin') || saved.origin || '',destination:airport('destination') || saved.destination || '',
-    carrier:saved.carrier || flight?.[1] || '',flightNumber:saved.flightNumber || flight?.[2] || '',date:journeyDate(record.departureDate),cabin:saved.cabin || cabin,
+    carrier:saved.carrier || flight?.carrier || '',flightNumber:saved.flightNumber || flight?.flightNumber || '',date:journeyDate(record.departureDate),cabin:saved.cabin || cabin,
     seat:record.seat || saved.seat || '',sequence:saved.sequence || '',status:saved.status || '1',identity:record.identity,
     ticketNumber:record.ticketNumber,gate:record.gate,boardingTime:record.boardingTime};
 }

@@ -3,7 +3,7 @@ import { createRecord, validDate } from './model.js';
 import { resolvePlace } from './places.js';
 import { AIRPORT_TIMEZONES } from './data/airport-timezones.js';
 import { normalizeAircraftRegistration, reconcileAircraft } from './aircraft.js';
-import { flightNumber, flightQuery } from './flight-query.js';
+import { flightNumber, flightQuery, isQueryableFlightNumber } from './flight-query.js';
 import { airlineNameForCode } from './airline-codes.js';
 import { airportCode, normalizeFlightStop } from './flight-stop.js';
 import { ticketFieldLocked } from './barcode-fields.js';
@@ -15,7 +15,7 @@ const flightIdentity = value => flightNumber(value).replace(/^([A-Z0-9]{2})0+(?=
 function flightCarriers(row, marketedFlight) {
   const marketedCarrier = marketedFlight.slice(0, 2);
   const operatingCarriers = new Set([row.shareFlight, row.ShareFlightNo].map(flightIdentity)
-    .filter(number => /^(?=[A-Z0-9]{0,1}[A-Z])[A-Z0-9]{2}\d{1,5}[A-Z]?$/.test(number))
+    .filter(isQueryableFlightNumber)
     .map(number => number.slice(0, 2)).filter(carrier => carrier !== marketedCarrier));
   if (!operatingCarriers.size) return { airline: clean(row.FlightCompany) || airlineNameForCode(marketedCarrier), marketingCarrier: '' };
   const [operatingCarrier] = operatingCarriers;
