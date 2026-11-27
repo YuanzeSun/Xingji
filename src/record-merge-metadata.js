@@ -48,13 +48,14 @@ export function mergeExtraFieldSources(target, base, local, remote, fields) {
 function boardingState(record) {
   if(!record)return undefined;
   const settings=generatedCodeSettings(record);
-  return settings ? {generated:settings} : {original:record.boardingCode || '',legIndex:record.boardingLegIndex || ''};
+  return settings ? {generated:settings} : {original:record.boardingCode || '',legIndex:record.boardingLegIndex || '',operatingFlight:record.boardingCodeOperatingFlight || ''};
 }
+const emptyBoarding = record => !record.boardingCode && !record.boardingCodeOperatingFlight && !record.lockedFields?.includes('boardingCode');
 export function mergeBoardingCode(base,local,remote,merged,conflicts) {
   const l=boardingState(local),r=boardingState(remote),b=boardingState(base);
   if(same(l,r) || same(r,b)){takeBoardingCode(merged,local);return;}
-  if(same(l,b) || (!base && !local.boardingCode && !local.lockedFields?.includes('boardingCode'))){takeBoardingCode(merged,remote);return;}
-  if(!base && !remote.boardingCode && !remote.lockedFields?.includes('boardingCode')){takeBoardingCode(merged,local);return;}
+  if(same(l,b) || (!base && emptyBoarding(local))){takeBoardingCode(merged,remote);return;}
+  if(!base && emptyBoarding(remote)){takeBoardingCode(merged,local);return;}
   conflicts.push({id:merged.id,field:'boardingCode',base:base?.boardingCode,local:local.boardingCode,remote:remote.boardingCode,context:{local:structuredClone(local),remote:structuredClone(remote)}});
 }
 export function resolveRecordConflict(record,conflict,choice) {

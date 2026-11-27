@@ -96,7 +96,11 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.equal(document.querySelector('[name="destinationCode"]').value,'CSG','a selected IATA code must survive a shared English airport name');
   fill('destination','HND');fill('aircraft','Airbus A330-300');fill('aircraftRegistration','B-0002');
   assert.match(document.querySelector('#editor-preview').textContent,/A330-300/);
-  click('[data-boarding-fields="baggage"] > summary');
+  assert.ok(document.querySelector('section[data-boarding-fields="baggage"] [name="baggageTagNumbers"]'));
+  assert.equal(document.querySelector('[name="marketingCarrier"], [name="marketingFlightNumber"]'), null);
+  const program = document.querySelector('[name="frequentFlyerCarrier"]');
+  assert.match(document.getElementById(program.getAttribute('aria-describedby')).textContent, /凤凰知音填 CA/);
+  fill('boardingCodeOperatingFlight', 'nh 964');
   fill('baggageTagNumbers', '0123456789');
   fill('checkedBaggageCount', '01');
   fill('checkedBaggageWeight', '9');
@@ -107,6 +111,9 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.equal(document.querySelector('[name="baggageDestinationCode"]'),null);
   submit();await wait(()=>!document.querySelector('dialog'));
   const flight=(await db.get('records',[])).find(r=>r.type==='flight');
+  assert.equal(flight.boardingCode, '');
+  assert.equal(flight.boardingCodeOperatingFlight, 'NH964');
+  assert.equal(flight.service, 'CA981');
   assert.equal(flight.originCode,'PEK');assert.equal(flight.destinationCode,'HND');
   assert.equal(flight.identity,'P000001');assert.equal(flight.seat,'24K');
   assert.equal(flight.departureZone,'Asia/Shanghai');assert.equal(flight.arrivalZone,'Asia/Tokyo');

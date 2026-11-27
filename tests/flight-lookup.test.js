@@ -110,8 +110,11 @@ test('a codeshare keeps the booked flight while identifying the marketing and op
   assert.equal(candidate.departureTerminal, 'T3');
   assert.equal(candidate.arrivalTerminal, 'T1');
   const booking = createRecord({ ...input, type:'flight', template:'air-boarding-pass' });
-  assert.equal(flightCompletion(booking, candidate).marketingCarrier, 'CA');
-  assert.equal(flightCompletion({ ...booking, marketingCarrier: 'ZH', lockedFields: ['marketingCarrier'] }, candidate).marketingCarrier, undefined);
+  assert.equal(flightCompletion(booking, candidate).marketingCarrier, undefined);
+  assert.equal(flightCompletion(booking, candidate).airline, '深圳航空');
+  const scanned = { ...booking, boardingCode: { format: 'PDF417' }, boardingCodeSource: 'original' };
+  assert.equal(flightCompletion(scanned, candidate).marketingCarrier, 'CA');
+  assert.equal(flightCompletion({ ...scanned, marketingCarrier: 'ZH', lockedFields: ['marketingCarrier'] }, candidate).marketingCarrier, undefined);
   const [aliased] = flightCandidates(payload([{ ...codeshare, shareFlight: '', ShareFlightNo: 'ZH0661' }]), input);
   assert.equal(aliased.airline, '深圳航空');
   const [conflict] = flightCandidates(payload([{ ...codeshare, ShareFlightNo: 'NH97' }]), input);
@@ -191,14 +194,17 @@ test('completion queries missing aircraft registration and tracks, reusing each 
     return Response.json({ id: message.id, result }, { headers: { 'Mcp-Session-Id': 'flight-session' } });
   };
   try {
+    const apis = () => instance.form.querySelector('[data-flight-apis]').textContent;
     Object.assign(instance.current, complete, { aircraftRegistration: '', flightTrack: { flightStr, segments },
       fieldSources: { boardingTime: 'barcode', departureTime: 'variflight' }, lockedFields: ['boardingTime'] });
     instance.form.querySelector('[data-flight-lookup]').click(); await settle();
     assert.deepEqual(calls, [{ name: 'getAircraftRotation', arguments: { fnum: 'CA181', date: '2026-07-18', dep: 'PEK', arr: 'HND' } }]);
     assert.equal(instance.calls, 0);
     assert.equal(instance.current.aircraftRegistration, 'B-5846');
+    assert.match(apis(), /getAircraftRotation/);
     instance.form.querySelector('[data-flight-lookup]').click(); await settle();
     assert.equal(calls.length, 1);
+    assert.equal(apis(), '');
     delete instance.current.flightTrack;
     instance.current.aircraftRegistration = '';
     instance.form.querySelector('[data-flight-lookup]').click(); await settle();
@@ -206,6 +212,8 @@ test('completion queries missing aircraft registration and tracks, reusing each 
     assert.deepEqual(instance.current.flightTrack.segments, segments);
     assert.equal(instance.current.aircraftRegistration, 'B-5846');
     assert.equal(instance.calls, 0);
+    assert.match(apis(), /getFlightTrackLine/);
+    assert.doesNotMatch(apis(), /getAircraftRotation/);
   } finally { globalThis.fetch = previousFetch; instance.dispose(); instance.dom.window.close(); }
 });
 
@@ -243,27 +251,27 @@ test('a failed schedule lookup can still add a track when both airports are know
   const [current] = flightCandidates(payload([row()]), input);
   const flightStr = 'CA181_PEK_HND_2026-07-18_0';
   const segments = [[[116.59, 40.08], [139.78, 35.55]]];
-  const instance = component({
-    lookup: async () => { throw new Error('时刻暂不可用'); },
-    applyTrack: track => { instance.current.flightTrack = track; }
-  });
-  Object.assign(instance.current, current, { gate: '' });
+  const dom = new JSDOM(`<form>${flightLookupMarkup()}</form>`), form = dom.window.document.querySelector('form');
+  const draft = { ...current, gate: '' };
+  const dispose = bindFlightLookup(form, { getRecord: () => draft, getKey: () => 'local-test-only', canQuery: () => true,
+    desktop: () => true, apply: changes => Object.assign(draft, changes), applyTrack: track => { draft.flightTrack = track; } });
   const previousFetch = globalThis.fetch, calls = [];
   globalThis.fetch = async (_url, options) => {
     const { id, method, params } = JSON.parse(options.body);
     if (method === 'notifications/initialized') return new Response(null, { status: 202 });
     if (method === 'tools/call') calls.push(params);
+    if (params.name === 'getFlightStatus') return Response.json({ id, error: { message: '时刻暂不可用' } });
     const result = method === 'initialize' ? { protocolVersion: '2025-03-26' } : payload([{ flightStr, segments }]);
     return Response.json({ id, result }, { headers: { 'Mcp-Session-Id': 'flight-session' } });
   };
   try {
-    instance.form.querySelector('[data-flight-lookup]').click(); await settle();
-    assert.equal(instance.calls, 1);
-    assert.deepEqual(calls, [{ name: 'getFlightTrackLine', arguments: { flightStr } }]);
-    assert.deepEqual(instance.current.flightTrack.segments, segments);
-    assert.equal(instance.current.gate, '');
-    assert.match(instance.form.querySelector('[data-flight-status]').textContent, /时刻暂不可用。已带入飞行航迹/);
-  } finally { globalThis.fetch = previousFetch; instance.dispose(); instance.dom.window.close(); }
+    form.querySelector('[data-flight-lookup]').click(); await settle();
+    assert.deepEqual(calls.map(call => call.name), ['getFlightStatus', 'getFlightTrackLine']);
+    assert.deepEqual(draft.flightTrack.segments, segments);
+    assert.equal(draft.gate, '');
+    assert.match(form.querySelector('[data-flight-status]').textContent, /时刻暂不可用。已带入飞行航迹/);
+    assert.match(form.querySelector('[data-flight-apis]').textContent, /getFlightStatus.*getFlightTrackLine/);
+  } finally { globalThis.fetch = previousFetch; dispose(); dom.window.close(); }
 });
 
 test('provider aircraft names agree across fields or leave the aircraft field for review', async () => {

@@ -8,6 +8,7 @@ import { airlineNameForCode } from './airline-codes.js';
 import { airportCode, normalizeFlightStop } from './flight-stop.js';
 import { ticketFieldLocked } from './barcode-fields.js';
 import { OPTIONAL_FLIGHT_TIMES } from './flight-times.js';
+import { hasOriginalBoardingCode } from './boarding-metadata.js';
 
 const clean = value => typeof value === 'string' && !/^(?:-+|null|undefined|n\/?a)$/i.test(value.trim()) ? value.trim().slice(0, 1000) : '';
 const flightIdentity = value => flightNumber(value).replace(/^([A-Z0-9]{2})0+(?=\d)/, '$1');
@@ -185,7 +186,8 @@ export function flightCompletion(record, candidate) {
     if (canCompletePair(record, [side, code])) { fill(side, candidate[side]); fill(code, candidate[code]); }
     if (found.status === 'matched') fill(terminal, candidate[terminal]);
   }
-  for (const field of [...scheduleFields, 'aircraftRegistration', 'marketingCarrier']) fill(field, candidate[field]);
+  for (const field of [...scheduleFields, 'aircraftRegistration']) fill(field, candidate[field]);
+  if (hasOriginalBoardingCode(record)) fill('marketingCarrier', candidate.marketingCarrier);
   for (const pair of timePairs) {
     const [date, time] = pair;
     if (!candidate[date] || !candidate[time]) continue;

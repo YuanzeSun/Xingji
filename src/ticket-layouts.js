@@ -298,7 +298,7 @@ function baggageSticker(record, baggage, departureDate, presentation, mark) {
   }, { ...barcode, stretch: true, marker: 'baggage-tag-code' });
   const outline = 'M1 2H268V191L247 191L241 194L202 192L157 195L151 192L103 194L99 191L57 193L49 190L1 192Z';
   const number = barcodeTag || ([...tags].length > 36 ? [...tags].slice(0, 35).join('') + '…' : tags);
-  const { carrierNames, passenger } = presentation;
+  const { carrierNames, passengerEnglish } = presentation;
   const carrier = carrierNames?.en?.toUpperCase() || record.airline || 'BAGGAGE CLAIM';
   const headerX = mark ? 55 : 14;
   const print = (x, y, value, width, size = 16, attrs = '') =>
@@ -313,7 +313,7 @@ function baggageSticker(record, baggage, departureDate, presentation, mark) {
     ${text(headerX, 40, carrierNames?.zh, 14, 'TicketHei')}
     ${print(14, 66, record.service, 127, 19)}
     ${print(254, 66, departureDate, 73, 17, right)}
-    ${print(14, 83, passenger, 239, 14)}
+    ${print(14, 83, passengerEnglish, 239, 14)}
     ${print(14, 104, `TO:${to ? ` ${to}` : ''}`, 129, 18)}
     ${print(254, 104, bag, 132, 16, right)}
     ${print(14, 123, `VIA:${via ? ` ${via}` : ''}`, 129, 16)}

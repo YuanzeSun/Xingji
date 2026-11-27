@@ -33,7 +33,7 @@ function flightSections(record) {
   const codeshare = key => key === 'marketingCarrier' || key === 'marketingFlightNumber';
   return [
     ['aircraft', '航司与飞机', [
-      ...values(record, 'airline'),
+      ...values(record, 'airline', 'boardingCodeOperatingFlight'),
       ...metadata.filter(([key]) => codeshare(key)),
       ...values(record, 'aircraft', 'aircraftRegistration')
     ]],

@@ -1,4 +1,4 @@
-import {BOARDING_METADATA_LABELS,BOARDING_LOYALTY_FIELDS,BOARDING_BAGGAGE_FIELDS} from './boarding-metadata.js';
+import {BOARDING_METADATA_LABELS,BOARDING_LOYALTY_FIELDS,BOARDING_MARKETING_FIELDS,BOARDING_BAGGAGE_FIELDS,hasOriginalBoardingCode} from './boarding-metadata.js';
 import {boardingBaggageIndex,occupiedBaggageFields,otherBaggageLegs,withBoardingBaggage} from './boarding-baggage.js';
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
@@ -1070,25 +1070,37 @@ function editorSection(title, content, note = '') {
   </section>`;
 }
 
-function flightEditorSections(record) {
-  const hints = { marketingFlightNumber: '按购票订单填完整航班号，如 CA7941。' };
-  const fields = (...keys) => keys.map(key => field(key, record, { hint: hints[key] })).join('');
-  const metadata = (title, key, keys) => `<details class="editor-extra" data-boarding-fields="${key}" ${keys.some(field => record[field]) ? 'open' : ''}>
-    <summary>${e(title)}</summary>${key === 'baggage' ? '<p class="flight-local-time" data-baggage-later-leg hidden>行李牌随首段登机牌展示。</p><p class="flight-local-time" data-baggage-occupied hidden></p>' : ''}<div class="form-grid">${fields(...keys)}</div>
+function boardingLoyaltyEditor(record) {
+  const scanned = hasOriginalBoardingCode(record);
+  const keys = scanned ? [...BOARDING_LOYALTY_FIELDS, ...BOARDING_MARKETING_FIELDS] : BOARDING_LOYALTY_FIELDS;
+  const hints = {
+    frequentFlyerCarrier: '填会员计划的航司代码，例如国航凤凰知音填 CA。',
+    marketingFlightNumber: '按购票订单填完整航班号，如 CA7941。'
+  };
+  return `<details class="editor-extra" data-boarding-fields="loyalty" ${scanned || keys.some(key => record[key]) ? 'open' : ''}>
+    <summary>${scanned ? '常旅客与代码共享' : '常旅客'}</summary>
+    <div class="form-grid">${keys.map(key => field(key, record, { hint: hints[key] })).join('')}</div>
   </details>`;
+}
+
+function flightEditorSections(record) {
+  const fields = (...keys) => keys.map(key => field(key, record)).join('');
   return [
     `<div data-boarding-journey>${boardingJourneyMarkup(record)}</div>`,
     editorSection('航班行程', fields('origin', 'departureTerminal', 'destination', 'arrivalTerminal', 'service') + flightStopField() +
       fields('departureDate') + flightLookupMarkup()),
     editorSection('计划起降', fields('departureTime', 'arrivalDate', 'arrivalTime'), FLIGHT_LOCAL_TIMES),
     editorSection('旅客与登机', fields('passenger', 'identity', 'seat', 'seatClass', 'gate', 'boardingTime')),
-    metadata('行李', 'baggage', BOARDING_BAGGAGE_FIELDS),
+    `<section class="editor-extra editor-section" data-boarding-fields="baggage">
+      <h3>行李</h3><p class="flight-local-time" data-baggage-later-leg hidden>行李牌随首段登机牌展示。</p><p class="flight-local-time" data-baggage-occupied hidden></p>
+      <div class="form-grid">${fields(...BOARDING_BAGGAGE_FIELDS)}</div>
+    </section>`,
     editorSection('航司与票务', fields('airline', 'aircraft', 'aircraftRegistration', 'flightDistance', 'pnr', 'ticketNumber', 'price')),
     `<details class="editor-extra" ${ACTUAL_FLIGHT_FIELDS.some(key => record[key]) ? 'open' : ''}>
       <summary>实际起降</summary><p class="flight-local-time">${e(FLIGHT_LOCAL_TIMES)}</p>
       <div class="form-grid">${fields(...ACTUAL_FLIGHT_FIELDS)}</div>
     </details>`,
-    metadata('常旅客与代码共享', 'loyalty', BOARDING_LOYALTY_FIELDS)
+    boardingLoyaltyEditor(record)
   ].join('');
 }
 
@@ -1246,12 +1258,13 @@ function editRecord(record, {
     if(!flight)refreshRailPhotoLock(form,draft);
     updatePersonalFields(previousRecord);
     editor.dirty=true;
+    if (flight) {
+      const loyalty = form.querySelector('[data-boarding-fields="loyalty"]');
+      if (hasOriginalBoardingCode(draft) !== Boolean(form.elements.marketingFlightNumber)) loyalty.outerHTML = boardingLoyaltyEditor(draft);
+      else if (BOARDING_LOYALTY_FIELDS.some(key => draft[key])) loyalty.open = true;
+    }
     refreshFieldSources(form,draft);
     refreshTicketFieldLocks(form,draft);
-    for (const [group, keys] of [['baggage', BOARDING_BAGGAGE_FIELDS], ['loyalty', BOARDING_LOYALTY_FIELDS]]) {
-      const section = form.querySelector(`[data-boarding-fields="${group}"]`);
-      if (section && keys.some(key => draft[key])) section.open = true;
-    }
     const journey=form.querySelector('[data-boarding-journey]');
     if(journey)journey.innerHTML=boardingJourneyMarkup(draft);
     refreshPreview();
@@ -1374,7 +1387,6 @@ function editRecord(record, {
       if (flight) {
         const fields = baggageFieldsInUse(draft).filter(key => draft[key]?.trim());
         if (fields.length) {
-          form.querySelector('[data-boarding-fields="baggage"]').open = true;
           throw Object.assign(new Error('联程其他航段已填写' + fields.map(key => BOARDING_METADATA_LABELS[key]).join('、') + '，请清空本段重复项。'), { fields });
         }
       }

@@ -39,6 +39,9 @@ test('the editor fills a flight through the provider, preserves private input an
     const summary = document.querySelector('[data-flight-status]').textContent;
     assert.match(summary, /已补全.*出发机场.*到达机场.*计划起飞时间.*经停机场/);
     assert.doesNotMatch(summary, /飞机编号/);
+    const apis = () => document.querySelector('[data-flight-apis]').textContent;
+    await wait(() => apis().includes('getFlightTrackLine'));
+    assert.equal(apis(), '本次调用接口：航班动态（getFlightStatus）、飞行航迹（getFlightTrackLine）');
     assert.equal(document.querySelector('[name=originCode]').value, 'PEK'); assert.equal(document.querySelector('[name=destinationCode]').value, 'HND');
     for (const key of flightDates) assert.deepEqual(dateParts(key), ['2026-08-01', '08', '01']);
     assert.equal(document.querySelector('[name=departureTime]').value, '23:45'); assert.equal(document.querySelector('[name=arrivalTime]').value, '03:50');
@@ -56,6 +59,7 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.equal(document.querySelector('#city-reference'),null);
     assert.match(document.querySelector('#editor-preview').textContent, /A330-343/);
     document.querySelector('[data-flight-lookup]').click(); await wait(() => document.querySelector('[data-flight-status]').textContent.includes('均已填写'));
+    assert.equal(apis(), '');
     assert.deepEqual(providerCalls.filter(call => call.method === 'tools/call').map(call => call.params), [
       { name: 'getFlightStatus', arguments: { fnum: 'CA181', date: '2026-07-31' } },
       { name: 'getFlightTrackLine', arguments: { flightStr: 'CA181_PEK_HND_2026-07-31_0' } },

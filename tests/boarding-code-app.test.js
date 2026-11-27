@@ -31,6 +31,8 @@ test('the app saves generated code edits immediately, persists provenance, and k
     assert.equal(document.querySelector('[name="template"]').type,'hidden');
     assert.ok(document.querySelector('[data-code-editor]').compareDocumentPosition(document.querySelector('[name="origin"]')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
     assert.ok(document.querySelector('[name="pnr"]').compareDocumentPosition(document.querySelector('[data-bcbp-generator]')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
+    assert.equal(document.querySelector('[name="marketingCarrier"], [name="marketingFlightNumber"]'), null);
+    assert.equal(document.querySelector('[data-bcbp="operatingFlight"]').disabled, false);
     fill('seat','20C');submit();await wait(()=>!document.querySelector('dialog'));
     let saved=server.records().find(record=>record.id==='generated');assert.equal(saved.seat,'20C');assert.equal(saved.boardingCodeSource,'generated');assert.equal(readBoardingCode(saved.boardingCode).seat,'20C');
     assert.equal(Object.hasOwn(saved,'marketingFlightNumber'),false);

@@ -1,7 +1,7 @@
 const ENDPOINT = 'https://c-gw.variflight.com/chat_message/mcp/api';
 import { flightQuery } from './flight-query.js';
 export class FlightConnector {
-  constructor(key, signal) { this.key = key.trim(); this.signal = signal; this.sequence = 0; this.session = null; this.endpoint = ENDPOINT; this.protocolVersion = '2025-03-26'; }
+  constructor(key, signal, { onToolCall } = {}) { this.key = key.trim(); this.signal = signal; this.onToolCall = onToolCall; this.sequence = 0; this.session = null; this.endpoint = ENDPOINT; this.protocolVersion = '2025-03-26'; }
   async send(method, params = {}, notification = false) {
     const id = notification ? undefined : ++this.sequence;
     const timeout = AbortSignal.timeout(45000), signal = this.signal ? AbortSignal.any([timeout, this.signal]) : timeout;
@@ -48,6 +48,8 @@ export class FlightConnector {
   }
   async #callTool(name, args, failure) {
     if (!this.session) await this.connect();
+    this.signal?.throwIfAborted();
+    this.onToolCall?.(name);
     const result = await this.send('tools/call', { name, arguments: args });
     if (!result || result.isError) throw new Error(failure);
     return result;

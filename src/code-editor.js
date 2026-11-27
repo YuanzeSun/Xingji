@@ -3,6 +3,7 @@ import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import {readTicketDate,writeTicketDate} from './date-field.js';
 import {readBoardingCode} from './bcbp.js';
 import {boardingScanReview} from './boarding-rescan.js';
+import {BOARDING_MARKETING_FIELDS} from './boarding-metadata.js';
 import {normalizePlaces} from './places.js';
 import {railService} from './rail-journey.js';
 import {markManualFields} from './lookup-values.js';
@@ -94,15 +95,16 @@ export function bindTicketCodeEditor(form, draft, changed, {
       return;
     }
     if(!form.querySelector('[data-bcbp-fields]'))return;
+    const settings=readBoardingGenerator(form);
+    draft.boardingCodeOperatingFlight=settings.operatingFlight || '';
     let result;
-    try { result=automaticBoardingCode(currentRecord(),readBoardingGenerator(form),{profile}); }
+    try { result=automaticBoardingCode(currentRecord(),settings,{profile}); }
     catch { result=null; }
     const previous=draft.boardingCodeSource==='generated' ? draft.boardingCode : null;
-    if(result && (previous?.rawBytes!==result.code.rawBytes || previous?.format!==result.code.format || draft.boardingCodeOperatingFlight!==result.operatingFlight)){
-      draft.boardingCode=result.code;
+    if(result && (previous?.rawBytes!==result.rawBytes || previous?.format!==result.format)){
+      draft.boardingCode=result;
       draft.boardingCodeSource='generated';
       draft.boardingLegIndex='0';
-      draft.boardingCodeOperatingFlight=result.operatingFlight;
       markFieldSources(draft,[field],'generated');
     } else if(!result && previous){
       clearGeneratedCode(draft);
@@ -326,6 +328,12 @@ export function bindTicketCodeEditor(form, draft, changed, {
     if(flight){
       const unlockIdentity = draft.fieldSources?.identity === 'profile-match' || draft.fieldSources?.identity === 'barcode';
       for(const key of BOARDING_FIELDS)draft[key]='';
+      draft.lockedFields = draft.lockedFields.filter(key => !BOARDING_MARKETING_FIELDS.includes(key));
+      for (const key of BOARDING_MARKETING_FIELDS) {
+        draft[key] = '';
+        delete draft.fieldSources[key];
+        delete draft.lookupValues[key];
+      }
       if (unlockIdentity) {
         draft.lockedFields = draft.lockedFields.filter(key => key !== 'identity');
         markFieldSources(draft, ['identity'], 'manual');

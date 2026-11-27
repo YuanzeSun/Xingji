@@ -53,6 +53,11 @@ test('individually archived legs retain their barcode metadata and display links
   assert.match(ticketSVG(rows[0]), /BAG: 02\/</);
   const brandedSticker = ticketSVG({ ...rows[0], airline: '中国国际航空' }).split('data-boarding-baggage-sticker')[1];
   assert.match(brandedSticker, /data-baggage-airline-logo="true".*?[\s\S]*AIR CHINA[\s\S]*中国国际航空/);
+  const [pass, sticker] = ticketSVG({ ...rows[0], passenger: '张三' }).split('data-boarding-baggage-sticker');
+  assert.match(pass, /张三/);
+  assert.match(sticker, /ZHANG\/SAN/);
+  assert.doesNotMatch(sticker, /张三/);
+  assert.doesNotMatch(ticketSVG({ ...rows[0], passenger: '李四', boardingCode: '' }).split('data-boarding-baggage-sticker')[1], /李四/);
   assert.throws(()=>createRecord({...second,boardingLegIndex:'3'}),/航段/);
   assert.throws(()=>createRecord({type:'flight',template:'air-boarding-pass',checkedBaggageCount:'-1'}),/行李件数/);
   assert.throws(()=>createRecord({type:'flight',template:'air-boarding-pass',checkedBaggageCount:'1.5'}),/行李件数/);

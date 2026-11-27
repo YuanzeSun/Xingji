@@ -1,7 +1,7 @@
 import { resolvePlace, normalizePlaceKey } from './places.js';
 import { AIRLINES as AIRLINE_DATABASE } from './data/airline-reference.js';
 import {readBoardingCode} from './bcbp.js';
-import {flightPassengerName} from './flight-passenger.js';
+import {flightPassengerEnglishName,flightPassengerName} from './flight-passenger.js';
 
 const CHINESE_REGIONS = new Set(['CN', 'HK', 'MO', 'TW']);
 const hasChinese = value => /\p{Script=Han}/u.test(value || '');
@@ -62,5 +62,7 @@ export function boardingPresentation(record) {
     : language === 'zh' ? origin.chineseFullName || origin.englishName : origin.englishName;
   const carrierNames = airlineNames.get(airlineKey(record.airline));
   const airline = carrierNames?.[language] || record.airline || words.airline;
-  return { language, words, airport, airline, carrierNames, origin: routeName('origin'), destination: routeName('destination'), passenger:flightPassengerName(record,readBoardingCode(record.boardingCode,record.boardingLegIndex) || {}) };
+  const code = readBoardingCode(record.boardingCode, record.boardingLegIndex) || {};
+  return { language, words, airport, airline, carrierNames, origin: routeName('origin'), destination: routeName('destination'),
+    passenger: flightPassengerName(record, code), passengerEnglish: flightPassengerEnglishName(record, code) };
 }

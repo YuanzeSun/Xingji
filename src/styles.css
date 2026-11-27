@@ -606,7 +606,7 @@ dialog.related-tickets-dialog::backdrop{backdrop-filter:none}
 .flight-lookup-heading .button{flex:none;margin-inline-start:auto;font-size:13px}
 .flight-lookup-note{font-size:12px;color:var(--muted);margin:8px 0 0}
 .flight-lookup-status{font-size:13px;line-height:1.8;color:#5a754c;margin:10px 0 0;overflow-wrap:anywhere}
-.flight-lookup-status:empty{display:none}
+.flight-lookup-status:empty,.flight-lookup-note:empty{display:none}
 .rail-lookup{grid-column:1/-1;padding:15px 16px;margin:0 0 20px;background:#eff3e9;border:1px solid #dce5d4;border-radius:8px;min-width:0}
 .rail-lookup-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px;color:#59714f}
 .rail-lookup-heading a{color:inherit;text-underline-offset:3px}

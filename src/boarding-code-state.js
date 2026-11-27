@@ -3,7 +3,8 @@ import {boardingCodeDefaults,readBoardingCode,createBoardingCode,BOARDING_FLIGHT
 import {hasChineseName} from './flight-passenger.js';
 import {markFieldSources} from './field-sources.js';
 
-export const BOARDING_FIELDS=['boardingCode','boardingCodeSource','boardingCodeOperatingFlight','boardingLegIndex'];
+export const BOARDING_CODE_FIELDS=['boardingCode','boardingCodeSource','boardingLegIndex'];
+export const BOARDING_FIELDS=[...BOARDING_CODE_FIELDS,'boardingCodeOperatingFlight'];
 export const BOARDING_SHARED_FIELDS=['passenger','pnr','origin','destination','originCode','destinationCode','service','departureDate','seat','seatClass','identity','ticketNumber','gate','boardingTime'];
 export function operatingFlight(value) {
   const text=String(value || '').trim().toUpperCase();
@@ -20,7 +21,7 @@ export function generatedCodeSettings(record,decoded) {
 }
 export function clearGeneratedCode(record) {
   if(record.boardingCodeSource!=='generated')return false;
-  for(const key of BOARDING_FIELDS)record[key]='';
+  for(const key of BOARDING_CODE_FIELDS)record[key]='';
   markFieldSources(record,['boardingCode'],'generated');
   return true;
 }

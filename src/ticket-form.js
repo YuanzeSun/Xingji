@@ -44,6 +44,7 @@ export function requiredRecordFields(record) {
 export function ticketFieldLabel(key, type, fallback = key) {
   const flight = type === 'flight';
   if (flight && FLIGHT_TIME_LABELS[key]) return FLIGHT_TIME_LABELS[key];
+  if (flight && key === 'boardingCodeOperatingFlight') return '实际承运航班';
   return ({ origin: flight ? '出发机场' : '出发站', destination: flight ? '到达机场' : '到达站', service: flight ? '航班号' : '车次', seat: flight ? '座位号' : '座位 / 铺位', seatClass: flight ? '舱位代码' : '席别', gate: flight ? '登机口' : '检票口', carriage: '车厢', passenger: '旅客姓名', identity: '证件号', departureDate: '出发日期', departureTime: '出发时间' })[key] || fallback;
 }
 

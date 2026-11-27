@@ -18,3 +18,11 @@ export function flightPassengerName(record,code={}) {
   const english=current && !hasChineseName(current) ? current : code.passenger || '';
   return language==='zh' ? chinese || english : language==='en' ? english || chinese : current || english || chinese;
 }
+
+export function flightPassengerEnglishName(record, code = {}) {
+  const current = String(record.passenger || '').normalize('NFKC').trim();
+  if (/^\p{Script=Latin}[\p{Script=Latin}\p{M} /.'’\-]*$/u.test(current)) return current.toUpperCase();
+  const codeMatches = !current || record.boardingCodeSource === 'generated' ||
+    (code.passengerChinese && nameKey(code.passengerChinese) === nameKey(current));
+  return codeMatches ? code.passenger || '' : '';
+}

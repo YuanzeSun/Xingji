@@ -16,16 +16,20 @@ const lookupLabels = {
 };
 const scheduleKey = request => 'schedule:' + JSON.stringify(request);
 const matchesRoute = (row, { dep, arr }) => (!dep || row.originCode === dep) && (!arr || row.destinationCode === arr);
+const apiLabels = { getFlightStatus: '航班动态', getAircraftRotation: '飞机轮转', getFlightTrackLine: '飞行航迹' };
 
 export function flightLookupMarkup() {
-  return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div><p class="flight-lookup-note">飞常准提供的机型等信息可能有误，建议用航旅纵横核对。</p><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><div data-flight-candidates></div></section>`;
+  return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div><p class="flight-lookup-note">飞常准提供的机型等信息可能有误，建议用航旅纵横核对。</p><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><p class="flight-lookup-note" data-flight-apis role="status"></p><div data-flight-candidates></div></section>`;
 }
 
 export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, apply, applyTrack, onPending, lookup }) {
   const section = form.querySelector('.flight-lookup');
   if (!section) return () => {};
   const button = section.querySelector('[data-flight-lookup]'), status = section.querySelector('[data-flight-status]'), list = section.querySelector('[data-flight-candidates]');
+  const apiStatus = section.querySelector('[data-flight-apis]');
   const cache = new Map();
+  const calledTools = new Set();
+  const connectorOptions = { onToolCall: name => calledTools.add(name) };
   let disposed = false, activeRequest, candidates = [], candidateStamp = '', selectedKey = '';
   const stamp = () => { const record = getRecord(); return JSON.stringify(['type', 'service', 'departureDate', 'origin', 'originCode', 'destination', 'destinationCode'].map(field => record[field] || '')); };
   const isOpen = () => !disposed && form.isConnected;
@@ -42,7 +46,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     if (!key) throw new Error('请先在「数据与同步」配置飞常准 Key');
     if (selectedKey !== key) cache.clear();
     selectedKey = key;
-    return new FlightConnector(key, signal);
+    return new FlightConnector(key, signal, connectorOptions);
   }
   async function fromCache(key, fetchValue) {
     const hit = cache.get(key);
@@ -117,6 +121,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     await fillMissing(connector, summary, '本次没有可补全的航班信息。');
   }
   async function query(signal) {
+    calledTools.clear(); apiStatus.textContent = '';
     list.innerHTML = ''; candidates = []; candidateStamp = '';
     const record = getRecord(), request = flightQuery(record), needs = flightLookupNeeds(record);
     const needsSchedule = needs.schedule || needs.stopover || (needs.registration && (!request.dep || !request.arr));
@@ -152,7 +157,10 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
       .catch(error => { if (isOpen()) status.textContent = error.message; })
       .finally(() => {
         activeRequest = undefined;
-        if (isOpen()) refreshButton();
+        if (isOpen()) {
+          if (calledTools.size) apiStatus.textContent = '本次调用接口：' + [...calledTools].map(name => `${apiLabels[name]}（${name}）`).join('、');
+          refreshButton();
+        }
       });
     onPending?.(pending);
   }
@@ -160,7 +168,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     const target = event.target.closest('[data-flight-lookup],[data-flight-candidate]');
     if (!target) return;
     if (target.hasAttribute('data-flight-lookup')) run(query);
-    else run(signal => accept(Number(target.dataset.flightCandidate), new FlightConnector(selectedKey, signal)));
+    else run(signal => accept(Number(target.dataset.flightCandidate), new FlightConnector(selectedKey, signal, connectorOptions)));
   };
   const input = () => {
     if (candidateStamp && stamp() !== candidateStamp) { candidates = []; list.innerHTML = ''; status.textContent = '航班或机场已改变，请重新查询'; }

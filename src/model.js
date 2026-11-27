@@ -7,7 +7,7 @@ export {resolveRecordConflict} from './record-merge-metadata.js';
 import {LOOKUP_FIELDS,normalizeLookupValues,isLookupValue as isAutomatic} from './lookup-values.js';
 import {normalizeFieldSources,isFieldSourceEntry,normalizeRailFieldDates,markFieldSources,importFieldSource,hasFieldValue,matchedIdentityLocked,railBarcodeFieldLocked,railImportFieldLocked,railInvoiceFieldLocked,sourceFieldValue} from './field-sources.js';
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
-import {BOARDING_FIELDS,refreshGeneratedCode,operatingFlight} from './boarding-code-state.js';
+import {BOARDING_CODE_FIELDS,BOARDING_FIELDS,refreshGeneratedCode,operatingFlight} from './boarding-code-state.js';
 import { normalizeRailRoute, railRouteMatches } from './rail-route-snapshot.js';
 import { normalizeFlightTrack } from './flight-track.js';
 import { normalizeFlightStop } from './flight-stop.js';
@@ -126,8 +126,14 @@ export function validateRecord(input) {
   out.sources = (Array.isArray(input.sources) ? input.sources : []).slice(0, 200).filter(s => s && typeof s === 'object').map(s => ({ kind: String(s.kind || 'manual').slice(0, 80), label: String(s.label || '').slice(0, 300), at: String(s.at || now()).slice(0, 40) }));
   out.sources.sort((a, b) => wireOrder(JSON.stringify(a), JSON.stringify(b)));
   out.lockedFields = [...new Set((Array.isArray(input.lockedFields) ? input.lockedFields : []).filter(f => fields.includes(f) && !['originCity','destinationCity','lookupValues','fieldSources','boardingCodeSource','boardingCodeOperatingFlight'].includes(f)))].sort();
+  if (out.type !== 'flight' || out.boardingCodeSource === 'original') out.boardingCodeOperatingFlight = '';
+  else if (out.boardingCodeOperatingFlight) {
+    out.boardingCodeOperatingFlight = flightNumber(out.boardingCodeOperatingFlight);
+    try { operatingFlight(out.boardingCodeOperatingFlight); }
+    catch (error) { error.fields = ['boardingCodeOperatingFlight']; throw error; }
+  }
   if (out.type !== 'flight' || !out.boardingCode) {
-    for (const field of BOARDING_FIELDS) out[field] = '';
+    for (const field of BOARDING_CODE_FIELDS) out[field] = '';
   } else {
     if (!['original', 'generated'].includes(out.boardingCodeSource)) throw new Error('条码来源无效');
     if (!/^[0-3]$/.test(out.boardingLegIndex)) throw new Error('条码航段无效');
@@ -135,12 +141,7 @@ export function validateRecord(input) {
       const boarding = readBoardingCode(out.boardingCode);
       const index = Number(out.boardingLegIndex);
       if (index >= (boarding?.legCount ?? 1)) throw new Error('条码航段无效');
-      out.boardingCodeOperatingFlight = '';
-    } else {
-      if (out.boardingLegIndex !== '0') throw new Error('条码航段无效');
-      out.boardingCodeOperatingFlight = out.boardingCodeOperatingFlight.trim().toUpperCase().replace(/\s/g, '');
-      if (out.boardingCodeOperatingFlight) operatingFlight(out.boardingCodeOperatingFlight);
-    }
+    } else if (out.boardingLegIndex !== '0') throw new Error('条码航段无效');
   }
   normalizePlaces(out);
   for (const side of ['origin','destination']) out[side+'City']=cityLabel(out,side);
@@ -192,7 +193,8 @@ function joinRecords(existing, incoming) {
     if (!fromInvoice && existing.lockedFields.includes(field)) continue;
     if (fromInvoice || incoming.lockedFields.includes(field) || (empty(existing[field]) && !empty(incoming[field]))) takeField(existing,incoming,field);
   }
-  if(!existing.lockedFields.includes('boardingCode') && (incoming.lockedFields.includes('boardingCode') || !existing.boardingCode))takeBoardingCode(existing,incoming);
+  const missingCode = !existing.boardingCode && (!existing.boardingCodeOperatingFlight || incoming.boardingCode);
+  if(!existing.lockedFields.includes('boardingCode') && (incoming.lockedFields.includes('boardingCode') || missingCode))takeBoardingCode(existing,incoming);
   existing.sources = union(existing.sources, incoming.sources);
   existing.lockedFields = union(existing.lockedFields, incoming.lockedFields);
   existing.createdAt = [existing.createdAt, incoming.createdAt].sort()[0];

@@ -4,6 +4,7 @@ import {boardingCodeDefaults,boardingFlightParts,createBoardingCode,BCBP_FORMATS
 import {hasChineseName} from './flight-passenger.js';
 import {fieldSourceBadge} from './field-sources.js';
 import {barcodeRequiredMark} from './ticket-form.js';
+import {hasOriginalBoardingCode} from './boarding-metadata.js';
 
 function generatorBadge(key,values,record,profile) {
   const kind=record.boardingCode ? record.boardingCodeSource==='generated' ? 'generated' : 'barcode' : key==='passenger' && profile && values.passenger ? 'profile' : ['format','status'].includes(key) ? 'default' : '';
@@ -14,10 +15,10 @@ const englishPassengerField=(values,record,{profile}={})=>`<label class="field" 
 export function boardingGeneratorMarkup(record,{profile,settings}={}) {
   if(record.type!=='flight')return '';
   const values={...boardingGeneratorValues(record,{profile}),...settings};
-  const scanned=!!record.boardingCode && record.boardingCodeSource!=='generated';
+  const scanned=hasOriginalBoardingCode(record);
 
   const select=(key,label,options,required=false)=>`<label class="field"><span>${label}${required?barcodeRequiredMark:''}${generatorBadge(key,values,record,profile)}</span><select data-bcbp="${key}">${options.map(([value,text])=>`<option value="${e(value)}" ${values[key]===value?'selected':''}>${e(text)}</option>`).join('')}</select></label>`;
-  const input=(key,label,max,placeholder,required=false)=>`<label class="field"><span>${label}${required?barcodeRequiredMark:''}${generatorBadge(key,values,record,profile)}</span><input data-bcbp="${key}" value="${e(values[key]||'')}" maxlength="${max}" placeholder="${placeholder}" autocomplete="off" spellcheck="false" ${key==='status'?'inputmode="numeric"':''}/></label>`;
+  const input=(key,label,max,placeholder,required=false)=>`<label class="field"><span>${label}${required?barcodeRequiredMark:''}${generatorBadge(key,values,record,profile)}</span><input data-bcbp="${key}" value="${e(values[key]||'')}" maxlength="${max}" placeholder="${placeholder}" autocomplete="off" spellcheck="false" ${key==='status'?'inputmode="numeric"':''}${key==='operatingFlight'?' name="boardingCodeOperatingFlight"':''}/></label>`;
   return `<div class="boarding-generator" data-bcbp-generator><h4>登机牌条码信息</h4><fieldset data-bcbp-fields${scanned ? ' disabled' : ''}><div class="form-grid">${hasChineseName(record.passenger)?englishPassengerField(values,record,{profile}):''}${input('sequence','值机序号（SEQ）',5,'如：25',true)}${input('status','打印时旅客状态',1,'如：1（已值机）',true)}${select('format','条码格式',BCBP_FORMATS.map(format=>[format,format==='PDF417'?'PDF417':format==='QRCode'?'QR Code':format]),true)}${input('operatingFlight','实际承运航班（代码共享时填写）',9,'如：CA1234')}</div></fieldset></div>`;
 }
 
@@ -26,12 +27,8 @@ export function readBoardingGenerator(section) {
 }
 
 export function automaticBoardingCode(record,settings,{profile}={}) {
-  const values={...boardingCodeDefaults(record,{useSaved:false,profile}),operatingFlight:'',...settings};
-  const operated=operatingFlight(values.operatingFlight);
-  return {
-    code:createBoardingCode({...values,...operated},values.format),
-    operatingFlight:operated ? operated.carrier+operated.flightNumber : '',
-  };
+  const values={...boardingCodeDefaults(record,{useSaved:false,profile}),...settings,...operatingFlight(settings.operatingFlight)};
+  return createBoardingCode(values,values.format);
 }
 
 export function editBoardingGeneratorField(input) {
@@ -41,9 +38,8 @@ export function editBoardingGeneratorField(input) {
 
 function boardingGeneratorValues(record,{profile}={}) {
   const values=boardingCodeDefaults(record,{profile});
-  values.operatingFlight='';
-  if(record.boardingCodeSource==='generated')values.operatingFlight=record.boardingCodeOperatingFlight || '';
-  else {
+  values.operatingFlight=record.boardingCodeOperatingFlight || '';
+  if(hasOriginalBoardingCode(record)) {
     const current=boardingFlightParts(record.service), encoded=values.carrier+values.flightNumber;
     if(values.carrier && current && encoded!==current.carrier+current.flightNumber)values.operatingFlight=encoded;
   }
@@ -72,7 +68,7 @@ export function refreshBoardingGenerator(section,record,{profile}={}) {
 }
 
 export function setBoardingGeneratorAvailability(section,record) {
-  const disabled=!!record.boardingCode && record.boardingCodeSource!=='generated';
+  const disabled=hasOriginalBoardingCode(record);
   const fields=section.querySelector('[data-bcbp-fields]');if(fields)fields.disabled=disabled;
   for(const input of section.querySelectorAll('[data-bcbp]'))input.disabled=disabled;
 }
