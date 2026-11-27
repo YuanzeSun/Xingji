@@ -37,7 +37,6 @@ test('individually archived legs retain their barcode metadata and display links
   assert.equal(rows[0].actualBoardingTime,'18:21');assert.equal(rows[0].baggageTagNumbers,'0123456789–0123456790');
   for(const key of ['actualBoardingTime','checkedBaggageCount','frequentFlyerNumber','marketingCarrier'])assert.equal(ticketFieldLocked(rows[0],key),true,key);
   assert.equal(rows[0].checkedBaggageWeight, '');
-  assert.equal(rows[0].baggageDestinationCode, '');
   assert.equal(rows[1].checkedBaggageCount, '');
   assert.equal(rows[1].baggageTagNumbers, '');
   assert.doesNotMatch(ticketSVG(rows[1]), /data-boarding-baggage-sticker/);
@@ -69,15 +68,6 @@ test('baggage tags align the number to its barcode and print the route to the fi
   assert.match(direct, /VIA:</);
   assert.match(direct, /BAG: 01\/9</);
   assert.match(direct, /<text x="133\.5"[^>]*text-anchor="middle"[^>]*>0123456789<\/text>/);
-  const connecting = createRecord({ ...base, baggageDestinationCode: ' sfo ', checkedBaggageWeight: '9.75' });
-  assert.deepEqual(readArchive(archive([connecting])), [connecting]);
-  assert.equal(connecting.baggageDestinationCode, 'SFO');
-  const svg = ticketSVG(connecting);
-  assert.match(svg, /TO: SFO</);
-  assert.match(svg, /VIA: HND</);
-  assert.match(svg, /BAG: 01\/9\.75</);
-  assert.match(ticketSVG({ ...base, baggageDestinationCode: 'HND' }), /VIA:</);
   assert.match(ticketSVG({ ...base, destinationCode: '', destination: '自填机场' }), /TO: 自填机场</);
-  assert.throws(() => createRecord({ ...base, baggageDestinationCode: 'SF' }), /机场三字码/);
   assert.throws(() => createRecord({ ...base, checkedBaggageWeight: '-9' }), /总重/);
 });

@@ -10,7 +10,7 @@ import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {BOARDING_FIELDS,refreshGeneratedCode,operatingFlight} from './boarding-code-state.js';
 import { normalizeRailRoute, railRouteMatches } from './rail-route-snapshot.js';
 import { normalizeFlightTrack } from './flight-track.js';
-import { airportCode, normalizeFlightStop } from './flight-stop.js';
+import { normalizeFlightStop } from './flight-stop.js';
 import { normalizeMarks } from './ticket-marks.js';
 import { normalizeTicketCode } from './ticket-code.js';
 import { normalizeBoardingCode } from './boarding-code.js';
@@ -104,13 +104,10 @@ export function validateRecord(input) {
   if (out.type === 'flight') {
     const count = out.checkedBaggageCount.normalize('NFKC').trim();
     const weight = out.checkedBaggageWeight.normalize('NFKC').trim();
-    const destination = out.baggageDestinationCode.normalize('NFKC').trim().toUpperCase();
     if (count && (!/^\d{1,4}$/.test(count) || Number(count) > 2997)) throw new Error('托运行李件数须为 0 至 2997 的整数');
     if (weight && !/^\d{1,6}(?:\.\d{1,3})?$/.test(weight)) throw new Error('托运行李总重请填写公斤数，最多三位小数');
-    if (destination && !airportCode(destination)) throw new Error('行李最终目的地请填写机场三字码');
     out.checkedBaggageCount = count ? String(Number(count)) : '';
     out.checkedBaggageWeight = weight ? String(Number(weight)) : '';
-    out.baggageDestinationCode = destination;
   }
   for (const field of ['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime', 'actualBoardingTime']) if (out[field] && !/^([01]\d|2[0-3]):[0-5]\d$/.test(out[field])) throw new Error('时间请填写 HH:mm');
   for (const field of ['departureZone', 'arrivalZone']) if (out[field] && !isStoredTimeZone(out[field])) throw new Error('请填写有效时区，例如 Asia/Shanghai');

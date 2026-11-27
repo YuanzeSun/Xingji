@@ -3,7 +3,7 @@ import { normalizeSeatClass } from './seat-classes.js';
 import { normalizeAircraft } from './aircraft.js';
 import { railwayStop } from './places.js';
 import { boardingPresentation } from './boarding-language.js';
-import { hasBoardingBaggage } from './boarding-metadata.js';
+import { boardingBaggage } from './boarding-baggage.js';
 import { maskRailIdentity } from './identity.js';
 import { escape as esc } from './html.js';
 // Coordinates follow the 12306 ticket specimens published on 2015-06-24.
@@ -35,7 +35,7 @@ const dim = Object.freeze({
 const baggageOverhang = 171;
 const boardingPassWithSticker = Object.freeze({ width: dim['air-boarding-pass'].width, height: dim['air-boarding-pass'].height + baggageOverhang });
 export function layoutDimensions(template, record) {
-  return template === 'air-boarding-pass' && record && hasBoardingBaggage(record) ? boardingPassWithSticker : dim[template];
+  return template === 'air-boarding-pass' && record && boardingBaggage(record) ? boardingPassWithSticker : dim[template];
 }
 
 function paperPattern(id, red) {
@@ -283,15 +283,13 @@ function boardingPenCircle(field, x, y, width, height, reverse = false) {
   return `<path data-boarding-pen="${field}" aria-hidden="true" d="${outline}" fill="none" stroke="#394b73" stroke-width="3" stroke-linecap="round" opacity=".79"/>`;
 }
 
-function baggageSticker(record, departureDate, presentation, mark) {
-  const tags = record.baggageTagNumbers?.trim() || '';
+function baggageSticker(record, baggage, departureDate, presentation, mark) {
+  const tags = baggage.baggageTagNumbers?.trim() || '';
   const barcodeTag = /\b\d{10}\b/.exec(tags)?.[0];
-  const count = record.checkedBaggageCount?.trim().replace(/^0+(?=\d)/, '') || '';
-  const weight = record.checkedBaggageWeight?.trim() || '';
-  const arrivalAirport = record.destinationCode || presentation.destination;
-  const finalAirport = record.baggageDestinationCode?.trim().toUpperCase();
-  const to = finalAirport || arrivalAirport;
-  const via = finalAirport && finalAirport !== arrivalAirport ? arrivalAirport : '';
+  const count = baggage.checkedBaggageCount?.trim().replace(/^0+(?=\d)/, '') || '';
+  const weight = baggage.checkedBaggageWeight?.trim() || '';
+  const to = baggage.to || record.destinationCode || presentation.destination;
+  const via = baggage.via || '';
   const bag = count || weight ? `BAG: ${count && count.padStart(2, '0')}/${weight}` : '';
   const barcode = { x: 6, y: 153, width: 255, height: 29 };
   const code = barcodeTag && renderCodeData({
@@ -326,7 +324,7 @@ function baggageSticker(record, departureDate, presentation, mark) {
 
 function flight(r) {
   const presentation = boardingPresentation(r), words = presentation.words;
-  const hasSticker = hasBoardingBaggage(r);
+  const baggage = boardingBaggage(r);
   const inactive = isInactiveFlight(r), open = r.flightStatus === 'open';
   const statusLabel = presentation.language === 'zh' ? open ? 'OPEN / 未定航班' : 'VOID / 无效票' : open ? 'OPEN / UNDATED' : 'VOID / INVALID';
   const service = r.service || (open ? 'OPEN' : '');
@@ -371,7 +369,7 @@ function flight(r) {
   const code = !codeSize ? '' : portraitCode
     ? `<g data-boarding-code-position="horizontal" transform="translate(35 432) rotate(-90)">${renderBoardingCode(r, 0, 0, 82, 394)}</g>`
     : `<g data-boarding-code-position="horizontal">${renderBoardingCode(r, 35, 350, 394, 82)}</g>`;
-  return `<g data-boarding-language="${presentation.language}" lang="${presentation.language === 'zh' ? 'zh-CN' : 'en'}"><g${hasSticker ? ` transform="translate(0 ${baggageOverhang})"` : ''}><rect width="1230" height="500" rx="3" fill="#fffdf6"/>
+  return `<g data-boarding-language="${presentation.language}" lang="${presentation.language === 'zh' ? 'zh-CN' : 'en'}"><g${baggage ? ` transform="translate(0 ${baggageOverhang})"` : ''}><rect width="1230" height="500" rx="3" fill="#fffdf6"/>
   <path data-boarding-header-paper="true" d="M3 0h1224q3 0 3 3v61H0V3q0-3 3-3" fill="#e4f0f7"/>
   <path d="M0 64h1230" stroke="#cbdde6"/>
   ${mark ? `<metadata>Airline mark: ${esc(mark.source || 'Soaring Symbols 0.4.1 (https://github.com/soaring-symbols/soaring-symbols)')}. Marks belong to their respective airlines.</metadata><svg data-airline-watermark="${logo.code}" x="0" y="65" width="1230" height="435" overflow="hidden" aria-hidden="true"><image x="475" y="-150" width="748" height="730" preserveAspectRatio="xMidYMid meet" opacity=".12" href="${mark.image}"/></svg>` : ''}
@@ -409,7 +407,7 @@ function flight(r) {
       ${label(930, 351, words.gate)}${label(1084, 351, words.seat)}${printed(930, 398, r.gate, 35, 125)}${printed(1084, 401, r.seat, 43, 120)}
       ${label(930, 444, words.boarding)}${label(1084, 444, words.terminal)}${printed(930, 477, r.boardingTime, 26, 140)}${printed(1084, 477, r.terminal, 25, 120)}
     </g>
-  </g></g>${hasSticker ? baggageSticker(r, date(r.departureDate), presentation, mark) : ''}</g>`;
+  </g></g>${baggage ? baggageSticker(r, baggage, date(r.departureDate), presentation, mark) : ''}</g>`;
 }
 
 export function renderTicket(record) {

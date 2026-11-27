@@ -1,4 +1,5 @@
 import {BOARDING_METADATA_LABELS,BOARDING_METADATA_FIELDS,BOARDING_BAGGAGE_FIELDS} from './boarding-metadata.js';
+import {boardingBaggageIndex,draftBoardingBaggage,withBoardingBaggage} from './boarding-baggage.js';
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
@@ -323,6 +324,11 @@ function header(title, subtitle, actions = '', archive = false) {
   return `<div class="mobile-brand"><a href="#archive">${icon('ticket')} 行迹 ${versionMarkup()}</a>${syncButton('')}</div><header class="page-header${archive ? ' archive-header' : ''}"><div><h1>${title}</h1>${subtitle ? '<p class="subtitle">' + subtitle + '</p>' : ''}</div><div class="header-actions">${syncButton('desktop-sync')}${demoToggle()}${actions}</div></header>`;
 }
 const archiveSelected = new Set();
+function ticketArtwork(records, allRecords) {
+  if (!records.some(record => record.type === 'flight')) return records;
+  const index = boardingBaggageIndex(allRecords);
+  return records.map(record => withBoardingBaggage(record, index));
+}
 function selectedArchiveRecords() {
   const result = searchTickets(live(), state.filters);
   return reconcileSelection(archiveSelected, result.error ? [] : result.records);
@@ -348,7 +354,7 @@ async function currentExport(scope) {
 }
 async function exportArchiveSelection(format) {
   const scope = exportScope();
-  const records = clone(selectedArchiveRecords());
+  const records = clone(ticketArtwork(selectedArchiveRecords(), live()));
   if (!records.length) return;
   const { exportDialog, bindExportDialog } = await import('./export-dialog.js');
   if (!await currentExport(scope) || modalRoot.querySelector('dialog')) return;
@@ -366,7 +372,8 @@ async function exportSingleTicket(button, format) {
   button.disabled = true;
   toast(format === 'svg' ? '正在准备包含字体的票面…' : '正在生成高清票面…');
   try {
-    const data = await (format === 'svg' ? exportSVG(record) : exportPNG(record));
+    const [artwork] = ticketArtwork([record], live());
+    const data = await (format === 'svg' ? exportSVG(artwork) : exportPNG(artwork));
     if (await currentExport(scope) && button.isConnected) {
       download(data, fileName(record) + '.' + format, format === 'svg' ? 'image/svg+xml;charset=utf-8' : 'image/png');
     }
@@ -389,7 +396,7 @@ function searchResults(rs, result) {
   const visible = result.records;
   if (result.error) return '<div class="empty-state"><h2>请调整筛选条件</h2><p>检查上方日期或票价范围后，结果会自动更新。</p></div>';
   const view=ticketView,rows=archiveIsSpace() ? visible : visible.slice(0,state.limit);
-  const collection=ticketCollection(rows,view,{icon,selected:archiveSelected,sort:state.filters.sort});
+  const collection=ticketCollection(view.mode === 'grid' ? ticketArtwork(rows, rs) : rows,view,{icon,selected:archiveSelected,sort:state.filters.sort});
   if (visible.length) return collection + (!archiveIsSpace() && visible.length > state.limit ? `<div class="load-more"><button class="button secondary" data-action="load-more">继续翻看 · 已显示 ${state.limit} / ${visible.length} 张</button></div>` : '');
   const empty = rs.length ? '<h2>还没有匹配的票据</h2><p>试试减少条件，或查找其他路线、旅客与日期。</p>' : '<h2>暂无票据</h2>';
   return `<div class="empty-state">${icon('ticket')}${empty}</div>`;
@@ -743,11 +750,11 @@ function loadMoreTickets(button) {
   if (searchTimer) { refreshSearch(); return; }
   if (!button.isConnected || archiveIsSpace()) return;
   const container = root.querySelector('#search-results');
-  const { records } = searchTickets(live(), state.filters);
+  const allRecords = live(), { records } = searchTickets(allRecords, state.filters);
   const next = records.slice(state.limit, state.limit + 48);
   if (!container || !next.length) return;
   const hadFocus = document.activeElement === button;
-  appendTicketCollection(container, next, ticketView, { icon, selected: archiveSelected, sort: state.filters.sort });
+  appendTicketCollection(container, ticketView.mode === 'grid' ? ticketArtwork(next, allRecords) : next, ticketView, { icon, selected: archiveSelected, sort: state.filters.sort });
   state.limit += next.length;
   if (state.limit >= records.length) button.closest('.load-more').remove();
   else button.textContent = `继续翻看 · 已显示 ${state.limit} / ${records.length} 张`;
@@ -758,8 +765,8 @@ function loadMoreTickets(button) {
 }
 function mountCollectionSpace() {
   const container=root.querySelector('[data-ticket-space]');if(!container)return;
-  const result=searchTickets(live(),state.filters);
-  ticketSpaceCleanup=mountTicketSpace(container,result.records);
+  const allRecords = live(), result = searchTickets(allRecords,state.filters);
+  ticketSpaceCleanup=mountTicketSpace(container,ticketArtwork(result.records, allRecords));
 }
 function bindPage() {
   void refreshConnectorStatus();
@@ -950,7 +957,8 @@ function viewRecord(id) {
   if (!record) return;
   const demo = id.startsWith('demo-');
   const reference = railReferenceNotice(record);
-  const preview = ticketSVG(record);
+  const [artwork] = ticketArtwork([record], records);
+  const preview = ticketSVG(artwork);
   const services = record.type === 'rail'
     ? railJourneyMarkup(record, records) + (isJourneyRecord(record) ? '<section class="rail-route" data-rail-route hidden aria-label="铁路线路"></section>' : '')
     : boardingJourneyMarkup(record, records) + (record.flightTrack ? '<section class="rail-route flight-track" data-flight-track aria-label="飞行航迹"></section>' : '');
@@ -990,11 +998,11 @@ function field(key, r, options = {}) {
   const required = requiredRecordFields(r).includes(key) || ['type', 'template'].includes(key);
   if(JOURNEY_DATE_FIELDS.includes(key))return ticketDateField(key,r,{label:ticketFieldLabel(key,r.type,labels[key]),required});
   const type = ['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime', 'actualBoardingTime'].includes(key) ? 'time' : 'text';
-  const placeholders = { railBureau: '如：上海局', railModel: '如：25T、CR400BF-S', railPowerSupply:'如：DC600V、AC380V', railMileage:'如：1463', origin: r.type === 'rail' ? '如：北京南' : '如：PEK / 北京首都', destination: r.type === 'rail' ? '如：上海虹桥' : '如：HND / 东京羽田', service: r.type === 'rail' ? '如：G103' : '如：CA181', identity: '请输入完整证件号', baggageDestinationCode: '机场三字码，留空用到达机场' };
+  const placeholders = { railBureau: '如：上海局', railModel: '如：25T、CR400BF-S', railPowerSupply:'如：DC600V、AC380V', railMileage:'如：1463', origin: r.type === 'rail' ? '如：北京南' : '如：PEK / 北京首都', destination: r.type === 'rail' ? '如：上海虹桥' : '如：HND / 东京羽田', service: r.type === 'rail' ? '如：G103' : '如：CA181', identity: '请输入完整证件号' };
   const requiredAttrs = required ? 'required aria-required="true"' : '';
   const decimal = ['price', 'railMileage', 'flightDistance', 'railSupplementFee', 'railSupplementSurcharge', 'checkedBaggageWeight'].includes(key);
   const inputMode = decimal ? 'inputmode="decimal"' : key === 'checkedBaggageCount' ? 'inputmode="numeric"' : '';
-  const noSuggestions = ['identity', 'baggageDestinationCode'].includes(key) ? 'autocomplete="off" spellcheck="false"' : '';
+  const noSuggestions = key === 'identity' ? 'autocomplete="off" spellcheck="false"' : '';
   const control = options.options ? `<select name="${key}" ${requiredAttrs}>${selectOptions(options.options, r[key])}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${inputMode} ${noSuggestions} />`;
   const content = ['origin','destination','airline'].includes(key) ? `<span class="airport-picker">${control}<span class="airport-suggestions" role="listbox" hidden></span></span>` : control;
   const label = key === 'price' && isRefundReceipt(r) ? '退票费（元）'
@@ -1061,7 +1069,7 @@ const flightLoyaltyFields = BOARDING_METADATA_FIELDS.filter(key => !BOARDING_BAG
 function flightEditorSections(record) {
   const fields = (...keys) => keys.map(key => field(key, record)).join('');
   const metadata = (title, key, keys) => `<details class="editor-extra" data-boarding-fields="${key}" ${keys.some(field => record[field]) ? 'open' : ''}>
-    <summary>${e(title)}</summary><div class="form-grid">${fields(...keys)}</div>
+    <summary>${e(title)}</summary>${key === 'baggage' ? '<p class="flight-local-time" data-baggage-later-leg hidden>行李牌随首段登机牌展示。</p>' : ''}<div class="form-grid">${fields(...keys)}</div>
   </details>`;
   return [
     `<div data-boarding-journey>${boardingJourneyMarkup(record)}</div>`,
@@ -1133,7 +1141,7 @@ function editRecord(record, {
         </div>
         <aside class="editor-visual">
           <div class="preview-label"><span>票面预览</span></div>
-          <div id="editor-preview" class="editor-preview">${ticketSVG(draft)}</div>
+          <div id="editor-preview" class="editor-preview"></div>
           ${localFileURL ? `<details open class="scan-reference"><summary>扫描原图</summary><img src="${e(localFileURL)}" alt="本次录入票据，供校对使用" /></details>` : ''}
         </aside>
       </div>
@@ -1148,6 +1156,14 @@ function editRecord(record, {
   // openModal replaces the DOM, but keeps the editor state deliberately.
   const form = document.querySelector('#editor-form');
   form.closest('dialog').classList.add('ticket-editor-modal');
+  function refreshPreview() {
+    const note = form.querySelector('[data-baggage-later-leg]');
+    const baggageEdited = flight && BOARDING_BAGGAGE_FIELDS.some(key => draft[key] !== original[key]);
+    const index = flight ? draftBoardingBaggage(baggageEdited ? { ...draft, updatedAt: now() } : draft, state.records) : null;
+    if (note) note.hidden = !index?.get(draft.id)?.laterLeg;
+    form.querySelector('#editor-preview').innerHTML = ticketSVG(index ? withBoardingBaggage(draft, index) : draft);
+  }
+  refreshPreview();
   let pendingLookup, waitingForLookup = false;
   function trackLookup(pending) {
     pendingLookup = pending;
@@ -1195,7 +1211,7 @@ function editRecord(record, {
   codeCleanup = bindTicketCodeEditor(form, draft, ({previousRecord={...draft},automatic=false,codeStatus='',railFields,rescan}={}) => {
     if(automatic){
       refreshFieldSources(form,draft);
-      document.querySelector('#editor-preview').innerHTML=ticketSVG(draft);
+      refreshPreview();
       return;
     }
     if (lookupContext(previousRecord)!==lookupContext(draft)) {
@@ -1226,7 +1242,7 @@ function editRecord(record, {
     }
     const journey=form.querySelector('[data-boarding-journey]');
     if(journey)journey.innerHTML=boardingJourneyMarkup(draft);
-    document.querySelector('#editor-preview').innerHTML=ticketSVG(draft);
+    refreshPreview();
   }, {
     onCameraStart:stopRailCamera,
     profile:state.settings.profile, preserveGenerator:!!generatorSettings, referenceURL:localFileURL, editingSaved,
@@ -1293,7 +1309,7 @@ function editRecord(record, {
     if(flight)updatePersonalFields(previousRecord);
     refreshFieldSources(form,draft);
     refreshTicketFieldLocks(form,draft);
-    document.querySelector('#editor-preview').innerHTML = ticketSVG(draft);
+    refreshPreview();
   });
   form.addEventListener('click', event => {
     const add = event.target.closest('[data-mark-add]'), remove = event.target.closest('[data-mark-remove]');
@@ -1306,7 +1322,7 @@ function editRecord(record, {
     draft.ticketMarks = marks.filter(mark => mark.text);markManualFields(draft,['ticketMarks']); editor.dirty = true;
     form.querySelector('#mark-rows').innerHTML = markRows(marks);
     refreshFieldSources(form,draft);
-    document.querySelector('#editor-preview').innerHTML = ticketSVG(draft);
+    refreshPreview();
     if (add) form.elements[`markText-${marks.length - 1}`].focus();
   });
   const showError = ticketFormFeedback(form, () => draft);
