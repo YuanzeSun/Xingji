@@ -43,5 +43,21 @@ test('RailGo sources survive normalization and disappear with deleted ticket dat
   const record=createRecord({service:'G21'});applyLookupValues(record,{railModel:'CR400BF-B',railBureau:'京局',railMileage:'1023'},true,{kind:'rail-lookup'});
   const normalized=createRecord(record);assert.equal(normalized.fieldSources.railModel,'railgo');assert.equal(fieldSourceLabel(normalized,'railBureau'),'RailGo');
   const deleted=createRecord({...normalized,deleted:true});assert.equal(Object.hasOwn(deleted, 'fieldSources'), false);
-  for(const source of [{passenger:'invented'},{fieldSources:'manual'},{nonexistent:'manual'},{passenger:['manual']},[]])assert.throws(()=>flight({fieldSources:source}),/来源/);
+});
+
+test('extra field sources remain readable and survive regular sync until explicitly cleaned', () => {
+  const baseline = flight({ fieldSources: { passenger: 'barcode' } });
+  const extra = { fieldSources: 'manual', offsetX: 'manual', orderNumber: 'manual', gate: { toString: 1 } };
+  const legacy = { ...baseline, gate: 'A1', fieldSources: { ...baseline.fieldSources, ...extra } };
+  const [stored] = readArchive(archive([legacy]));
+  for (const [key, value] of Object.entries(extra)) assert.deepEqual(stored.fieldSources[key], value);
+  assert.equal(fieldSourceLabel(stored, 'gate'), '未记录');
+  assert.match(fieldSourceBadge('gate', stored), /data-source-kind=""/);
+  const local = { ...baseline, seat: '12A' };
+  const sync = mergeThreeWay([baseline], [local], [stored]);
+  assert.equal(sync.conflicts.length, 0);
+  assert.deepEqual(sync.records[0].fieldSources, stored.fieldSources);
+  const cleaned = mergeThreeWay([stored], [{ ...stored, seat: '12A' }], [{ ...stored, fieldSources: baseline.fieldSources }]);
+  assert.deepEqual(cleaned.records[0].fieldSources, baseline.fieldSources);
+  assert.doesNotThrow(() => flight({ fieldSources: [] }));
 });

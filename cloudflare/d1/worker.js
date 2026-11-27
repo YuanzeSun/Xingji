@@ -3,12 +3,11 @@ const newHead = 'EXISTS (SELECT 1 FROM archive_state WHERE singleton = 1 AND hea
 const validId = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id);
 const validResetId = id => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id);
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
-const markerFields = new Set(['id', 'deleted', 'updatedAt', 'mergedIds']);
+const markerFields = new Set(['id', 'deleted', 'updatedAt']);
 function validRecord(row) {
   if (!object(row) || !validId(row.id)) return false;
-  if (row.deleted !== true) return ['rail', 'flight'].includes(row.type);
-  return typeof row.updatedAt === 'string' && Object.keys(row).every(key => markerFields.has(key)) &&
-    (row.mergedIds === undefined || (Array.isArray(row.mergedIds) && row.mergedIds.every(validId)));
+  if (row.deleted !== true) return ['rail', 'flight'].includes(row.type) && !Object.hasOwn(row, 'mergedIds');
+  return typeof row.updatedAt === 'string' && Object.keys(row).every(key => markerFields.has(key));
 }
 const encoder = new TextEncoder();
 const missingSchema = respond => respond({ code: 'D1_SCHEMA_MISSING', error: 'D1 票库尚未初始化' }, 503);

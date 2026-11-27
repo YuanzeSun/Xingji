@@ -2,13 +2,17 @@
 
 在 Cloudflare 控制台操作即可，支持 Workers 免费计划。
 
-1. 在 **D1 SQL Database** 新建数据库，在该库的 **Console** 执行 [初始化 SQL](../cloudflare/d1/migrations/0001_archive.sql)。
+1. 在 **D1 SQL Database** 新建数据库，依次执行 [初始化 SQL](../cloudflare/d1/migrations/0001_archive.sql) 和 [票据结构 SQL](../cloudflare/d1/migrations/0002_ticket_payload.sql)。使用 Wrangler 管理的新库可按迁移编号应用。
 2. 在 **Workers & Pages** 新建 Worker。通过 **Edit Code** 粘贴 [Worker 源码](../cloudflare/d1/worker.js)，点击 **Deploy**。
 3. 在 Worker 的 **Overview → Bindings → Add a binding** 选择 **D1 database**。变量名固定填 `ARCHIVE`，数据库选第 1 步创建的库。
 4. 在 **Settings → Variables and Secrets** 添加 **Secret**，名称为 `ARCHIVE_TOKEN`，值用密码管理器生成的随机密码。
 5. 打开行迹网页的 **Cloudflare D1** 连接卡片，填写 Worker 根地址和同一串凭证。
 
-已部署的 Worker 可通过 **Edit Code** 更新为仓库中的源码，以接受新版的简短删除标记。现有数据库表结构可继续使用。
+### 已有数据库升级
+
+对已完成初始化的 D1 库应用 [0002 票据结构迁移](../cloudflare/d1/migrations/0002_ticket_payload.sql)，再通过 **Edit Code → Deploy** 更新 [Worker 源码](../cloudflare/d1/worker.js)。迁移保留现有票据、数据库身份、重置代次和设置，清除旧关联编号，并在数据库层约束删除标记的结构。字段来源仍可在行迹的「数据迁移」中按需清理。
+
+已用 Wrangler 登记初始化迁移时，执行 `npx wrangler d1 migrations apply <数据库> --remote`。如果之前是在控制台手动运行初始化 SQL，只执行新增文件 `npx wrangler d1 execute <数据库> --remote --file=cloudflare/d1/migrations/0002_ticket_payload.sql`。[Cloudflare Wrangler 命令](https://developers.cloudflare.com/d1/wrangler-commands/)
 
 **连接时收到 503**　确认 Worker 的 **Bindings** 有名为 `ARCHIVE` 的 D1 绑定，并在该数据库的 **Console** 核对是否存在 `archive_state` 和 `tickets` 两张表。新库缺表时，执行第 1 步的初始化 SQL。
 

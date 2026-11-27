@@ -5,9 +5,10 @@ import worker from '../../cloudflare/d1/worker.js';
 export const endpoint = 'https://archive.example.workers.dev';
 export const token = 'test-worker-credential';
 
-export function memoryD1(records = [], settings = {}) {
+export function memoryD1(records = [], settings = {}, { legacySchema = false } = {}) {
   const sqlite = new DatabaseSync(':memory:');
   sqlite.exec(readFileSync(new URL('../../cloudflare/d1/migrations/0001_archive.sql', import.meta.url), 'utf8'));
+  if (!legacySchema) sqlite.exec(readFileSync(new URL('../../cloudflare/d1/migrations/0002_ticket_payload.sql', import.meta.url), 'utf8'));
   const put = sqlite.prepare('INSERT INTO tickets VALUES (?, ?)');
   for (const record of records) put.run(record.id, JSON.stringify(record));
   sqlite.prepare('UPDATE archive_state SET settings = ?').run(JSON.stringify(settings));

@@ -30,13 +30,14 @@ const oldFlight = {
   }, lockedFields: ['orderNumber', 'offsetX']
 };
 for (const field of ['actualBoardingTime', 'boardingCodeSource', 'boardingLegIndex']) delete oldFlight[field];
+const oldFlightWithCode = { ...oldFlight, boardingCodeSource: flight.boardingCodeSource, boardingLegIndex: flight.boardingLegIndex };
 
 function replaceOldShard(server) {
   const files = { ...server.trees.get(server.commits.get(server.head).tree) };
   const manifest = JSON.parse(server.blobs.get(files['archive/index.json']));
   const path = 'archive/2025.json';
   const file = JSON.parse(server.blobs.get(files[path]));
-  files[path] = manifest.files[path] = server.blob(JSON.stringify({ ...file, records: [oldFlight] }));
+  files[path] = manifest.files[path] = server.blob(JSON.stringify({ ...file, records: [oldFlightWithCode] }));
   files['archive/index.json'] = server.blob(JSON.stringify(manifest));
   server.head = server.commit(server.tree(files));
   return files;
@@ -49,11 +50,11 @@ test('GitHub migration previews changes, cancels without writing, and updates on
   const preview = () => document.querySelector('[data-field-migration-form]');
   const files = replaceOldShard(server);
   const previewHead = server.head;
-  await db.setMany([['records', [oldFlight, train]], ['base', [oldFlight, train]],
-    ['syncMeta', { revision: 1, head: previewHead, verified: true, pending: false }]]);
   try {
     await import('../src/app.js');
-    await until(() => button()?.disabled === false && document.querySelector('#connection-state')?.textContent.includes('字段来源包含无效内容'));
+    await until(() => button()?.disabled === false && document.querySelector('[data-action="import-json"]')?.disabled === false);
+    assert.equal((await db.get('records')).find(row => row.id === flight.id).fieldSources.offsetX, 'manual');
+    assert.equal(server.head, previewHead);
     assert.equal(button().closest('section').querySelector('h2').textContent, '数据迁移');
     assert.equal(document.querySelector('.backup-panel').querySelector('[data-action="migrate-fields"]'), null);
     button().click();
@@ -65,7 +66,6 @@ test('GitHub migration previews changes, cancels without writing, and updates on
     assert.deepEqual(new Set(removed.textContent.split('、')),
       new Set(['订单号', '旧经停资料', '整张票面的位置微调（横向和纵向）']));
     assert.match(text, /补齐.*实际登机时间/);
-    assert.match(text, /补齐.*条码来源.*条码航段/);
     assert.doesNotMatch(text, /TRAVEL-ORDER/);
     preview().querySelector('[data-action="close-modal"]').click();
     await until(() => !preview());
@@ -97,7 +97,7 @@ test('GitHub migration previews changes, cancels without writing, and updates on
 test('D1 migration aborts on a stale preview and updates only changed records after a new preview', async () => {
   const marker = { id: 'old-deletion', deleted: true, updatedAt: train.updatedAt };
   const oldMarker = { ...marker, type: 'rail', template: train.template, offsetX: '', offsetY: '', fieldSources: {} };
-  const server = memoryD1([oldFlight, train, oldMarker], { flightMcpKey: 'test-key' });
+  const server = memoryD1([oldFlight, train, oldMarker], { flightMcpKey: 'test-key' }, { legacySchema: true });
   const store = new D1Store({ url: endpoint }, token, server.fetch.bind(server));
   const snapshot = await store.readRaw();
   const plan = planArchiveFieldMigration(snapshot);

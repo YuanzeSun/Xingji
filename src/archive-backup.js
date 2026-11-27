@@ -5,7 +5,7 @@ import { backupConnections } from './cloud-connections.js';
 const backupFormat = 'xingji-backup';
 export function fullBackup(records, settings, connections) {
   const { connections: saved, ...preferences } = sharedSettings(settings);
-  return { ...archive(records), format: backupFormat, settings: preferences, connections: backupConnections({ ...saved, ...backupConnections(connections) }) };
+  return { ...archive(records.filter(record => !record.deleted)), format: backupFormat, settings: preferences, connections: backupConnections({ ...saved, ...backupConnections(connections) }) };
 }
 
 export function readFullBackup(value) {

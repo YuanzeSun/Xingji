@@ -1,4 +1,4 @@
-import { fieldSourceLabel, markFieldSources } from './field-sources.js';
+import { fieldSourceKind, fieldSourceLabel, markFieldSources } from './field-sources.js';
 import { bindAirportPicker } from './airport-picker.js';
 import { flightQuery } from './flight-query.js';
 import { airportCode } from './flight-stop.js';
@@ -39,7 +39,7 @@ export function bindFlightStopEditor(form, record, manualInput, onEdit) {
     const edited = manualInput !== undefined;
     source.hidden = !filled;
     source.textContent = edited ? '手动输入' : fieldSourceLabel(record, 'flightStop');
-    source.dataset.sourceKind = edited ? 'manual' : record.fieldSources?.flightStop || '';
+    source.dataset.sourceKind = edited ? 'manual' : fieldSourceKind(record, 'flightStop');
   }
   function refresh() {
     airport.value = manualInput ?? record.flightStop?.airport ?? '';

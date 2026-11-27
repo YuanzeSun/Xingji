@@ -98,9 +98,9 @@ export function mountStatistics(container, records, { options = {} } = {}) {
           `<div><dt>${label}</dt><dd><strong>${count === 0 ? '—' : value}</strong>${coverage ? `<span>${count} / ${total} ${coverage}</span>` : ''}</dd></div>`).join('')}</dl></section>`).join('')}</section>
       <section class="statistics-panel statistics-trend"><header><h2>乘坐次数</h2><div class="statistics-period-controls"><div role="group" aria-label="统计图时间粒度">${[['year', '按年'], ['month', '按月']].map(([value, label]) => `<button data-stat-scale="${value}" aria-pressed="${options.period === value}">${label}</button>`).join('')}</div><label ${options.period === 'month' ? '' : 'hidden'}><span class="visually-hidden">月度图年份</span><select data-stat-year aria-label="月度图年份">${[...yearChoices].reverse().map(year => `<option ${options.year === year ? 'selected' : ''}>${e(year)}</option>`).join('')}</select></label></div></header>${tripChartMarkup(series,{zoom:options.chartZoom,viewportWidth:container.clientWidth || 720})}</section>
       <section class="statistics-panel" data-stat-arrival-delays><header><h2>落地延误分布</h2><span>${data.arrivalDelayTrips} / ${data.flight} 班可比较</span></header>
-        ${data.arrivalDelayTrips ? `<figure class="statistics-delay-plot" data-stat-delay-plot tabindex="0" aria-label="落地延误分布，显示平滑占比，可用左右方向键查看有记录的分钟">
-          <svg class="statistics-delay-chart" aria-hidden="true"></svg><output class="statistics-delay-readout" aria-live="polite"></output>
-        </figure><p class="statistics-coverage">占比按相邻分钟加权平滑。负值表示提前，正值表示延误。</p>` : empty('暂无可比较的落地时间')}
+        ${data.arrivalDelayTrips ? `<figure class="statistics-delay-plot" data-stat-delay-plot aria-label="落地延误分布，负值为提前，正值为延误">
+          <svg class="statistics-delay-chart" aria-hidden="true"></svg>
+        </figure>` : empty('暂无可比较的落地时间')}
       </section>
       <div class="statistics-columns">${rankingPanel('rail-models')}${rankingPanel('rail-bureaus')}</div>
       <div class="statistics-columns">${rankingPanel('airlines')}${rankingPanel('aircraft')}</div>

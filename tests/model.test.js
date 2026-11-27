@@ -22,10 +22,22 @@ test('backup roundtrip preserves template, manual locks and unicode', () => {
 });
 test('backup restore combines copies by ID and retains independently saved tickets', () => {
   const before = sample({ seat: '08F', price: '', lockedFields: ['seat'], sources: [{ kind: 'manual', label: '校对', at: '2026-01-01' }] });
-  const incoming = sample({ id: 'other-id', mergedIds: [before.id], seat: '08F', price: '553.00', sources: [{ kind: 'pdf', label: '电子报销凭证', at: '2026-01-02' }] });
+  const incoming = sample({ id: before.id, seat: '08F', price: '553.00', sources: [{ kind: 'pdf', label: '电子报销凭证', at: '2026-01-02' }] });
   const merged = mergeBackupRecords([before], [incoming]);
   assert.equal(merged.length, 1); assert.equal(merged[0].seat, '08F'); assert.equal(merged[0].price, '553.00'); assert.equal(merged[0].sources.length, 2);
   assert.equal(mergeBackupRecords([before], [sample({ id: 'independent-copy' })]).length, 2);
+});
+test('explicit JSON restore reimports live copies with new IDs and ignores deletion markers in the backup', () => {
+  const ticket = sample({ id: 'deleted-ticket', seat: '12A' });
+  const marker = createRecord({ ...ticket, deleted: true });
+  const live = sample({ id: 'still-live' });
+  const backupMarker = createRecord({ ...live, deleted: true });
+  const restored = mergeBackupRecords([marker, live], [ticket, backupMarker]);
+  assert.deepEqual(restored.slice(0, 2), [marker, live]);
+  const replacement = restored[2];
+  assert.notEqual(replacement.id, ticket.id);
+  assert.deepEqual({ ...replacement, id: ticket.id, updatedAt: ticket.updatedAt }, ticket);
+  assert.deepEqual(mergeBackupRecords(restored, [ticket, backupMarker]), restored);
 });
 test('connecting flights sharing a ticket number remain separate legs', () => {
   const first = sample({ type: 'flight', template: 'air-boarding-pass', service: 'CA181', ticketNumber: '9991234567890' });

@@ -26,7 +26,7 @@
 - `archive/index.json` 保存文件 SHA-256、总记录数、重置标识 `generation`、个人资料及飞常准连接设置。
 - 网页版与 Flutter 可以同时连接同一个私有仓库和分支。两端使用同一套票据校验与标准化规则，保留另一端写入的票据字段、条码和行程资料。
 - Git tree、commit、非强制 ref 更新共同提交一次完整快照。基于上次成功同步的副本进行三方合并。分支已前进时重新读取并合并；同一字段有冲突时须确认取值。
-- 删除用 `{ "id": "票据编号", "deleted": true, "updatedAt": "ISO 时间" }` 替换票据。有合并记录时另保留 `mergedIds`。删除标记在 GitHub 写入 `archive/unknown.json`，也可写入 D1 和 JSON 备份。
+- 删除用 `{ "id": "票据内部编号", "deleted": true, "updatedAt": "ISO 时间" }` 替换票据。删除标记在 GitHub 写入 `archive/unknown.json`，D1 也用同样的结构保留。用户导出的 JSON 备份收录在用票据。
 - 线路和时刻表快照属于在用票据的一部分。地图打开时不发起线路查询。
 - 同步前验证私人仓库、写权限、仓库 ID、提交祖先关系及 `generation`；远端重置不会悄悄把本机旧记录重新上传。
 

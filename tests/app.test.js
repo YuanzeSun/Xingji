@@ -136,10 +136,12 @@ test('ticket edits, duplicate review and backup restore work across the archive'
   assert.doesNotMatch(document.body.textContent, /回收站/);
   await waitFor(() => document.querySelector('[data-action=import-json]:not(:disabled)'));
   const input = document.querySelector('#import-json-file');
-  const json = JSON.stringify(fullBackup(Array.from({ length: 49 }, (_, i) => createRecord({
+  const backupRows = Array.from({ length: 49 }, (_, i) => createRecord({
     service: 'G' + (100 + i), departureDate: '2026-10-01', origin: '测试出发' + i, destination: '测试到达' + i,
     departureTime: '08:00', passenger: '测试旅客', identity: 'TEST123', carriage: '05', seat: '08F', seatClass: '二等座'
-  }))));
+  }));
+  const json = JSON.stringify(fullBackup([...backupRows, records[1], removed]));
+  assert.equal(JSON.parse(json).records.filter(row => row.deleted).length, 0);
   Object.defineProperty(input, 'files', { value: [{ name: 'test.json', type: 'application/json', size: json.length, text: async () => json }] });
   input.dispatchEvent(new window.Event('change', { bubbles: true }));
   await waitFor(() => document.querySelector('[data-backup-restore]'));
@@ -147,11 +149,16 @@ test('ticket edits, duplicate review and backup restore work across the archive'
   click('[data-action="navigate"][data-page="archive"]');
   await waitFor(() => document.querySelector('[data-action="filter"][data-type="all"]'));
   click('[data-action="filter"][data-type="all"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 48);
-  assert.equal((await get('records', [])).length, 51);
+  const restored = await get('records', []);
+  assert.equal(restored.length, 52);
+  assert.deepEqual(restored.find(row => row.id === flightId), removed);
+  const reimported = restored.find(row => row.service === 'CA181');
+  assert.ok(reimported && reimported.id !== flightId);
+  assert.ok(document.querySelector('.ticket-card [data-action="view"][data-id="' + reimported.id + '"]'));
   const firstCard = document.querySelector('.ticket-card');
   firstCard.querySelector('[data-archive-select]').click();
   document.querySelector('[data-action="load-more"]').focus();
-  click('[data-action="load-more"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 50);
+  click('[data-action="load-more"]'); await waitFor(() => document.querySelectorAll('.ticket-card').length === 51);
   assert.equal(document.activeElement.closest('.ticket-card'), document.querySelectorAll('.ticket-card')[48]);
   assert.equal(document.querySelector('.ticket-card'), firstCard);
   assert.equal(firstCard.querySelector('[data-archive-select]').checked, true);

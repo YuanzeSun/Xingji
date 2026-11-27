@@ -1,4 +1,4 @@
-import { alignMergedIds, archive, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
+import { archive, readArchive, mergeThreeWay, partition, deduplicateRecords, resolveRecordConflict, sameRecords, yearOf } from './model.js';
 import { sharedSettings, sameSettings, mergeSettings, preservedSettings, unlinkedSettings } from './shared-settings.js';
 
 class GitHubError extends Error { constructor(message, status, retryAt = 0) { super(message); this.status = status; this.retryAt = retryAt; } }
@@ -157,7 +157,7 @@ export async function synchronize(store, base, local, resolutions = {}, { baseHe
   if (baseHead && snapshot.initialized === false) throw new ArchiveResetError(snapshot);
   if (baseHead && (snapshot.generation || '') !== baseGeneration) throw new ArchiveResetError(snapshot, true);
   if (baseHead && store.assertDescendant) await store.assertDescendant(baseHead, snapshot.head);
-  const merge = mergeThreeWay(...alignMergedIds(base, local, snapshot.records).map(deduplicateRecords));
+  const merge = mergeThreeWay(...[base, local, snapshot.records].map(deduplicateRecords));
   const settingMerge = mergeSettings(baseSettings, localSettings, snapshot.settings);
   const unresolved = [];
   for (const conflict of [...merge.conflicts, ...settingMerge.conflicts]) {

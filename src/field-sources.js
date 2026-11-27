@@ -21,7 +21,8 @@ export const matchedIdentityLocked = (record, key) => key === 'identity' &&
 export const railCodeEntryLocked = record => record.type === 'rail' &&
   (!!record.railInvoice?.electronicTicketNumber || isRailPointsRecord(record));
 const referenceLabels=Object.fromEntries(Object.entries(RAIL_TIMETABLE_REFERENCES).map(([key, { name }]) => [key, name]));
-export const isRailLookupSource = kind => kind === 'railgo' || kind === RAILGO_REFERENCE_SOURCE || Object.hasOwn(referenceLabels, kind);
+export const isRailLookupSource = kind => typeof kind === 'string' &&
+  (kind === 'railgo' || kind === RAILGO_REFERENCE_SOURCE || Object.hasOwn(referenceLabels, kind));
 const FIELD_SOURCES=Object.freeze({manual:'手动输入',barcode:'条码',variflight:'飞常准',railgo:'RailGo',profile:'个人资料','profile-match':'证件匹配',ocr:'图片识别',pdf:'PDF 导入',default:'默认值',generated:'自动生成',database:'地点数据库',lookup:'查询补全',[RAIL_POINTS_SOURCE]:'12306 积分',[RAILGO_REFERENCE_SOURCE]:'RailGo 参考',...referenceLabels});
 const metadata=new Set(['fieldSources','lookupValues','boardingCodeSource','boardingCodeOperatingFlight','deleted']);
 const editorSettings=new Set(['type','template','flightStatus','provenance']);
@@ -40,15 +41,18 @@ export function normalizeRailFieldDates(record, dates) {
   return result;
 }
 
-export function normalizeFieldSources(input,fields) {
-  if(!input)return {};
-  if(typeof input!=='object' || Array.isArray(input))throw new Error('字段来源格式不正确');
-  const out={};
-  for(const key of Object.keys(input).sort()){
-    if(!(fields.includes(key)||(key.endsWith('DateYear')&&JOURNEY_DATE_FIELDS.includes(key.slice(0,-4)))) || metadata.has(key) || typeof input[key]!=='string' || !Object.hasOwn(FIELD_SOURCES,input[key]))throw new Error('字段来源包含无效内容');
-    out[key]=input[key];
-  }
-  return out;
+const knownSource = kind => typeof kind === 'string' && Object.hasOwn(FIELD_SOURCES, kind);
+export function isFieldSourceEntry(key, kind, fields) {
+  return knownSource(kind) && !metadata.has(key) &&
+    (fields.includes(key) || (key.endsWith('DateYear') && JOURNEY_DATE_FIELDS.includes(key.slice(0, -4))));
+}
+export function normalizeFieldSources(input) {
+  return input && typeof input === 'object' && !Array.isArray(input)
+    ? Object.fromEntries(Object.keys(input).sort().map(key => [key, input[key]])) : {};
+}
+export function fieldSourceKind(record, key) {
+  const kind = record.fieldSources?.[key];
+  return knownSource(kind) ? kind : '';
 }
 export function markFieldSources(record,fields,kind) {
   if(!Object.hasOwn(FIELD_SOURCES,kind))throw new Error('未知字段来源');
@@ -78,19 +82,19 @@ export function copyFieldSource(target,source,key) {
 export function fieldSourceLabel(record,key) {
   const value = JOURNEY_DATE_FIELDS.includes(key) ? journeyDate(record[key])?.dayOfYear : sourceFieldValue(record,key);
   if(!hasFieldValue(value))return '未填写';
-  const source = record.fieldSources?.[key], label = FIELD_SOURCES[source] || '未记录';
+  const source = fieldSourceKind(record, key), label = FIELD_SOURCES[source] || '未记录';
   const dataDate = isRailLookupSource(source) && record.railFieldDates?.[key];
   return dataDate ? label + ' · ' + dataDate : label;
 }
 export function fieldSourceBadge(key,record) {
   if(editorSettings.has(key))return '';
   const label=fieldSourceLabel(record,key);
-  return `<small class="field-source" data-field-source="${e(key)}" data-source-kind="${e(record.fieldSources?.[key] || '')}" title="信息来源：${e(label)}">${e(label)}</small>`;
+  return `<small class="field-source" data-field-source="${e(key)}" data-source-kind="${e(fieldSourceKind(record, key))}" title="信息来源：${e(label)}">${e(label)}</small>`;
 }
 export function refreshFieldSources(root,record) {
   for(const badge of root.querySelectorAll('[data-field-source]')){
     const key=badge.dataset.fieldSource;if(key.startsWith('bcbp:'))continue;
     const label=fieldSourceLabel(record,key);
-    badge.textContent=label;badge.title='信息来源：'+label;badge.dataset.sourceKind=record.fieldSources?.[key] || '';
+    badge.textContent=label;badge.title='信息来源：'+label;badge.dataset.sourceKind=fieldSourceKind(record, key);
   }
 }

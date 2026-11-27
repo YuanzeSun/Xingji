@@ -15,7 +15,7 @@ const lookupLabels = {
 };
 
 export function flightLookupMarkup() {
-  return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><div class="button-row flight-lookup-actions"><button class="button secondary small" type="button" data-flight-track-query>查询航迹</button><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div></div><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><div data-flight-candidates></div></section>`;
+  return `<section class="flight-lookup" aria-label="航班信息补全"><div class="flight-lookup-heading"><span>数据来源：飞常准</span><div class="button-row flight-lookup-actions"><button class="button secondary small" type="button" data-flight-track-query>查询航迹</button><button class="button secondary small" type="button" data-flight-lookup>查询并补全</button></div></div><p class="flight-lookup-note">飞常准提供的机型等信息可能有误，建议用航旅纵横核对。</p><p class="flight-lookup-status" data-flight-status role="status" aria-live="polite"></p><div data-flight-candidates></div></section>`;
 }
 
 export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, apply, applyTrack, onPending, lookup }) {

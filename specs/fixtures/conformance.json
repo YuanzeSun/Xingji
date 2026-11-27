@@ -560,8 +560,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "a",
@@ -641,8 +640,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expected": [
@@ -724,8 +722,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ]
     },
@@ -810,8 +807,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "a",
@@ -894,8 +890,7 @@
           "sources": [],
           "lockedFields": [
             "gate"
-          ],
-          "mergedIds": []
+          ]
         }
       ],
       "expected": [
@@ -980,9 +975,6 @@
           "sources": [],
           "lockedFields": [
             "gate"
-          ],
-          "mergedIds": [
-            "b"
           ]
         }
       ]
@@ -1068,8 +1060,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "b",
@@ -1149,8 +1140,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expected": [
@@ -1232,8 +1222,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "b",
@@ -1313,8 +1302,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ]
     },
@@ -1399,8 +1387,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "b",
@@ -1480,8 +1467,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expected": [
@@ -1563,8 +1549,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "b",
@@ -1644,8 +1629,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ]
     },
@@ -1730,8 +1714,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "b",
@@ -1811,8 +1794,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expected": [
@@ -1894,8 +1876,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "b",
@@ -1975,8 +1956,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ]
     },
@@ -2061,8 +2041,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "b",
@@ -2142,8 +2121,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expected": [
@@ -2225,8 +2203,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "b",
@@ -2306,8 +2283,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ]
     },
@@ -2392,8 +2368,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "b",
@@ -2473,8 +2448,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expected": [
@@ -2556,10 +2530,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": [
-            "b"
-          ]
+          "lockedFields": []
         }
       ]
     },
@@ -2644,8 +2615,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "b",
@@ -2725,8 +2695,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "c",
@@ -2806,8 +2775,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expected": [
@@ -2889,8 +2857,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "b",
@@ -2970,8 +2937,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         },
         {
           "id": "c",
@@ -3051,8 +3017,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ]
     }
@@ -3139,8 +3104,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "local": [
@@ -3225,8 +3189,7 @@
           "sources": [],
           "lockedFields": [
             "gate"
-          ],
-          "mergedIds": []
+          ]
         }
       ],
       "remote": [
@@ -3308,8 +3271,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expectedRecords": [
@@ -3394,8 +3356,7 @@
           "sources": [],
           "lockedFields": [
             "gate"
-          ],
-          "mergedIds": []
+          ]
         }
       ],
       "conflictFields": []
@@ -3481,8 +3442,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "local": [
@@ -3564,8 +3524,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "remote": [
@@ -3647,8 +3606,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expectedRecords": [
@@ -3730,8 +3688,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "conflictFields": [
@@ -3822,8 +3779,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "local": [
@@ -3905,8 +3861,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "remote": [
@@ -3988,8 +3943,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expectedRecords": [
@@ -4071,8 +4025,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "conflictFields": []
@@ -4158,8 +4111,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "local": [
@@ -4248,8 +4200,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expectedRecords": [
@@ -4342,8 +4293,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "local": [
@@ -4432,8 +4382,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expectedRecords": [
@@ -4532,8 +4481,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "remote": [
@@ -4615,8 +4563,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expectedRecords": [
@@ -4698,8 +4645,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "conflictFields": []
@@ -4788,8 +4734,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "local": [
@@ -4874,8 +4819,7 @@
           "sources": [],
           "lockedFields": [
             "gate"
-          ],
-          "mergedIds": []
+          ]
         }
       ],
       "remote": [
@@ -4960,8 +4904,7 @@
           "createdAt": "2026-11-18T00:00:00.000Z",
           "updatedAt": "2026-11-18T00:00:00.000Z",
           "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
+          "lockedFields": []
         }
       ],
       "expectedRecords": [
@@ -5046,8 +4989,7 @@
           "sources": [],
           "lockedFields": [
             "gate"
-          ],
-          "mergedIds": []
+          ]
         }
       ],
       "conflictFields": [
@@ -5056,346 +4998,6 @@
           "field": "gate"
         }
       ]
-    },
-    {
-      "name": "merged aliases",
-      "base": [
-        {
-          "id": "a",
-          "type": "rail",
-          "template": "rail-receipt",
-          "origin": "北京南",
-          "destination": "南京南",
-          "originCity": "北京",
-          "destinationCity": "南京",
-          "originCode": "",
-          "destinationCode": "",
-          "service": "G21",
-          "departureDate": {
-            "year": 2026,
-            "dayOfYear": 321
-          },
-          "departureTime": "15:00",
-          "arrivalDate": "",
-          "arrivalTime": "",
-          "actualDepartureDate": "",
-          "actualDepartureTime": "",
-          "actualArrivalDate": "",
-          "actualArrivalTime": "",
-          "actualBoardingTime": "",
-          "flightDistance": "",
-          "departureZone": "Asia/Shanghai",
-          "arrivalZone": "Asia/Shanghai",
-          "passenger": "张三",
-          "identity": "11010119900101****",
-          "carriage": "05",
-          "seat": "08F",
-          "seatClass": "二等座",
-          "railStanding": false,
-          "price": "",
-          "orderNumber": "",
-          "ticketNumber": "",
-          "saleCode": "",
-          "issuer": "",
-          "gate": "",
-          "terminal": "",
-          "boardingTime": "",
-          "airline": "",
-          "flightStatus": "",
-          "aircraft": "",
-          "aircraftRegistration": "",
-          "railBureau": "",
-          "railModel": "",
-          "railTrainsets": "",
-          "railPowerSupply": "",
-          "railMileage": "",
-          "railRunner": "",
-          "railCarOwner": "",
-          "railPlatform": "",
-          "railRoute": "",
-          "railJourney": "",
-          "pnr": "",
-          "ticketMarks": [],
-          "ticketCode": "",
-          "boardingCode": "",
-          "boardingCodeSource": "",
-          "boardingCodeOperatingFlight": "",
-          "boardingLegIndex": "",
-          "baggageTagNumbers": "",
-          "checkedBaggageCount": "",
-          "freeBaggageAllowance": "",
-          "frequentFlyerCarrier": "",
-          "frequentFlyerNumber": "",
-          "marketingCarrier": "",
-          "lookupValues": {},
-          "fieldSources": {
-            "arrivalZone": "default",
-            "departureZone": "default",
-            "provenance": "default"
-          },
-          "provenance": "commemorative",
-          "deleted": false,
-          "createdAt": "2026-11-18T00:00:00.000Z",
-          "updatedAt": "2026-11-18T00:00:00.000Z",
-          "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
-        }
-      ],
-      "local": [
-        {
-          "id": "a",
-          "type": "rail",
-          "template": "rail-receipt",
-          "origin": "北京南",
-          "destination": "南京南",
-          "originCity": "北京",
-          "destinationCity": "南京",
-          "originCode": "",
-          "destinationCode": "",
-          "service": "G21",
-          "departureDate": {
-            "year": 2026,
-            "dayOfYear": 321
-          },
-          "departureTime": "15:00",
-          "arrivalDate": "",
-          "arrivalTime": "",
-          "actualDepartureDate": "",
-          "actualDepartureTime": "",
-          "actualArrivalDate": "",
-          "actualArrivalTime": "",
-          "actualBoardingTime": "",
-          "flightDistance": "",
-          "departureZone": "Asia/Shanghai",
-          "arrivalZone": "Asia/Shanghai",
-          "passenger": "张三",
-          "identity": "11010119900101****",
-          "carriage": "05",
-          "seat": "08F",
-          "seatClass": "二等座",
-          "railStanding": false,
-          "price": "",
-          "orderNumber": "",
-          "ticketNumber": "",
-          "saleCode": "",
-          "issuer": "",
-          "gate": "16A",
-          "terminal": "",
-          "boardingTime": "",
-          "airline": "",
-          "flightStatus": "",
-          "aircraft": "",
-          "aircraftRegistration": "",
-          "railBureau": "",
-          "railModel": "",
-          "railTrainsets": "",
-          "railPowerSupply": "",
-          "railMileage": "",
-          "railRunner": "",
-          "railCarOwner": "",
-          "railPlatform": "",
-          "railRoute": "",
-          "railJourney": "",
-          "pnr": "",
-          "ticketMarks": [],
-          "ticketCode": "",
-          "boardingCode": "",
-          "boardingCodeSource": "",
-          "boardingCodeOperatingFlight": "",
-          "boardingLegIndex": "",
-          "baggageTagNumbers": "",
-          "checkedBaggageCount": "",
-          "freeBaggageAllowance": "",
-          "frequentFlyerCarrier": "",
-          "frequentFlyerNumber": "",
-          "marketingCarrier": "",
-          "lookupValues": {},
-          "fieldSources": {
-            "arrivalZone": "default",
-            "departureZone": "default",
-            "provenance": "default"
-          },
-          "provenance": "commemorative",
-          "deleted": false,
-          "createdAt": "2026-11-18T00:00:00.000Z",
-          "updatedAt": "2026-11-18T00:00:00.000Z",
-          "sources": [],
-          "lockedFields": [],
-          "mergedIds": [
-            "b"
-          ]
-        }
-      ],
-      "remote": [
-        {
-          "id": "b",
-          "type": "rail",
-          "template": "rail-receipt",
-          "origin": "北京南",
-          "destination": "南京南",
-          "originCity": "北京",
-          "destinationCity": "南京",
-          "originCode": "",
-          "destinationCode": "",
-          "service": "G21",
-          "departureDate": {
-            "year": 2026,
-            "dayOfYear": 321
-          },
-          "departureTime": "15:00",
-          "arrivalDate": "",
-          "arrivalTime": "",
-          "actualDepartureDate": "",
-          "actualDepartureTime": "",
-          "actualArrivalDate": "",
-          "actualArrivalTime": "",
-          "actualBoardingTime": "",
-          "flightDistance": "",
-          "departureZone": "Asia/Shanghai",
-          "arrivalZone": "Asia/Shanghai",
-          "passenger": "张三",
-          "identity": "11010119900101****",
-          "carriage": "05",
-          "seat": "08F",
-          "seatClass": "二等座",
-          "railStanding": false,
-          "price": "503",
-          "orderNumber": "",
-          "ticketNumber": "",
-          "saleCode": "",
-          "issuer": "",
-          "gate": "",
-          "terminal": "",
-          "boardingTime": "",
-          "airline": "",
-          "flightStatus": "",
-          "aircraft": "",
-          "aircraftRegistration": "",
-          "railBureau": "",
-          "railModel": "",
-          "railTrainsets": "",
-          "railPowerSupply": "",
-          "railMileage": "",
-          "railRunner": "",
-          "railCarOwner": "",
-          "railPlatform": "",
-          "railRoute": "",
-          "railJourney": "",
-          "pnr": "",
-          "ticketMarks": [],
-          "ticketCode": "",
-          "boardingCode": "",
-          "boardingCodeSource": "",
-          "boardingCodeOperatingFlight": "",
-          "boardingLegIndex": "",
-          "baggageTagNumbers": "",
-          "checkedBaggageCount": "",
-          "freeBaggageAllowance": "",
-          "frequentFlyerCarrier": "",
-          "frequentFlyerNumber": "",
-          "marketingCarrier": "",
-          "lookupValues": {},
-          "fieldSources": {
-            "arrivalZone": "default",
-            "departureZone": "default",
-            "provenance": "default"
-          },
-          "provenance": "commemorative",
-          "deleted": false,
-          "createdAt": "2026-11-18T00:00:00.000Z",
-          "updatedAt": "2026-11-18T00:00:00.000Z",
-          "sources": [],
-          "lockedFields": [],
-          "mergedIds": []
-        }
-      ],
-      "expectedRecords": [
-        {
-          "id": "a",
-          "type": "rail",
-          "template": "rail-receipt",
-          "origin": "北京南",
-          "destination": "南京南",
-          "originCity": "北京",
-          "destinationCity": "南京",
-          "originCode": "",
-          "destinationCode": "",
-          "service": "G21",
-          "departureDate": {
-            "year": 2026,
-            "dayOfYear": 321
-          },
-          "departureTime": "15:00",
-          "arrivalDate": "",
-          "arrivalTime": "",
-          "actualDepartureDate": "",
-          "actualDepartureTime": "",
-          "actualArrivalDate": "",
-          "actualArrivalTime": "",
-          "actualBoardingTime": "",
-          "flightDistance": "",
-          "departureZone": "Asia/Shanghai",
-          "arrivalZone": "Asia/Shanghai",
-          "passenger": "张三",
-          "identity": "11010119900101****",
-          "carriage": "05",
-          "seat": "08F",
-          "seatClass": "二等座",
-          "railStanding": false,
-          "price": "503",
-          "orderNumber": "",
-          "ticketNumber": "",
-          "saleCode": "",
-          "issuer": "",
-          "gate": "16A",
-          "terminal": "",
-          "boardingTime": "",
-          "airline": "",
-          "flightStatus": "",
-          "aircraft": "",
-          "aircraftRegistration": "",
-          "railBureau": "",
-          "railModel": "",
-          "railTrainsets": "",
-          "railPowerSupply": "",
-          "railMileage": "",
-          "railRunner": "",
-          "railCarOwner": "",
-          "railPlatform": "",
-          "railRoute": "",
-          "railJourney": "",
-          "pnr": "",
-          "ticketMarks": [],
-          "ticketCode": "",
-          "boardingCode": "",
-          "boardingCodeSource": "",
-          "boardingCodeOperatingFlight": "",
-          "boardingLegIndex": "",
-          "baggageTagNumbers": "",
-          "checkedBaggageCount": "",
-          "freeBaggageAllowance": "",
-          "frequentFlyerCarrier": "",
-          "frequentFlyerNumber": "",
-          "marketingCarrier": "",
-          "lookupValues": {},
-          "fieldSources": {
-            "arrivalZone": "default",
-            "departureZone": "default",
-            "provenance": "default"
-          },
-          "provenance": "commemorative",
-          "deleted": false,
-          "createdAt": "2026-11-18T00:00:00.000Z",
-          "updatedAt": "2026-11-18T00:00:00.000Z",
-          "sources": [],
-          "lockedFields": [],
-          "mergedIds": [
-            "b"
-          ]
-        }
-      ],
-      "conflictFields": []
     }
   ]
 }

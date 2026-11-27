@@ -1,6 +1,6 @@
 import { dateLabel } from './journey-date.js';
 import { fieldsForTransport, SCHEMA_VERSION, validateRecord, yearOf } from './model.js';
-import { normalizeFieldSources } from './field-sources.js';
+import { isFieldSourceEntry, normalizeFieldSources } from './field-sources.js';
 import { LOOKUP_FIELDS } from './lookup-values.js';
 import { FLIGHT_TIME_LABELS } from './flight-times.js';
 import { escape as e } from './html.js';
@@ -23,13 +23,9 @@ function prepareRecord(row) {
       if (row.fieldSources?.flightStops) draft.fieldSources = { ...row.fieldSources, flightStop: row.fieldSources.flightStops };
     }
   }
-  if (plainObject(draft.fieldSources)) {
-    const fields = fieldsForTransport(row.type);
-    draft.fieldSources = Object.fromEntries(Object.entries(draft.fieldSources).filter(([field, source]) => {
-      try { normalizeFieldSources({ [field]: source }, fields); return true; }
-      catch { return false; }
-    }));
-  }
+  const fields = fieldsForTransport(row.type);
+  draft.fieldSources = Object.fromEntries(Object.entries(normalizeFieldSources(draft.fieldSources))
+    .filter(([field, source]) => isFieldSourceEntry(field, source, fields)));
   if (plainObject(draft.lookupValues)) {
     draft.lookupValues = Object.fromEntries(Object.entries(draft.lookupValues).filter(([field]) => LOOKUP_FIELDS.includes(field)));
   }

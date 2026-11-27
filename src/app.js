@@ -1474,7 +1474,7 @@ function openQueuedBackup() {
 }
 function reviewFullBackup(backup, context) {
   const count = backup.records.filter(record => !record.deleted).length;
-  openModal(modalHead('导入 JSON 备份', '票据将合并到当前票库，个人资料和飞常准 MCP 设置将以备份为准。') +
+  openModal(modalHead('导入 JSON 备份', '备份将与当前票库合并，已删票据按新票导入。个人资料和飞常准 MCP 设置以备份为准。') +
     `<form class="detail-body" data-backup-restore><p>${count} 张票据</p><p class="form-error" role="alert"></p><div class="reset-actions"><button type="button" class="button secondary" data-action="discard-uploaded-backup">取消</button><button class="button primary" type="submit">恢复票库和设置</button></div></form>`);
   const form = modalRoot.querySelector('[data-backup-restore]');
   form.addEventListener('submit', async event => {

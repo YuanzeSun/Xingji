@@ -1,6 +1,6 @@
 import {LOOKUP_FIELDS,isLookupValue} from './lookup-values.js';
 import {BOARDING_FIELDS,generatedCodeSettings} from './boarding-code-state.js';
-import {copyFieldSource} from './field-sources.js';
+import {copyFieldSource,isFieldSourceEntry} from './field-sources.js';
 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 
@@ -34,6 +34,16 @@ export function takeBoardingCode(target,source) {
   for(const field of BOARDING_FIELDS)target[field]=structuredClone(source[field] || '');
   copyFieldSource(target,source,'boardingCode');
   copyFieldLock(target,source,'boardingCode');
+}
+export function mergeExtraFieldSources(target, base, local, remote, fields) {
+  const sources = new Map(Object.entries(target.fieldSources).filter(([key, value]) => isFieldSourceEntry(key, value, fields)));
+  const [before, left, right] = [base, local, remote].map(record => new Map(Object.entries(record?.fieldSources ?? {})));
+  for (const key of new Set([...left.keys(), ...right.keys()])) {
+    if (sources.has(key)) continue;
+    const value = same(left.get(key), before.get(key)) ? right.get(key) : left.get(key);
+    if (value !== undefined && !isFieldSourceEntry(key, value, fields)) sources.set(key, value);
+  }
+  target.fieldSources = Object.fromEntries(sources);
 }
 function boardingState(record) {
   if(!record)return undefined;

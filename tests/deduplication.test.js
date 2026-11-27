@@ -24,7 +24,7 @@ test('airport variants share canonical names and IATA identities without equatin
   assert.deepEqual(searchTickets([flight('pek'), flight('pkx', { origin: '北京大兴' })], { query: '首都国际机场' }).records.map(r => r.id), ['pek']);
 });
 
-test('synchronization retains a confirmed supplement and its absorbed ID cannot re-create the record', async () => {
+test('a confirmed supplement keeps one ID and automatic synchronization honours deletion of that ID', async () => {
   const a = flight('a', { seat: '08F', sources: [{ kind: 'scan', label: '原票' }] });
   const b = flight('b', { origin: '首都国际机场', price: '500', sources: [{ kind: 'flight-lookup', label: '飞常准历史行程' }] });
   let stored = [a], writes = 0;
@@ -34,14 +34,15 @@ test('synchronization retains a confirmed supplement and its absorbed ID cannot 
   assert.equal(first.conflicts.length, 0); assert.equal(stored.length, 1); assert.equal(writes, 1);
   assert.equal(stored[0].seat, '08F'); assert.equal(stored[0].price, '500');
   assert.equal(stored[0].sources.length, 2);
-  const next = await synchronize(store, [b], [{ ...b, issuer: '后续补录' }]);
+  assert.deepEqual(stored.map(row => row.id), ['a']);
+  assert.equal(Object.hasOwn(stored[0], 'mergedIds'), false);
+  const live = structuredClone(stored[0]);
+  const next = await synchronize(store, [live], [{ ...live, issuer: '后续补录' }]);
   assert.equal(next.conflicts.length, 0); assert.equal(stored.length, 1); assert.equal(stored[0].issuer, '后续补录');
-  const old = { ...structuredClone(stored[0]), id: 'b', mergedIds: [] };
+  const old = structuredClone(stored[0]);
   await synchronize(store, [old], [{ ...old, deleted: true }]);
-  assert.equal(stored.length, 1); assert.equal(stored[0].deleted, true, 'deleting from a previously absorbed ID must affect the actual merged record');
-  assert.deepEqual(stored[0], { id: 'a', deleted: true, updatedAt: stored[0].updatedAt, mergedIds: ['b'] });
-  const restored = mergeBackupRecords([a, b], stored);
-  assert.deepEqual(restored, [{ ...stored[0], updatedAt: restored[0].updatedAt }]);
+  await synchronize(store, [old], [old]);
+  assert.deepEqual(stored, [{ id: 'a', deleted: true, updatedAt: old.updatedAt }]);
 });
 
 test('import review catches discrepancies and requires fresh confirmation before writing a supplement', () => {
