@@ -66,7 +66,11 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.ok(saved.sources.some(source => source.kind === 'flight-lookup')); assert.ok(saved.sources.some(source => source.kind === 'manual'));
     assert.equal(JSON.stringify(saved).includes('fixture-key-only'), false);
     document.querySelector('[data-action=\"navigate\"][data-page=\"archive\"]').click();await wait(()=>document.querySelector('[data-action=\"view\"]'));document.querySelector('[data-action=\"view\"]').click();await wait(()=>document.querySelector('[data-ticket-detail=journey] .detail-grid'));
-    assert.match(document.querySelector('[data-ticket-detail=journey] .detail-grid').textContent,/计划起飞时间08:45/);assert.match(document.querySelector('[data-ticket-detail=actual-times] .detail-grid').textContent,/实际起飞时间09:15/);assert.doesNotMatch(document.querySelector('.detail-preview').textContent,/09:15|13:15/);
+    const timeline = document.querySelector('[data-flight-time-comparison]');
+    assert.match(timeline.querySelector('.planned').textContent, /08:45[\s\S]*12:50/);
+    assert.match(timeline.querySelector('.actual').textContent, /09:15[\s\S]*13:15/);
+    assert.match(timeline.textContent, /起飞较计划晚 30 分钟[\s\S]*落地较计划晚 25 分钟[\s\S]*在途较计划少用 5 分钟/);
+    assert.doesNotMatch(document.querySelector('.detail-preview').textContent,/09:15|13:15/);
     assert.match(document.querySelector('[data-detail-field=flightStop]').textContent, /经停机场.*KIX/);
     document.querySelector('[data-action="edit"]').click(); await wait(() => document.querySelector('#editor-form'));
     const airport = document.querySelector('[name=flightStopAirport]');

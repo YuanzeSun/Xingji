@@ -15,14 +15,13 @@ import { isRefundReceipt } from './record-kind.js';
 import { ticketFieldLabel } from './ticket-form.js';
 import { fieldSourceBadge, isRailLookupSource } from './field-sources.js';
 import { flightStopText } from './flight-stop.js';
+import { flightTimeComparison } from './flight-time-comparison.js';
 
 const values = (record, ...keys) => keys.map(key => [key, record[key]]);
 
 function flightSections(record) {
   const metadata = boardingMetadataDetails(record);
   return [
-    ['actual-times', '实际登机与起降', ACTUAL_FLIGHT_FIELDS.map(key =>
-      [key, record[key] && (key.endsWith('Date') ? formatDate(record[key]) : record[key])])],
     ['aircraft', '航司与飞机', [
       ...values(record, 'airline'),
       ...metadata.filter(([key]) => key === 'marketingCarrier'),
@@ -65,6 +64,7 @@ function detailLabel(record, key, labels) {
 
 export function ticketDetailsMarkup(record, labels, hasRenderedCode) {
   const flight = record.type === 'flight';
+  const comparison = flight && flightTimeComparison(record);
   const passenger = flight
     ? flightPassengerName(record, readBoardingCode(record.boardingCode, record.boardingLegIndex) || {})
     : record.passenger;
@@ -77,32 +77,37 @@ export function ticketDetailsMarkup(record, labels, hasRenderedCode) {
     ['journey', '行程安排', [
       ['originCity', cityLabel(record, 'origin') || '待补充'],
       ['destinationCity', cityLabel(record, 'destination') || '待补充'],
-      ['departureDate', formatDate(record.departureDate)],
-      ['departureTime', (flight || isRailLookupSource(record.fieldSources?.departureTime)) && record.departureTime],
-      ['arrivalDate', record.arrivalDate && formatDate(record.arrivalDate)],
-      ...values(record, 'arrivalTime', flight ? 'flightDistance' : 'railMileage'),
+      ['departureDate', !comparison && formatDate(record.departureDate)],
+      ['departureTime', !comparison && (flight || isRailLookupSource(record.fieldSources?.departureTime)) && record.departureTime],
+      ['arrivalDate', !comparison && record.arrivalDate && formatDate(record.arrivalDate)],
+      ['arrivalTime', !comparison && record.arrivalTime],
+      ...values(record, flight ? 'flightDistance' : 'railMileage'),
       ['flightStop', flight && flightStopText(record.flightStop)]
     ]],
+    ...(flight ? [['actual-times', comparison ? '计划与实际起降' : '实际登机与起降',
+      comparison ? [] : ACTUAL_FLIGHT_FIELDS.map(key =>
+        [key, record[key] && (key.endsWith('Date') ? formatDate(record[key]) : record[key])]), comparison]] : []),
     ['passenger', flight ? '旅客与登机' : '旅客与乘车', [
       ['passenger', passenger],
       ['identity', maskIdentity(record.identity)],
       ...values(record, flight ? 'terminal' : 'railPlatform', 'gate'),
       ['boardingTime', flight && record.boardingTime],
+      ['actualBoardingTime', comparison && record.actualBoardingTime],
       ['seat', seat]
     ]],
     ...(flight ? flightSections(record) : railSections(record, hasRenderedCode))
   ];
-  return `<div class="ticket-detail-groups">${sections.map(([name, title, rows]) => {
+  return `<div class="ticket-detail-groups">${sections.map(([name, title, rows, comparison]) => {
     const fields = rows.filter(([, value]) => value);
-    if (!fields.length) return '';
+    if (!fields.length && !comparison) return '';
     const heading = `ticket-detail-${name}`;
     return `<section class="ticket-detail-group" data-ticket-detail="${name}" aria-labelledby="${heading}">
-      <h3 id="${heading}">${title}</h3>
-      <dl class="detail-grid">${fields.map(([key, value]) => {
+      <h3 id="${heading}">${title}</h3>${comparison || ''}
+      ${fields.length ? `<dl class="detail-grid">${fields.map(([key, value]) => {
         const timeZone = flight && flightTimeZoneLabel(key);
         return `<div data-detail-field="${e(key)}"><dt>${e(detailLabel(record, key, labels))}${detailSourceBadge(key, record)}</dt>` +
           `<dd>${e(value)}${timeZone ? ` <small class="flight-local-time">${e(timeZone)}</small>` : ''}</dd></div>`;
-      }).join('')}</dl>
+      }).join('')}</dl>` : ''}
     </section>`;
   }).join('')}</div>`;
 }

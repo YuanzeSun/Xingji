@@ -32,19 +32,28 @@ function localInstant(date, time, zone) {
 
 const durationMinutes = (departure, arrival) => arrival > departure ? Math.round((arrival - departure) / MINUTE) : 0;
 
-export function journeyTiming(record) {
+export function flightTiming(record) {
   const { departureZone, arrivalZone } = record;
+  const plannedDeparture = localInstant(record.departureDate, record.departureTime, departureZone);
   const plannedArrival = localInstant(record.arrivalDate, record.arrivalTime, arrivalZone);
-  let minutes = 0, arrivalDifference = NaN;
+  const actualDeparture = localInstant(record.actualDepartureDate, record.actualDepartureTime, departureZone);
+  const actualArrival = localInstant(record.actualArrivalDate, record.actualArrivalTime, arrivalZone);
+  return {
+    plannedDeparture, plannedArrival, actualDeparture, actualArrival,
+    plannedMinutes: durationMinutes(plannedDeparture, plannedArrival),
+    actualMinutes: durationMinutes(actualDeparture, actualArrival),
+    departureDifference: Math.round((actualDeparture - plannedDeparture) / MINUTE),
+    arrivalDifference: Math.round((actualArrival - plannedArrival) / MINUTE)
+  };
+}
+
+export function journeyTiming(record) {
   if (record.type === 'flight') {
-    const actualArrival = localInstant(record.actualArrivalDate, record.actualArrivalTime, arrivalZone);
-    const actualDeparture = localInstant(record.actualDepartureDate, record.actualDepartureTime, departureZone);
-    minutes = durationMinutes(actualDeparture, actualArrival);
-    arrivalDifference = Math.round((actualArrival - plannedArrival) / MINUTE);
+    const { plannedMinutes, actualMinutes, arrivalDifference } = flightTiming(record);
+    return { minutes: actualMinutes || plannedMinutes, arrivalDifference };
   }
-  if (!minutes) {
-    const plannedDeparture = localInstant(record.departureDate, record.departureTime, departureZone);
-    minutes = durationMinutes(plannedDeparture, plannedArrival);
-  }
-  return { minutes, arrivalDifference };
+  const { departureZone, arrivalZone } = record;
+  const departure = localInstant(record.departureDate, record.departureTime, departureZone);
+  const arrival = localInstant(record.arrivalDate, record.arrivalTime, arrivalZone);
+  return { minutes: durationMinutes(departure, arrival), arrivalDifference: NaN };
 }

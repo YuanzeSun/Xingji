@@ -9,6 +9,7 @@ import { mountStatistics } from '../src/statistics.js';
 import { smoothArrivalDelays } from '../src/arrival-delay-chart.js';
 import { flightTrackRequest } from '../src/flight-track.js';
 import { createBoardingCode } from '../src/bcbp.js';
+import { flightTimeComparison } from '../src/flight-time-comparison.js';
 
 const rail = extra => createRecord({ origin: '北京南', destination: '上海虹桥', departureDate: '2024-02-29', ...extra });
 const flight = extra => createRecord({ type: 'flight', template: 'air-boarding-pass', origin: 'PEK', destination: 'HND', departureDate: '2024-03-01', aircraft: 'Boeing 737-800', ...extra });
@@ -199,6 +200,26 @@ test('railway footprints count each named line once per ridden section within th
     unmount();
     dom.window.close();
   }
+});
+
+test('a flight time comparison shares one axis across an overnight trip and two airport time zones', () => {
+  const record = flight({
+    departureDate: '2026-11-26', departureTime: '23:45', arrivalDate: '2026-11-27', arrivalTime: '04:10',
+    actualDepartureDate: '2026-11-27', actualDepartureTime: '00:20', actualArrivalDate: '2026-11-27', actualArrivalTime: '04:22'
+  });
+  const dom = new JSDOM(flightTimeComparison(record));
+  try {
+    const document = dom.window.document;
+    const plan = document.querySelector('.planned .flight-timing-axis');
+    const actual = document.querySelector('.actual .flight-timing-axis');
+    assert.equal(plan.style.getPropertyValue('--from'), '0.000%');
+    assert.equal(actual.style.getPropertyValue('--to'), '100.000%');
+    assert.ok(parseFloat(actual.style.getPropertyValue('--from')) > 16);
+    assert.deepEqual([...document.querySelectorAll('dd')].map(element => element.textContent),
+      ['晚 35 分钟', '晚 12 分钟', '少用 23 分钟']);
+    assert.equal(document.querySelector('.actual time').dateTime, '2026-11-27T00:20');
+    assert.equal(flightTimeComparison({ ...record, actualArrivalDate: '' }), '');
+  } finally { dom.window.close(); }
 });
 
 test('arrival delay smoothing bridges a single empty minute and leaves long gaps empty', () => {
