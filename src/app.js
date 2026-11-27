@@ -1074,7 +1074,7 @@ function boardingLoyaltyEditor(record) {
   const scanned = hasOriginalBoardingCode(record);
   const keys = scanned ? [...BOARDING_LOYALTY_FIELDS, ...BOARDING_MARKETING_FIELDS] : BOARDING_LOYALTY_FIELDS;
   const hints = {
-    frequentFlyerCarrier: '填会员计划的航司代码，例如国航凤凰知音填 CA。',
+    frequentFlyerCarrier: '按会员账户所属航司填代码，如国航 CA、厦航 MF、深航 ZH、汉莎 LH。',
     marketingFlightNumber: '按购票订单填完整航班号，如 CA7941。'
   };
   return `<details class="editor-extra" data-boarding-fields="loyalty" ${scanned || keys.some(key => record[key]) ? 'open' : ''}>
