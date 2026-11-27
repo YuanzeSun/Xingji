@@ -8,7 +8,7 @@ import { mountRailRoute } from '../src/rail-route-map.js';
 test('terrain sampling stays within one request, uses WGS84 and does not join gaps in the recorded route', () => {
   const lines = [[[100, 35], [104, 35]], [[108, 35], [114, 35]]];
   const projected = lines.map(line => line.map(railMapPoint));
-  const { samples, total, pick } = sampleRailElevation(lines, projected);
+  const { samples, total, pick, atMapDistance } = sampleRailElevation(lines, projected);
   assert.equal(samples.length, 100);
   assert.deepEqual(samples[0].coordinate, railWgs84Point(lines[0][0]));
   assert.deepEqual(samples.at(-1).coordinate, railWgs84Point(lines[1][1]));
@@ -17,12 +17,27 @@ test('terrain sampling stays within one request, uses WGS84 and does not join ga
   assert.equal(pick(projected[0][0], .2), 0);
   assert.equal(pick(projected[1][1], .2), 99);
   assert.equal(pick(railMapPoint([106, 35]), .2), null);
+  const [[start, end], [secondStart, secondEnd]] = projected;
+  const mapLength = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const secondMidpoint = atMapDistance(mapLength(start, end) + mapLength(secondStart, secondEnd) / 2);
+  assert.equal(secondMidpoint.group, 1);
+  assert.ok(Math.abs(secondMidpoint.mapPoint[0] - (secondStart[0] + secondEnd[0]) / 2) < 1e-9);
+  assert.deepEqual(atMapDistance(Infinity).mapPoint, secondEnd);
 });
 
 test('the rail detail queries elevation on demand and synchronizes the map with the profile', async () => {
   const dom = new JSDOM('<section hidden></section>', { pretendToBeVisual: true });
   const { window } = dom;
   window.HTMLCanvasElement.prototype.getContext = () => null;
+  const frames = new Map();
+  let nextFrame = 0;
+  window.requestAnimationFrame = callback => { frames.set(++nextFrame, callback); return nextFrame; };
+  window.cancelAnimationFrame = id => frames.delete(id);
+  function advance(timestamp) {
+    for (const [id, callback] of [...frames]) {
+      if (frames.delete(id)) callback(timestamp);
+    }
+  }
   const root = window.document.querySelector('section');
   const segments = [[[116.38, 39.86], [116.52, 39.79], [116.72, 39.66]]];
   const record = { type: 'rail', service: 'G1', origin: '北京南', destination: '天津南', railRoute: {
@@ -78,6 +93,35 @@ test('the rail detail queries elevation on demand and synchronizes the map with 
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(marker.hasAttribute('data-active'), true);
     assert.equal(requests.length, 2);
+
+    details.open = false;
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const play = root.querySelector('[data-rail-play-route]');
+    play.click();
+    advance(0);
+    advance(1500);
+    assert.equal(marker.hasAttribute('data-active'), false);
+    assert.equal(requests.length, 2);
+    details.open = true;
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const initialProgress = Number(slider.value);
+    const cursor = root.querySelector('[data-elevation-cursor]');
+    const initialCursor = cursor.getAttribute('transform');
+    const initialMarker = marker.getAttribute('transform');
+    assert.ok(initialProgress > 0 && initialProgress < Number(slider.max));
+    slider.value = '0';
+    slider.dispatchEvent(new window.Event('input', { bubbles: true }));
+    assert.equal(Number(slider.value), initialProgress);
+    advance(1505);
+    assert.equal(Number(slider.value), initialProgress);
+    assert.notEqual(cursor.getAttribute('transform'), initialCursor);
+    assert.notEqual(marker.getAttribute('transform'), initialMarker);
+    advance(6000);
+    assert.equal(slider.value, slider.max);
+    assert.notEqual(marker.getAttribute('transform'), start);
+    play.click();
+    assert.equal(slider.value, '0');
+    assert.equal(marker.getAttribute('transform'), start);
   } finally {
     unmount();
     globalThis.fetch = previousFetch;

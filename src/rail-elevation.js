@@ -9,7 +9,7 @@ const clamp = value => Math.max(0, Math.min(1, value));
 
 export function sampleRailElevation(segments, projected) {
   const edges = [];
-  let total = 0, group = 0, previousEnd;
+  let total = 0, mapTotal = 0, group = 0, previousEnd;
   for (const [segmentIndex, segment] of segments.entries()) {
     const line = segment.map(railWgs84Point);
     if (previousEnd && distanceKm(previousEnd, line[0]) > .15) group++;
@@ -18,9 +18,10 @@ export function sampleRailElevation(segments, projected) {
       const a = line[i - 1], b = line[i], length = distanceKm(a, b);
       if (!length) continue;
       const from = projected[segmentIndex][i - 1], to = projected[segmentIndex][i];
-      const dx = to[0] - from[0], dy = to[1] - from[1];
-      edges.push({ a, b, from, to, dx, dy, squared: dx * dx + dy * dy, start: total, length, group });
+      const dx = to[0] - from[0], dy = to[1] - from[1], mapLength = Math.hypot(dx, dy);
+      edges.push({ a, b, from, to, dx, dy, squared: dx * dx + dy * dy, start: total, length, group, mapStart: mapTotal, mapLength });
       total += length;
+      mapTotal += mapLength;
     }
   }
   if (!total) return null;
@@ -33,6 +34,17 @@ export function sampleRailElevation(segments, projected) {
     const edge = edges[edgeIndex], fraction = clamp((distance - edge.start) / edge.length);
     return { distance, group: edge.group, coordinate: interpolate(edge.a, edge.b, fraction), mapPoint: interpolate(edge.from, edge.to, fraction) };
   });
+  function atMapDistance(distance) {
+    let first = 0, last = edges.length - 1;
+    while (first < last) {
+      const middle = Math.floor((first + last) / 2), edge = edges[middle];
+      if (distance > edge.mapStart + edge.mapLength) first = middle + 1;
+      else last = middle;
+    }
+    const edge = edges[first];
+    const fraction = clamp((distance - edge.mapStart) / (edge.mapLength || 1));
+    return { distance: edge.start + edge.length * fraction, group: edge.group, mapPoint: interpolate(edge.from, edge.to, fraction) };
+  }
   function pick([x, y], radius) {
     let closest = radius ** 2, distance, chosenGroup;
     for (const edge of edges) {
@@ -49,7 +61,7 @@ export function sampleRailElevation(segments, projected) {
     const index = Math.round(distance / total * (samples.length - 1));
     return [index, index - 1, index + 1].find(i => samples[i]?.group === chosenGroup) ?? null;
   }
-  return { samples, total, pick };
+  return { samples, total, pick, atMapDistance };
 }
 
 export async function readRailElevation(samples, { signal, fetcher = globalThis.fetch } = {}) {

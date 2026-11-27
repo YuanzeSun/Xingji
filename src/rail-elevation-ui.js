@@ -9,7 +9,7 @@ const viewHeight = 176, left = 52, right = 16, top = 16, bottom = 139;
 const meters = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 });
 const kilometers = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 });
 
-function bindProfile(content, route, { samples, total }, elevation, markLocation) {
+function bindProfile(content, route, { samples, total }, elevation, markLocation, isPlaying) {
   content.innerHTML = `<div class="rail-elevation-ends"><strong>${e(route.origin)}</strong><strong>${e(route.destination)}</strong></div>
     <div class="rail-elevation-plot">
       <svg aria-hidden="true"></svg>
@@ -28,22 +28,36 @@ function bindProfile(content, route, { samples, total }, elevation, markLocation
   const low = Math.floor(minimum / interval) * interval;
   const high = Math.max(low + 2 * interval, Math.ceil(maximum / interval) * interval);
   const y = value => bottom - (value - low) / (high - low) * (bottom - top);
-  let width, selected = 0;
+  let width, cursor, dot;
+  let selection = { point: samples[0], value: elevation[0], index: 0 };
   const x = distance => left + distance / total * (width - left - right);
 
-  function select(index, redraw = false) {
-    if (index === null || (selected === index && !redraw)) return;
-    selected = index;
-    const sample = samples[index], value = elevation[index], position = x(sample.distance);
-    const label = `${kilometers.format(sample.distance)} 公里 · ${value === null ? '暂无高程' : meters.format(value) + ' 米'}`;
+  function paintSelection() {
+    const { point, value, index } = selection;
+    const label = `${kilometers.format(point.distance)} 公里 · ${value === null ? '暂无高程' : meters.format(value) + ' 米'}`;
     slider.value = String(index);
     slider.setAttribute('aria-valuetext', label);
     output.textContent = label;
-    svg.querySelector('[data-elevation-cursor]').setAttribute('transform', `translate(${position},0)`);
-    const dot = svg.querySelector('[data-elevation-dot]');
+    cursor.setAttribute('transform', `translate(${x(point.distance)},0)`);
     dot.toggleAttribute('data-unavailable', value === null);
     if (value !== null) dot.setAttribute('cy', y(value));
-    markLocation(sample.mapPoint);
+    markLocation(point.mapPoint);
+  }
+  function select(index) {
+    if (index === null || isPlaying() || samples[index] === selection.point) return;
+    selection = { point: samples[index], value: elevation[index], index };
+    paintSelection();
+  }
+  function follow(point) {
+    const offset = point.distance / total * (samples.length - 1);
+    const before = Math.floor(offset), after = Math.ceil(offset);
+    let value = null;
+    if (samples[before].group === point.group && samples[after].group === point.group &&
+        elevation[before] !== null && elevation[after] !== null) {
+      value = elevation[before] + (elevation[after] - elevation[before]) * (offset - before);
+    }
+    selection = { point, value, index: Math.round(offset) };
+    paintSelection();
   }
   function draw() {
     const nextWidth = Math.round(frame.clientWidth) || 640;
@@ -77,7 +91,9 @@ function bindProfile(content, route, { samples, total }, elevation, markLocation
     svg.setAttribute('viewBox', `0 0 ${width} ${viewHeight}`);
     svg.innerHTML = `<text x="${left - 7}" y="10" text-anchor="end">米</text>${ticks.join('')}${profile}${distanceLabels}
       <g data-elevation-cursor><path d="M0,${top}V${bottom}"/><circle data-elevation-dot r="4.6"/></g>`;
-    select(selected, true);
+    cursor = svg.querySelector('[data-elevation-cursor]');
+    dot = svg.querySelector('[data-elevation-dot]');
+    paintSelection();
   }
 
   const fromPointer = event => {
@@ -87,7 +103,10 @@ function bindProfile(content, route, { samples, total }, elevation, markLocation
     const fraction = Math.max(0, Math.min(1, (relative - left) / (width - left - right)));
     select(Math.round(fraction * (samples.length - 1)));
   };
-  const fromSlider = () => select(Number(slider.value));
+  const fromSlider = () => {
+    if (isPlaying()) slider.value = String(selection.index);
+    else select(Number(slider.value));
+  };
   slider.addEventListener('input', fromSlider);
   svg.addEventListener('pointermove', fromPointer);
   svg.addEventListener('click', fromPointer);
@@ -97,7 +116,7 @@ function bindProfile(content, route, { samples, total }, elevation, markLocation
   else window.addEventListener('resize', draw);
 
   return {
-    select, show() { markLocation(samples[selected].mapPoint); },
+    select, follow, show() { markLocation(selection.point.mapPoint); },
     dispose() {
       observer?.disconnect();
       window.removeEventListener('resize', draw);
@@ -111,7 +130,15 @@ function bindProfile(content, route, { samples, total }, elevation, markLocation
 export function bindRailElevation(container, route, projected, markLocation) {
   const details = container.querySelector('[data-rail-elevation]');
   const content = details.querySelector('[data-rail-elevation-content]');
-  let sampling, profile, request;
+  let sampling, profile, request, playbackDistance, appliedDistance, playing = false;
+  function showProfile() {
+    if (playbackDistance !== appliedDistance) {
+      profile.follow(sampling.atMapDistance(playbackDistance));
+      appliedDistance = playbackDistance;
+    } else {
+      profile.show();
+    }
+  }
   async function load() {
     if (request) return;
     sampling ??= sampleRailElevation(route.segments, projected);
@@ -121,7 +148,8 @@ export function bindRailElevation(container, route, projected, markLocation) {
     try {
       const elevation = await readRailElevation(sampling.samples, { signal: active.signal });
       if (!active.signal.aborted && details.open) {
-        profile = bindProfile(content, route, sampling, elevation, point => { if (details.open) markLocation(point); });
+        profile = bindProfile(content, route, sampling, elevation, point => { if (details.open) markLocation(point); }, () => playing);
+        showProfile();
       }
     } catch {
       if (!active.signal.aborted) {
@@ -133,7 +161,7 @@ export function bindRailElevation(container, route, projected, markLocation) {
   }
   function toggle() {
     if (details.open) {
-      if (profile) profile.show(); else void load();
+      if (profile) showProfile(); else void load();
     } else {
       request?.abort();
       request = null;
@@ -144,6 +172,11 @@ export function bindRailElevation(container, route, projected, markLocation) {
   details.addEventListener('toggle', toggle);
   content.addEventListener('click', retry);
   return {
+    follow(distance, active) {
+      playbackDistance = distance;
+      playing = active;
+      if (details.open && profile) showProfile();
+    },
     pick(point, unit) {
       if (details.open && profile) profile.select(sampling.pick(point, 12 * unit));
     },

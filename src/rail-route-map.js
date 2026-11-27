@@ -11,7 +11,7 @@ import { escape as e } from './html.js';
 import {RAIL_LINE_SOURCE} from './rail-line-names.js';
 import { bindRailElevation, railElevationMarkup } from './rail-elevation-ui.js';
 
-function bindRailPlayback(container, svg, segments, route) {
+function bindRailPlayback(container, svg, segments, route, followElevation) {
   const button = container.querySelector('[data-rail-play-route]');
   const status = container.querySelector('[data-rail-play-status]');
   const track = svg.querySelector('.rail-track');
@@ -57,6 +57,7 @@ function bindRailPlayback(container, svg, segments, route) {
       segment.offset = offset;
     }
     updateStations();
+    followElevation(distance, distance < total);
   }
   function animate(timestamp) {
     startedAt ??= timestamp;
@@ -109,7 +110,6 @@ function mountMap(container, route) {
   const paths=lines=>lines.map(line=>`<path d="M${line.map(point=>point.map(value=>value.toFixed(5)).join(',')).join('L')}"/>`).join('');
   const track=paths(segments);
   svg.innerHTML = `${background}<g class="rail-full-track">${route.fullRoute ? paths(fullSegments) : ''}</g><g class="rail-track-halo">${track}</g><g class="rail-track">${track}</g><g data-rail-lines></g><g data-rail-context></g><g data-rail-stops></g><g data-rail-elevation-marker aria-hidden="true"><circle r="6"/><circle r="2"/></g>`;
-  const playback = bindRailPlayback(container, svg, segments, route);
   const stationLayer = svg.querySelector('[data-rail-stops]');
   const marker = svg.querySelector('[data-rail-elevation-marker]');
   let markerPoint, mapUnit;
@@ -118,6 +118,7 @@ function mountMap(container, route) {
     if (markerPoint) marker.setAttribute('transform', `translate(${markerPoint.join(' ')}) scale(${mapUnit})`);
   }
   const elevation = bindRailElevation(container, route, segments, point => { markerPoint = point; drawMarker(); });
+  const playback = bindRailPlayback(container, svg, segments, route, elevation.follow);
   function fitViewport(width, height) {
     const [left, top, right, bottom] = context.bounds;
     return { x: (left + right) / 2, y: (top + bottom) / 2, zoom: Math.min(1000 / Math.max(.02, right - left) * .72, 1000 * height / width / Math.max(.02, bottom - top) * .65) };
