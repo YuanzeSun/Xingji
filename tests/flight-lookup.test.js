@@ -131,10 +131,11 @@ test('departure-terminal and airline aliases are reused without introducing anot
   assert.equal(fallback.airline, '中国国际航空');
   assert.equal(fallback.aircraftRegistration, 'B-5846');
   assert.equal(fallback.marketingCarrier, '');
-  assert.deepEqual(flightLookupNeeds(fallback), { schedule: false, registration: false, stopover: true });
+  assert.deepEqual(flightLookupNeeds(fallback), { schedule: false, terminals: false, registration: false, stopover: true });
   const [arrivalOnly] = flightCandidates(payload([row({ FlightDepTerminal: '', FlightArrTerminal: 'T1', FlightTerminal: 'T1' })]), input);
   assert.equal(arrivalOnly.departureTerminal, '');
   assert.equal(arrivalOnly.arrivalTerminal, 'T1');
+  assert.deepEqual(flightLookupNeeds(arrivalOnly), { schedule: false, terminals: true, registration: false, stopover: true });
   const [official] = flightCandidates(payload([row()]), input);
   assert.equal(official.arrivalTerminal, 'T2');
 });
@@ -225,12 +226,14 @@ test('typing never calls a provider; one candidate fills automatically and repea
     instance.form.querySelector('[data-flight-lookup]').click(); await settle();
     assert.equal(instance.calls, 1); assert.equal(instance.applied, 1); assert.equal(instance.current.originCode, 'PEK');
     instance.form.querySelector('[data-flight-lookup]').click(); await settle();
+    assert.equal(instance.calls, 1);
+    instance.form.querySelector('[data-flight-schedule-choice=query]').click(); await settle();
     assert.equal(instance.calls, 1); assert.equal(instance.applied, 1);
     assert.match(instance.form.querySelector('[data-flight-status]').textContent, /没有可补全/);
   } finally { instance.dispose(); instance.dom.window.close(); }
 });
 
-test('a lookup fills the stopover when every other provider field is already known', async () => {
+test('a lookup fills the stopover after confirmation when every other provider field is already known', async () => {
   const [current] = flightCandidates(payload([row()]), input);
   const [candidate] = flightCandidates(payload([row({ StopFlag: '1', StopAirportCode: 'KIX', LegFlag: '0' })]), input);
   const instance = component({ rows: [candidate] });
@@ -238,6 +241,9 @@ test('a lookup fills the stopover when every other provider field is already kno
     Object.assign(instance.current, current, { gate: 'E99' });
     const button = instance.form.querySelector('[data-flight-lookup]');
     button.click(); await settle();
+    assert.equal(instance.calls, 0);
+    assert.match(instance.form.querySelector('[data-flight-status]').textContent, /只缺经停机场/);
+    instance.form.querySelector('[data-flight-schedule-choice=query]').click(); await settle();
     assert.equal(instance.calls, 1);
     assert.deepEqual(instance.current.flightStop, candidate.flightStop);
     assert.equal(instance.current.gate, 'E99');
@@ -245,6 +251,42 @@ test('a lookup fills the stopover when every other provider field is already kno
     button.click(); await settle();
     assert.equal(instance.calls, 1);
   } finally { instance.dispose(); instance.dom.window.close(); }
+});
+
+test('skipping optional flight information queries only a missing track', async () => {
+  const [current] = flightCandidates(payload([row()]), input);
+  const flightStr = 'CA181_PEK_HND_2026-07-18_0';
+  const segments = [[[116.59, 40.08], [139.78, 35.55]]];
+  const instance = component({ applyTrack: track => { instance.current.flightTrack = track; } });
+  const originalFetch = globalThis.fetch, tools = [];
+  globalThis.fetch = async (_url, options) => {
+    const { id, method, params } = JSON.parse(options.body);
+    if (method === 'notifications/initialized') return new Response(null, { status: 202 });
+    if (method === 'tools/call') tools.push(params.name);
+    const result = method === 'initialize' ? { protocolVersion: '2025-03-26' } : payload([{ flightStr, segments }]);
+    return Response.json({ id, result }, { headers: { 'Mcp-Session-Id': 'flight-session' } });
+  };
+  try {
+    Object.assign(instance.current, current, { departureTerminal: '', flightTrack: { flightStr, segments } });
+    const button = instance.form.querySelector('[data-flight-lookup]');
+    const status = () => instance.form.querySelector('[data-flight-status]').textContent;
+    const skip = () => instance.form.querySelector('[data-flight-schedule-choice=skip]').click();
+    button.click(); await settle();
+    assert.match(status(), /只缺航站楼编号、经停机场/);
+    skip(); await settle();
+    assert.equal(status(), '已跳过航班信息查询。');
+    assert.deepEqual(tools, []);
+    delete instance.current.flightTrack;
+    button.click(); await settle();
+    assert.match(status(), /仍会查询缺失的航迹/);
+    assert.deepEqual(tools, []);
+    skip(); await settle();
+    assert.equal(instance.calls, 0);
+    assert.deepEqual(tools, ['getFlightTrackLine']);
+    assert.deepEqual(instance.current.flightTrack.segments, segments);
+    assert.match(status(), /已跳过航班信息查询。已带入飞行航迹/);
+    assert.match(instance.form.querySelector('[data-flight-apis]').textContent, /getFlightTrackLine/);
+  } finally { globalThis.fetch = originalFetch; instance.dispose(); instance.dom.window.close(); }
 });
 
 test('a failed schedule lookup can still add a track when both airports are known', async () => {

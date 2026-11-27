@@ -30,13 +30,13 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
   const cache = new Map();
   const calledTools = new Set();
   const connectorOptions = { onToolCall: name => calledTools.add(name) };
-  let disposed = false, activeRequest, candidates = [], candidateStamp = '', selectedKey = '';
+  let disposed = false, activeRequest, candidates = [], choiceStamp = '', selectedKey = '';
   const stamp = () => { const record = getRecord(); return JSON.stringify(['type', 'service', 'departureDate', 'origin', 'originCode', 'destination', 'destinationCode'].map(field => record[field] || '')); };
   const isOpen = () => !disposed && form.isConnected;
   const validContext = original => isOpen() && canQuery() && desktop() && stamp() === original && getKey() === selectedKey;
   const changed = () => { if (isOpen()) status.textContent = '航班或连接已改变，请重新查询。'; };
-  function clearCandidates() {
-    candidates = []; candidateStamp = ''; list.replaceChildren();
+  function clearChoices() {
+    candidates = []; choiceStamp = ''; list.replaceChildren();
   }
   function refreshButton() {
     button.disabled = Boolean(activeRequest) || !desktop() || !canQuery();
@@ -104,8 +104,8 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     status.textContent = summary || empty;
   }
   async function accept(index, connector) {
-    if (!validContext(candidateStamp) || !candidates[index]) {
-      clearCandidates();
+    if (!validContext(choiceStamp) || !candidates[index]) {
+      clearChoices();
       status.textContent = '查询条件已改变，请重新查询';
       return;
     }
@@ -113,7 +113,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     const changes = flightCompletion(recordBeforeLookup, candidate);
     const conflicts = candidate.aircraftConflicts ??
       (recordBeforeLookup.aircraft && candidate.aircraft ? reconcileAircraft([recordBeforeLookup.aircraft, candidate.aircraft]).conflicts : []);
-    clearCandidates();
+    clearChoices();
     const fields = Object.keys(changes);
     if (fields.length) apply(changes, source());
     const confirmed = flightQuery(getRecord());
@@ -127,17 +127,32 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     }
     await fillMissing(connector, summary, '本次没有可补全的航班信息。');
   }
-  async function query(signal) {
+  async function query(signal, scheduleChoice) {
     calledTools.clear(); apiStatus.textContent = '';
-    clearCandidates();
+    clearChoices();
     const record = getRecord(), request = flightQuery(record), needs = flightLookupNeeds(record);
-    const needsSchedule = needs.schedule || needs.stopover || (needs.registration && (!request.dep || !request.arr));
-    if (!needsSchedule && !needs.registration && !missingTrackRequest()) {
-      status.textContent = '已有信息均已填写。';
+    const needsOtherScheduleFields = needs.schedule || (needs.registration && (!request.dep || !request.arr));
+    const optionalFields = [needs.terminals && '航站楼编号', needs.stopover && '经停机场'].filter(Boolean);
+    const needsTrack = missingTrackRequest();
+    if (!needsOtherScheduleFields && optionalFields.length && !scheduleChoice) {
+      choiceStamp = stamp();
+      status.textContent = `航班信息只缺${optionalFields.join('、')}，仍要查询吗？${needsTrack ? '跳过后仍会查询缺失的航迹。' : ''}`;
+      list.innerHTML = `<div class="button-row">
+        <button class="button secondary small" type="button" data-flight-schedule-choice="skip">跳过航班信息</button>
+        <button class="button primary small" type="button" data-flight-schedule-choice="query">仍查询航班信息</button>
+      </div>`;
+      list.querySelector('button').focus();
+      return;
+    }
+    const skipSchedule = scheduleChoice === 'skip';
+    const skipped = skipSchedule ? '已跳过航班信息查询。' : '';
+    const needsSchedule = !skipSchedule && (needsOtherScheduleFields || optionalFields.length > 0);
+    if (!needsSchedule && !needs.registration && !needsTrack) {
+      status.textContent = skipped || '已有信息均已填写。';
       return;
     }
     const connector = connectorFor(signal), original = stamp();
-    if (!needsSchedule) return fillMissing(connector);
+    if (!needsSchedule) return fillMissing(connector, skipped);
     status.textContent = '正在查询飞常准…';
     let fetched;
     try {
@@ -151,7 +166,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     if (!validContext(original)) return changed();
     const rows = fetched.filter(row => row.service === request.fnum && sameDate(row.departureDate, request.date) && matchesRoute(row, request));
     if (!rows.length) return fillMissing(connector, '未查到可核对日期与机场的航班信息。');
-    candidates = rows; candidateStamp = original;
+    candidates = rows; choiceStamp = original;
     if (rows.length === 1) { await accept(0, connector); return; }
     status.textContent = `找到 ${rows.length} 个航段，请选择要补全的这一程。`;
     list.innerHTML = rows.map((row, index) => `<button type="button" class="flight-candidate" data-flight-candidate="${index}"><strong>${e(row.origin)} <code>${e(row.originCode)}</code> → ${e(row.destination)} <code>${e(row.destinationCode)}</code></strong><span>计划 ${e(calendarDate(row.departureDate))} ${e(row.departureTime)} → ${e(calendarDate(row.arrivalDate) || '日期待补充')} ${e(row.arrivalTime)}</span>${row.actualDepartureTime || row.actualArrivalTime ? `<span>实际 ${e(calendarDate(row.actualDepartureDate) || '日期待补充')} ${e(row.actualDepartureTime || '待补充')} → ${e(calendarDate(row.actualArrivalDate) || '日期待补充')} ${e(row.actualArrivalTime || '待补充')}</span>` : ''}<small>${e([row.airline, row.aircraft, row.flightDistance && '航程 ' + row.flightDistance + ' km'].filter(Boolean).join(' · '))} · 选择并补全</small></button>`).join('');
@@ -172,14 +187,15 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     onPending?.(pending);
   }
   const click = event => {
-    const target = event.target.closest('[data-flight-lookup],[data-flight-candidate]');
+    const target = event.target.closest('[data-flight-lookup],[data-flight-candidate],[data-flight-schedule-choice]');
     if (!target) return;
     if (target.hasAttribute('data-flight-lookup')) run(query);
+    else if (target.dataset.flightScheduleChoice) run(signal => query(signal, target.dataset.flightScheduleChoice));
     else run(signal => accept(Number(target.dataset.flightCandidate), new FlightConnector(selectedKey, signal, connectorOptions)));
   };
   const input = () => {
-    if (candidateStamp && stamp() !== candidateStamp) {
-      clearCandidates();
+    if (choiceStamp && stamp() !== choiceStamp) {
+      clearChoices();
       status.textContent = '航班或机场已改变，请重新查询';
     }
     refreshButton();

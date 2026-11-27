@@ -161,13 +161,16 @@ const canCompletePair = (record, [first, second]) =>
   (canFill(record, second) && record[first]);
 
 export function flightLookupNeeds(record) {
-  const incompleteAirport = airportTerminals.some(([side, terminal]) => {
+  let airports = false, terminals = false;
+  for (const [side, terminal] of airportTerminals) {
     const code = side + 'Code';
-    return (canCompletePair(record, [side, code]) || canFill(record, terminal)) &&
-      ((!record[side] && !record[code]) || resolvePlace(record, side).status === 'matched');
-  });
+    if ((record[side] || record[code]) && resolvePlace(record, side).status !== 'matched') continue;
+    airports ||= Boolean(canCompletePair(record, [side, code]));
+    terminals ||= canFill(record, terminal);
+  }
   return {
-    schedule: incompleteAirport || scheduleFields.some(field => canFill(record, field)) || timePairs.some(pair => canCompletePair(record, pair)),
+    schedule: airports || scheduleFields.some(field => canFill(record, field)) || timePairs.some(pair => canCompletePair(record, pair)),
+    terminals,
     registration: canFill(record, 'aircraftRegistration'),
     stopover: canFillFlightStop(record)
   };
