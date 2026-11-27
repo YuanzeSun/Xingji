@@ -105,7 +105,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   fill('checkedBaggageCount', '01');
   fill('checkedBaggageWeight', '9');
   const baggage = () => document.querySelector('#editor-preview [data-boarding-baggage-sticker]').textContent;
-  assert.match(baggage(), /TO: HND\s+BAG: 01\/9\s+VIA:\s+0123456789/);
+  assert.match(baggage(), /BEIJING\s+TO: HND CA981 01JUL\s+VIA:\s+BAG: 01\/9\s+0123456789/);
   fill('checkedBaggageWeight', '');
   fill('ticketNumber', '9990000000002');
   assert.equal(document.querySelector('[name="baggageDestinationCode"]'),null);
@@ -134,7 +134,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   const onward=(await db.get('records',[])).find(r=>r.service==='NH108');
   const face=id=>document.querySelector('[data-action="view"][data-id="'+id+'"]');
   const firstSticker=face(flight.id).querySelector('[data-boarding-baggage-sticker]');
-  assert.match(firstSticker.textContent,/TO: SFO\s+BAG: 01\/12\s+VIA: HND/);
+  assert.match(firstSticker.textContent,/BEIJING\s+TO: SFO\s+VIA: HND CA981 01JUL\s+BAG: 01\/12/);
   assert.equal(face(onward.id).querySelector('[data-boarding-baggage-sticker]'),null);
   assert.equal(onward.checkedBaggageWeight,'12');
   assert.equal(document.querySelector('#city-reference'),null);

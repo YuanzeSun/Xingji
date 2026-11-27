@@ -289,7 +289,10 @@ function baggageSticker(record, baggage, departureDate, presentation, mark) {
   const count = baggage.checkedBaggageCount?.trim().replace(/^0+(?=\d)/, '') || '';
   const weight = baggage.checkedBaggageWeight?.trim() || '';
   const to = baggage.to || record.destinationCode || presentation.destination;
-  const via = baggage.via || '';
+  const [via, ...otherStops] = baggage.via || [];
+  const flightLine = airport => [airport, record.service, departureDate].filter(Boolean).join(' ');
+  const toLine = via ? to : flightLine(to);
+  const viaLine = via ? [flightLine(via), ...otherStops].join(' / ') : '';
   const bag = count || weight ? `BAG: ${count && count.padStart(2, '0')}/${weight}` : '';
   const barcode = { x: 6, y: 153, width: 255, height: 29 };
   const code = barcodeTag && renderCodeData({
@@ -298,26 +301,25 @@ function baggageSticker(record, baggage, departureDate, presentation, mark) {
   }, { ...barcode, stretch: true, marker: 'baggage-tag-code' });
   const outline = 'M1 2H268V191L247 191L241 194L202 192L157 195L151 192L103 194L99 191L57 193L49 190L1 192Z';
   const number = barcodeTag || ([...tags].length > 36 ? [...tags].slice(0, 35).join('') + '…' : tags);
-  const { carrierNames, passengerEnglish } = presentation;
+  const { carrierNames, passengerEnglish, originEnglish } = presentation;
   const carrier = carrierNames?.en?.toUpperCase() || record.airline || 'BAGGAGE CLAIM';
   const headerX = mark ? 55 : 14;
   const print = (x, y, value, width, size = 16, attrs = '') =>
     text(x, y, value, Math.min(size, width / Math.max(1, textUnits(value || ''))), 'TicketMono,TicketHei', attrs);
   const right = 'text-anchor="end"';
   return `<g data-boarding-baggage-sticker="true" transform="translate(570 8) rotate(177 135 98)" fill="#26282a">
-    <title>${esc(['行李提取联', tags, count && `托运 ${count} 件`, weight && `总重 ${weight} kg`, to && `目的地 ${to}`, via && `经由 ${via}`].filter(Boolean).join(' · '))}</title>
+    <title>${esc(['行李提取联', tags, count && `托运 ${count} 件`, weight && `总重 ${weight} kg`, to && `目的地 ${toLine}`, via && `经由 ${viaLine}`].filter(Boolean).join(' · '))}</title>
     <path d="${outline}" transform="translate(-2 -3)" fill="#e2e4df" stroke="#bcc2bc"/>
     <path d="${outline}" fill="#f8f8f5" stroke="#cacdca"/>
     ${mark ? `<image data-baggage-airline-logo="true" x="13" y="8" width="33" height="32" preserveAspectRatio="xMidYMid meet" href="${mark.image}"/>` : ''}
     ${text(headerX, carrierNames?.zh ? 24 : 32, carrier, Math.min(24, (254 - headerX) / textUnits(carrier)), 'TicketLatin,TicketHei', 'font-weight="700"')}
     ${text(headerX, 40, carrierNames?.zh, 14, 'TicketHei')}
-    ${print(14, 66, record.service, 127, 19)}
-    ${print(254, 66, departureDate, 73, 17, right)}
-    ${print(14, 83, passengerEnglish, 239, 14)}
-    ${print(14, 104, `TO:${to ? ` ${to}` : ''}`, 129, 18)}
-    ${print(254, 104, bag, 132, 16, right)}
-    ${print(14, 123, `VIA:${via ? ` ${via}` : ''}`, 129, 16)}
-    ${print(barcode.x + barcode.width / 2, 149, number, 237, 23, 'text-anchor="middle" font-weight="700" letter-spacing=".4"')}
+    ${print(14, 61, passengerEnglish, 240, 15)}
+    ${print(14, 82, originEnglish, 240, 15)}
+    ${print(14, 106, `TO:${toLine ? ` ${toLine}` : ''}`, via ? 119 : 240, 17)}
+    ${print(14, 128, `VIA:${viaLine ? ` ${viaLine}` : ''}`, via ? 240 : 119, 15)}
+    ${print(254, via ? 106 : 128, bag, 113, 15, right)}
+    ${print(barcode.x + barcode.width / 2, 151, number, 237, 19, 'text-anchor="middle" font-weight="700" letter-spacing=".4"')}
     ${code || ''}
   </g>`;
 }

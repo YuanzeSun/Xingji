@@ -52,7 +52,7 @@ export function boardingBaggageIndex(records) {
     const fields = Object.fromEntries(BOARDING_BAGGAGE_FIELDS.map(key =>
       [key, legs.find(record => record[key]?.trim())?.[key] || '']));
     const sticker = Object.values(fields).some(Boolean) ? {
-      ...fields, to: destination(legs.at(-1)), via: legs.slice(0, -1).map(destination).filter(Boolean).join(' / ')
+      ...fields, to: destination(legs.at(-1)), via: legs.slice(0, -1).map(destination).filter(Boolean)
     } : null;
     legs.forEach((record, index) => result.set(record.id, { sticker: index === 0 ? sticker : null, laterLeg: index > 0 }));
   }

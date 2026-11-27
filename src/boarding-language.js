@@ -63,6 +63,9 @@ export function boardingPresentation(record) {
   const carrierNames = airlineNames.get(airlineKey(record.airline));
   const airline = carrierNames?.[language] || record.airline || words.airline;
   const code = readBoardingCode(record.boardingCode, record.boardingLegIndex) || {};
+  const originEnglish = origin.municipality || origin.englishName ||
+    (/^\p{Script=Latin}/u.test(record.origin || '') && !hasChinese(record.origin) ? record.origin : record.originCode);
   return { language, words, airport, airline, carrierNames, origin: routeName('origin'), destination: routeName('destination'),
-    passenger: flightPassengerName(record, code), passengerEnglish: flightPassengerEnglishName(record, code) };
+    originEnglish: (originEnglish || '').toUpperCase(), passenger: flightPassengerName(record, code),
+    passengerEnglish: flightPassengerEnglishName(record, code) };
 }

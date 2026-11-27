@@ -12,13 +12,13 @@ const flight = (id, origin, destination, fields = {}) => createRecord({
 const tag = { baggageTagNumbers: '0123456789', checkedBaggageCount: '1', checkedBaggageWeight: '9.75' };
 
 test('later manual legs supply one sticker on the first boarding pass, independent of display selection', () => {
-  const first = flight('first', 'PEK', 'SHA', { ticketNumber: '9990000000001/1', departureTime: '09:00' });
+  const first = flight('first', 'PEK', 'SHA', { ticketNumber: '9990000000001/1', service: 'CA1831', departureTime: '09:00' });
   const second = flight('second', 'SHA', 'HND', { ticketNumber: '9990000000001/2', departureTime: '12:00', ...tag });
   const third = flight('third', 'HND', 'SFO', { departureTime: '17:00' });
   const index = boardingBaggageIndex([third, second, first]);
   const firstFace = withBoardingBaggage(first, index);
   const secondFace = withBoardingBaggage(second, index);
-  assert.match(ticketSVG(firstFace), /TO: SFO<.*VIA: SHA \/ HND</s);
+  assert.match(ticketSVG(firstFace), /TO: SFO<.*VIA: SHA CA1831 28NOV \/ HND</s);
   assert.match(ticketSVG(firstFace), /BAG: 01\/9\.75</);
   assert.equal(ticketDimensions(firstFace).height, 671);
   assert.equal(ticketDimensions(secondFace).height, 500);
@@ -37,9 +37,9 @@ test('separate M1 codes with the same ticket number share baggage regardless of 
     boardingCode: createBoardingCode({ ...common, origin: 'SHA', destination: 'CTU', flightNumber: '5678', date: '2025-01-09' }) });
   assert.equal(readBoardingCode(first.boardingCode).legCount, 1);
   assert.equal(readBoardingCode(second.boardingCode).legCount, 1);
-  assert.match(ticketSVG(withBoardingBaggage(second, boardingBaggageIndex([second]))), /TO: CTU<.*VIA:</s);
+  assert.match(ticketSVG(withBoardingBaggage(second, boardingBaggageIndex([second]))), /TO: CTU CA5678 09JAN<.*VIA:/s);
   const full = boardingBaggageIndex([second, first]);
-  assert.match(ticketSVG(withBoardingBaggage(first, full)), /TO: CTU<.*VIA: PVG</s);
+  assert.match(ticketSVG(withBoardingBaggage(first, full)), /TO: CTU<.*VIA: PVG CA1234 01JAN</s);
   assert.equal(full.get('first').sticker.checkedBaggageWeight, '9.75');
   assert.deepEqual(full.get('second'), { sticker: null, laterLeg: true });
   assert.deepEqual(occupiedBaggageFields(otherBaggageLegs(first, [second, first])), Object.keys(tag));
@@ -52,6 +52,6 @@ test('flights with distinct ticket numbers keep their own stickers', () => {
   const index = boardingBaggageIndex([second, first]);
   for (const record of [first, second]) {
     assert.equal(index.get(record.id).sticker.to, record.destinationCode);
-    assert.equal(index.get(record.id).sticker.via, '');
+    assert.deepEqual(index.get(record.id).sticker.via, []);
   }
 });

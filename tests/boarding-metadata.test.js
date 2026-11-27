@@ -64,15 +64,16 @@ test('individually archived legs retain their barcode metadata and display links
   assert.equal(createRecord({type:'flight',template:'air-boarding-pass',checkedBaggageCount:'2997'}).checkedBaggageCount,'2997');
 });
 
-test('baggage tags align the number to its barcode and print the route to the final airport', () => {
-  const base = createRecord({ type: 'flight', template: 'air-boarding-pass', origin: 'PEK', destination: 'HND',
+test('baggage tags align the number to its barcode and print the origin and dated routing', () => {
+  const base = createRecord({ type: 'flight', template: 'air-boarding-pass', origin: 'SZX', destination: 'HND',
+    service: 'ZH9410', departureDate: '2026-03-07', passenger: 'ZHANG/JIE',
     baggageTagNumbers: '0123456789', checkedBaggageCount: '01', checkedBaggageWeight: '9' });
   assert.equal(base.checkedBaggageCount, '1');
   const direct = ticketSVG(base);
-  assert.match(direct, /TO: HND</);
+  assert.match(direct.split('data-boarding-baggage-sticker')[1], /ZHANG\/JIE<.*SHENZHEN<.*TO: HND ZH9410 07MAR</s);
   assert.match(direct, /VIA:</);
   assert.match(direct, /BAG: 01\/9</);
   assert.match(direct, /<text x="133\.5"[^>]*text-anchor="middle"[^>]*>0123456789<\/text>/);
-  assert.match(ticketSVG({ ...base, destinationCode: '', destination: '自填机场' }), /TO: 自填机场</);
+  assert.match(ticketSVG({ ...base, destinationCode: '', destination: '自填机场' }), /TO: 自填机场 ZH9410 07MAR</);
   assert.throws(() => createRecord({ ...base, checkedBaggageWeight: '-9' }), /总重/);
 });
