@@ -6,11 +6,11 @@ export function detailMapControls(label) {
   return `<div class="map-controls"><button type="button" data-route-zoom="in" aria-label="放大${e(label)}">＋</button><button type="button" data-route-zoom="out" aria-label="缩小${e(label)}">−</button><button type="button" data-route-zoom="fit" aria-label="显示完整${e(label)}">↔</button></div>`;
 }
 
-export function bindDetailMapControls(frame, { fitViewport, draw }) {
+export function bindDetailMapControls(frame, { fitViewport, draw, onTap }) {
   const view = frame.ownerDocument.defaultView, svg = frame.querySelector('svg');
   const listeners = new view.AbortController(), { signal } = listeners;
   const pointers = new Map();
-  let width, height, viewport, fitted, adjusted = false, animation = 0, gesture;
+  let width, height, viewport, fitted, adjusted = false, animation = 0, gesture, tap;
 
   function measure() {
     const rect = frame.getBoundingClientRect(), nextWidth = rect.width || 640, nextHeight = rect.height || 340;
@@ -57,13 +57,17 @@ export function bindDetailMapControls(frame, { fitViewport, draw }) {
     event.preventDefault();
     svg.focus({ preventScroll: true });
     frame.setPointerCapture?.(event.pointerId);
-    pointers.set(event.pointerId, location(event));
+    const point = location(event);
+    pointers.set(event.pointerId, point);
+    tap = onTap && pointers.size === 1 ? { id: event.pointerId, point } : null;
     gesture = pointerGesture();
   }, { signal });
   frame.addEventListener('pointermove', event => {
     if (!pointers.has(event.pointerId)) return;
     event.preventDefault();
-    pointers.set(event.pointerId, location(event));
+    const point = location(event);
+    if (tap && Math.hypot(point[0] - tap.point[0], point[1] - tap.point[1]) > 5) tap = null;
+    pointers.set(event.pointerId, point);
     const next = pointerGesture(), scale = unit();
     viewport.x -= (next.center[0] - gesture.center[0]) * scale;
     viewport.y -= (next.center[1] - gesture.center[1]) * scale;
@@ -74,6 +78,13 @@ export function bindDetailMapControls(frame, { fitViewport, draw }) {
   }, { signal });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) frame.addEventListener(type, event => {
     if (!pointers.delete(event.pointerId)) return;
+    if (type === 'pointerup' && tap?.id === event.pointerId) {
+      const [x, y] = location(event), scale = unit();
+      if (Math.hypot(x - tap.point[0], y - tap.point[1]) <= 5) {
+        onTap([viewport.x + (x - width / 2) * scale, viewport.y + (y - height / 2) * scale], scale);
+      }
+    }
+    tap = null;
     gesture = pointerGesture();
     schedule();
   }, { signal });

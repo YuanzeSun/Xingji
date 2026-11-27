@@ -703,6 +703,28 @@ select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-w
 [data-flight-night]{fill:#081224;fill-opacity:.48;stroke:none}
 [data-flight-terminator]{fill:none;stroke:#f3c983;stroke-width:1.4;stroke-dasharray:4 3}
 .flight-track .rail-route-caption{color:var(--muted)}
+.rail-elevation{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.rail-elevation>summary{width:fit-content;color:var(--green);font-weight:650;cursor:pointer}
+.rail-elevation-content{margin-top:12px;color:var(--muted);font-size:13px}
+.rail-elevation-ends,.rail-elevation-meta{display:flex;justify-content:space-between;align-items:baseline;gap:6px 12px;flex-wrap:wrap}
+.rail-elevation-ends{color:var(--green);margin-bottom:8px}
+.rail-elevation-meta output{font-variant-numeric:tabular-nums;color:var(--green);font-weight:600}
+.rail-elevation-plot{position:relative;border-radius:4px}
+.rail-elevation-plot:focus-within{outline:2px solid var(--green);outline-offset:3px}
+.rail-elevation-plot svg{width:100%;height:auto;display:block;touch-action:pan-y;cursor:crosshair}
+.rail-elevation-plot text{fill:var(--muted);font:12px system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.rail-elevation-grid{stroke:var(--line);fill:none}
+.rail-elevation-area{fill:#dce8df}
+.rail-elevation-line{stroke:var(--green);stroke-width:1.75;stroke-linejoin:round;fill:none}
+.rail-elevation-point{fill:var(--green)}
+[data-elevation-cursor]>path{stroke:#8b6b3e;stroke-dasharray:3 3}
+[data-elevation-dot]{fill:#79572b;stroke:var(--surface);stroke-width:1.5}
+[data-elevation-dot][data-unavailable]{display:none}
+[data-rail-elevation-marker]{visibility:hidden;pointer-events:none}
+[data-rail-elevation-marker][data-active]{visibility:visible}
+[data-rail-elevation-marker]>circle:first-child{fill:#173047;stroke:#ffd18d;stroke-width:2}
+[data-rail-elevation-marker]>circle:last-child{fill:#ffd18d}
+@media(pointer:coarse){.rail-elevation>summary{padding-block:9px}}
 @media(max-width:680px){.flight-track .button.small{min-height:44px}}
 .boarding-generator{border-top:1px solid var(--line);margin-top:15px;padding-top:10px}.boarding-generator>h4{font-size:14px;font-weight:550;color:var(--green);margin:4px 0 16px}.boarding-generator .field{min-width:0}.boarding-generator input{width:100%}
 .statistics-chart-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px}.statistics-chart-toolbar .statistics-legend{margin:0}.statistics-chart-zoom{display:flex;align-items:center;gap:4px}.statistics-chart-zoom button{min-width:32px;min-height:32px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--green);font:inherit;font-size:15px;cursor:pointer;transition:background .15s,transform .15s}.statistics-chart-zoom button:hover:not(:disabled){background:#eaf0e4}.statistics-chart-zoom button:active:not(:disabled){transform:scale(.95)}.statistics-chart-zoom button:disabled{opacity:.4;cursor:default}.statistics-chart-zoom [data-stat-zoom-label]{min-width:48px;text-align:center;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}.statistics-chart-scroll{touch-action:pan-x pan-y}.statistics-series.is-entering{animation:statistics-series-in .4s ease-out both}.statistics-dot{transition:r .15s,fill .15s,stroke-width .15s}.statistics-dot.is-active{r:7;stroke-width:3;fill:#e4ecdd}@keyframes statistics-series-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.statistics-series.is-entering{animation:none}.statistics-dot,.statistics-chart-zoom button{transition:none}}
