@@ -6,6 +6,7 @@ import { createRecord } from '../src/model.js';
 import { journeyDate } from '../src/journey-date.js';
 import { statisticsOptions, todayDate, journeyStatistics, tripSeries } from '../src/statistics-model.js';
 import { mountStatistics } from '../src/statistics.js';
+import { smoothedDelayShares } from '../src/arrival-delay-chart.js';
 import { flightTrackRequest } from '../src/flight-track.js';
 import { createBoardingCode } from '../src/bcbp.js';
 
@@ -200,7 +201,15 @@ test('railway footprints count each named line once per ridden section within th
   }
 });
 
-test('the arrival delay curve uses exact minute counts across midnight and clock changes', () => {
+test('arrival delay smoothing bridges an empty minute and preserves the total sample share', () => {
+  const shares = smoothedDelayShares([{ minutes: 24, count: 100 }, { minutes: 26, count: 80 }]);
+  assert.ok(shares.get(25) >= Math.min(shares.get(24), shares.get(26)));
+  assert.ok(Math.abs([...shares.values()].reduce((sum, share) => sum + share, 0) - 1) < 1e-12);
+  const distant = smoothedDelayShares([{ minutes: -120, count: 1 }, { minutes: 1440, count: 1 }]);
+  assert.equal(distant.get(25), undefined, 'minutes far from every sample have no share');
+});
+
+test('the arrival delay chart preserves exact counts across midnight and clock changes', () => {
   const trip = (actualArrivalTime, extra) => flight({
     arrivalDate: '2024-03-01', arrivalTime: '12:00', actualArrivalDate: '2024-03-01', actualArrivalTime, ...extra
   });
@@ -233,13 +242,13 @@ test('the arrival delay curve uses exact minute counts across midnight and clock
     const plot = delayPanel().querySelector('[data-stat-delay-plot]');
     const line = plot.querySelector('.statistics-line').getAttribute('d');
     assert.match(line, /^M.*C/);
-    assert.ok(line.match(/C/g).length <= all.arrivalDelays.length * 3 + 1);
-    assert.match(plot.querySelector('svg').textContent, /次数.*延误分钟数/s);
+    assert.doesNotMatch(line, /NaN|Infinity/);
+    assert.match(plot.querySelector('svg').textContent, /平滑占比.*%.*延误分钟数/s);
     assert.equal(plot.querySelectorAll('[data-stat-delay-point]').length, all.arrivalDelays.length);
     plot.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight' }));
-    assert.equal(plot.querySelector('output').textContent, '−1 分钟 · 1 班');
+    assert.match(plot.querySelector('output').textContent, /^−1 分钟 · 平滑占比 [\d.]+% · 实际 1 班$/);
     plot.querySelector('[data-stat-delay-point="5"] circle').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-    assert.equal(plot.querySelector('output').textContent, '15 分钟 · 2 班');
+    assert.match(plot.querySelector('output').textContent, /^15 分钟 · 平滑占比 [\d.]+% · 实际 2 班$/);
     assert.match(root.querySelector('[data-stat-ranking="rail-lines"]').textContent, /暂无已识别的铁路线/);
     applyStatisticsDate(root, '[data-stat-from]', '2024-03-10');
     assert.match(delayPanel().textContent, /1 \/ 2 班可比较/);
