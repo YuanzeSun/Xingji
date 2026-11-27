@@ -109,13 +109,26 @@ test('archive entries preselect each transport and share a switchable editor',as
         assert.equal(form().elements.arrivalDateDay.value,'01');
         assert.equal(form().elements.actualArrivalDateMonth.value,'06');
         assert.equal(form().elements.actualArrivalDateDay.value,'');
-        fillAll({arrivalDateYear:'',arrivalDateMonth:'',arrivalDateDay:'',arrivalTime:''});
+        const expectTimeGap = (field, label) => {
+          form().dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
+          assert.match(form().querySelector('#editor-error').textContent, new RegExp(label + '.*超过 24 小时'));
+          assert.equal(form().elements[field].getAttribute('aria-invalid'), 'true');
+          assert.equal(server.records().find(row=>row.id===ticket.id)[field], '');
+        };
+        fillAll({departureTime:'09:00',actualDepartureDate:'2026-07-01',actualDepartureTime:'09:01'});
+        expectTimeGap('actualDepartureTime','起飞');
+        fill('actualDepartureTime','09:00');
+        fillAll({actualArrivalDate:'2026-06-30',actualArrivalTime:'12:59'});
+        expectTimeGap('actualArrivalTime','到达');
+        fillAll({arrivalDateYear:'',arrivalDateMonth:'',arrivalDateDay:'',arrivalTime:'',
+          actualArrivalDateYear:'',actualArrivalDateMonth:'',actualArrivalDateDay:'',actualArrivalTime:''});
       }
       fill('price','123');await submit();assert.equal(server.records().find(row=>row.id===ticket.id).type,ticket.type);
       if (ticket.type === 'flight') {
         const updated = server.records().find(row=>row.id===ticket.id);
         assert.equal(updated.arrivalDate,'');
         assert.equal(updated.arrivalTime,'');
+        assert.equal(updated.actualDepartureTime,'09:00');
       }
     }
   }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();}

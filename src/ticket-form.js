@@ -1,4 +1,4 @@
-import {FLIGHT_TIME_LABELS} from './flight-times.js';
+import {FLIGHT_TIME_LABELS,validateFlightTimeDifferences} from './flight-times.js';
 import {JOURNEY_DATE_FIELDS,journeyDate} from './journey-date.js';
 import { requireCompleteIdentity } from './identity.js';
 import { isAnonymousRedTemplate } from './rail-template.js';
@@ -54,7 +54,7 @@ export const missingTicketFields = record => requiredRecordFields(record).filter
 export function validateTicketForm(record) {
   requireCompleteIdentity(record.identity);
   const fields = missingTicketFields(record);
-  if (!fields.length) return;
+  if (!fields.length) return validateFlightTimeDifferences(record);
   const key = fields[0], error = new Error('请填写' + (key === 'price' && record.template === 'rail-refund-receipt' ? '退票费' : ticketFieldLabel(key, record.type)));
   error.fields = fields;
   throw error;
