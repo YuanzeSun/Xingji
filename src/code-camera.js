@@ -13,7 +13,7 @@ export function codeCameraMarkup() {
 }
 
 export function bindCodeCamera(section, onCapture, {
-  mediaDevices = navigator.mediaDevices, schedule = (fn, ms) => setTimeout(fn, ms), unschedule = clearTimeout, onStart = () => {}, onCancel = () => {}, asCanvas = false
+  mediaDevices = navigator.mediaDevices, schedule = (fn, ms) => setTimeout(fn, ms), unschedule = clearTimeout, onStart = () => {}, onCancel = () => {}
 } = {}) {
   const panel = section.querySelector('[data-code-camera]'), video = panel.querySelector('video');
   const status = panel.querySelector('[data-code-camera-status]'), trigger = section.querySelector('[data-code-start]');
@@ -34,19 +34,19 @@ export function bindCodeCamera(section, onCapture, {
     try {
       if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {
         const crop = controls.crop(), width = video.videoWidth / crop, height = video.videoHeight / crop;
-        const canvas = doc.createElement('canvas'), scale = Math.min(1, (asCanvas ? 2400 : 1600) / Math.max(width, height));
+        const canvas = doc.createElement('canvas'), scale = Math.min(1, 2400 / Math.max(width, height));
         canvas.width = Math.round(width * scale); canvas.height = Math.round(height * scale);
         canvas.getContext('2d').drawImage(video, (video.videoWidth - width) / 2, (video.videoHeight - height) / 2,
           width, height, 0, 0, canvas.width, canvas.height);
-        const image = asCanvas ? canvas : await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
-        if (disposed || request !== generation) return;
-        if (image && await onCapture(image, { cameraFrame: manual ? 0 : ++frame })) { if (request === generation) stop(); return; }
+        try {
+          if (await onCapture(canvas, { cameraFrame: manual ? 0 : ++frame })) { if (request === generation) stop(); return; }
+        } finally { canvas.width = canvas.height = 1; }
       }
       if (request === generation) status.textContent = '';
     } catch (error) { if (request === generation) status.textContent = error.message || '暂未读到码，请调整距离重试'; }
     finally {
       if (reading === request) reading = -1;
-      if (!disposed && stream && request === generation) timer = schedule(() => capture(request), asCanvas ? 200 : 900);
+      if (!disposed && stream && request === generation) timer = schedule(() => capture(request), 200);
     }
   }
   async function open(request) {
@@ -73,7 +73,7 @@ export function bindCodeCamera(section, onCapture, {
       controls.start(stream.getVideoTracks?.()[0]);
       shutter.disabled = false;
       status.textContent = '';
-      timer = schedule(() => capture(request), asCanvas ? 80 : 350);
+      timer = schedule(() => capture(request), 80);
     } catch (error) {
       if (disposed || request !== generation) return;
       stop(); panel.hidden = false;

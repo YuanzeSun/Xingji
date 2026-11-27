@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { prepareZXingModule, readBarcodes, writeBarcode } from 'zxing-wasm';
-import { prepareCodeReader, rebuildCodeSymbols } from '../src/code-reader.js';
+import { prepareCodeReader, rebuildCodesFromImage, rebuildCodeSymbols } from '../src/code-reader.js';
 import { encodeBCBP, readBoardingCode } from '../src/bcbp.js';
 import { readBCBP } from '../src/bcbp-reader.js';
 import { createRecord } from '../src/model.js';
@@ -22,7 +22,7 @@ import {ticketFieldLocked} from '../src/barcode-fields.js';
 import { symbolImage } from '../src/barcode-symbols.js';
 import { Resvg } from '@resvg/resvg-js';
 import { DEMO_BOARDING_CODE } from '../src/demo-boarding-code.js';
-import { DEMO_TICKET_CODE } from '../src/demo-code.js';
+import { DEMO_RAIL_LINEAR_CODE, DEMO_RAIL_TICKET_CODE, DEMO_TICKET_CODE } from '../src/demo-code.js';
 import bwip from 'bwip-js/generic';
 
 await Promise.all([
@@ -30,6 +30,46 @@ await Promise.all([
   prepareZXingModule({ overrides: { wasmBinary: await readFile('node_modules/zxing-wasm/dist/full/zxing_full.wasm') }, fireImmediately: true })
 ]);
 const payload = new Uint8Array([0, 1, 29, 65, 66, 67, 127, 128, 200, 255, 49, 50, 51]);
+
+function rasterSource(image) {
+  const crops = [];
+  return { ...image, crops, ownerDocument: { createElement() {
+    return { getContext() {
+      let crop;
+      return { fillRect() {}, drawImage(_image, x, y, width, height) { crop = [x, y, width, height]; }, getImageData(_x, _y, width, height) {
+        const [left, top, sourceWidth, sourceHeight] = crop;
+        crops.push(crop);
+        const data = new Uint8ClampedArray(width * height * 4);
+        for (let row = 0; row < height; row++) for (let col = 0; col < width; col++) {
+          const x = left + Math.floor((col + .5) * sourceWidth / width);
+          const y = top + Math.floor((row + .5) * sourceHeight / height);
+          const pixel = (y * image.width + x) * 4;
+          data.set(image.data.subarray(pixel, pixel + 4), (row * width + col) * 4);
+        }
+        return { data, width, height };
+      } };
+    } };
+  } } };
+}
+
+test('the first camera frame can recover a faded Code128 with only one readable line', async () => {
+  const width = 820, height = 730, symbol = symbolFromCodeData(DEMO_RAIL_LINEAR_CODE);
+  const data = new Uint8ClampedArray(width * height * 4).fill(255);
+  const left = Math.floor((width - symbol.width) / 2), row = Math.floor((height - 1) / 2) + 5;
+  for (let x = 0; x < symbol.width; x++) if (symbol.data[x] < 128) {
+    const pixel = (row * width + left + x) * 4;
+    data.fill(185, pixel, pixel + 3);
+  }
+  const image = { data, width, height };
+  assert.equal((await rebuildCodeSymbols(image, 'rail')).codes.length, 0);
+  const result = await rebuildCodesFromImage(rasterSource(image), 'rail', { cameraFrame: 1 });
+  assert.equal(result.codes[0]?.data.rawBytes, DEMO_RAIL_LINEAR_CODE.rawBytes);
+
+  const qr = rasterSource(symbolImage(symbolFromCodeData(DEMO_RAIL_TICKET_CODE)));
+  assert.equal((await rebuildCodesFromImage(qr, 'rail', { cameraFrame: 1 })).codes[0]?.data.rawBytes, DEMO_RAIL_TICKET_CODE.rawBytes);
+  assert.equal(qr.crops.length, 1, 'a readable QR requires only the full-frame pass');
+});
+
 test('compact and MicroPDF417 boarding passes rebuild into verified standard PDF417', async () => {
   const text = encodeBCBP({ passenger: 'EXAMPLE/TRAVELER', pnr: 'ABC123', origin: 'JFK', destination: 'LHR', carrier: 'BA', flightNumber: '321', date: '2026-05-18', cabin: 'Y', seat: '12A', sequence: '42', status: '1' });
   for (const bcid of ['pdf417compact', 'micropdf417']) {

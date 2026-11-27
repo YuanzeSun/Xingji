@@ -151,7 +151,6 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     drawImage() {}, fillRect() {}, getImageData: () => pixels,
   });
   let imageBlob = new Blob([await fixture.image.arrayBuffer()], { type: 'image/png' });
-  window.HTMLCanvasElement.prototype.toBlob = callback => callback(imageBlob);
 
   const server = await prepareCloud();
   const archiveFetch = globalThis.fetch, railQueries = [];

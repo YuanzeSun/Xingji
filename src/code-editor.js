@@ -306,7 +306,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
   }
   const clearFeedback = () => { reset(); status.textContent = ''; error.textContent = ''; };
   const camera = railCodeEntryLocked(draft) ? null : bindCodeCamera(section, (image, options) => read(image, 'camera', options), {
-    asCanvas: flight, ...cameraOptions, onStart: () => { clearFeedback(); onCameraStart?.(); }, onCancel: clearFeedback
+    ...cameraOptions, onStart: () => { clearFeedback(); onCameraStart?.(); }, onCancel: clearFeedback
   });
   if (camera) {
     form.querySelector('[data-rail-photo]')?.addEventListener('click',camera.stop,true);

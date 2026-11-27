@@ -17,6 +17,8 @@ const pdfFormats = ['PDF417', 'CompactPDF417', 'MicroPDF417'];
 const flightFormats = [...pdfFormats, 'Aztec', 'QRCode', 'DataMatrix', 'Code128'];
 const formatsFor = type => type === 'flight' ? flightFormats : RAIL_TICKET_CODE_FORMATS;
 const options = { tryHarder: true, tryRotate: true, tryInvert: true, tryDownscale: false, maxNumberOfSymbols: 8, textMode: 'Plain' };
+const boardingStripOptions = { ...options, formats: [...pdfFormats, 'Code128'], minLineCount: 1 };
+const railStripOptions = { ...options, formats: ['Code128'], minLineCount: 1 };
 const rawText = result => String.fromCharCode(...result.bytes);
 const isBoardingResult = result => result.bytes.length <= MAX_CODE_BYTES && !!readBCBP(rawText(result));
 
@@ -72,6 +74,8 @@ function imagePixels(source, { x = 0, y = 0, width, height, edge, upscale = fals
   canvas.width = Math.max(1, Math.round(width * scale)); canvas.height = Math.max(1, Math.round(height * scale));
   try {
     const context = canvas.getContext('2d', { willReadFrequently: true });
+    // Interpolation can erase narrow bars when enlarging a camera crop.
+    if (scale > 1) context.imageSmoothingEnabled = false;
     context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(source, x, y, width, height, 0, 0, canvas.width, canvas.height);
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -94,16 +98,26 @@ function stretchCodeContrast(pixels) {
   return pixels;
 }
 
-function* liveBoardingFrames(source) {
-  const longest = Math.max(source.naturalWidth || source.width, source.naturalHeight || source.height);
-  yield { edge: 1800 };
-  yield { edge: Math.min(2400, Math.round(longest * 1.5)), upscale: true, enhance: true };
+function centeredBarcodeFrames(width, height) {
+  const stripWidth = Math.ceil(width / 2), stripHeight = Math.ceil(height / 2);
+  const longest = Math.max(width, height);
+  const enhanced = { edge: longest <= 1200 ? longest * 2 : 2400, upscale: longest <= 1200, enhance: true };
+  // Keep both ends and quiet zones visible for a horizontal or vertical strip.
+  return [
+    { ...enhanced, width, y: Math.floor((height - stripHeight) / 2), height: stripHeight },
+    { ...enhanced, x: Math.floor((width - stripWidth) / 2), width: stripWidth, height }
+  ];
 }
 
-function* boardingFrames(source) {
+function* boardingFrames(source, fullSearch) {
   const width = source.naturalWidth || source.width, height = source.naturalHeight || source.height;
   const longest = Math.max(width, height);
   yield { edge: 1800 };
+  yield* centeredBarcodeFrames(width, height);
+  if (!fullSearch) {
+    yield { edge: Math.min(2400, Math.round(longest * 1.5)), upscale: true, enhance: true };
+    return;
+  }
   if (longest > 1100) yield { edge: 1100 };
   if (longest > 1800) yield { edge: 2600 };
   if (longest < 1800) yield { edge: 1800, upscale: true };
@@ -119,14 +133,13 @@ function* boardingFrames(source) {
 async function readFlightImage(source, cameraFrame = 0) {
   await prepareCodeReader();
   return withCodeImage(source, async image => {
-    let fallback = [], issues = [], formats = formatsFor('flight');
+    let fallback = [], issues = [], readOptions = { ...options, formats: flightFormats };
     // Every fourth camera frame gets the same full search as an uploaded photo.
-    const frames = cameraFrame % 4 ? liveBoardingFrames(image) : boardingFrames(image);
-    for (const frame of frames) {
+    for (const frame of boardingFrames(image, cameraFrame % 4 === 0)) {
       const pixels = imagePixels(image, frame);
-      const results = (await readBarcodes(pixels, { ...options, formats })).filter(result => result.isValid);
-      if (formats !== pdfFormats) fallback = results;
-      formats = pdfFormats;
+      const results = (await readBarcodes(pixels, readOptions)).filter(result => result.isValid);
+      if (readOptions !== boardingStripOptions) fallback = results;
+      readOptions = boardingStripOptions;
       const boarding = results.filter(isBoardingResult);
       if (!boarding.length) continue;
       const rebuilt = await rebuildResults(boarding, 'flight', true);
@@ -144,11 +157,17 @@ export async function rebuildCodesFromImage(source, type = 'rail', { cameraFrame
       const width = image.naturalWidth || image.width, height = image.naturalHeight || image.height;
       if (width * height > 24_000_000) throw new Error('图片尺寸过大，请选择原始票据截图');
       const first = await rebuildCodeSymbols(imagePixels(image), type);
-      if (first.codes.length || cameraFrame % 4) return first;
-      // A faded thermal strip can be readable after contrast correction and a single scanline.
-      const imageData = imagePixels(image, { edge: 2400, upscale: true, enhance: true });
-      const codes = await readBarcodes(imageData, { ...options, formats: ['Code128'], minLineCount: 1 });
-      return codes.length ? rebuildResults(codes, type, false) : first;
+      if (first.codes.length) return first;
+      const frames = centeredBarcodeFrames(width, height);
+      if (!cameraFrame || cameraFrame % 4 === 0) frames.push({ edge: 2400, upscale: true, enhance: true });
+      for (const frame of frames) {
+        const codes = await readBarcodes(imagePixels(image, frame), railStripOptions);
+        if (!codes.length) continue;
+        const rebuilt = await rebuildResults(codes, type, false);
+        if (rebuilt.codes.length) return rebuilt;
+        first.issues.push(...rebuilt.issues);
+      }
+      return first;
     });
   return { ...result, codes: result.codes.map(({ format, data, byteLength, isLink, verified }) => ({ format, data, byteLength, isLink, verified })) };
 }

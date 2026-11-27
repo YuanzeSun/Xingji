@@ -20,25 +20,38 @@ function pinchZoom(f) {
 }
 function fixture(values) {
   const draft = createRecord(values), dom = new JSDOM(`<form>${ticketCodeEditor(draft)}</form>`), form = dom.window.document.querySelector('form');
-  const video = form.querySelector('video'), queue = new Map(); let next = 0, stopped = 0, reads = 0;
+  const video = form.querySelector('video'), queue = new Map(), delays = []; let next = 0, stopped = 0, reads = 0;
   video.play = async () => {}; video.pause = () => {};
   Object.defineProperties(video, { readyState: { value: 2 }, videoWidth: { value: 1920 }, videoHeight: { value: 1080 } });
   dom.window.HTMLCanvasElement.prototype.getContext = () => ({ drawImage() {} });
-  dom.window.HTMLCanvasElement.prototype.toBlob = function (callback) { assert.equal(this.width, 1600); callback(new Blob(['captured frame'], { type: 'image/png' })); };
+  dom.window.HTMLCanvasElement.prototype.toBlob = () => assert.fail('the live scanner should read the uncompressed frame directly');
   const track = { stop: () => stopped++ }, stream = { getTracks: () => [track], getVideoTracks: () => [track] };
-  const options = { cameraOptions: { mediaDevices: { getUserMedia: async options => { assert.equal(options.audio, false); assert.equal(options.video.facingMode.ideal, 'environment'); return stream; } }, schedule: fn => { queue.set(++next, fn); return next; }, unschedule: id => queue.delete(id) }, loadRebuilder: async () => async file => { reads++; assert.ok(file instanceof Blob); return { codes: [{ format: 'QRCode', data: DEMO_RAIL_TICKET_CODE }], issues: [] }; } };
-  return { dom, form, draft, stream, queue, track, options, stopped: () => stopped, reads: () => reads };
+  const options = { cameraOptions: { mediaDevices: { getUserMedia: async options => { assert.equal(options.audio, false); assert.equal(options.video.facingMode.ideal, 'environment'); return stream; } }, schedule: (fn, delay) => { delays.push(delay); queue.set(++next, fn); return next; }, unschedule: id => queue.delete(id) }, loadRebuilder: async () => async image => { reads++; assert.ok(image instanceof dom.window.HTMLCanvasElement); return { codes: [{ format: 'QRCode', data: DEMO_RAIL_TICKET_CODE }], issues: [] }; } };
+  return { dom, form, draft, stream, queue, delays, track, options, stopped: () => stopped, reads: () => reads };
 }
 
 test('camera opens only on request, captures and rebuilds code data, then releases its stream', async () => {
   const f = fixture(); let changed = 0;
+  const load = f.options.loadRebuilder;
+  f.options.loadRebuilder = async () => {
+    const rebuild = await load();
+    return (image, _type, { cameraFrame }) => {
+      assert.equal(image.width, 1920);
+      return cameraFrame === 1 ? { codes: [], issues: [] } : rebuild(image);
+    };
+  };
   const dispose = bindTicketCodeEditor(f.form, f.draft, () => changed++, f.options);
   assert.equal(f.queue.size, 0); assert.equal(f.reads(), 0);
   assert.equal(f.form.querySelector('[data-code-start]').textContent, '相机扫描');
   assert.doesNotMatch(f.form.textContent, /虚构车票二维码|将完整的码对准相机/);
   f.form.querySelector('[data-code-start]').click(); await settle();
   assert.equal(f.form.querySelector('[data-code-camera]').hidden, false);
-  const [id, frame] = f.queue.entries().next().value; f.queue.delete(id); await frame(); await settle();
+  for (let i = 0; i < 2; i++) {
+    const [id, frame] = f.queue.entries().next().value;
+    f.queue.delete(id);
+    await frame();
+  }
+  assert.deepEqual(f.delays, [80, 200]);
   assert.equal(f.reads(), 1); assert.equal(changed, 1);
   assert.deepEqual(f.draft.ticketCode, DEMO_RAIL_TICKET_CODE);
   assert.equal(f.stopped(), 1); assert.equal(f.form.querySelector('[data-code-camera]').hidden, true);
@@ -49,9 +62,7 @@ test('the boarding-code camera retries promptly and the shutter uses the full im
   const f = fixture({ type: 'flight', template: 'air-boarding-pass' });
   const code = createBoardingCode({ passenger: 'EXAMPLE/TRAVELER', pnr: 'ABC123', origin: 'JFK', destination: 'LHR',
     carrier: 'BA', flightNumber: '321', date: '2026-05-18', cabin: 'Y', seat: '12A', sequence: '42', status: '1' });
-  const modes = [], delays = [];
-  const schedule = f.options.cameraOptions.schedule;
-  f.options.cameraOptions.schedule = (fn, delay) => { delays.push(delay); return schedule(fn); };
+  const modes = [];
   f.options.loadRebuilder = async () => async (image, type, { cameraFrame }) => {
     assert.equal(image.width, 1920);
     assert.equal(type, 'flight');
@@ -63,7 +74,7 @@ test('the boarding-code camera retries promptly and the shutter uses the full im
     f.form.querySelector('[data-code-start]').click(); await settle();
     const [id, fn] = f.queue.entries().next().value;
     f.queue.delete(id); await fn();
-    assert.deepEqual(delays, [80, 200]);
+    assert.deepEqual(f.delays, [80, 200]);
     assert.deepEqual(modes, [1]);
     f.form.querySelector('[data-code-shutter]').click(); await settle();
     assert.deepEqual(modes, [1, 0]);
@@ -159,7 +170,6 @@ test('camera access without zoom permission supports pinch, a slider and a match
   };
   let crop;
   f.dom.window.HTMLCanvasElement.prototype.getContext = () => ({ drawImage: (_video, ...args) => { crop = args; } });
-  f.dom.window.HTMLCanvasElement.prototype.toBlob = callback => callback(new Blob(['cropped frame']));
   const dispose = bindTicketCodeEditor(f.form, f.draft, () => {}, f.options);
   t.after(() => { dispose(); f.dom.window.close(); });
   f.form.querySelector('[data-code-start]').click(); await settle();
