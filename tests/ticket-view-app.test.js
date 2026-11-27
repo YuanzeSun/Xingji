@@ -11,6 +11,8 @@ test('archive opens in medium newest-first grid and combines layouts with shared
   Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});
   window.scrollTo=()=>{};window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};window.HTMLDialogElement.prototype.close=function(){this.open=false;};
   const rows=Array.from({length:80},(_,i)=>createRecord({id:'trip-'+i,service:'G'+(i+1),origin:'北京南',destination:'南京南',departureDate:i<40 ? '2025-11-16' : i<60 ? '2026-11-16' : '2026-06-16',passenger:'示例旅客',seatClass:'二等座',price:String(i+1)}));
+  rows[40]=createRecord({id:'trip-40',type:'flight',template:'air-boarding-pass',service:'CA181',origin:'PEK',destination:'HND',departureDate:'2026-11-16',ticketNumber:'9990000001001/1'});
+  rows[48]=createRecord({id:'trip-48',type:'flight',template:'air-boarding-pass',service:'NH108',origin:'HND',destination:'SFO',departureDate:'2026-11-17',ticketNumber:'999-0000001001/2'});
   const server=await prepareCloud(rows),db=await import('../src/db.js');
   const wait=async predicate=>{for(let i=0;i<300;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('Ticket view did not settle');};
   const click=selector=>{const element=document.querySelector(selector);assert.ok(element,selector);element.click();};
@@ -19,6 +21,18 @@ test('archive opens in medium newest-first grid and combines layouts with shared
     await import('../src/app.js');await wait(()=>document.querySelectorAll('.ticket-grid .ticket-card').length===48);
     assert.equal(document.querySelector('[data-ticket-view="grid"]').getAttribute('aria-pressed'),'true');assert.equal(document.querySelector('[data-ticket-size="medium"]').getAttribute('aria-pressed'),'true');assert.equal(document.querySelector('#search-sort').value,'newest');
     assert.deepEqual([...document.querySelector('#search-sort').options].map(option=>option.value),['newest','oldest','price-asc','price-desc']);
+    assert.match(document.querySelector('[data-action="load-more"]').textContent,/49 \/ 80/);
+    const back = '.ticket-stack-layer [data-action="view"][data-id="trip-48"]';
+    click(back);
+    await wait(()=>document.querySelector('.detail-grid'));
+    assert.ok(document.querySelector('[data-action="edit"][data-id="trip-48"]'));
+    click('[data-action="close-modal"]');await wait(()=>!document.querySelector('dialog'));
+    click('.ticket-stack-front [data-archive-select="trip-40"]');
+    click(back);
+    assert.equal(document.querySelector('[data-archive-select="trip-48"]').checked,true);
+    assert.equal(document.querySelector('[data-archive-select="trip-40"]').checked,true);
+    assert.equal(document.querySelector('dialog'),null);
+    click('[data-action="finish-selection"]');
     click('[data-ticket-size="small"]');await mode('list');await wait(()=>document.querySelectorAll('.ticket-list-row').length===48);
     assert.equal(document.querySelector('nav [data-page="timeline"]'),null);
     const id=document.querySelector('[data-archive-select]').dataset.archiveSelect;click('[data-archive-select="'+id+'"]');
@@ -41,7 +55,7 @@ test('archive opens in medium newest-first grid and combines layouts with shared
     assert.equal(document.querySelector('.timeline-service').textContent,'G1');
     click('[data-action="load-more"]');await wait(()=>document.querySelectorAll('.timeline-item').length===80);
     click('[data-ticket-size="small"]');await wait(()=>document.querySelectorAll('.ticket-list-row').length===80);
-    sort('newest');await wait(()=>document.querySelector('.ticket-list-open').dataset.id==='trip-40');
+    sort('newest');await wait(()=>document.querySelector('.ticket-list-open').dataset.id==='trip-48');
     await mode('space');
     assert.equal(document.querySelector('[data-ticket-view="space"]').getAttribute('aria-pressed'),'true');
     const filter=document.querySelector('[data-search-field="service"]');filter.value='G80';filter.dispatchEvent(new window.Event('input',{bubbles:true}));await wait(()=>document.querySelectorAll('.space-ticket').length===1);

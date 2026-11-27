@@ -11,7 +11,7 @@ function dateParts(value) {
   return { label: day ? `${month}.${day}` : month ? `${month}月` : '日期待补充', detail: day ? weekday.format(new Date(value + 'T12:00:00Z')) : '' };
 }
 
-export function ticketPeriods(records, renderRows) {
+export function ticketPeriods(records, renderRows, countTickets = rows => rows.length) {
   const groups = new Map();
   for (const record of records) {
     const period = calendarDate(record.departureDate).slice(0, 7);
@@ -21,7 +21,8 @@ export function ticketPeriods(records, renderRows) {
   return [...groups].map(([period, rows]) => {
     const [year, month] = period.split('-');
     const label = month ? `${year} 年 ${Number(month)} 月` : year ? `${year} 年 · 月份未知` : '日期未知';
-    return `<section class="ticket-period" data-ticket-period="${period}"><header class="ticket-period-heading"><h2>${label}</h2><span>${rows.length} 张票据</span></header>${renderRows(rows)}</section>`;
+    const count = countTickets(rows);
+    return `<section class="ticket-period" data-ticket-period="${period}" data-ticket-count="${count}"><header class="ticket-period-heading"><h2>${label}</h2><span>${count} 张票据</span></header>${renderRows(rows)}</section>`;
   }).join('');
 }
 export function timeline(records, icon, {selectable=false,selected=new Set(),groupByDate=true} = {}) {

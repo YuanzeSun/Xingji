@@ -782,6 +782,14 @@ p.flight-local-time{margin:-4px 0 13px}
 .ticket-face{position:relative;width:100%;margin-bottom:18px;line-height:0}.ticket-face .ticket-preview{margin:0!important}.ticket-face>.card-select{position:absolute;left:5px;top:5px;z-index:1;min-width:22px;min-height:22px;padding:2px;background:#fffefad9;border-radius:4px;line-height:1}.ticket-face>.card-select input{width:16px;height:16px}
 .ticket-face[data-ticket-type=flight]>.card-select{left:auto;right:5px}
 .ticket-face:has(.ticket-preview>svg[data-ticket-has-sticker])>.card-select{top:calc(100% * 171 / 671 + 5px)}
+.ticket-stack-deck{--stack-x:min(clamp(8px,3cqw,14px),calc(24cqw / var(--stack-size)));--stack-y:clamp(29px,9cqw,44px);display:grid;grid-template-columns:minmax(0,1fr);align-items:end;isolation:isolate;margin-bottom:18px;padding-inline-end:calc(var(--stack-size) * var(--stack-x));padding-bottom:calc(var(--stack-size) * var(--stack-y))}
+.ticket-collection[data-faces-only=true] .ticket-stack-deck,.ticket-stack-deck .ticket-stack-leg{margin-bottom:0}
+.ticket-stack-leg{grid-area:1/1}
+.ticket-stack-front{z-index:1}
+.ticket-stack-layer{z-index:calc(-1 * var(--stack-depth));transform:translate(calc(var(--stack-depth) * var(--stack-x)),calc(var(--stack-depth) * var(--stack-y)))}
+.ticket-stack-layer:has(:focus-visible){z-index:2}
+.ticket-stack-leg.is-selected .ticket-preview{outline:2px solid #60836f;outline-offset:-1px}
+.ticket-stack-layer[data-ticket-type=flight]>.card-select{top:auto;bottom:4px;right:4px}
 .ticket-collection[data-faces-only=true] .card-top{display:none}.ticket-collection[data-faces-only=true] .ticket-face{margin:0}
 .ticket-list-date{line-height:1.2;gap:2px}.ticket-list-person,.ticket-list-seat{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .ticket-list-route>span:not(.route-arrow){white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:calc(50% - 12px)}

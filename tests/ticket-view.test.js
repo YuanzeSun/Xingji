@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {createRecord} from '../src/model.js';
-import {ticketViewOptions,ticketViewControls,ticketCollection,appendTicketCollection,bindTicketViewControls} from '../src/ticket-view.js';
+import {ticketViewOptions,ticketViewControls,ticketViewEntries,visibleTicketCount,ticketCollection,appendTicketCollection,bindTicketViewControls} from '../src/ticket-view.js';
 import {spaceWindow,spherePoint,ticketSpaceMarkup,mountTicketSpace} from '../src/ticket-space.js';
 import {timeline} from '../src/timeline.js';
 
@@ -66,6 +66,35 @@ test('both grid sizes group dates and the small grid shows only ticket faces',()
   root.innerHTML=ticketCollection([rows[0],rows[20],rows[1]],{mode:'list',size:'medium'},{icon,sort:'price-asc'});
   assert.equal(root.querySelector('.ticket-period-heading'),null);assert.deepEqual([...root.querySelectorAll('.timeline-item')].map(button=>button.dataset.id),['row-0','row-20','row-1']);
   dom.window.close();
+});
+
+test('grid stacks stay together under the first visible flight and count every leg across pages', () => {
+  const flight = (id, values = {}) => createRecord({ id, type: 'flight', template: 'air-boarding-pass',
+    origin: 'PEK', destination: 'NRT', service: 'CA181', departureDate: '2026-11-30', ticketNumber: '999-0000001001/1', ...values });
+  const first = flight('first');
+  const next = flight('next', { origin: 'NRT', destination: 'LAX', service: 'NH006', departureDate: '2026-12-01', ticketNumber: '9990000001001/2' });
+  const railTicket = rail('train', { departureDate: '2026-12-02' });
+  const records = [railTicket, next, first];
+  for (const size of ['medium', 'small']) {
+    const view = { mode: 'grid', size }, options = { icon, selected: new Set(['next']) };
+    const entries = ticketViewEntries(records, view);
+    assert.deepEqual(entries.map(record => record.id), ['train', 'first']);
+    assert.equal(visibleTicketCount(entries), 3);
+    const dom = new JSDOM(ticketCollection(entries.slice(0, 1), view, options));
+    try {
+      const root = dom.window.document.body;
+      appendTicketCollection(root, entries.slice(1), view, options);
+      const stack = root.querySelector('.ticket-period[data-ticket-period="2026-11"] .ticket-stack');
+      assert.deepEqual([...stack.querySelectorAll('[data-action="view"]')].map(button => button.dataset.id), ['first', 'next']);
+      assert.equal(stack.querySelectorAll('.ticket-preview > svg').length, 2);
+      assert.equal(stack.querySelector('[data-archive-select="next"]').checked, true);
+      assert.equal(stack.querySelector('[data-archive-select="first"]').checked, false);
+      appendTicketCollection(root, [rail('more')], view, options);
+      assert.equal(stack.closest('.ticket-period').querySelector('.ticket-period-heading span').textContent, '3 张票据');
+    } finally { dom.window.close(); }
+  }
+  assert.equal(ticketViewEntries([next], { mode: 'grid' })[0].stackedFlights, undefined);
+  assert.deepEqual(ticketViewEntries(records, { mode: 'list' }), records);
 });
 
 test('3D navigation bounds rendered tickets, excludes selection, and supports zoom, drag and cleanup',()=>{

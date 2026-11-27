@@ -36,7 +36,7 @@ import { escape as e, selectOptions } from './html.js';
 import { demoRecords } from './demo.js';
 import { MARK_SHAPES, describeMarks } from './ticket-marks.js';
 import { ticketCodeEditor, bindTicketCodeEditor } from './code-editor.js';
-import {ticketViewOptions,ticketViewControls,ticketCollection, appendTicketCollection,bindTicketViewControls} from './ticket-view.js';
+import {ticketViewOptions,ticketViewControls,ticketViewEntries,visibleTicketCount,ticketCollection,appendTicketCollection,bindTicketViewControls} from './ticket-view.js';
 import {mountTicketSpace} from './ticket-space.js';
 import { requiredRecordFields, ticketRequiredMark, ticketFieldLabel, validateTicketForm, ticketFormFeedback } from './ticket-form.js';
 import { seatClassField, bindSeatClassFields } from './seat-class-field.js';
@@ -331,7 +331,11 @@ const archiveSelected = new Set();
 function ticketArtwork(records, allRecords) {
   if (!records.some(record => record.type === 'flight')) return records;
   const index = boardingBaggageIndex(allRecords);
-  return records.map(record => withBoardingBaggage(record, index));
+  return records.map(record => {
+    const artwork = withBoardingBaggage(record, index);
+    if (artwork.stackedFlights) artwork.stackedFlights = artwork.stackedFlights.map(leg => withBoardingBaggage(leg, index));
+    return artwork;
+  });
 }
 function selectedArchiveRecords() {
   const result = searchTickets(live(), state.filters);
@@ -346,7 +350,7 @@ function refreshArchiveSelection(result = searchTickets(live(), state.filters)) 
   all.indeterminate = archiveSelected.size > 0 && archiveSelected.size < result.records.length;
   for (const input of document.querySelectorAll('[data-archive-select]')) {
     input.checked = archiveSelected.has(input.dataset.archiveSelect);
-    input.closest('.ticket-card,.timeline-ticket').classList.toggle('is-selected', input.checked);
+    input.closest('.ticket-stack-leg,.ticket-card,.timeline-ticket').classList.toggle('is-selected', input.checked);
   }
 }
 function exportScope() {
@@ -399,9 +403,10 @@ function archivePage() {
 function searchResults(rs, result) {
   const visible = result.records;
   if (result.error) return '<div class="empty-state"><h2>请调整筛选条件</h2><p>检查上方日期或票价范围后，结果会自动更新。</p></div>';
-  const view=ticketView,rows=archiveIsSpace() ? visible : visible.slice(0,state.limit);
+  const view = ticketView, entries = ticketViewEntries(visible, view);
+  const rows = archiveIsSpace() ? entries : entries.slice(0, state.limit);
   const collection=ticketCollection(view.mode === 'grid' ? ticketArtwork(rows, rs) : rows,view,{icon,selected:archiveSelected,sort:state.filters.sort});
-  if (visible.length) return collection + (!archiveIsSpace() && visible.length > state.limit ? `<div class="load-more"><button class="button secondary" data-action="load-more">继续翻看 · 已显示 ${state.limit} / ${visible.length} 张</button></div>` : '');
+  if (visible.length) return collection + (!archiveIsSpace() && entries.length > state.limit ? `<div class="load-more"><button class="button secondary" data-action="load-more">继续翻看 · 已显示 ${visibleTicketCount(rows)} / ${visible.length} 张</button></div>` : '');
   const empty = rs.length ? '<h2>还没有匹配的票据</h2><p>试试减少条件，或查找其他路线、旅客与日期。</p>' : '<h2>暂无票据</h2>';
   return `<div class="empty-state">${icon('ticket')}${empty}</div>`;
 }
@@ -755,13 +760,14 @@ function loadMoreTickets(button) {
   if (!button.isConnected || archiveIsSpace()) return;
   const container = root.querySelector('#search-results');
   const allRecords = live(), { records } = searchTickets(allRecords, state.filters);
-  const next = records.slice(state.limit, state.limit + 48);
+  const entries = ticketViewEntries(records, ticketView);
+  const next = entries.slice(state.limit, state.limit + 48);
   if (!container || !next.length) return;
   const hadFocus = document.activeElement === button;
   appendTicketCollection(container, ticketView.mode === 'grid' ? ticketArtwork(next, allRecords) : next, ticketView, { icon, selected: archiveSelected, sort: state.filters.sort });
   state.limit += next.length;
-  if (state.limit >= records.length) button.closest('.load-more').remove();
-  else button.textContent = `继续翻看 · 已显示 ${state.limit} / ${records.length} 张`;
+  if (state.limit >= entries.length) button.closest('.load-more').remove();
+  else button.textContent = `继续翻看 · 已显示 ${visibleTicketCount(entries.slice(0, state.limit))} / ${records.length} 张`;
   if (hadFocus) {
     [...container.querySelectorAll('[data-action="view"]')]
       .find(item => item.dataset.id === next[0].id)?.focus({ preventScroll: true });
@@ -2504,7 +2510,7 @@ document.addEventListener('change', event => {
 });
 document.addEventListener('click', event => {
   if (archiveSelected.size && !event.target.closest('.card-select')) {
-    const card = event.target.closest('#search-results .ticket-card, #search-results .timeline-ticket');
+    const card = event.target.closest('#search-results :is(.ticket-stack-leg,.ticket-card,.timeline-ticket)');
     const checkbox = card?.querySelector('[data-archive-select]');
     if (checkbox) {
       checkbox.click();

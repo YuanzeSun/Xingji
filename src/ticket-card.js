@@ -9,8 +9,18 @@ const routeLabel = record => `${record.service || '票据'} ${record.origin || '
 export function ticketSelection(record, selected) {
   return `<label class="card-select"><input type="checkbox" data-archive-select="${e(record.id)}" ${selected ? 'checked' : ''} aria-label="选择 ${e(routeLabel(record))} ${e(formatDate(record.departureDate))}票据"/></label>`;
 }
-export function ticketCard(record, {icon, selectable = true, selected = false}) {
-  return `<article class="ticket-card${selected ? ' is-selected' : ''}"><div class="card-top"><span class="transport-tag ${record.type}">${icon(record.type === 'rail' ? 'train' : 'plane')}${kind(record)}</span><time>${e(formatDate(record.departureDate))}</time></div><div class="card-info"><div class="card-route"><strong class="card-service">${e(record.service || (record.flightStatus === 'open' ? 'OPEN' : '班次待补充'))}</strong><h2><span class="route-endpoint">${e(record.origin || '出发地待补充')}</span><span class="route-arrow">→</span><span class="route-endpoint">${e(record.destination || '到达地待补充')}</span></h2></div></div><div class="ticket-face" data-ticket-type="${record.type}">${selectable ? ticketSelection(record,selected) : ''}<button class="ticket-preview" data-action="view" data-id="${e(record.id)}" aria-label="查看 ${e(routeLabel(record))}票据">${ticketSVG(record)}</button></div></article>`;
+
+function ticketFace(record, { selectable, selected, depth }) {
+  const layer = depth === undefined ? '' : ` ticket-stack-leg ${depth ? 'ticket-stack-layer' : 'ticket-stack-front'}${selected ? ' is-selected' : ''}`;
+  const offset = depth ? ` style="--stack-depth:${depth}"` : '';
+  return `<div class="ticket-face${layer}" data-ticket-type="${record.type}"${offset}>${selectable ? ticketSelection(record,selected) : ''}<button class="ticket-preview" data-action="view" data-id="${e(record.id)}" aria-label="查看 ${e(routeLabel(record))}票据">${ticketSVG(record)}</button></div>`;
+}
+
+export function ticketCard(record, {icon, selectable = true, selected = false, selectedIds}) {
+  const stacked = record.stackedFlights?.length > 0;
+  const face = ticketFace(record, { selectable, selected, depth: stacked ? 0 : undefined });
+  const content = stacked ? `<div class="ticket-stack-deck" style="--stack-size:${record.stackedFlights.length}" role="group" aria-label="联程航班，共 ${record.stackedFlights.length + 1} 段">${face}${record.stackedFlights.map((leg, index) => ticketFace(leg, { selectable, selected: selectedIds?.has(leg.id), depth: index + 1 })).join('')}</div>` : face;
+  return `<article class="ticket-card${stacked ? ' ticket-stack' : selected ? ' is-selected' : ''}"><div class="card-top"><span class="transport-tag ${record.type}">${icon(record.type === 'rail' ? 'train' : 'plane')}${stacked ? `联程 · ${record.stackedFlights.length + 1} 段` : kind(record)}</span><time>${e(formatDate(record.departureDate))}</time></div><div class="card-info"><div class="card-route"><strong class="card-service">${e(record.service || (record.flightStatus === 'open' ? 'OPEN' : '班次待补充'))}</strong><h2><span class="route-endpoint">${e(record.origin || '出发地待补充')}</span><span class="route-arrow">→</span><span class="route-endpoint">${e(record.destination || '到达地待补充')}</span></h2></div></div>${content}</article>`;
 }
 export function ticketListRow(record, {icon, selectable = true, selected = false}) {
   const seat = [record.type === 'rail' && record.carriage ? record.carriage+'车' : '',record.seat,record.type === 'flight' ? flightCabinLabel(record.seatClass) : record.seatClass].filter(Boolean).join(' · ');
