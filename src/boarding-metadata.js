@@ -7,6 +7,8 @@ export const BOARDING_METADATA_LABELS = {
 };
 export const BOARDING_METADATA_FIELDS=Object.keys(BOARDING_METADATA_LABELS);
 export const BOARDING_BAGGAGE_FIELDS = Object.keys(baggageLabels);
+export const flightTicketNumber = value => String(value || '').normalize('NFKC').replace(/[\s-]/g, '')
+  .match(/^(\d{13})(?:\/\d{1,2})?$/)?.[1] || '';
 export function boardingMetadataValues(read) {
   const values={};
   for(const key of ['frequentFlyerCarrier','frequentFlyerNumber','marketingCarrier'])if(read[key])values[key]=read[key];

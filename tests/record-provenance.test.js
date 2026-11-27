@@ -9,21 +9,21 @@ import {searchTickets} from '../src/search.js';
 import {MemoryGitHub} from './helpers/cloud.js';
 import {GitHubStore,synchronize} from '../src/github.js';
 
-const options={passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:'2026-11-17',cabin:'Y',seat:'12A',sequence:'25',status:'3',electronic:'E'};
+const options={passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:'2026-11-17',cabin:'Y',seat:'12A',sequence:'25',status:'3'};
 const flight=extra=>createRecord({id:'flight',type:'flight',template:'air-boarding-pass',passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-11-17',seat:'12A',boardingCode:createBoardingCode(options),boardingCodeSource:'generated',boardingLegIndex:'0',...extra});
 const rail=extra=>createRecord({id:'rail',service:'G1',origin:'北京南',destination:'上海虹桥',departureDate:'2026-11-17',...extra});
 const result=record=>railDetails({success:true,data:{bureau:'H',bureauShortName:'上局',car:'CR400BF-S',runner:'上海客运段',carOwner:'上海动车段',numberFull:['G1'],rundays:['20261117'],timetable:[{station:'北京南',day:0,arrive:'06:30',depart:'06:30'},{station:'上海虹桥',day:0,arrive:'11:24',depart:'11:24'}]}},railQuery(record));
 
 test('generated codes follow ticket changes while preserving adopted status, format and actual operating flight',()=>{
   const updated=flight({seat:'20C',service:'CA5678',pnr:'XYZ789',departureDate:'2024-12-31',passenger:'DOE/JOHN',seatClass:'S'}),read=readBoardingCode(updated.boardingCode);
-  assert.equal(read.seat,'20C');assert.equal(read.service,'CA5678');assert.equal(read.pnr,'XYZ789');assert.equal(read.dayOfYear,366);assert.equal(read.passenger,'DOE/JOHN');
-  assert.equal(read.status,'3');assert.equal(read.sequence,'00025');assert.equal(read.cabin,updated.seatClass);assert.equal(refreshGeneratedCode(updated),false);
+  assert.equal(read.seat,'20C');assert.equal(read.service,'CA5678');assert.equal(read.pnr,'XYZ789');assert.equal(read.dayOfYear,366);assert.equal(read.passenger,'DOEJOHN');
+  assert.equal(read.status,'3');assert.equal(read.sequence,'0025');assert.equal(read.cabin,updated.seatClass);assert.equal(refreshGeneratedCode(updated),false);
   const shared=flight({service:'BA123',boardingCodeOperatingFlight:'AA45A'});
   assert.equal(readBoardingCode(shared.boardingCode).service,'AA45A');
   assert.equal(readBoardingCode(createRecord({...shared,service:'BA456',seat:'08C'}).boardingCode).service,'AA45A');
   for(const format of ['PDF417','Aztec','QRCode','DataMatrix']){
-    const record=flight({boardingCode:createBoardingCode({...options,electronic:''},format),seat:'5A'});
-    assert.equal(record.boardingCode.format,format);assert.equal(readBoardingCode(record.boardingCode).electronic,'');
+    const record=flight({boardingCode:createBoardingCode(options,format),seat:'5A'});
+    assert.equal(record.boardingCode.format,format);assert.equal(atob(record.boardingCode.rawBytes)[22],' ');
   }
 });
 

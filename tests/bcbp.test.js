@@ -14,20 +14,19 @@ import {boardingGeneratorMarkup} from '../src/boarding-code-generator.js';
 import {DEMO_BOARDING_CODE} from '../src/demo-boarding-code.js';
 import {bindUppercaseInputs} from '../src/uppercase-input.js';
 
-const values=()=>({passenger:'DESMARAIS/LUC',pnr:'ABC123',origin:'YUL',destination:'FRA',carrier:'AC',flightNumber:'834',date:'2009-08-14',cabin:'F',seat:'1A',sequence:'25',status:'1',electronic:'E'});
+const values=()=>({passenger:'DESMARAIS/LUC',pnr:'ABC123',origin:'YUL',destination:'FRA',carrier:'AC',flightNumber:'834',date:'2009-08-14',cabin:'F',seat:'1A',sequence:'25',status:'1'});
 const flight=extra=>createRecord({type:'flight',template:'air-boarding-pass',passenger:'DESMARAIS/LUC',pnr:'ABC123',origin:'YUL',destination:'FRA',service:'AC834',departureDate:'2009-08-14',seat:'1A',seatClass:'F',boardingCodeSource:'original',boardingLegIndex:'0',...extra});
 
 test('single-leg BCBP round-trips fixed-width fields and rejects invalid values or payloads',()=>{
   const raw=encodeBCBP(values());
-  assert.equal(raw,'M1DESMARAIS/LUC       EABC123 YULFRAAC 0834 226F001A00025100');assert.equal(raw.length,60);
+  assert.equal(raw,'M1DESMARAIS/LUC        ABC123 YULFRAAC 0834 226F001A00025100');assert.equal(raw.length,60);
   const decoded = readBCBP(raw), fields = values();
   assert.deepEqual([decoded.passenger, decoded.pnr, decoded.originCode, decoded.destinationCode, decoded.carrier,
     decoded.service, decoded.dayOfYear, decoded.cabin, decoded.seat],
     [fields.passenger, fields.pnr, fields.origin, fields.destination, fields.carrier, 'AC834', 226, 'F', '1A']);
   assert.equal(encodeBCBP({...values(),date:'2024-12-31'}).slice(44,47),'366');
   assert.equal(encodeBCBP({...values(),carrier:'u2',flightNumber:'12a',seat:'INF',sequence:'A12'}).slice(36,44),'U2 0012A');
-  assert.equal(encodeBCBP({...values(),electronic:''})[22],' ');
-  assert.equal(encodeBCBP({...values(),electronic:undefined})[22],' ');
+  assert.equal(raw[22],' ');
   for(const [key,value] of [['passenger','姓名'],['passenger','SURNAME/GIVENNAMETOOLONG'],['pnr','ABCD1234'],['origin','PE'],['flightNumber','12345'],['date','2025-02-29'],['date','2024'],['seat','12345A'],['sequence','123456'],['status',''],['cabin','K1']])assert.throws(()=>encodeBCBP({...values(),[key]:value}));
   for (const malformed of ['https://example.com', raw.slice(0, 59), 'M2' + raw.slice(2),
     raw.slice(0, 58) + 'FF', raw.slice(0, 44) + '999' + raw.slice(47), raw.slice(0, 2) + '张' + raw.slice(3)]) {
@@ -35,16 +34,21 @@ test('single-leg BCBP round-trips fixed-width fields and rejects invalid values 
   }
 });
 
-test('domestic BCBP reads the NI extension and only writes masked resident IDs',()=>{
+test('domestic PDF417 payload matches the mobile layout and contains only the masked resident ID',()=>{
   const identity='200000200001010018', mask='2'+'*'.repeat(16)+'8';
-  const domestic={...values(),origin:'DQA',destination:'PEK',carrier:'CA',identity};
+  const domestic={...values(),origin:'DQA',destination:'PEK',carrier:'CA',identity,ticketNumber:'784-0000000001/2',
+    passenger:'LI/MING',passengerChinese:'李明',gate:'2',boardingTime:'15:20'};
   const payload=encodeBCBP(domestic);
-  assert.equal(payload.slice(58),'1A>80000NI'+mask);
+  assert.equal(payload.slice(2,22).trim(),'LIMING');
+  assert.equal(payload.slice(52,57),'0025 ');
+  assert.equal(payload.slice(58),'2B>1030MM0E78400000000010NI'+mask+'#90李明#91大庆#92北京#932#9415:20');
+  assert.equal(readBCBP(payload).ticketNumber,'7840000000001');
   assert.equal(readBCBP(payload).identityHint,mask);
   assert.equal(payload.includes(identity),false);
   assert.equal(encodeBCBP({...domestic,destination:'HKG'}).slice(58),'00');
   assert.equal(encodeBCBP({...domestic,origin:'NRT'}).slice(58),'00');
-  assert.equal(encodeBCBP({...domestic,identity:'P12345678'}).slice(58),'00');
+  assert.equal(readBCBP(encodeBCBP({...domestic,identity:'P12345678'})).identityHint,undefined);
+  assert.doesNotMatch(encodeBCBP({...domestic,boardingTime:''}),/#90/);
 
   const header=payload.slice(0,58);
   const appendix='#90示例旅客#91大庆#92北京#932#9415:20';
@@ -58,21 +62,20 @@ test('domestic BCBP reads the NI extension and only writes masked resident IDs',
   assert.equal(readBCBP(header+'17'+carrierBlock+'NI'+mask).identityHint,undefined);
 });
 
-test('new generators default to check-in status 1, no electronic marker and economy Y while saved codes retain their values',()=>{
+test('new generators default to check-in status 1 and economy Y while saved codes retain their values',()=>{
   const defaults=boardingCodeDefaults(flight({seatClass:''}));
-  assert.equal(defaults.electronic,'');assert.equal(defaults.cabin,'Y');assert.equal(defaults.status,'1');
+  assert.equal(defaults.cabin,'Y');assert.equal(defaults.status,'1');
   for(const code of ['S','M','Z','J'])assert.equal(boardingCodeDefaults(flight({seatClass:code})).cabin,code);
   assert.equal(boardingCodeDefaults(flight({seatClass:'头等舱'})).cabin,'F');
-  for(const electronic of ['','E']){
-    const saved=boardingCodeDefaults(flight({boardingCode:createBoardingCode({...values(),electronic,status:'0'})}));
-    assert.equal(saved.electronic,electronic);assert.equal(saved.cabin,'F');assert.equal(saved.status,'0');
-  }
+  const saved=boardingCodeDefaults(flight({boardingCode:createBoardingCode({...values(),status:'0'})}));
+  assert.equal(saved.cabin,'F');assert.equal(saved.status,'0');
 });
 
 test('all generated symbologies decode to the complete BCBP and survive metadata exports',async()=>{
   await prepareZXingModule({overrides:{wasmBinary:await readFile('node_modules/zxing-wasm/dist/reader/zxing_reader.wasm')},fireImmediately:true});
   for(const format of BCBP_FORMATS){
-    const input={...values(),origin:'DQA',destination:'PEK',carrier:'CA',identity:'200000200001010018'};
+    const input={...values(),origin:'DQA',destination:'PEK',carrier:'CA',identity:'200000200001010018',
+      ticketNumber:'7840000000001',passengerChinese:'李明',gate:'2',boardingTime:'15:20'};
     const code=createBoardingCode(input,format),image=symbolImage(symbolFromCodeData(code),'flight');
     const result=(await readBarcodes(image,{formats:[format],textMode:'Plain',tryHarder:true})).find(result=>result.isValid);
     assert.ok(result,format);assert.equal(result.text,encodeBCBP(input));assert.deepEqual(result.bytes,codeBytes(code.rawBytes));
@@ -93,7 +96,7 @@ test('the generator gets shared fields from the ticket and creates or updates th
   const waitForPreview=()=>new Promise(resolve=>setTimeout(resolve,200));
   try{
     assert.equal(form.querySelector('[data-bcbp="cabin"]'),null);
-    assert.equal(form.querySelector('[data-bcbp="electronic"] option:checked').textContent,'无');
+    assert.equal(form.querySelector('[data-bcbp="electronic"]'),null);
     assert.equal(form.querySelector('[data-bcbp-generate]'),null);
     assert.equal(form.querySelector('[data-bcbp-fields]').disabled,true);
     submit();assert.deepEqual(draft.boardingCode,DEMO_BOARDING_CODE);
@@ -109,8 +112,8 @@ test('the generator gets shared fields from the ticket and creates or updates th
     assert.equal(form.querySelector('.barcode-required-legend'), null);
     assert.equal(form.querySelector('[data-bcbp="status"]').value,'1');
     const payload=()=>String.fromCharCode(...codeBytes(draft.boardingCode.rawBytes));
-    set('sequence','25');submit();assert.equal(payload(),encodeBCBP({...values(),electronic:''}));
-    set('electronic','E');set('passenger','desmarais/luc');set('status','3');submit();
+    set('sequence','25');submit();assert.equal(payload(),encodeBCBP(values()));
+    set('passenger','desmarais/luc');set('status','3');submit();
     assert.equal(payload(),encodeBCBP({...values(),status:'3'}));
     set('status','1');
     await waitForPreview();

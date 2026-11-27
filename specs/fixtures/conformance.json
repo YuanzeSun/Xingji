@@ -39,7 +39,6 @@
       "payload": "TTFaSEFORy9TQU4gICAgICAgICAgICBBQkMxMjMgUEVLUFZHQ0EgMTIzNCAzNjZZMDEyQTAwMDIwMTcyPjgxODBXTTYzNjZCQ0EgMDEyMzQ1Njc4OTAwMjJBMTIzMDAwMDAwMDAwMTAwTEggQ0EgMDAwMDAxMjM0NTY3ODkgICAyMEtOIzkw5byg5LiJIzkx5YyX5LqsIzky5LiK5rW3IzkzQTEwMSM5NDE4OjIx",
       "expected": {
         "passenger": "ZHANG/SAN",
-        "electronic": "",
         "baggageSeries": [
           {
             "number": "0123456789",
@@ -68,7 +67,6 @@
         "legs": [
           {
             "passenger": "ZHANG/SAN",
-            "electronic": "",
             "baggageSeries": [
               {
                 "number": "0123456789",
@@ -103,7 +101,6 @@
       "payload": "TTJaSEFORy9TQU4gICAgICAgICAgICBBQkMxMjMgUEVLUFZHQ0EgMTIzNCAzNjZZMDEyQTAwMDIwMTcyPjgxODBXTTYzNjZCQ0EgMDEyMzQ1Njc4OTAwMjJBMTIzMDAwMDAwMDAwMTAwTEggQ0EgMDAwMDAxMjM0NTY3ODkgICAyMEtOIzkw5byg5LiJIzkx5YyX5LqsIzky5LiK5rW3IzkzQTEwMSM5NDE4OjIxQUJDMTIzIFBWR1NGT1VBIDA4NTcgMDAxWTAyMEMwMDAyMTEyQzJBMTIzMDAwMDAwMDAwMjAwTEggQ0EgMDAwMDAxMjM0NTY3ODkgICAyMEtO",
       "expected": {
         "passenger": "ZHANG/SAN",
-        "electronic": "",
         "baggageSeries": [
           {
             "number": "0123456789",
@@ -132,7 +129,6 @@
         "legs": [
           {
             "passenger": "ZHANG/SAN",
-            "electronic": "",
             "baggageSeries": [
               {
                 "number": "0123456789",
@@ -161,7 +157,6 @@
           },
           {
             "passenger": "ZHANG/SAN",
-            "electronic": "",
             "baggageSeries": [
               {
                 "number": "0123456789",
@@ -193,7 +188,6 @@
       "payload": "TTNaSEFORy9TQU4gICAgICAgICAgICBBQkMxMjMgUEVLUFZHQ0EgMTIzNCAzNjZZMDEyQTAwMDIwMTcyPjgxODBXTTYzNjZCQ0EgMDEyMzQ1Njc4OTAwMjJBMTIzMDAwMDAwMDAwMTAwTEggQ0EgMDAwMDAxMjM0NTY3ODkgICAyMEtOIzkw5byg5LiJIzkx5YyX5LqsIzky5LiK5rW3IzkzQTEwMSM5NDE4OjIxQUJDMTIzIFBWR1NGT1VBIDA4NTcgMDAxWTAyMEMwMDAyMTEyQzJBMTIzMDAwMDAwMDAwMjAwTEggQ0EgMDAwMDAxMjM0NTY3ODkgICAyMEtOQUJDMTIzIFNGT0xBWFVBIDAxMDAgMDAyWTAzMEQwMDAyMjEyQzJBMTIzMDAwMDAwMDAwMzAwTEggQ0EgMDAwMDAxMjM0NTY3ODkgICAyMEtO",
       "expected": {
         "passenger": "ZHANG/SAN",
-        "electronic": "",
         "baggageSeries": [
           {
             "number": "0123456789",
@@ -222,7 +216,6 @@
         "legs": [
           {
             "passenger": "ZHANG/SAN",
-            "electronic": "",
             "baggageSeries": [
               {
                 "number": "0123456789",
@@ -251,7 +244,6 @@
           },
           {
             "passenger": "ZHANG/SAN",
-            "electronic": "",
             "baggageSeries": [
               {
                 "number": "0123456789",
@@ -277,7 +269,6 @@
           },
           {
             "passenger": "ZHANG/SAN",
-            "electronic": "",
             "baggageSeries": [
               {
                 "number": "0123456789",
@@ -309,7 +300,6 @@
       "payload": "TTRaSEFORy9TQU4gICAgICAgICAgICBBQkMxMjMgUEVLUFZHQ0EgMTIzNCAzNjZZMDEyQTAwMDIwMTcyPjgxODBXTTYzNjZCQ0EgMDEyMzQ1Njc4OTAwMjJBMTIzMDAwMDAwMDAwMTAwTEggQ0EgMDAwMDAxMjM0NTY3ODkgICAyMEtOIzkw5byg5LiJIzkx5YyX5LqsIzky5LiK5rW3IzkzQTEwMSM5NDE4OjIxQUJDMTIzIFBWR1NGT1VBIDA4NTcgMDAxWTAyMEMwMDAyMTEyQzJBMTIzMDAwMDAwMDAwMjAwTEggQ0EgMDAwMDAxMjM0NTY3ODkgICAyMEtOQUJDMTIzIFNGT0xBWFVBIDAxMDAgMDAyWTAzMEQwMDAyMjEyQzJBMTIzMDAwMDAwMDAwMzAwTEggQ0EgMDAwMDAxMjM0NTY3ODkgICAyMEtOQUJDMTIzIExBWFBFS0NBIDA5ODggMDAzWTA0MkEwMDAyMzEyQzJBMTIzMDAwMDAwMDAwNDAwTEggQ0EgMDAwMDAxMjM0NTY3ODkgICAyMEtO",
       "expected": {
         "passenger": "ZHANG/SAN",
-        "electronic": "",
         "baggageSeries": [
           {
             "number": "0123456789",
@@ -338,7 +328,6 @@
         "legs": [
           {
             "passenger": "ZHANG/SAN",
-            "electronic": "",
             "baggageSeries": [
               {
                 "number": "0123456789",
@@ -367,7 +356,6 @@
           },
           {
             "passenger": "ZHANG/SAN",
-            "electronic": "",
             "baggageSeries": [
               {
                 "number": "0123456789",
@@ -393,7 +381,6 @@
           },
           {
             "passenger": "ZHANG/SAN",
-            "electronic": "",
             "baggageSeries": [
               {
                 "number": "0123456789",
@@ -419,7 +406,6 @@
           },
           {
             "passenger": "ZHANG/SAN",
-            "electronic": "",
             "baggageSeries": [
               {
                 "number": "0123456789",

@@ -1,10 +1,10 @@
 import {journeyDate} from './journey-date.js';
-import {boardingCodeDefaults,readBoardingCode,createBoardingCode,encodeBCBP} from './bcbp.js';
+import {boardingCodeDefaults,readBoardingCode,createBoardingCode} from './bcbp.js';
 import {hasChineseName} from './flight-passenger.js';
 import {markFieldSources} from './field-sources.js';
 
 export const BOARDING_FIELDS=['boardingCode','boardingCodeSource','boardingCodeOperatingFlight','boardingLegIndex'];
-export const BOARDING_SHARED_FIELDS=['passenger','pnr','origin','destination','originCode','destinationCode','service','departureDate','seat','seatClass','identity'];
+export const BOARDING_SHARED_FIELDS=['passenger','pnr','origin','destination','originCode','destinationCode','service','departureDate','seat','seatClass','identity','ticketNumber','gate','boardingTime'];
 export function operatingFlight(value) {
   const text=String(value || '').trim().toUpperCase();
   if(!text)return null;
@@ -16,7 +16,7 @@ export function generatedCodeSettings(record) {
   if(record.boardingCodeSource!=='generated' || !record.boardingCode)return null;
   const saved=readBoardingCode(record.boardingCode,record.boardingLegIndex);
   if(!saved)throw new Error('生成条码的基础数据无效，请重新生成或移除条码');
-  return {sequence:saved.sequence,status:saved.status,electronic:saved.electronic,format:saved.format,operatingFlight:record.boardingCodeOperatingFlight || ''};
+  return {sequence:saved.sequence,status:saved.status,format:saved.format,operatingFlight:record.boardingCodeOperatingFlight || ''};
 }
 export function clearGeneratedCode(record) {
   if(record.boardingCodeSource!=='generated')return false;
@@ -30,8 +30,9 @@ export function refreshGeneratedCode(record) {
   if(!settings)return false;
   try {
     const values={...boardingCodeDefaults(record,{useSaved:false}),...settings,...operatingFlight(settings.operatingFlight)};
-    if(btoa(encodeBCBP(values))===record.boardingCode.rawBytes)return false;
-    record.boardingCode=createBoardingCode(values,settings.format);
+    const code=createBoardingCode(values,settings.format);
+    if(code.rawBytes===record.boardingCode.rawBytes)return false;
+    record.boardingCode=code;
     markFieldSources(record,['boardingCode'],'generated');
     return true;
   } catch {

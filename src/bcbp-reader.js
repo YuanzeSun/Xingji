@@ -4,9 +4,9 @@ const carrier=value=>/^(?:[A-Z]{2,3}|[A-Z]\d|\d[A-Z])$/.test(value);
 // Byte offsets apply to the raw one-byte string, including airline extensions.
 export function readBCBP(value) {
   if(typeof value!=='string'||value.length<60||value.length>8192||!/^M[1-4][\x20-\x7e]{21}/.test(value))return null;
-  const passenger=value.slice(2,22).trim(),electronic=value[22].trim(),count=Number(value[1]);
+  const passenger=value.slice(2,22).trim(),count=Number(value[1]);
   if(!/^[A-Z][A-Z /.'-]*$/.test(passenger)||!['E',' '].includes(value[22]))return null;
-  const shared={passenger,electronic},legs=[];let offset=23;
+  const shared={passenger},legs=[];let offset=23;
   for(let index=0;index<count;index++){
     const fixed=value.slice(offset,offset+35),length=value.slice(offset+35,offset+37);
     if(!/^[\x20-\x7e]{35}$/.test(fixed)||!hexadecimal(length))return null;

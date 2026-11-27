@@ -21,7 +21,7 @@ test('the reader extracts the ticket number and individual airline tags without 
   const payload=taggedBoardingPayload(),raw=String.fromCharCode(...new TextEncoder().encode(payload));
   for(const value of [payload,raw]){
     const read=readBCBP(value);
-    assert.equal(read.passenger,'ZHANG/SAN');assert.equal(read.passengerChinese,'张三');assert.equal(read.ticketNumber,'1230000000001');
+    assert.equal(read.passenger,'ZHANGSAN');assert.equal(read.passengerChinese,'张三');assert.equal(read.ticketNumber,'1230000000001');
     assert.equal(read.gate,'A101');assert.equal(read.boardingTime,'18:21');
     assert.equal(read.cabin,'Z');assert.equal(read.departureDate,undefined);
   }
@@ -54,9 +54,9 @@ test('a domestic Chinese ticket can generate an English-name BCBP without changi
   try{
     assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'ZHANG/SAN');assert.ok(form.querySelector('[data-bcbp-passenger-field] .barcode-required-mark'));
     form.querySelector('[data-bcbp="sequence"]').value='42';form.querySelector('[data-bcbp="status"]').value='1';form.dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
-    assert.equal(form.querySelector('#code-error').textContent,'');assert.equal(draft.passenger,'张三');assert.equal(readBoardingCode(draft.boardingCode).passenger,'ZHANG/SAN');
-    assert.equal(boardingPresentation(draft).passenger,'张三');assert.equal(boardingPresentation({...draft,destination:'LHR',destinationCode:'LHR'}).passenger,'ZHANG/SAN');
-    draft.seat='20C';assert.equal(refreshGeneratedCode(draft),true);assert.equal(readBoardingCode(draft.boardingCode).seat,'20C');assert.equal(readBoardingCode(draft.boardingCode).passenger,'ZHANG/SAN');
+    assert.equal(form.querySelector('#code-error').textContent,'');assert.equal(draft.passenger,'张三');assert.equal(readBoardingCode(draft.boardingCode).passenger,'ZHANGSAN');
+    assert.equal(boardingPresentation(draft).passenger,'张三');assert.equal(boardingPresentation({...draft,destination:'LHR',destinationCode:'LHR'}).passenger,'ZHANGSAN');
+    draft.seat='20C';assert.equal(refreshGeneratedCode(draft),true);assert.equal(readBoardingCode(draft.boardingCode).seat,'20C');assert.equal(readBoardingCode(draft.boardingCode).passenger,'ZHANGSAN');
     const svg=new JSDOM(ticketSVG(draft),{contentType:'image/svg+xml'});assert.match(svg.window.document.querySelector('[data-boarding-section="main"]').textContent,/张三/);svg.window.close();
   }finally{cleanup();dom.window.close();}
 });

@@ -49,7 +49,7 @@ export function ticketCodeEditor(record, { fromScan = false, editingSaved = fals
 }
 export function bindTicketCodeEditor(form, draft, changed, {
   referenceURL = '', autoRead = false, editingSaved = false, savedService = editingSaved ? draft.service : '',
-  profile, preserveGenerator = false, onCameraStart, isCurrent = () => true,
+  profile, preserveGenerator = false, onCameraStart, isCurrent = () => true, baggageFieldsInUse = () => [],
   loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {}
 } = {}) {
   const section = form.querySelector('[data-code-editor]'); if (!section) return () => {};
@@ -148,10 +148,14 @@ export function bindTicketCodeEditor(form, draft, changed, {
       }
     }
     const adopted = review?.conflicts.filter(({ key }) => selection?.choices[key] === 'scanned') || [];
-    const replaceCode = !draft.boardingCode || !rescan || review?.added || review?.values.identity || adopted.length;
+    const values = Object.assign({}, review?.values, ...adopted.map(({ update }) => update));
+    const skipped = baggageFieldsInUse({ ...previousRecord, ...values }).filter(key => Object.hasOwn(values, key));
+    for (const key of skipped) delete values[key];
+    const added = (review?.added || 0) - skipped.filter(key => !previousRecord[key]).length;
+    const replaceCode = !draft.boardingCode || !rescan || added || values.identity || adopted.some(({ key }) => Object.hasOwn(values, key));
     reset();
     status.textContent = !rescan ? '已读取并重建 ' + code.format :
-      review?.added ? `已补充 ${review.added} 项资料` : review?.conflicts.length ? '已按选择核对扫码资料' : '扫码资料一致';
+      added ? `已补充 ${added} 项资料` : review?.conflicts.length ? '已按选择核对扫码资料' : '扫码资料一致';
     error.textContent = '';
     if (!replaceCode) return;
 
@@ -161,7 +165,6 @@ export function bindTicketCodeEditor(form, draft, changed, {
     draft.boardingCodeOperatingFlight = '';
     markManualFields(draft, [field]);
     markFieldSources(draft, [field], 'barcode');
-    const values = Object.assign({}, review?.values, ...adopted.map(({ update }) => update));
     const filled = Object.keys(values);
     Object.assign(draft, values);
     markFieldSources(draft, filled, 'barcode');

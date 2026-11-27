@@ -16,7 +16,7 @@ function code(flightNumber='1234') {
   return normalizeCodeData({version:1,format:'PDF417',rawBytes:Buffer.from(bytes).toString('base64'),symbologyIdentifier:']L2',gs1:false,eci:[],parameters:{symbolVersion:'',errorCorrectionLevel:'',mask:null}});
 }
 function editor(lookup) {
-  const draft=createRecord({type:'flight',template:'air-boarding-pass'}),fields=[...BOARDING_SHARED_FIELDS,'ticketNumber','gate','boardingTime','departureTime','arrivalDate','arrivalTime','airline','aircraft','departureTerminal'];
+  const draft=createRecord({type:'flight',template:'air-boarding-pass'}),fields=[...BOARDING_SHARED_FIELDS,'departureTime','arrivalDate','arrivalTime','airline','aircraft','departureTerminal'];
   const dom=new JSDOM('<form>'+fields.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+ticketCodeEditor(draft)+boardingGeneratorMarkup(draft)+flightLookupMarkup()+'</form>'),form=dom.window.document.querySelector('form');
   let scanned=code(),applies=0;
   const stopCode=bindTicketCodeEditor(form,draft,()=>{},{loadRebuilder:async()=>async()=>({codes:[{data:scanned,format:'PDF417'}],issues:[]})});

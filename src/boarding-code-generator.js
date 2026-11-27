@@ -6,9 +6,9 @@ import {fieldSourceBadge} from './field-sources.js';
 import {barcodeRequiredMark} from './ticket-form.js';
 
 function generatorBadge(key,values,record,profile) {
-  const kind=record.boardingCode ? record.boardingCodeSource==='generated' ? 'generated' : 'barcode' : key==='passenger' && profile && values.passenger ? 'profile' : ['format','electronic','status'].includes(key) ? 'default' : '';
+  const kind=record.boardingCode ? record.boardingCodeSource==='generated' ? 'generated' : 'barcode' : key==='passenger' && profile && values.passenger ? 'profile' : ['format','status'].includes(key) ? 'default' : '';
   const field='bcbp:'+key;
-  return fieldSourceBadge(field,{[field]:key==='electronic' ? values[key] || '无' : values[key],fieldSources:{[field]:kind}});
+  return fieldSourceBadge(field,{[field]:values[key],fieldSources:{[field]:kind}});
 }
 const englishPassengerField=(values,record,{profile}={})=>`<label class="field" data-bcbp-passenger-field><span>条码英文姓名${barcodeRequiredMark}${generatorBadge('passenger',values,record,profile)}</span><input data-bcbp="passenger" value="${e(values.passenger || '')}" maxlength="20" placeholder="姓/名，如：ZHANG/SAN" autocomplete="off" spellcheck="false" /></label>`;
 export function boardingGeneratorMarkup(record,{profile,settings}={}) {
@@ -18,7 +18,7 @@ export function boardingGeneratorMarkup(record,{profile,settings}={}) {
 
   const select=(key,label,options,required=false)=>`<label class="field"><span>${label}${required?barcodeRequiredMark:''}${generatorBadge(key,values,record,profile)}</span><select data-bcbp="${key}">${options.map(([value,text])=>`<option value="${e(value)}" ${values[key]===value?'selected':''}>${e(text)}</option>`).join('')}</select></label>`;
   const input=(key,label,max,placeholder,required=false)=>`<label class="field"><span>${label}${required?barcodeRequiredMark:''}${generatorBadge(key,values,record,profile)}</span><input data-bcbp="${key}" value="${e(values[key]||'')}" maxlength="${max}" placeholder="${placeholder}" autocomplete="off" spellcheck="false" ${key==='status'?'inputmode="numeric"':''}/></label>`;
-  return `<div class="boarding-generator" data-bcbp-generator><h4>登机牌条码信息</h4><fieldset data-bcbp-fields${scanned ? ' disabled' : ''}><div class="form-grid">${hasChineseName(record.passenger)?englishPassengerField(values,record,{profile}):''}${input('sequence','值机序号（SEQ）',5,'如：25',true)}${input('status','打印时旅客状态',1,'如：1（已值机）',true)}${select('format','条码格式',BCBP_FORMATS.map(format=>[format,format==='PDF417'?'PDF417':format==='QRCode'?'QR Code':format]),true)}${select('electronic','电子客票标记',[['','无'],['E','E · 电子客票']])}${input('operatingFlight','实际承运航班（代码共享时填写）',9,'如：CA1234')}</div></fieldset></div>`;
+  return `<div class="boarding-generator" data-bcbp-generator><h4>登机牌条码信息</h4><fieldset data-bcbp-fields${scanned ? ' disabled' : ''}><div class="form-grid">${hasChineseName(record.passenger)?englishPassengerField(values,record,{profile}):''}${input('sequence','值机序号（SEQ）',5,'如：25',true)}${input('status','打印时旅客状态',1,'如：1（已值机）',true)}${select('format','条码格式',BCBP_FORMATS.map(format=>[format,format==='PDF417'?'PDF417':format==='QRCode'?'QR Code':format]),true)}${input('operatingFlight','实际承运航班（代码共享时填写）',9,'如：CA1234')}</div></fieldset></div>`;
 }
 
 export function readBoardingGenerator(section) {
@@ -40,7 +40,7 @@ export function automaticBoardingCode(record,settings,{profile}={}) {
 
 export function editBoardingGeneratorField(input) {
   const field='bcbp:'+input.dataset.bcbp,badge=input.closest('.field').querySelector('[data-field-source]');
-  if(badge)badge.outerHTML=fieldSourceBadge(field,{[field]:input.value || (input.dataset.bcbp==='electronic' ? '无' : ''),fieldSources:{[field]:'manual'}});
+  if(badge)badge.outerHTML=fieldSourceBadge(field,{[field]:input.value,fieldSources:{[field]:'manual'}});
 }
 
 function boardingGeneratorValues(record,{profile}={}) {

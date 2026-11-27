@@ -51,7 +51,7 @@ test('every sample train has an offline route with line names, a complete timeta
 test('demo flights have independent boarding codes and cover the aircraft grouping options',()=>{
   const rows=demoRecords('2026-11-17').filter(record=>record.type==='flight');
   for(const record of rows){
-    const code=readBoardingCode(record.boardingCode);assert.equal(record.boardingCodeSource,'generated');assert.equal(code.service,record.service);assert.equal(code.originCode,record.originCode);assert.equal(code.destinationCode,record.destinationCode);assert.equal(code.seat,record.seat);assert.equal(code.cabin,record.seatClass);assert.equal(code.pnr,record.pnr);assert.equal(code.electronic,'');
+    const code=readBoardingCode(record.boardingCode);assert.equal(record.boardingCodeSource,'generated');assert.equal(code.service,record.service);assert.equal(code.originCode,record.originCode);assert.equal(code.destinationCode,record.destinationCode);assert.equal(code.seat,record.seat);assert.equal(code.cabin,record.seatClass);assert.equal(code.pnr,record.pnr);assert.equal(atob(record.boardingCode.rawBytes)[22],' ');
     for(const key of ['airline','aircraft','aircraftRegistration','departureTerminal','arrivalTerminal','boardingTime','pnr','flightStatus','flightDistance','actualDepartureDate','actualDepartureTime','actualArrivalDate','actualArrivalTime','frequentFlyerCarrier','frequentFlyerNumber','marketingCarrier'])assert.ok(record[key],record.service+' '+key);
     assert.equal(ticketSVG(record).includes('data-boarding-baggage-sticker'), Boolean(record.checkedBaggageCount));
   }

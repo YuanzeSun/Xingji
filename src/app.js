@@ -1,5 +1,5 @@
 import {BOARDING_METADATA_LABELS,BOARDING_METADATA_FIELDS,BOARDING_BAGGAGE_FIELDS} from './boarding-metadata.js';
-import {boardingBaggageIndex,draftBoardingBaggage,withBoardingBaggage} from './boarding-baggage.js';
+import {boardingBaggageIndex,occupiedBaggageFields,otherBaggageLegs,withBoardingBaggage} from './boarding-baggage.js';
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
@@ -1069,7 +1069,7 @@ const flightLoyaltyFields = BOARDING_METADATA_FIELDS.filter(key => !BOARDING_BAG
 function flightEditorSections(record) {
   const fields = (...keys) => keys.map(key => field(key, record)).join('');
   const metadata = (title, key, keys) => `<details class="editor-extra" data-boarding-fields="${key}" ${keys.some(field => record[field]) ? 'open' : ''}>
-    <summary>${e(title)}</summary>${key === 'baggage' ? '<p class="flight-local-time" data-baggage-later-leg hidden>行李牌随首段登机牌展示。</p>' : ''}<div class="form-grid">${fields(...keys)}</div>
+    <summary>${e(title)}</summary>${key === 'baggage' ? '<p class="flight-local-time" data-baggage-later-leg hidden>行李牌随首段登机牌展示。</p><p class="flight-local-time" data-baggage-occupied hidden></p>' : ''}<div class="form-grid">${fields(...keys)}</div>
   </details>`;
   return [
     `<div data-boarding-journey>${boardingJourneyMarkup(record)}</div>`,
@@ -1157,11 +1157,16 @@ function editRecord(record, {
   const form = document.querySelector('#editor-form');
   form.closest('dialog').classList.add('ticket-editor-modal');
   function refreshPreview() {
-    const note = form.querySelector('[data-baggage-later-leg]');
-    const baggageEdited = flight && BOARDING_BAGGAGE_FIELDS.some(key => draft[key] !== original[key]);
-    const index = flight ? draftBoardingBaggage(baggageEdited ? { ...draft, updatedAt: now() } : draft, state.records) : null;
-    if (note) note.hidden = !index?.get(draft.id)?.laterLeg;
-    form.querySelector('#editor-preview').innerHTML = ticketSVG(index ? withBoardingBaggage(draft, index) : draft);
+    if (!flight) { form.querySelector('#editor-preview').innerHTML = ticketSVG(draft); return; }
+    const related = otherBaggageLegs(draft, state.records);
+    const index = boardingBaggageIndex([draft, ...related]);
+    form.querySelector('[data-baggage-later-leg]').hidden = !index.get(draft.id)?.laterLeg;
+    const occupied = occupiedBaggageFields(draft, related);
+    const note = form.querySelector('[data-baggage-occupied]');
+    note.hidden = occupied.length === 0;
+    note.textContent = occupied.length ? '联程其他航段已填写' + occupied.map(key => BOARDING_METADATA_LABELS[key]).join('、') + '。' : '';
+    for (const key of BOARDING_BAGGAGE_FIELDS) form.elements[key].disabled = occupied.includes(key) && !draft[key]?.trim();
+    form.querySelector('#editor-preview').innerHTML = ticketSVG(withBoardingBaggage(draft, index));
   }
   refreshPreview();
   let pendingLookup, waitingForLookup = false;
@@ -1245,6 +1250,7 @@ function editRecord(record, {
     refreshPreview();
   }, {
     onCameraStart:stopRailCamera,
+    baggageFieldsInUse: record => occupiedBaggageFields(record, state.records),
     profile:state.settings.profile, preserveGenerator:!!generatorSettings, referenceURL:localFileURL, editingSaved,
     savedService: serviceFixed ? original.service : '',
     isCurrent:() => form.isConnected && !form.dataset.pending && canWrite() && isArchiveContext(context),
@@ -1257,6 +1263,11 @@ function editRecord(record, {
     const changedKey=target.name || (target.matches('[data-seat-preset]') ? 'seatClass'
       : target.matches('[data-seat-number],[data-berth]') ? 'seat'
       : target.matches('[data-rail-standing]') ? 'railStanding' : '');
+    if (flight && BOARDING_BAGGAGE_FIELDS.includes(changedKey) && target.value.trim() &&
+        occupiedBaggageFields(draft, state.records).includes(changedKey)) {
+      target.value = draft[changedKey];
+      return;
+    }
     if (!lookupApplying && changedKey === 'type') {
       if (typeFixed || ticketFieldLocked(draft,'type')) { form.elements.type.value=draft.type; return; }
       if (['rail','flight'].includes(event.target.value) && event.target.value !== draft.type) {
@@ -1352,6 +1363,13 @@ function editRecord(record, {
         try{draft[key]=readTicketDate(form,key,draft,{strict:true});}catch(error){error.fields=[key];throw error;}
       }
       validateTicketForm(draft);
+      if (flight) {
+        const fields = occupiedBaggageFields(draft, state.records).filter(key => draft[key]?.trim());
+        if (fields.length) {
+          form.querySelector('[data-boarding-fields="baggage"]').open = true;
+          throw Object.assign(new Error('联程其他航段已填写' + fields.map(key => BOARDING_METADATA_LABELS[key]).join('、') + '，请清空本段重复项。'), { fields });
+        }
+      }
       flightStopEditor?.commit();
     } catch (error) { showError(error); return; }
     release = freezeForm(form, '保存中…');

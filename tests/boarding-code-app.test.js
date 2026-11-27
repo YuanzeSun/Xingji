@@ -33,7 +33,7 @@ test('the app saves generated code edits immediately, persists provenance, and k
     fill('seat','20C');submit();await wait(()=>!document.querySelector('dialog'));
     let saved=server.records().find(record=>record.id==='generated');assert.equal(saved.seat,'20C');assert.equal(saved.boardingCodeSource,'generated');assert.equal(readBoardingCode(saved.boardingCode).seat,'20C');
     assert.equal(saved.fieldSources.seat,'manual');assert.equal(saved.fieldSources.boardingCode,'generated');
-    await open('generated');assert.equal(document.querySelector('[data-bcbp="sequence"]').value,'00025');assert.equal(document.querySelector('[data-bcbp="status"]').value,'1');
+    await open('generated');assert.equal(document.querySelector('[data-bcbp="sequence"]').value,'0025');assert.equal(document.querySelector('[data-bcbp="status"]').value,'1');
     assert.equal(document.querySelector('[data-bcbp-generate]'),null);
     assert.ok(document.querySelector('[name="pnr"]').closest('.field').querySelector('.barcode-required-mark'));
     fill('pnr','');submit();await wait(()=>!document.querySelector('dialog'));

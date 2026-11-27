@@ -46,7 +46,7 @@ test('compact and MicroPDF417 boarding passes rebuild into verified standard PDF
 });
 
 test('boarding QR codes preserve Chinese or binary extensions and autofill fields while clearing only the electronic marker',async()=>{
-  const header=encodeBCBP({passenger:'EXAMPLE/TRAVELER',pnr:'ABC123',origin:'JFK',destination:'LHR',carrier:'BA',flightNumber:'321',date:'2026-05-18',cabin:'Y',seat:'12A',sequence:'42',status:'1',electronic:'E'});
+  const header=encodeBCBP({passenger:'EXAMPLE/TRAVELER',pnr:'ABC123',origin:'JFK',destination:'LHR',carrier:'BA',flightNumber:'321',date:'2026-05-18',cabin:'Y',seat:'12A',sequence:'42',status:'1'});
   const utf8=text=>new TextEncoder().encode(text);
   const examples=[
     {conditional:utf8('>6'.padEnd(43,' ')),tail:utf8('旅客/测试 出发/纽约 到达/伦敦')},
@@ -55,7 +55,7 @@ test('boarding QR codes preserve Chinese or binary extensions and autofill field
   for(const {conditional,tail} of examples){
     // A carrier can use a nonstandard cabin code. It must be retained, not replaced by the new Y default.
     const prefix=header.slice(0,47)+'Z'+header.slice(48,58)+conditional.length.toString(16).toUpperCase().padStart(2,'0');
-    const bytes=new Uint8Array([...utf8(prefix),...conditional,...tail]);
+    const bytes=new Uint8Array([...utf8(prefix),...conditional,...tail]);bytes[22]=69;
     const expected=bytes.slice();expected[22]=32;
     const made=await writeBarcode(bytes,{format:'QRCode'}),image=symbolImage(made.symbol,'flight');
     const result=await rebuildCodeSymbols(image,'flight',{boardingPass:true});
@@ -63,7 +63,7 @@ test('boarding QR codes preserve Chinese or binary extensions and autofill field
     const code=result.codes[0].data,parsed=readBoardingCode(code);
     assert.equal(code.format,'PDF417');assert.equal(result.codes[0].format,'PDF417');
     const [converted]=await readBarcodes(result.codes[0].image,{formats:['PDF417'],textMode:'Plain'});assert.deepEqual(converted.bytes,expected);
-    assert.deepEqual(codeBytes(code.rawBytes),expected);assert.equal(parsed.service,'BA321');assert.equal(parsed.cabin,'Z');assert.equal(parsed.electronic,'');
+    assert.deepEqual(codeBytes(code.rawBytes),expected);assert.equal(parsed.service,'BA321');assert.equal(parsed.cabin,'Z');assert.equal(Object.hasOwn(parsed,'electronic'),false);
     assert.equal(readBCBP(String.fromCharCode(...bytes)).passenger,'EXAMPLE/TRAVELER');
     assert.equal(readBCBP(String.fromCharCode(...bytes.slice(0,60+conditional.length-1))),null,'truncated extensions are still rejected');
 
@@ -77,16 +77,17 @@ test('boarding QR codes preserve Chinese or binary extensions and autofill field
         assert.equal(draft[key],value);assert.equal(form.elements[key].value,value);
       }
       assert.equal(calendarDate(draft.departureDate),'');assert.equal(draft.seatClass,'Z');assert.equal(draft.airline,'英国航空');assert.equal(draft.boardingCodeSource,'original');
-      assert.equal(form.querySelector('[data-bcbp="cabin"]'),null);assert.equal(draft.seatClass,'Z');assert.equal(form.querySelector('[data-bcbp="electronic"]').value,'');
+      assert.equal(form.querySelector('[data-bcbp="cabin"]'),null);assert.equal(draft.seatClass,'Z');assert.equal(form.querySelector('[data-bcbp="electronic"]'),null);
       assert.equal(form.querySelector('[data-bcbp-fields]').disabled,true);assert.deepEqual(codeBytes(draft.boardingCode.rawBytes),expected);
     }finally{cleanup();dom.window.close();}
   }
 });
 
 test('every supported boarding-code format becomes PDF417 and loses only the electronic ticket marker',async()=>{
-  const text=encodeBCBP({passenger:'EXAMPLE/TRAVELER',pnr:'ABC123',origin:'JFK',destination:'LHR',carrier:'BA',flightNumber:'321',date:'2026-05-18',cabin:'Y',seat:'12A',sequence:'42',status:'1',electronic:'E'});
+  const text=encodeBCBP({passenger:'EXAMPLE/TRAVELER',pnr:'ABC123',origin:'JFK',destination:'LHR',carrier:'BA',flightNumber:'321',date:'2026-05-18',cabin:'Y',seat:'12A',sequence:'42',status:'1'});
+  const input=text.slice(0,22)+'E'+text.slice(23);
   for(const format of ['QRCode','PDF417','Aztec','DataMatrix','Code128']){
-    const made=await writeBarcode(text,{format}),image=symbolImage(made.symbol,'flight');
+    const made=await writeBarcode(input,{format}),image=symbolImage(made.symbol,'flight');
     const {codes,issues}=await rebuildCodeSymbols(image,'flight',{boardingPass:true});
     assert.deepEqual(issues,[],format);assert.equal(codes.length,1,format);
     const code=codes[0];assert.equal(code.format,'PDF417',format);assert.equal(code.data.format,'PDF417');assert.equal(code.verified,true);
@@ -101,7 +102,7 @@ test('the QR fills the single boarding time and preserves city tags and unknown 
   const bytes=new TextEncoder().encode(taggedBoardingPayload()+'#95未知字段'),made=await writeBarcode(bytes,{format:'QRCode'}),image=symbolImage(made.symbol,'flight');
   const result=await rebuildCodeSymbols(image,'flight',{boardingPass:true});assert.deepEqual(result.issues,[]);assert.equal(result.codes.length,1);
   const draft=createRecord({type:'flight',template:'air-boarding-pass',boardingTime:'17:30'});
-  const fields=[...BOARDING_SHARED_FIELDS.filter(key=>key!=='seatClass'),'ticketNumber','gate','boardingTime','airline'];
+  const fields=[...BOARDING_SHARED_FIELDS.filter(key=>key!=='seatClass'),'airline'];
   const dom=new JSDOM('<form>'+fields.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+seatClassField(draft)+ticketCodeEditor(draft)+boardingGeneratorMarkup(draft)+'</form>'),form=dom.window.document.querySelector('form');
   bindSeatClassFields(form);
   const cleanup=bindTicketCodeEditor(form,draft,()=>{},{loadRebuilder:async()=>async()=>result});
@@ -112,7 +113,7 @@ test('the QR fills the single boarding time and preserves city tags and unknown 
     assert.equal(draft.airline,'中国国际航空');assert.equal(form.elements.airline.value,'中国国际航空');
     assert.equal(draft.boardingTime,'18:21');assert.equal(calendarDate(draft.departureDate),'');assert.equal(readBoardingCode(draft.boardingCode).boardingTime,'18:21');
     assert.equal(form.elements.boardingTime.value,'18:21');
-    assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'ZHANG/SAN');assert.equal(form.querySelector('[data-bcbp="electronic"]').value,'');assert.equal(form.querySelector('[data-bcbp-fields]').disabled,true);
+    assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'ZHANGSAN');assert.equal(form.querySelector('[data-bcbp="electronic"]'),null);assert.equal(form.querySelector('[data-bcbp-fields]').disabled,true);
     for(const origin of ['PEK','LHR']){const presentation=boardingPresentation({...draft,origin,originCode:origin});assert.equal(presentation.language,origin==='PEK'?'zh':'en');assert.equal(presentation.passenger,'张三');}
     const expected=bytes.slice();expected[22]=32;assert.deepEqual(codeBytes(draft.boardingCode.rawBytes),expected);
     const [displayed] = await readBarcodes(result.codes[0].image, { formats: ['PDF417'] });
@@ -131,7 +132,9 @@ test('a boarding QR fills available baggage, loyalty and marketing fields and le
     baggageTagNumbers: '0123456789', checkedBaggageCount: '1',
     frequentFlyerCarrier: 'CA', frequentFlyerNumber: '00000123456789', marketingCarrier: 'LH'
   };
-  for (const [text, expected] of [[withMetadata, metadata], [withoutMetadata, {}]]) {
+  const remaining = { ...metadata };
+  delete remaining.checkedBaggageCount;
+  for (const [text, expected, occupied = []] of [[withMetadata, metadata], [withoutMetadata, {}], [withMetadata, remaining, ['checkedBaggageCount']]]) {
     const bytes = Uint8Array.from(text, character => character.charCodeAt(0));
     const { symbol } = await writeBarcode(bytes, { format: 'QRCode' });
     const result = await rebuildCodeSymbols(symbolImage(symbol, 'flight'), 'flight', { boardingPass: true });
@@ -142,7 +145,10 @@ test('a boarding QR fills available baggage, loyalty and marketing fields and le
     const inputs = BOARDING_METADATA_FIELDS.map(key => `<input name="${key}">`).join('');
     const dom = new JSDOM(`<form>${inputs}${ticketCodeEditor(draft)}</form>`);
     const form = dom.window.document.querySelector('form');
-    const dispose = bindTicketCodeEditor(form, draft, () => {}, { loadRebuilder: async () => async () => result });
+    const dispose = bindTicketCodeEditor(form, draft, () => {}, {
+      loadRebuilder: async () => async () => result,
+      baggageFieldsInUse: record => record.ticketNumber === '1230000000001' ? occupied : []
+    });
     try {
       const input = form.querySelector('#code-photo');
       Object.defineProperty(input, 'files', { value: [new Blob(['QR fixture'])] });

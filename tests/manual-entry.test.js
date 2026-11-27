@@ -102,6 +102,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   fill('checkedBaggageWeight', '9');
   const baggage = () => document.querySelector('#editor-preview [data-boarding-baggage-sticker]').textContent;
   assert.match(baggage(), /TO: HND\s+BAG: 01\/9\s+VIA:\s+0123456789/);
+  fill('checkedBaggageWeight', '');
   fill('ticketNumber', '9990000000002');
   assert.equal(document.querySelector('[name="baggageDestinationCode"]'),null);
   submit();await wait(()=>!document.querySelector('dialog'));
@@ -109,10 +110,17 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.equal(flight.originCode,'PEK');assert.equal(flight.destinationCode,'HND');
   assert.equal(flight.identity,'P000001');assert.equal(flight.seat,'24K');
   assert.equal(flight.departureZone,'Asia/Shanghai');assert.equal(flight.arrivalZone,'Asia/Tokyo');
-  assert.deepEqual([flight.baggageTagNumbers, flight.checkedBaggageCount, flight.checkedBaggageWeight], ['0123456789', '1', '9']);
+  assert.deepEqual([flight.baggageTagNumbers, flight.checkedBaggageCount, flight.checkedBaggageWeight], ['0123456789', '1', '']);
   click('[data-action="new"][data-type="flight"]');await wait(()=>document.querySelector('#editor-form'));
   fill('origin','HND');fill('destination','SFO');fill('service','NH108');fill('departureDate','2026-07-02');fill('departureTime','08:00');
-  fill('passenger','示例旅客');fill('seat','18A');fill('seatClass','Y');fill('ticketNumber','999-0000000002/2');fill('checkedBaggageWeight','12');
+  fill('passenger','示例旅客');fill('seat','18A');fill('seatClass','Y');fill('checkedBaggageCount','2');
+  fill('ticketNumber','999-0000000002/2');fill('checkedBaggageWeight','12');
+  submit();
+  assert.match(document.querySelector('#editor-error').textContent,/请清空本段重复项/);
+  fill('checkedBaggageCount','');
+  assert.equal(document.querySelector('[name="checkedBaggageCount"]').disabled,true);
+  fill('checkedBaggageCount','3');
+  assert.equal(document.querySelector('[name="checkedBaggageCount"]').value,'');
   assert.equal(document.querySelector('[data-baggage-later-leg]').hidden,false);
   assert.equal(document.querySelector('#editor-preview [data-boarding-baggage-sticker]'),null);
   submit();await wait(()=>!document.querySelector('dialog'));

@@ -2,7 +2,7 @@ import {createRecord,FIELDS} from './model.js';
 import {journeyDate} from './journey-date.js';
 import {DEMO_TICKET_CODE} from './demo-code.js';
 import {DEMO_RAIL_DETAILS} from './data/demo-rail.js';
-import {createBoardingCode} from './bcbp.js';
+import {boardingCodeDefaults,createBoardingCode} from './bcbp.js';
 import {railCompletion,railLookupDataDate,shiftRailDate} from './rail-lookup-model.js';
 import {LOOKUP_FIELDS} from './lookup-values.js';
 import {markFieldSources} from './field-sources.js';
@@ -98,7 +98,7 @@ export function demoRecords(today=localToday()){
           ]
         };
       }
-      values.boardingCode=createBoardingCode({passenger:values.passenger==='示例旅客' ? 'SHILI/LVKE' : values.passenger,pnr:values.pnr,origin:values.originCode,destination:values.destinationCode,carrier:values.service.slice(0,2),flightNumber:values.service.slice(2),date:values.departureDate,cabin:values.seatClass,seat:values.seat,sequence:String(42+index),status:'1',electronic:''});
+      values.boardingCode=createBoardingCode({ ...boardingCodeDefaults(values), passenger: values.passenger==='示例旅客' ? 'SHILI/LVKE' : values.passenger, sequence: String(42+index) });
       values.boardingCodeSource='generated';values.boardingLegIndex='0';values.fieldSources.boardingCode='generated';
       if (!syntheticFlight) values.sources.push({kind:'reference',label:`航班参考：${values.airline} ${values.service}，${values.origin}—${values.destination}`,at:verifiedAt});
     }

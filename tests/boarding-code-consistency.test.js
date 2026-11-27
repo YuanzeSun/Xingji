@@ -10,7 +10,7 @@ import {boardingGeneratorMarkup} from '../src/boarding-code-generator.js';
 import {BOARDING_SHARED_FIELDS} from '../src/boarding-code-state.js';
 import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
 
-const values={passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:'2026-11-17',cabin:'Y',seat:'12A',sequence:'25',status:'3',electronic:'E'};
+const values={passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',carrier:'CA',flightNumber:'1234',date:'2026-11-17',cabin:'Y',seat:'12A',sequence:'25',status:'3'};
 const flight=extra=>createRecord({type:'flight',template:'air-boarding-pass',passenger:'DOE/JANE',pnr:'ABC123',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-11-17',seat:'12A',seatClass:'S',boardingLegIndex:'0',...extra});
 function editor(draft,options={}){
   const dom=new JSDOM('<form>'+BOARDING_SHARED_FIELDS.map(key=>`<input name="${key}" value="${key.endsWith('Date')?calendarDate(draft[key]):draft[key]}">`).join('')+'<p id="editor-error" hidden></p>'+ticketCodeEditor(draft,options)+boardingGeneratorMarkup(draft)+'<button type="submit">保存</button></form>'),form=dom.window.document.querySelector('form');
@@ -149,9 +149,9 @@ test('reading an original barcode fills the generator, carrier and supplied cabi
   try{
     const photo=page.form.querySelector('#code-photo');Object.defineProperty(photo,'files',{value:[new Blob(['fixture'])]});photo.dispatchEvent(new page.dom.window.Event('change',{bubbles:true}));
     await new Promise(resolve=>setTimeout(resolve,0));
-    assert.equal(page.form.querySelector('[data-bcbp="sequence"]').value,'00025');assert.equal(page.form.querySelector('[data-bcbp="status"]').value,'3');assert.equal(page.form.querySelector('[data-bcbp="cabin"]'),null);
+    assert.equal(page.form.querySelector('[data-bcbp="sequence"]').value,'0025');assert.equal(page.form.querySelector('[data-bcbp="status"]').value,'3');assert.equal(page.form.querySelector('[data-bcbp="cabin"]'),null);
     assert.equal(page.form.querySelector('[data-bcbp-fields]').disabled,true);assert.ok([...page.form.querySelectorAll('[data-bcbp]')].every(input=>input.disabled));
-    assert.equal(draft.boardingCodeSource,'original');assert.equal(draft.passenger,'DOE/JANE');assert.equal(draft.pnr,'ABC123');assert.equal(draft.originCode,'PEK');assert.equal(draft.destinationCode,'SHA');assert.equal(draft.seat,'12A');
+    assert.equal(draft.boardingCodeSource,'original');assert.equal(draft.passenger,'DOEJANE');assert.equal(draft.pnr,'ABC123');assert.equal(draft.originCode,'PEK');assert.equal(draft.destinationCode,'SHA');assert.equal(draft.seat,'12A');
     assert.equal(calendarDate(draft.departureDate),'');assert.equal(draft.seatClass,'Y');assert.equal(draft.airline,'中国国际航空');assert.equal(page.form.elements.departureDate.value,'');
     page.set('seat','20C');page.submit();assert.equal(page.saves,1);assert.deepEqual(draft.boardingCode,code);
     assert.equal(page.form.elements.seat.value,'12A');assert.equal(page.form.elements.seat.readOnly,true);assert.equal(page.form.querySelector('#code-consistency').hidden,true);
@@ -189,7 +189,7 @@ test('generated codes update after edits, preserve adopted settings, and synchro
     page.set('seat','20C');
     await new Promise(resolve=>setTimeout(resolve,180));assert.equal(readBoardingCode(draft.boardingCode).seat,'20C');assert.equal(page.form.querySelector('#code-consistency').hidden,true);
     page.set('service','CA5678');page.set('departureDate','2024-12-31');page.set('pnr','XYZ789');page.submit();assert.equal(page.saves,1);
-    const read=readBoardingCode(draft.boardingCode);assert.equal(read.service,'CA5678');assert.equal(read.dayOfYear,366);assert.equal(read.pnr,'XYZ789');assert.equal(read.status,'3');assert.equal(read.cabin,'S');assert.equal(read.sequence,'00025');
+    const read=readBoardingCode(draft.boardingCode);assert.equal(read.service,'CA5678');assert.equal(read.dayOfYear,366);assert.equal(read.pnr,'XYZ789');assert.equal(read.status,'3');assert.equal(read.cabin,'S');assert.equal(read.sequence,'0025');
     page.set('seatClass','Z');page.set('seat','30A');page.submit();assert.equal(readBoardingCode(draft.boardingCode).cabin,'Z','the generated code follows the main booking code');
     const identity='200000200001010018';
     page.set('identity',identity);page.submit();
@@ -203,7 +203,7 @@ test('missing or invalid barcode data allow saving without a stale code, and cor
   const draft=flight({boardingCode:createBoardingCode(values),boardingCodeSource:'generated'}),page=editor(draft);
   try{
     page.set('pnr','');page.submit();assert.equal(page.saves,1);assert.equal(draft.boardingCode,'');assert.equal(draft.boardingCodeSource,'');
-    assert.equal(page.form.querySelector('#editor-error').hidden,true);assert.equal(page.form.querySelector('[data-bcbp="sequence"]').value,'00025');
+    assert.equal(page.form.querySelector('#editor-error').hidden,true);assert.equal(page.form.querySelector('[data-bcbp="sequence"]').value,'0025');
     page.set('pnr','TOOLONGPNR');page.submit();assert.equal(page.saves,2);assert.equal(draft.boardingCode,'');
     page.set('pnr','XYZ789');page.submit();assert.equal(page.saves,3);assert.equal(readBoardingCode(draft.boardingCode).pnr,'XYZ789');
   }finally{page.dispose();}
@@ -224,7 +224,7 @@ test('scanning fills and locks decoded facts and enables manual editing and gene
   } });
   try{
     const photo=page.form.querySelector('#code-photo');Object.defineProperty(photo,'files',{value:[new Blob(['fixture'])]});photo.dispatchEvent(new page.dom.window.Event('change',{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,0));
-    assert.equal(draft.passenger,'DOE/JANE');assert.equal(draft.pnr,'ABC123');assert.equal(page.form.querySelector('[data-bcbp-fields]').disabled,true);
+    assert.equal(draft.passenger,'DOEJANE');assert.equal(draft.pnr,'ABC123');assert.equal(page.form.querySelector('[data-bcbp-fields]').disabled,true);
     assert.equal(draft.seatClass,'Y');assert.equal(draft.airline,'中国国际航空');assert.equal(page.form.elements.passenger.readOnly,true);assert.equal(page.form.elements.pnr.readOnly,true);
     assert.equal(draft.seat, '12A');
     assert.equal(page.form.elements.seat.value, '12A');

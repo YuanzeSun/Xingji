@@ -5,7 +5,7 @@ export function multilegPayload({count=2}={}) {
   const routes=[['CA','1234','PEK','PVG','2024-12-31','12A'],['UA','857','PVG','SFO','2025-01-01','20C'],['UA','100','SFO','LAX','2025-01-02','30D'],['CA','988','LAX','PEK','2025-01-03','42A']];
   let shared='';
   const legs=routes.slice(0,count).map(([carrier,flightNumber,origin,destination,date,seat],index)=>{
-    const fixed=encodeBCBP({passenger:'ZHANG/SAN',pnr:'ABC123',origin,destination,carrier,flightNumber,date,seat,cabin:'Y',sequence:String(20+index),status:'1',electronic:''});
+    const fixed=encodeBCBP({passenger:'ZHANG/SAN',pnr:'ABC123',origin,destination,carrier,flightNumber,date,seat,cabin:'Y',sequence:String(20+index),status:'1'});
     shared=fixed.slice(2,23);
     const unique='0WM'+'6366'+'B'+'CA '+'0123456789002';
     const repeated='123'+String(index+1).padStart(10,'0')+'0'+'0'+'LH '+'CA '+'00000123456789'.padEnd(16,' ')+' '+'20K'+'N';
