@@ -1,7 +1,7 @@
 import { FIELDS, clone, now, validateRecord } from './model.js';
 import { calendarDate, fullDate, JOURNEY_DATE_FIELDS, journeyDate } from './journey-date.js';
 import { placeIdentity } from './places.js';
-import { isRefundReceipt } from './record-kind.js';
+import { ticketKind, ticketServiceNumber as serviceNumber } from './record-kind.js';
 import { BOARDING_FIELDS, refreshGeneratedCode } from './boarding-code-state.js';
 import { takeBoardingCode, takeField } from './record-merge-metadata.js';
 import { hasFieldValue } from './field-sources.js';
@@ -10,7 +10,6 @@ import { requireCompleteIdentity } from './identity.js';
 const normalized = value => String(value || '').normalize('NFKC').replace(/[\s·]/gu, '').toUpperCase();
 const passengerName = value => normalized(value).replace(/\//g, '');
 const numeric = value => normalized(value).replace(/^0+(?=\d)/, '');
-const serviceNumber = value => normalized(value).replace(/^(\w*?[A-Z])0+(?=\d)/, '$1');
 const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const sameKnown = (a, b) => !!a && a === b;
 const differentKnown = (a, b) => !!a && !!b && a !== b;
@@ -18,8 +17,6 @@ const electronicNumber = record => record.railInvoice?.electronicTicketNumber ||
 const airTicketNumber = record => normalized(record.ticketNumber).replace(/-/g, '').match(/^\d{13}$/)?.[0] || '';
 const originalCode = record => record.type === 'rail' ? record.ticketCode?.rawBytes :
   record.boardingCodeSource === 'original' ? record.boardingCode?.rawBytes + ':' + record.boardingLegIndex : '';
-const ticketKind = record => record.type === 'flight' ? record.flightStatus :
-  isRefundReceipt(record) ? 'refund' : record.template === 'rail-supplement' ? 'supplement' : 'ticket';
 
 function railNumberMatch(existing, incoming) {
   if (sameKnown(electronicNumber(existing), electronicNumber(incoming))) return '电子客票号相同';

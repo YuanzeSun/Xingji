@@ -18,6 +18,9 @@ test('backup roundtrip preserves template, manual locks and unicode', () => {
   assert.deepEqual(readArchive(JSON.parse(JSON.stringify(archive([r])))), [r]);
   assert.throws(() => readArchive({ schemaVersion: 99, records: [] }), /格式/);
   assert.throws(() => readArchive({ ...archive([r]), records: [r, r] }), /重复/);
+  const invalid = { ...r };
+  delete invalid.ticketMarks;
+  assert.throws(() => readArchive({ ...archive([r]), records: [r, invalid] }), /第 2 条票据：票面标识须为数组/);
   assert.throws(() => sample({ departureZone: 'badzone' }), /时区/);
 });
 test('backup restore combines copies by ID and retains independently saved tickets', () => {
@@ -30,14 +33,25 @@ test('backup restore combines copies by ID and retains independently saved ticke
 test('explicit JSON restore reimports live copies with new IDs and ignores deletion markers in the backup', () => {
   const ticket = sample({ id: 'deleted-ticket', seat: '12A' });
   const marker = createRecord({ ...ticket, deleted: true });
-  const live = sample({ id: 'still-live' });
+  const live = sample({ id: 'still-live', service: 'G104' });
   const backupMarker = createRecord({ ...live, deleted: true });
   const restored = mergeBackupRecords([marker, live], [ticket, backupMarker]);
   assert.deepEqual(restored.slice(0, 2), [marker, live]);
   const replacement = restored[2];
   assert.notEqual(replacement.id, ticket.id);
   assert.deepEqual({ ...replacement, id: ticket.id, updatedAt: ticket.updatedAt }, ticket);
-  assert.deepEqual(mergeBackupRecords(restored, [ticket, backupMarker]), restored);
+  const edited = [...restored.slice(0, 2), { ...replacement, seat: '15F' }];
+  assert.deepEqual(mergeBackupRecords(edited, [ticket, backupMarker]), edited);
+  const refund = sample({ id: 'refund-receipt', template: 'rail-refund-receipt' });
+  assert.equal(mergeBackupRecords([marker, refund], [ticket]).length, 3);
+});
+test('restoring a deleted flight matches the flight number and scheduled date after edits', () => {
+  const flight = sample({ id: 'flight-original', type: 'flight', template: 'air-boarding-pass', service: 'CA0181' });
+  const marker = createRecord({ ...flight, deleted: true });
+  const restored = createRecord({ ...flight, id: 'flight-restored', service: 'CA181', seat: '15A', actualDepartureDate: '2026-11-16' });
+  assert.deepEqual(mergeBackupRecords([marker, restored], [flight]), [marker, restored]);
+  const tomorrow = createRecord({ ...flight, departureDate: '2026-11-16' });
+  assert.equal(mergeBackupRecords([marker, restored], [tomorrow]).length, 3);
 });
 test('connecting flights sharing a ticket number remain separate legs', () => {
   const first = sample({ type: 'flight', template: 'air-boarding-pass', service: 'CA181', ticketNumber: '9991234567890' });

@@ -1,6 +1,7 @@
 import {BOARDING_METADATA_FIELDS} from './boarding-metadata.js';
 import {fieldState,takeField,takeBoardingCode,mergeBoardingCode,mergeExtraFieldSources} from './record-merge-metadata.js';
-import {JOURNEY_DATE_FIELDS,journeyDate,storedJourneyDate,dateLabel} from './journey-date.js';
+import {JOURNEY_DATE_FIELDS,journeyDate,storedJourneyDate,calendarDate,fullDate,dateLabel} from './journey-date.js';
+import { ticketKind, ticketServiceNumber } from './record-kind.js';
 import {readBoardingCode} from './bcbp.js';
 export {resolveRecordConflict} from './record-merge-metadata.js';
 import {LOOKUP_FIELDS,normalizeLookupValues,isLookupValue as isAutomatic} from './lookup-values.js';
@@ -58,6 +59,7 @@ export function validDate(value) {
 export function validateRecord(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('票据不是有效对象');
   if (!validId(input.id)) throw new Error('票据ID无效');
+  if (Object.hasOwn(input, 'deleted') && typeof input.deleted !== 'boolean') throw new Error('删除状态须为布尔值');
   if (input.deleted === true) return deletionMarker(input);
   if (!['rail', 'flight'].includes(input.type)) throw new Error('未知交通方式');
   if (!Object.hasOwn(TEMPLATES, input.template)) throw new Error('不支持的票面样式');
@@ -153,7 +155,10 @@ export function validateRecord(input) {
 export function archive(records) { return { format: 'xingji-archive', schemaVersion: SCHEMA_VERSION, exportedAt: now(), records: records.map(validateRecord) }; }
 export function readArchive(input) {
   if (!input || input.format !== 'xingji-archive' || input.schemaVersion !== SCHEMA_VERSION || !Array.isArray(input.records)) throw new Error('档案格式无效');
-  const records = input.records.map(validateRecord);
+  const records = input.records.map((record, index) => {
+    try { return validateRecord(record); }
+    catch (error) { throw new Error(`第 ${index + 1} 条票据：${error.message}`, { cause: error }); }
+  });
   if (new Set(records.map(r => r.id)).size !== records.length) throw new Error('备份包含重复ID');
   return records;
 }
@@ -190,19 +195,26 @@ export function deduplicateRecords(records) {
   }
   return [...byId.values()].sort((a, b) => a.index - b.index).map(({ record }) => validateRecord(record));
 }
+function backupTripKey(record) {
+  if (record.deleted || !fullDate(record.departureDate)) return '';
+  const service = ticketServiceNumber(record.service);
+  return service ? JSON.stringify([record.type, ticketKind(record), service, calendarDate(record.departureDate)]) : '';
+}
 export function mergeBackupRecords(records, backupRecords) {
   const before = new Map(records.map(record => [record.id, record]));
+  const activeTrips = new Set(records.map(backupTripKey).filter(Boolean));
   const imported = [];
   for (const record of backupRecords) {
     if (record.deleted) continue;
     requireCompleteIdentity(record.identity);
-    if (!before.get(record.id)?.deleted) {
+    const trip = backupTripKey(record);
+    if (before.get(record.id)?.deleted) {
+      if (trip && activeTrips.has(trip)) continue;
+      imported.push({ ...record, id: crypto.randomUUID(), updatedAt: now() });
+    } else {
       imported.push(record);
-      continue;
     }
-    const duplicate = records.some(current => !current.deleted && current.createdAt === record.createdAt &&
-      equal({ ...current, id: record.id, updatedAt: record.updatedAt }, record));
-    if (!duplicate) imported.push({ ...record, id: crypto.randomUUID(), updatedAt: now() });
+    if (trip) activeTrips.add(trip);
   }
   const merged = deduplicateRecords([...records, ...imported]);
   for (const record of merged) {

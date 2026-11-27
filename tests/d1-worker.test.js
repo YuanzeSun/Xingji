@@ -71,6 +71,18 @@ test('D1 archive responses require the reset generation and settings', async () 
   }
 });
 
+test('the browser D1 client validates ticket structure before sending updates or replacements', async () => {
+  const row = createRecord({ id: 'canonical' });
+  const snapshot = { id: '0'.repeat(32), head: 'head', records: [row], settings: {} };
+  let requests = 0;
+  const store = new D1Store({ url: endpoint }, token, async () => { requests++; throw new Error('Unexpected request'); });
+  const missingMarks = { ...row };
+  delete missingMarks.ticketMarks;
+  await assert.rejects(store.write([missingMarks], snapshot, {}), /票面标识须为数组/);
+  await assert.rejects(store.replace(snapshot, [{ ...row, deleted: 'true' }], {}), /删除状态须为布尔值/);
+  assert.equal(requests, 0);
+});
+
 test('D1 whole replacements are atomic and stale clients cannot delete or overwrite tickets', async () => {
   const original = createRecord({ id: 'old', service: 'G21' });
   const replacement = createRecord({ id: 'new', service: 'G103' });
