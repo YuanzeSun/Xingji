@@ -1,6 +1,7 @@
 import { escape as e } from './html.js';
 import { formatDate } from './model.js';
 import { cityLabel } from './locations.js';
+import { resolvePlace } from './places.js';
 import { maskIdentity } from './identity.js';
 import { describeMarks } from './ticket-marks.js';
 import { railTrainsetIds } from './rail-journey.js';
@@ -18,6 +19,14 @@ import { flightStopText } from './flight-stop.js';
 import { flightTimeComparison } from './flight-time-comparison.js';
 
 const values = (record, ...keys) => keys.map(key => [key, record[key]]);
+
+function flightAirport(record, side, terminal) {
+  const place = resolvePlace(record, side);
+  const name = place.chineseFullName || place.fullName || record[side] || record[side + 'Code'];
+  const code = place.code || record[side + 'Code'];
+  const airport = name && code && name !== code ? `${name}（${code}）` : name;
+  return [airport || '待补充', terminal].filter(Boolean).join(' · ');
+}
 
 function flightSections(record) {
   const metadata = boardingMetadataDetails(record);
@@ -75,8 +84,13 @@ export function ticketDetailsMarkup(record, labels, hasRenderedCode) {
   ].filter(Boolean).join(' · ');
   const sections = [
     ['journey', '行程安排', [
-      ['originCity', cityLabel(record, 'origin') || '待补充'],
-      ['destinationCity', cityLabel(record, 'destination') || '待补充'],
+      ...(flight ? [
+        ['origin', flightAirport(record, 'origin', record.departureTerminal)],
+        ['destination', flightAirport(record, 'destination', record.arrivalTerminal)]
+      ] : [
+        ['originCity', cityLabel(record, 'origin') || '待补充'],
+        ['destinationCity', cityLabel(record, 'destination') || '待补充']
+      ]),
       ['departureDate', !comparison && formatDate(record.departureDate)],
       ['departureTime', !comparison && (flight || isRailLookupSource(record.fieldSources?.departureTime)) && record.departureTime],
       ['arrivalDate', !comparison && record.arrivalDate && formatDate(record.arrivalDate)],
@@ -84,15 +98,14 @@ export function ticketDetailsMarkup(record, labels, hasRenderedCode) {
       ...values(record, flight ? 'flightDistance' : 'railMileage'),
       ['flightStop', flight && flightStopText(record.flightStop)]
     ]],
-    ...(flight ? [['actual-times', comparison ? '计划与实际起降' : '实际登机与起降',
+    ...(flight ? [['actual-times', comparison ? '计划与实际起降' : '实际起降',
       comparison ? [] : ACTUAL_FLIGHT_FIELDS.map(key =>
         [key, record[key] && (key.endsWith('Date') ? formatDate(record[key]) : record[key])]), comparison]] : []),
     ['passenger', flight ? '旅客与登机' : '旅客与乘车', [
       ['passenger', passenger],
       ['identity', maskIdentity(record.identity)],
-      ...values(record, flight ? 'terminal' : 'railPlatform', 'gate'),
+      ...values(record, ...(flight ? ['gate'] : ['railPlatform', 'gate'])),
       ['boardingTime', flight && record.boardingTime],
-      ['actualBoardingTime', comparison && record.actualBoardingTime],
       ['seat', seat]
     ]],
     ...(flight ? flightSections(record) : railSections(record, hasRenderedCode))

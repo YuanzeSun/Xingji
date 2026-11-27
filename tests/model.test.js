@@ -88,9 +88,9 @@ test('order numbers survive backups independently of ticket numbers and do not m
 test('unsupported flight responses are never silently guessed', () => {
   assert.throws(() => mapFlightResult({ data: [{ route: 'unknown' }] }), /结构/);
   const mapped = mapFlightResult({ flights: [{ flightNumber: 'CA181', origin: '北京首都', destination: '东京羽田', departureDate: '2026-11-15',
-    terminal: 'T3', gate: 'E18', boardingTime: '08:05', actualBoardingTime: '08:15', marketingCarrier: 'CA' }] });
+    departureTerminal: 'T3', gate: 'E18', boardingTime: '08:05', arrivalTerminal: 'T2', marketingCarrier: 'CA' }] });
   assert.equal(mapped[0].service, 'CA181'); assert.equal(mapped[0].type, 'flight');
-  for (const [field, value] of Object.entries({terminal:'T3',gate:'E18',boardingTime:'08:05',actualBoardingTime:'08:15',marketingCarrier:'CA'})) {
+  for (const [field, value] of Object.entries({departureTerminal:'T3',gate:'E18',boardingTime:'08:05',arrivalTerminal:'T2',marketingCarrier:'CA'})) {
     assert.equal(mapped[0][field], value);
     assert.equal(mapped[0].fieldSources[field], 'variflight');
   }

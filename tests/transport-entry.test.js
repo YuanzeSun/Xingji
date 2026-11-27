@@ -44,7 +44,7 @@ test('archive entries preselect each transport and share a switchable editor',as
     assert.equal(form().elements.orderNumber, undefined);
     assert.equal(form().elements.departureDateYear.value,'');
     assert.equal(form().elements.offsetX, undefined);assert.equal(form().elements.offsetY, undefined);assert.equal(document.querySelector('[data-field-source="passenger"]').textContent,'个人资料');
-    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDate:'2026-11-17',departureTime:'09:00',arrivalDate:'2026-11-17',arrivalTime:'13:00',actualDepartureDate:'2026-11-17',actualDepartureTime:'09:10',actualArrivalDate:'2026-11-17',actualArrivalTime:'13:15',passenger:'OLD/NAME',identity:'OLDPASSPORT',seat:'20C',seatClass:'S',airline:'中国国际航空',aircraft:'777-300ER',aircraftRegistration:'B-0001',flightDistance:'8000',pnr:'ABC123',ticketNumber:'1230000000001',terminal:'T3',boardingTime:'08:30',gate:'B20',price:'5000'});
+    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDate:'2026-11-17',departureTime:'09:00',arrivalDate:'2026-11-17',arrivalTime:'13:00',actualDepartureDate:'2026-11-17',actualDepartureTime:'09:10',actualArrivalDate:'2026-11-17',actualArrivalTime:'13:15',passenger:'OLD/NAME',identity:'OLDPASSPORT',seat:'20C',seatClass:'S',airline:'中国国际航空',aircraft:'777-300ER',aircraftRegistration:'B-0001',flightDistance:'8000',pnr:'ABC123',ticketNumber:'1230000000001',departureTerminal:'T3',boardingTime:'08:30',gate:'B20',price:'5000'});
     fill('type','rail');
     assert.deepEqual(controls(),blankRail,'switching back restores a fresh form, including hidden values, marks, dates and layout');
     fillAll({origin:'清河',destination:'天津',service:'G103',departureDate:'2026-11-15',departureTime:'08:00',carriage:'05',seat:'08F',seatClass:'二等座',railTrainsets:'cr400af-0001'});
@@ -53,7 +53,7 @@ test('archive entries preselect each transport and share a switchable editor',as
     await submit();
     const rail=server.records()[0];assert.equal(rail.type,'rail');assert.equal(rail.railTrainsets,'CR400AF-0001');
     assert.equal(rail.seatClass,'二等座');assert.equal(rail.railStanding,true);assert.equal(rail.seat,'');
-    for(const key of ['actualDepartureDate','actualDepartureTime','actualArrivalDate','actualArrivalTime','flightDistance','airline','aircraft','aircraftRegistration','pnr','terminal','boardingTime','orderNumber','gate','price','boardingCode'])assert.equal(rail[key],'',key);
+    for(const key of ['actualDepartureDate','actualDepartureTime','actualArrivalDate','actualArrivalTime','flightDistance','airline','aircraft','aircraftRegistration','pnr','departureTerminal','boardingTime','orderNumber','gate','price','boardingCode'])assert.equal(rail[key],'',key);
     assert.deepEqual(rail.ticketMarks,[]);assert.equal(rail.fieldSources.airline,undefined);
     entry('flight').click();await wait(form);
     assert.equal(form().elements.type.value,'flight');

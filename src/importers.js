@@ -4,8 +4,8 @@ import { parseRailInvoicePage } from './rail-invoice.js';
 
 const flightHistoryTextFields = [
   'origin', 'destination', 'originCity', 'destinationCity', 'originCode', 'destinationCode', 'departureZone', 'arrivalZone',
-  'departureTime', 'arrivalTime', 'actualDepartureTime', 'actualArrivalTime', 'boardingTime', 'actualBoardingTime',
-  'flightDistance', 'passenger', 'seat', 'airline', 'marketingCarrier', 'terminal', 'gate', 'flightStatus', 'aircraft', 'aircraftRegistration'
+  'departureTime', 'arrivalTime', 'actualDepartureTime', 'actualArrivalTime', 'boardingTime',
+  'flightDistance', 'passenger', 'seat', 'airline', 'marketingCarrier', 'departureTerminal', 'arrivalTerminal', 'gate', 'flightStatus', 'aircraft', 'aircraftRegistration'
 ];
 
 export function mapFlightResult(payload) {

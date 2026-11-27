@@ -42,8 +42,8 @@ export function demoRecords(today=localToday()){
   const domesticFlight = {
     type: 'flight', template: 'air-boarding-pass', origin: '上海虹桥', destination: '成都双流', originCode: 'SHA', destinationCode: 'CTU',
     airline: '中国东方航空', marketingCarrier: 'MU', departureTime: '09:15', arrivalTime: '12:30', boardingTime: '08:35',
-    actualDepartureTime: '09:23', actualArrivalTime: '12:37', actualBoardingTime: '08:41', flightDistance: '1667',
-    seat: '32A', seatClass: 'Y', terminal: 'T2', gate: 'D21', price: '860.00',
+    actualDepartureTime: '09:23', actualArrivalTime: '12:37', flightDistance: '1667',
+    seat: '32A', seatClass: 'Y', departureTerminal: 'T2', arrivalTerminal: 'T2', gate: 'D21', price: '860.00',
     frequentFlyerCarrier: 'MU', frequentFlyerNumber: '000012345678'
   };
   const boeingExamples = [['737-8Q8', 'B-DEMO1', '12:21'], ['737-800', 'B-DEMO1', '12:30'], ['737-8', 'B-DEMO3', '13:08']].map(([aircraft, aircraftRegistration, actualArrivalTime], index) => ({
@@ -58,7 +58,7 @@ export function demoRecords(today=localToday()){
     {id:'demo-3',type:'rail',template:'rail-blue',departureDate:'2018-10-01',origin:'杭州东',destination:'南京南',service:'G7602',carriage:'03',seat:'12A',seatClass:'二等座',price:'117.5',issuer:'杭州东',gate:'7',railPlatform:'7',provenance:'reconstruction'},
     {id:'demo-4',type:'rail',template:'rail-red-classic',departureDate:'2014-07-12',origin:'北京',destination:'齐齐哈尔',service:'Z83',carriage:'09',seat:'015号下铺',seatClass:'硬卧',price:'363.0',issuer:'北京',gate:'2',railPlatform:'5',provenance:'reconstruction'},
     {id:'demo-5',type:'rail',template:'rail-receipt',departureDate:recent(2),origin:'广州南',destination:'深圳北',service:'G6203',carriage:'07',seat:'06C',seatClass:'二等座',price:'74.5',issuer:'广州南',gate:'B18',railPlatform:'18'},
-    {id:'demo-6',type:'flight',template:'air-boarding-pass',departureDate:recent(3),departureTime:'15:40',arrivalTime:'19:50',boardingTime:'15:00',actualDepartureTime:'15:48',actualArrivalTime:'19:55',origin:'北京首都',destination:'东京羽田',originCode:'PEK',destinationCode:'HND',service:'CA181',airline:'中国国际航空',seat:'24K',seatClass:'Y',terminal:'T3',gate:'E23',aircraft:'A330-343',aircraftRegistration:'B-0002',flightDistance:'2100',pnr:'DEMO02',actualBoardingTime:'15:06',baggageTagNumbers:'9990000201–9990000202',checkedBaggageCount:'2',checkedBaggageWeight:'23',frequentFlyerCarrier:'CA',frequentFlyerNumber:'000087654321',marketingCarrier:'CA',price:'2680.00',ticketNumber:'9990000000002',passenger:'EXAMPLE/TRAVELER',identity:'P00000000'},
+    {id:'demo-6',type:'flight',template:'air-boarding-pass',departureDate:recent(3),departureTime:'15:40',arrivalTime:'19:50',boardingTime:'15:00',actualDepartureTime:'15:48',actualArrivalTime:'19:55',origin:'北京首都',destination:'东京羽田',originCode:'PEK',destinationCode:'HND',service:'CA181',airline:'中国国际航空',seat:'24K',seatClass:'Y',departureTerminal:'T3',arrivalTerminal:'T3',gate:'E23',aircraft:'A330-343',aircraftRegistration:'B-0002',flightDistance:'2100',pnr:'DEMO02',baggageTagNumbers:'9990000201–9990000202',checkedBaggageCount:'2',checkedBaggageWeight:'23',frequentFlyerCarrier:'CA',frequentFlyerNumber:'000087654321',marketingCarrier:'CA',price:'2680.00',ticketNumber:'9990000000002',passenger:'EXAMPLE/TRAVELER',identity:'P00000000'},
     {id:'demo-7',type:'rail',template:'rail-red',departureDate:'2017-09-10',origin:'北京南',destination:'天津',service:'C2021',carriage:'01',seat:'02A',seatClass:'二等座',price:'57.0',issuer:'北京南',gate:'18',railPlatform:'9',provenance:'reconstruction'},
     ...boeingExamples,
     {...g21,id:'demo-11',departureDate:recent(7),seat:'10A'}

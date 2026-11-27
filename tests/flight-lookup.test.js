@@ -9,7 +9,7 @@ import { bindFlightLookup, flightLookupMarkup } from '../src/flight-lookup.js';
 import { FlightConnector } from '../src/mcp.js';
 
 const input = { type: 'flight', service: 'CA181', departureDate: '2026-07-18' };
-const row = extra => ({ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:00:00', FlightArrtimePlanDate: '2026-07-18 12:20:00', FlightDeptimeDate: '2026-07-18 09:00:00', FlightArrtimeDate: '2026-07-18 13:20:00', distance: 2100, scheduledBoardingTime: '07:25', aircraftNumber: 'B306R', FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', BoardGate: 'E18', aircraftType: 'Airbus A330-300', StopFlag: '0', ...extra });
+const row = extra => ({ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:00:00', FlightArrtimePlanDate: '2026-07-18 12:20:00', FlightDeptimeDate: '2026-07-18 09:00:00', FlightArrtimeDate: '2026-07-18 13:20:00', distance: 2100, scheduledBoardingTime: '07:25', aircraftNumber: 'B306R', FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', FlightTerminal: 'T2', BoardGate: 'E18', aircraftType: 'Airbus A330-300', StopFlag: '0', ...extra });
 const payload = items => ({ structuredContent: { kind: 'collection', items } });
 const record = extra => createRecord({ ...input, template: 'air-boarding-pass', ...extra });
 
@@ -36,7 +36,7 @@ test('provider mapping is verified by number, date and specific airports and use
   const candidates = flightCandidates(payload(rows), { ...input, origin: 'PEK' });
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].departureTime, '08:00'); assert.equal(candidates[0].arrivalTime, '12:20');
-  assert.equal(candidates[0].aircraft, 'A330-300'); assert.equal(candidates[0].gate, 'E18'); assert.equal(candidates[0].terminal, 'T3');
+  assert.equal(candidates[0].aircraft, 'A330-300'); assert.equal(candidates[0].gate, 'E18'); assert.equal(candidates[0].departureTerminal, 'T3');
   assert.equal(candidates[0].departureZone, 'Asia/Shanghai'); assert.equal(candidates[0].arrivalZone, 'Asia/Tokyo');
   assert.equal(flightCandidates(payload([row({ aircraftType: '空客', miniAirplaneModels: 'A330-343', generic: 'A333' })]), input)[0].aircraft, 'A330-343');
   assert.equal(flightCandidates(payload([row({ aircraftType: '空客' })]), input)[0].aircraft, '');
@@ -107,7 +107,8 @@ test('a codeshare keeps the booked flight while identifying the marketing and op
   assert.equal(candidate.service, 'CA7941');
   assert.equal(candidate.airline, '深圳航空');
   assert.equal(candidate.marketingCarrier, 'CA');
-  assert.equal(candidate.terminal, 'T3');
+  assert.equal(candidate.departureTerminal, 'T3');
+  assert.equal(candidate.arrivalTerminal, 'T1');
   const booking = createRecord({ ...input, type:'flight', template:'air-boarding-pass' });
   assert.equal(flightCompletion(booking, candidate).marketingCarrier, 'CA');
   assert.equal(flightCompletion({ ...booking, marketingCarrier: 'ZH', lockedFields: ['marketingCarrier'] }, candidate).marketingCarrier, undefined);
@@ -123,13 +124,16 @@ test('departure-terminal and airline aliases are reused without introducing anot
     FlightDepTerminal: '', FlightHTerminal: 'T2', FlightArrTerminal: 'T1', FlightTerminal: 'T1',
     FlightCompany: '', aircraftNumber: '', AircraftNumber: 'B5846'
   })]), input);
-  assert.equal(fallback.terminal, 'T2');
+  assert.equal(fallback.departureTerminal, 'T2');
   assert.equal(fallback.airline, '中国国际航空');
   assert.equal(fallback.aircraftRegistration, 'B-5846');
   assert.equal(fallback.marketingCarrier, '');
   assert.deepEqual(flightLookupNeeds(fallback), { schedule: false, registration: false, stopover: true });
   const [arrivalOnly] = flightCandidates(payload([row({ FlightDepTerminal: '', FlightArrTerminal: 'T1', FlightTerminal: 'T1' })]), input);
-  assert.equal(arrivalOnly.terminal, '');
+  assert.equal(arrivalOnly.departureTerminal, '');
+  assert.equal(arrivalOnly.arrivalTerminal, 'T1');
+  const [official] = flightCandidates(payload([row()]), input);
+  assert.equal(official.arrivalTerminal, 'T2');
 });
 
 test('completion protects nonempty and manually corrected fields, private ticket data and unmatched handwritten endpoints', () => {
@@ -137,6 +141,7 @@ test('completion protects nonempty and manually corrected fields, private ticket
   const candidate = flightCandidates(payload([row({ passenger: 'DO NOT COPY', price: '9999', FlightAircraftReg: 'DO NOT COPY' })]), input)[0];
   const changes = flightCompletion(target, candidate), before = JSON.stringify(target);
   assert.equal(changes.departureTime, undefined); assert.equal(changes.gate, undefined); assert.equal(changes.originCode, undefined);
+  assert.equal(changes.departureTerminal, undefined); assert.equal(changes.arrivalTerminal, 'T2');
   assert.equal(changes.destinationCode, 'HND'); assert.equal(changes.aircraft, 'A330-300');
   for (const key of ['passenger', 'identity', 'seat', 'seatClass', 'price', 'pnr', 'aircraftRegistration', 'boardingCode', 'ticketNumber']) assert.equal(changes[key], undefined);
   assert.equal(JSON.stringify(target), before);
@@ -153,17 +158,15 @@ function component({ rows, lookup, applyTrack, desktop = () => true } = {}) {
 }
 const settle = async () => { await new Promise(resolve => setTimeout(resolve, 5)); };
 
-test('only explicit scheduled boarding times fill the planned boarding field', () => {
+test('only explicit scheduled boarding times fill the boarding time when the pass has no time', () => {
   const [planned] = flightCandidates(payload([row({ aircraftNumber: 'b5846', scheduledBoardingTime: '2026-07-17T23:05:00Z' })]), input);
   assert.equal(planned.aircraftRegistration, 'B-5846');
   assert.equal(planned.boardingTime, '07:05');
   const [other] = flightCandidates(payload([row({ scheduledBoardingTime: '', EstimateBoardingStartTime: '07:05', actualBoardingTime: '07:10' })]), input);
   assert.equal(other.boardingTime, '');
-  assert.equal(other.actualBoardingTime, '');
-  const scanned = { ...record(), boardingTime: '07:15', actualBoardingTime: '07:40', lockedFields: ['boardingTime'],
-    fieldSources: { boardingTime: 'barcode', actualBoardingTime: 'barcode' } };
+  const scanned = { ...record(), boardingTime: '07:15', lockedFields: ['boardingTime'],
+    fieldSources: { boardingTime: 'barcode' } };
   assert.equal(flightCompletion(scanned, planned).boardingTime, undefined);
-  assert.equal(flightCompletion(scanned, planned).actualBoardingTime, undefined);
 });
 
 test('completion queries missing aircraft registration and tracks, reusing each value once filled', async () => {

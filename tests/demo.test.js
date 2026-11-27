@@ -52,7 +52,7 @@ test('demo flights have independent boarding codes and cover the aircraft groupi
   const rows=demoRecords('2026-11-17').filter(record=>record.type==='flight');
   for(const record of rows){
     const code=readBoardingCode(record.boardingCode);assert.equal(record.boardingCodeSource,'generated');assert.equal(code.service,record.service);assert.equal(code.originCode,record.originCode);assert.equal(code.destinationCode,record.destinationCode);assert.equal(code.seat,record.seat);assert.equal(code.cabin,record.seatClass);assert.equal(code.pnr,record.pnr);assert.equal(code.electronic,'');
-    for(const key of ['airline','aircraft','aircraftRegistration','terminal','boardingTime','pnr','flightStatus','flightDistance','actualDepartureDate','actualDepartureTime','actualArrivalDate','actualArrivalTime','actualBoardingTime','frequentFlyerCarrier','frequentFlyerNumber','marketingCarrier'])assert.ok(record[key],record.service+' '+key);
+    for(const key of ['airline','aircraft','aircraftRegistration','departureTerminal','arrivalTerminal','boardingTime','pnr','flightStatus','flightDistance','actualDepartureDate','actualDepartureTime','actualArrivalDate','actualArrivalTime','frequentFlyerCarrier','frequentFlyerNumber','marketingCarrier'])assert.ok(record[key],record.service+' '+key);
     assert.equal(ticketSVG(record).includes('data-boarding-baggage-sticker'), Boolean(record.checkedBaggageCount));
   }
   assert.deepEqual(rows.filter(record => record.checkedBaggageCount).map(record => record.service), ['CA181', 'MU9901']);

@@ -82,7 +82,7 @@ const icons = {
   chart: '<path d="M4 3v17h17M7 14l4-5 4 3 5-7"/>'
 };
 const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || icons.ticket}</svg>`;
-const labels = { ...BOARDING_METADATA_LABELS, flightStop: '经停机场', ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', terminal: '航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightTrack: '飞行航迹', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '条码', boardingCode: '机票条码' };
+const labels = { ...BOARDING_METADATA_LABELS, flightStop: '经停机场', ...SUPPLEMENT_FIELDS, railPlatform:'上车站台', type: '交通方式', template: '票面样式', origin: '出发站 / 机场', destination: '到达站 / 机场', originCity: '出发城市', destinationCity: '到达城市', originCode: '出发站拼音 / 机场码', destinationCode: '到达站拼音 / 机场码', service: '车次 / 航班号', departureDate: '出发日期', departureTime: '出发时间', arrivalDate: '到达日期', arrivalTime: '到达时间', departureZone: '出发地时区', arrivalZone: '到达地时区', passenger: '旅客姓名', identity: '证件号（身份证 / 护照）', carriage: '车厢', seat: '座位 / 铺位', seatClass: '席别 / 舱位', price: '票价（元）', orderNumber: '订单号', ticketNumber: '票号', saleCode: '底部售票码', issuer: '售票站', gate: '检票口 / 登机口', departureTerminal: '出发航站楼', arrivalTerminal: '到达航站楼', boardingTime: '登机时间', airline: '航空公司', flightStatus: '机票状态', aircraft: '机型', railBureau: '担当路局', railModel: '车型', railTrainsets:'车组编号', railInvoice:'电子报销凭证资料', railPowerSupply:'供电制式', railMileage:'铁路里程（km）', flightTrack: '飞行航迹', flightDistance:'航程距离（km）', railRunner: '担当客运段', railCarOwner: '车辆归属单位', railJourney: '铁路行程资料', aircraftRegistration: '飞机编号', pnr: '订座编号 PNR', provenance: '票面性质', deleted: '删除状态', ticketMarks: '票面标识', ticketCode: '条码', boardingCode: '机票条码' };
 const imports = { task: null, backup: null, railPoints: null };
 let importView = 0;
 const state = { records: [], base: [], settings: sharedSettings(), settingsBase: sharedSettings(), flightKeyDraft: null, settingsError: '', page: 'archive', profileDraft: null, profileBase: null, profileDirty: false, profileError: '', filters: searchOptions(), filterOpen: false, mapView: { layers: ['airway', 'railway'], year: 'all' }, limit: 48, showDemo: false, config: null, syncMeta: { verified: false, pending: false, head: '', revision: 0 }, connectionStatus: 'checking', saving: false, syncing: false, lastSync: null, syncMessage: '', resetRequest: null, resetting: false, flightYear: String(new Date().getFullYear()), flightResultYear: null, flightResult: null };
@@ -997,7 +997,7 @@ function field(key, r, options = {}) {
   if (key === 'seat' && r.type === 'rail') return seatField(r);
   const required = requiredRecordFields(r).includes(key) || ['type', 'template'].includes(key);
   if(JOURNEY_DATE_FIELDS.includes(key))return ticketDateField(key,r,{label:ticketFieldLabel(key,r.type,labels[key]),required});
-  const type = ['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime', 'actualBoardingTime'].includes(key) ? 'time' : 'text';
+  const type = ['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime'].includes(key) ? 'time' : 'text';
   const placeholders = { railBureau: '如：上海局', railModel: '如：25T、CR400BF-S', railPowerSupply:'如：DC600V、AC380V', railMileage:'如：1463', origin: r.type === 'rail' ? '如：北京南' : '如：PEK / 北京首都', destination: r.type === 'rail' ? '如：上海虹桥' : '如：HND / 东京羽田', service: r.type === 'rail' ? '如：G103' : '如：CA181', identity: '请输入完整证件号' };
   const requiredAttrs = required ? 'required aria-required="true"' : '';
   const decimal = ['price', 'railMileage', 'flightDistance', 'railSupplementFee', 'railSupplementSurcharge', 'checkedBaggageWeight'].includes(key);
@@ -1073,15 +1073,15 @@ function flightEditorSections(record) {
   </details>`;
   return [
     `<div data-boarding-journey>${boardingJourneyMarkup(record)}</div>`,
-    editorSection('航班行程', fields('origin', 'destination', 'service') + flightStopField() +
+    editorSection('航班行程', fields('origin', 'departureTerminal', 'destination', 'arrivalTerminal', 'service') + flightStopField() +
       fields('departureDate') + flightLookupMarkup()),
-    editorSection('计划时间', fields('departureTime', 'boardingTime', 'arrivalDate', 'arrivalTime'), FLIGHT_LOCAL_TIMES),
-    editorSection('旅客与座位', fields('passenger', 'identity', 'seat', 'seatClass', 'terminal', 'gate')),
+    editorSection('计划起降', fields('departureTime', 'arrivalDate', 'arrivalTime'), FLIGHT_LOCAL_TIMES),
+    editorSection('旅客与登机', fields('passenger', 'identity', 'seat', 'seatClass', 'gate', 'boardingTime')),
     metadata('行李', 'baggage', BOARDING_BAGGAGE_FIELDS),
     editorSection('航司与票务', fields('airline', 'aircraft', 'aircraftRegistration', 'flightDistance', 'pnr', 'ticketNumber', 'price')),
     `<details class="editor-extra" ${ACTUAL_FLIGHT_FIELDS.some(key => record[key]) ? 'open' : ''}>
-      <summary>实际登机与起降</summary><p class="flight-local-time">${e(FLIGHT_LOCAL_TIMES)}</p>
-      <div class="form-grid">${fields('actualDepartureDate', 'actualDepartureTime', 'actualBoardingTime', 'actualArrivalDate', 'actualArrivalTime')}</div>
+      <summary>实际起降</summary><p class="flight-local-time">${e(FLIGHT_LOCAL_TIMES)}</p>
+      <div class="form-grid">${fields('actualDepartureDate', 'actualDepartureTime', 'actualArrivalDate', 'actualArrivalTime')}</div>
     </details>`,
     metadata('常旅客与代码共享', 'loyalty', flightLoyaltyFields)
   ].join('');

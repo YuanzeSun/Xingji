@@ -63,12 +63,11 @@ function readAirlineExtras(value) {
       try{text=new TextDecoder('gb18030',{fatal:true}).decode(bytes);}catch{return {};}
     }
   }
-  const tagged=text.match(/#90([\p{Script=Han}·•]{1,40})#91([^#\x00-\x1f]{1,80})#92([^#\x00-\x1f]{1,80})(?=#93|$)/u);
-  if(!tagged)return {};
-  const extra={passengerChinese:tagged[1],originChinese:tagged[2],destinationChinese:tagged[3]};
+  const extra={};
+  const name=text.match(/#90([\p{Script=Han}·•]{1,40})(?=#|$)/u);
   const gate=text.match(/#93([A-Z0-9][A-Z0-9/\-]{0,15})(?=#|$)/),boarding=text.match(/#94((?:[01]\d|2[0-3]):[0-5]\d)(?=#|$)/);
+  if(name)extra.passengerChinese=name[1];
   if(gate)extra.gate=gate[1];
-  // This provider updates #94 after boarding; it is not the scheduled time.
-  if(boarding)extra.recordedBoardingTime=boarding[1];
+  if(boarding)extra.boardingTime=boarding[1];
   return extra;
 }

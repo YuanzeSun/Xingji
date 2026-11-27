@@ -84,7 +84,7 @@ test('rescanning an electronic pass with a paper pass fills missing fields and r
   const paper = normalizeCodeData({
     ...createBoardingCode(facts), rawBytes: Buffer.from(taggedBoardingPayload(facts)).toString('base64')
   });
-  const draft = flight({passenger:'ZHANG/SAN', departureDate:facts.date, seatClass:'Z', airline:'中国国际航空', terminal:'T3',
+  const draft = flight({passenger:'ZHANG/SAN', departureDate:facts.date, seatClass:'Z', airline:'中国国际航空', departureTerminal:'T3',
     boardingCode:electronic, boardingCodeSource:'original', fieldSources:{departureDate:'barcode', seat:'barcode'}});
   const page = savedEditor(draft);
   try {
@@ -93,14 +93,14 @@ test('rescanning an electronic pass with a paper pass fills missing fields and r
     assert.deepEqual(draft.boardingCode, electronic, 'format and check-in sequence alone do not replace the original');
     await page.scan(paper);
     assert.match(page.form.querySelector('#code-status').textContent, /已补充 3 项/);
-    assert.equal(draft.actualBoardingTime, '18:21');
+    assert.equal(draft.boardingTime, '18:21');
     assert.equal(draft.ticketNumber, '1230000000001');
     assert.equal(draft.gate, 'A101');
-    assert.equal(draft.terminal, 'T3');
+    assert.equal(draft.departureTerminal, 'T3');
     assert.deepEqual(draft.boardingCode, paper);
     await page.scan(electronic);
     assert.deepEqual(draft.boardingCode, paper, 'a sparser code leaves the collected code untouched');
-    assert.equal(draft.actualBoardingTime, '18:21');
+    assert.equal(draft.boardingTime, '18:21');
   } finally { page.dispose(); }
 });
 

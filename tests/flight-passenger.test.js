@@ -17,16 +17,19 @@ import {ticketSVG} from '../src/tickets.js';
 const profile={chineseName:'张三',lastName:'ZHANG',firstName:'SAN',documents:[{id:'id',type:'national-id',number:'000000200001011234'},{id:'passport',type:'passport',number:'E00000000'}]};
 const flight=extra=>createRecord({type:'flight',template:'air-boarding-pass',origin:'PEK',destination:'SHA',service:'CA1234',departureDate:'2026-05-18',passenger:'张三',pnr:'ABC123',seat:'12A',...extra});
 
-test('structured ticket numbers and tagged Chinese names are decoded without inventing years or planned times',()=>{
+test('the reader extracts the ticket number and individual airline tags without inventing a year',()=>{
   const payload=taggedBoardingPayload(),raw=String.fromCharCode(...new TextEncoder().encode(payload));
   for(const value of [payload,raw]){
     const read=readBCBP(value);
     assert.equal(read.passenger,'ZHANG/SAN');assert.equal(read.passengerChinese,'张三');assert.equal(read.ticketNumber,'1230000000001');
-    assert.equal(read.originChinese,'北京');assert.equal(read.destinationChinese,'上海');assert.equal(read.gate,'A101');assert.equal(read.recordedBoardingTime,'18:21');
-    assert.equal(read.cabin,'Z');assert.equal(read.departureDate,undefined);assert.equal(read.boardingTime,undefined);
+    assert.equal(read.gate,'A101');assert.equal(read.boardingTime,'18:21');
+    assert.equal(read.cabin,'Z');assert.equal(read.departureDate,undefined);
   }
-  assert.equal(readBCBP(payload.replace('#90张三#91北京#92上海','北京上海')).passengerChinese,undefined);
-  assert.equal(readBCBP(payload.replace('#9418:21','#9429:90')).recordedBoardingTime,undefined);
+  const partial = readBCBP(payload.replace('#91北京#92上海',''));
+  assert.equal(partial.passengerChinese,'张三');
+  assert.equal(partial.gate,'A101');
+  assert.equal(partial.boardingTime,'18:21');
+  assert.equal(readBCBP(payload.replace('#9418:21','#9429:90')).boardingTime,undefined);
 });
 
 test('profile names follow domestic and international routes without replacing manual corrections',()=>{

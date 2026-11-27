@@ -15,8 +15,8 @@ test('standard optional sections and up to four legs remain separate with strict
   for(const count of [1,2,3,4]){
     const read=readBCBP(multilegPayload({count}));assert.equal(read.legCount,count);assert.equal(read.legs.length,count);
     assert.equal(read.legs[0].ticketNumber,'1230000000001');assert.equal(read.legs[0].frequentFlyerNumber,'00000123456789');assert.equal(read.legs[0].marketingCarrier,'LH');
-    assert.deepEqual(read.legs[0].baggageSeries,[{number:'0123456789',count:2}]);assert.equal(read.legs[0].recordedBoardingTime,'18:21');
-    if(count>1){assert.equal(read.legs[1].service,'UA857');assert.equal(read.legs[1].dayOfYear,1);assert.equal(read.legs[1].ticketNumber,'1230000000002');assert.equal(read.legs[1].recordedBoardingTime,undefined);assert.equal(read.legs[1].gate,undefined);}
+    assert.deepEqual(read.legs[0].baggageSeries,[{number:'0123456789',count:2}]);assert.equal(read.legs[0].boardingTime,'18:21');
+    if(count>1){assert.equal(read.legs[1].service,'UA857');assert.equal(read.legs[1].dayOfYear,1);assert.equal(read.legs[1].ticketNumber,'1230000000002');assert.equal(read.legs[1].boardingTime,undefined);assert.equal(read.legs[1].gate,undefined);}
   }
   const payload=multilegPayload();assert.equal(readBCBP(payload.slice(0,-5)),null);assert.equal(readBCBP(payload.replace(/^M2/,'M4')),null);assert.equal(readBCBP(payload.slice(0,58)+'FF'+payload.slice(60)),null);
 });
@@ -24,7 +24,7 @@ test('standard optional sections and up to four legs remain separate with strict
 test('individually archived legs retain their barcode metadata and display links to one another',()=>{
   const code = multilegCode();
   const rows = readBoardingCode(code).legs.map((leg, index) => {
-    const metadata = boardingMetadataValues(leg);
+    const metadata = { ...boardingMetadataValues(leg), boardingTime: leg.boardingTime || '' };
     const values = {
       type: 'flight', template: 'air-boarding-pass', service: leg.service, pnr: leg.pnr,
       origin: leg.originCode, destination: leg.destinationCode,
@@ -34,8 +34,8 @@ test('individually archived legs retain their barcode metadata and display links
     markFieldSources(values, Object.keys(metadata), 'barcode');
     return createRecord(values);
   });
-  assert.equal(rows[0].actualBoardingTime,'18:21');assert.equal(rows[0].baggageTagNumbers,'0123456789–0123456790');
-  for(const key of ['actualBoardingTime','checkedBaggageCount','frequentFlyerNumber','marketingCarrier'])assert.equal(ticketFieldLocked(rows[0],key),true,key);
+  assert.equal(rows[0].boardingTime,'18:21');assert.equal(rows[0].baggageTagNumbers,'0123456789–0123456790');
+  for(const key of ['boardingTime','checkedBaggageCount','frequentFlyerNumber','marketingCarrier'])assert.equal(ticketFieldLocked(rows[0],key),true,key);
   assert.equal(rows[0].checkedBaggageWeight, '');
   assert.equal(rows[1].checkedBaggageCount, '');
   assert.equal(rows[1].baggageTagNumbers, '');
@@ -43,7 +43,7 @@ test('individually archived legs retain their barcode metadata and display links
   const second=createRecord({...rows[1],departureDate:{year:2025,dayOfYear:1}});assert.equal(calendarDate(second.departureDate),'2025-01-01');assert.equal(readBoardingCode(second.boardingCode,second.boardingLegIndex).service,'UA857');
   assert.equal(mergeBackupRecords(rows,rows).length,2);assert.equal(readArchive(archive([second]))[0].frequentFlyerNumber,second.frequentFlyerNumber);
   assert.match(boardingJourneyMarkup(rows[0],rows),new RegExp('data-id="'+rows[1].id+'"'));assert.ok(boardingMetadataDetails(second).some(([key])=>key==='marketingCarrier'));
-  assert.equal(ticketSVG({...rows[0],actualBoardingTime:'22:00',frequentFlyerNumber:'OTHER'}),ticketSVG(rows[0]));
+  assert.notEqual(ticketSVG({...rows[0],boardingTime:'22:00'}),ticketSVG(rows[0]));
   assert.match(ticketSVG(rows[0]), /data-boarding-baggage-sticker="true"/);
   assert.match(ticketSVG(rows[0]), /0123456789–0123456790/);
   const withoutBaggage = { ...rows[0], baggageTagNumbers: '', checkedBaggageCount: '' };

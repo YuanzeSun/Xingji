@@ -18,12 +18,12 @@ test('dual-city filters, details and airport edits stay consistent when the save
   try{
     await import('../src/app.js');await wait(()=>document.querySelector('#search-originCity'));
     fill('#search-originCity','海东');await wait(()=>document.querySelector('#city-context').textContent.includes('海东'));
-    assert.equal(document.querySelectorAll('.ticket-card').length,1);await open();assert.match(document.querySelector('.detail-grid').textContent,/出发城市西宁 \/ 海东/);
+    assert.equal(document.querySelectorAll('.ticket-card').length,1);await open();assert.match(document.querySelector('.detail-grid').textContent,/出发机场西宁曹家堡国际机场（XNN）/);
     await wait(()=>document.querySelector('[data-action="edit"]:not(:disabled)'));document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));assert.equal(document.querySelector('[name="type"]').disabled,true);
     fill('[name="origin"]','PKX');assert.equal(document.querySelector('[name="originCode"]').value,'PKX');
     document.querySelector('#editor-form').dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>!document.querySelector('#editor-form'));
     assert.equal(server.records()[0].originCode,'PKX');assert.equal(server.records()[0].originCity,'北京 / 廊坊');assert.equal(server.records()[0].departureZone,'Asia/Shanghai');
     fill('#search-originCity','廊坊');await wait(()=>document.querySelector('#city-context').textContent.includes('廊坊'));
-    assert.equal(document.querySelectorAll('.ticket-card').length,1);await open();assert.match(document.querySelector('.detail-grid').textContent,/出发城市北京 \/ 廊坊/);
+    assert.equal(document.querySelectorAll('.ticket-card').length,1);await open();assert.match(document.querySelector('.detail-grid').textContent,/出发机场北京大兴国际机场（PKX）/);
   }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();}
 });

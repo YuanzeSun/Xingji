@@ -10,7 +10,6 @@ export const BOARDING_BAGGAGE_FIELDS = Object.keys(baggageLabels);
 export function boardingMetadataValues(read) {
   const values={};
   for(const key of ['frequentFlyerCarrier','frequentFlyerNumber','marketingCarrier'])if(read[key])values[key]=read[key];
-  if(read.recordedBoardingTime)values.actualBoardingTime=read.recordedBoardingTime;
   if(read.legIndex === 0 && read.baggageSeries?.length){
     values.checkedBaggageCount=String(read.baggageSeries.reduce((total,series)=>total+series.count,0));
     values.baggageTagNumbers=read.baggageSeries.map(({number,count})=>count===1 ? number : number+'–'+String(Number(number)+count-1).padStart(10,'0')).join(' / ');

@@ -18,7 +18,7 @@ test('the editor fills a flight through the provider, preserves private input an
     const result = message.method === 'initialize' ? { protocolVersion: '2025-03-26' } :
       message.params.name === 'getFlightTrackLine' ? { structuredContent: { kind: 'collection', items: [{
         fnum: 'CA181', dep: 'PEK', arr: 'HND', date: '2026-07-18_0', coordinates: '40.08,116.59;35.55,139.78',
-      }] }} : { structuredContent: { kind: 'collection', items: [{ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:45:00', FlightArrtimePlanDate: '2026-07-18 12:50:00', FlightDeptimeDate: '2026-07-18 09:15:00', FlightArrtimeDate: '2026-07-18 13:15:00', distance: 2100, LegFlag: '0', StopFlag: '1', StopAirportCode: 'KIX', FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', BoardGate: 'E12', scheduledBoardingTime: '2026-07-18 08:05:00', aircraftNumber: 'B306R', aircraftType: '空客', miniAirplaneModels: 'A330-343', generic: 'A333' }] } };
+      }] }} : { structuredContent: { kind: 'collection', items: [{ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:45:00', FlightArrtimePlanDate: '2026-07-18 12:50:00', FlightDeptimeDate: '2026-07-18 09:15:00', FlightArrtimeDate: '2026-07-18 13:15:00', distance: 2100, LegFlag: '0', StopFlag: '1', StopAirportCode: 'KIX', FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', FlightTerminal: 'T2', BoardGate: 'E12', scheduledBoardingTime: '2026-07-18 08:05:00', aircraftNumber: 'B306R', aircraftType: '空客', miniAirplaneModels: 'A330-343', generic: 'A333' }] } };
     return Response.json({ id: message.id, result }, { headers: { 'Mcp-Session-Id': 'fixture-session' } });
   };
   const wait = async fn => { for (let i = 0; i < 250; i++) { if (await fn()) return; await new Promise(resolve => setTimeout(resolve, 5)); } assert.fail('Flight lookup did not settle'); };
@@ -38,6 +38,8 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.equal(document.querySelector('[name=originCode]').value, 'PEK'); assert.equal(document.querySelector('[name=destinationCode]').value, 'HND');
     assert.equal(document.querySelector('[name=departureTime]').value, '08:45'); assert.equal(document.querySelector('[name=arrivalDate]').value, '2026-07-18'); assert.equal(document.querySelector('[name=arrivalTime]').value, '12:50');
     assert.equal(document.querySelector('[name=boardingTime]').value, '08:05');
+    assert.equal(document.querySelector('[name=departureTerminal]').value, 'T3');
+    assert.equal(document.querySelector('[name=arrivalTerminal]').value, 'T2');
     assert.equal(document.querySelector('[name=flightStopAirport]').value, 'KIX');
     assert.equal(document.querySelector('[data-flight-stop-source]').textContent, '飞常准');
     assert.equal(document.querySelector('[name=actualDepartureTime]').value,'09:15');assert.equal(document.querySelector('[name=actualArrivalTime]').value,'13:15');assert.equal(document.querySelector('[name=flightDistance]').value,'2100');
@@ -66,6 +68,9 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.ok(saved.sources.some(source => source.kind === 'flight-lookup')); assert.ok(saved.sources.some(source => source.kind === 'manual'));
     assert.equal(JSON.stringify(saved).includes('fixture-key-only'), false);
     document.querySelector('[data-action=\"navigate\"][data-page=\"archive\"]').click();await wait(()=>document.querySelector('[data-action=\"view\"]'));document.querySelector('[data-action=\"view\"]').click();await wait(()=>document.querySelector('[data-ticket-detail=journey] .detail-grid'));
+    assert.match(document.querySelector('[data-detail-field=origin]').textContent, /北京首都国际机场.*PEK.*T3/);
+    assert.match(document.querySelector('[data-detail-field=destination]').textContent, /东京羽田机场.*HND.*T2/);
+    assert.equal(document.querySelector('[data-detail-field=originCity], [data-detail-field=destinationCity]'), null);
     const timeline = document.querySelector('[data-flight-time-comparison]');
     assert.match(timeline.querySelector('.planned').textContent, /08:45[\s\S]*12:50/);
     assert.match(timeline.querySelector('.actual').textContent, /09:15[\s\S]*13:15/);

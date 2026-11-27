@@ -97,8 +97,8 @@ test('every supported boarding-code format becomes PDF417 and loses only the ele
   }
 });
 
-test('tagged Chinese names, ticket numbers and gates autofill from QR while recorded boarding times remain separate',async()=>{
-  const bytes=new TextEncoder().encode(taggedBoardingPayload()),made=await writeBarcode(bytes,{format:'QRCode'}),image=symbolImage(made.symbol,'flight');
+test('the QR fills the single boarding time and preserves city tags and unknown extensions in the displayed barcode',async()=>{
+  const bytes=new TextEncoder().encode(taggedBoardingPayload()+'#95未知字段'),made=await writeBarcode(bytes,{format:'QRCode'}),image=symbolImage(made.symbol,'flight');
   const result=await rebuildCodeSymbols(image,'flight',{boardingPass:true});assert.deepEqual(result.issues,[]);assert.equal(result.codes.length,1);
   const draft=createRecord({type:'flight',template:'air-boarding-pass',boardingTime:'17:30'});
   const fields=[...BOARDING_SHARED_FIELDS.filter(key=>key!=='seatClass'),'ticketNumber','gate','boardingTime','airline'];
@@ -110,13 +110,16 @@ test('tagged Chinese names, ticket numbers and gates autofill from QR while reco
     assert.equal(draft.passenger,'张三');assert.equal(form.elements.passenger.value,'张三');assert.equal(draft.ticketNumber,'1230000000001');assert.equal(form.elements.gate.value,'A101');
     assert.equal(draft.seatClass,'Z');assert.equal(form.elements.seatClass.value,'Z');assert.equal(form.querySelector('[data-seat-preset]').value,'Z');assert.equal(form.elements.seatClass.hidden,true);
     assert.equal(draft.airline,'中国国际航空');assert.equal(form.elements.airline.value,'中国国际航空');
-    assert.equal(draft.boardingTime,'17:30');assert.equal(calendarDate(draft.departureDate),'');assert.equal(readBoardingCode(draft.boardingCode).recordedBoardingTime,'18:21');
+    assert.equal(draft.boardingTime,'18:21');assert.equal(calendarDate(draft.departureDate),'');assert.equal(readBoardingCode(draft.boardingCode).boardingTime,'18:21');
+    assert.equal(form.elements.boardingTime.value,'18:21');
     assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'ZHANG/SAN');assert.equal(form.querySelector('[data-bcbp="electronic"]').value,'');assert.equal(form.querySelector('[data-bcbp-fields]').disabled,true);
     for(const origin of ['PEK','LHR']){const presentation=boardingPresentation({...draft,origin,originCode:origin});assert.equal(presentation.language,origin==='PEK'?'zh':'en');assert.equal(presentation.passenger,'张三');}
     const expected=bytes.slice();expected[22]=32;assert.deepEqual(codeBytes(draft.boardingCode.rawBytes),expected);
+    const [displayed] = await readBarcodes(result.codes[0].image, { formats: ['PDF417'] });
+    assert.deepEqual(displayed.bytes, expected);
     for(const key of ['passenger','service','origin','destination','seat','seatClass','airline','ticketNumber','gate','departureDate'])assert.equal(draft.fieldSources[key],'barcode',key);
     assert.equal(ticketFieldLocked(draft,'seat'),true);
-    assert.equal(ticketFieldLocked(draft,'boardingTime'),false);
+    assert.equal(ticketFieldLocked(draft,'boardingTime'),true);
   }finally{cleanup();dom.window.close();}
 });
 
@@ -187,7 +190,7 @@ test('two scans of a connecting boarding pass can save each chosen flight separa
       assert.equal(draft.boardingLegIndex, String(index));
       assert.deepEqual(draft.departureDate, { year: null, dayOfYear: leg.dayOfYear });
       assert.equal(draft.ticketNumber, leg.ticketNumber);
-      assert.equal(draft.actualBoardingTime, leg.time);
+      assert.equal(draft.boardingTime, leg.time);
       draft.departureDate.year = leg.year;
       saved = applyReviewedTicket(saved, draft).records;
       assert.equal(saved.length, index + 1);

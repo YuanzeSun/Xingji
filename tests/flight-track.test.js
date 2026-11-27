@@ -16,7 +16,7 @@ const flight = createRecord({
   departureTime: '18:00', arrivalDate: '2026-11-23', arrivalTime: '11:00',
   actualDepartureDate: '2026-11-23', actualDepartureTime: '18:10', actualArrivalDate: '2026-11-23', actualArrivalTime: '11:20',
   flightDistance: '8800', airline: '日本航空', aircraft: '787-9', aircraftRegistration: 'JA123A',
-  terminal: 'T1', gate: '31', boardingTime: '17:20',
+  departureTerminal: 'T1', arrivalTerminal: 'TBIT', gate: '31', boardingTime: '17:20',
   flightStop: { fnum: 'JL62', date: '2026-11-23', dep: 'NRT', arr: 'LAX', airport: 'ANC' }
 });
 const flightStr = 'JL62_NRT_LAX_2026-11-23_0';

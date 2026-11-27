@@ -8,7 +8,7 @@ const record = (id, extra = {}) => createRecord({ id, origin: '北京南', desti
 const rows = [
   record('outbound', { ticketNumber: 'E123456', ticketMarks: [{ text: '网' }, { text: '学' }], ticketCode: DEMO_TICKET_CODE, sources: [{ kind: 'scan', label: '旧票扫描夹' }] }),
   record('return', { origin: '上海虹桥', destination: '北京南', originCode: 'Shanghaihongqiao', destinationCode: 'Beijingnan', service: 'G104', departureDate: '2025-08-18', price: '600' }),
-  record('flight', { type: 'flight', template: 'air-boarding-pass', origin: '上海虹桥', destination: '北京首都', originCode: 'SHA', destinationCode: 'PEK', service: 'CA1502', departureDate: '2025-08-17', passenger: '李四', price: '100', seat: '32A', seatClass: '经济舱', airline: '中国国际航空', aircraft: 'A330', pnr: 'PNR123', terminal: 'T2', gate: 'B09' }),
+  record('flight', { type: 'flight', template: 'air-boarding-pass', origin: '上海虹桥', destination: '北京首都', originCode: 'SHA', destinationCode: 'PEK', service: 'CA1502', departureDate: '2025-08-17', passenger: '李四', price: '100', seat: '32A', seatClass: '经济舱', airline: '中国国际航空', aircraft: 'A330', pnr: 'PNR123', departureTerminal: 'T2', arrivalTerminal: 'T3', gate: 'B09' }),
   record('month', { departureDate: '2025-08-01', passenger: '王五', price: '' }),
   record('year', { departureDate: '2025', passenger: '王五', price: '' }),
   record('undated', { departureDate: '', price: '', template: 'rail-red-classic' }),
@@ -27,6 +27,7 @@ test('search combines words, normalizes case and full-width text, excludes words
   assert.deepEqual(ids({ query: '08F' }), [], 'seat numbers are outside the requested search scope');
   assert.deepEqual(ids({ query: 'E123456 学' }), ['outbound']);
   assert.deepEqual(ids({ query: 'A330 B09 T2' }), ['flight']);
+  assert.deepEqual(ids({ query: 'A330 B09 T3' }), ['flight']);
   assert.deepEqual(ids({ query: 'iVBORw0KGgo' }), [], 'image payloads are not searched');
   assert.deepEqual(ids({ query: '红票' }), ['undated']);
   assert.equal(ids({}).includes('deleted'), false);

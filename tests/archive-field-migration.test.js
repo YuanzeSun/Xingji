@@ -29,7 +29,7 @@ const oldFlight = {
     ...flight.fieldSources, orderNumber: 'manual', flightStops: 'variflight', offsetX: 'manual', offsetY: 'default'
   }, lockedFields: ['orderNumber', 'offsetX']
 };
-for (const field of ['actualBoardingTime', 'boardingCodeSource', 'boardingLegIndex']) delete oldFlight[field];
+for (const field of ['arrivalTerminal', 'boardingCodeSource', 'boardingLegIndex']) delete oldFlight[field];
 const oldFlightWithCode = { ...oldFlight, boardingCodeSource: flight.boardingCodeSource, boardingLegIndex: flight.boardingLegIndex };
 
 function replaceOldShard(server) {
@@ -69,7 +69,7 @@ test('GitHub migration previews changes, cancels without writing, and updates on
       ['fieldSources.flightStops', 'fieldSources.offsetX', 'fieldSources.offsetY', 'fieldSources.orderNumber',
         'flightStops', 'offsetX', 'offsetY', 'orderNumber']);
     assert.deepEqual([...fieldNames('补充字段')].map(code => code.textContent),
-      ['actualBoardingTime', 'fieldSources.flightStop', 'flightStop']);
+      ['arrivalTerminal', 'fieldSources.flightStop', 'flightStop']);
     assert.deepEqual([...fieldNames('调整字段')].map(code => code.textContent), ['lockedFields']);
     assert.doesNotMatch(text, /TRAVEL-ORDER|订单号|实际登机时间|位置微调/);
     preview().querySelector('[data-action="close-modal"]').click();

@@ -390,7 +390,7 @@ function flight(r) {
       ${label(710, 100, words.seat)}${printed(710, 150, r.seat, 47, 155)}
       ${label(510, 202, words.boarding)}${printed(510, 244, r.boardingTime, 35, 170)}
       ${label(710, 202, words.cabin)}${printed(710, 242, normalizeSeatClass(r.seatClass, 'flight').replace(/舱$/, ''), 28, 155, 'TicketMono,TicketHei')}
-      ${label(510, 300, words.terminal)}${printed(510, 339, r.terminal, 29, 170)}
+      ${label(510, 300, words.terminal)}${printed(510, 339, r.departureTerminal, 29, 170)}
       ${label(710, 300, words.departure)}${printed(710, 339, r.departureTime, 31, 155)}
       ${code}
       ${r.aircraft || r.aircraftRegistration ? `<g data-boarding-aircraft="true">${r.aircraft ? label(510, 383, words.aircraft) + printed(610, 383, r.aircraft, 18, 255) : ''}${r.aircraftRegistration ? label(510, r.aircraft ? 416 : 383, words.registration) + printed(610, r.aircraft ? 416 : 383, r.aircraftRegistration, 20, 255) : ''}</g>` : ''}
@@ -405,7 +405,7 @@ function flight(r) {
       ${label(930, 264, words.route)}${printed(930, 297, [r.originCode, r.destinationCode].filter(Boolean).join(' - ') || [presentation.origin, presentation.destination].filter(Boolean).join(' - '), 27, 270)}
       ${inactive ? `<g data-flight-status="${r.flightStatus}" aria-label="${statusLabel}" fill="#a04039"><rect x="930" y="310" width="270" height="25" rx="2" fill="none" stroke="#a04039" stroke-width="1.5"/>${text(1065, 328, statusLabel, 18, 'TicketMono,TicketHei', 'text-anchor="middle"')}</g>` : ''}
       ${label(930, 351, words.gate)}${label(1084, 351, words.seat)}${printed(930, 398, r.gate, 35, 125)}${printed(1084, 401, r.seat, 43, 120)}
-      ${label(930, 444, words.boarding)}${label(1084, 444, words.terminal)}${printed(930, 477, r.boardingTime, 26, 140)}${printed(1084, 477, r.terminal, 25, 120)}
+      ${label(930, 444, words.boarding)}${label(1084, 444, words.terminal)}${printed(930, 477, r.boardingTime, 26, 140)}${printed(1084, 477, r.departureTerminal, 25, 120)}
     </g>
   </g></g>${baggage ? baggageSticker(r, baggage, date(r.departureDate), presentation, mark) : ''}</g>`;
 }

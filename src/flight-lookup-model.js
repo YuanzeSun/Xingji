@@ -95,7 +95,8 @@ export function flightCandidates(result, input) {
       arrivalDate: arrival?.date || '', arrivalTime: arrival?.time || '', ...flightCarriers(row, query.fnum),
       actualDepartureDate: actualDeparture?.date || '', actualDepartureTime: actualDeparture?.time || '', actualArrivalDate: actualArrival?.date || '', actualArrivalTime: actualArrival?.time || '',
       flightDistance: /^(?:0|[1-9]\d{0,5})(?:\.\d{1,3})?$/.test(distance) && Number(distance) > 0 && Number(distance) <= 100000 ? distance : '',
-      terminal: clean(row.FlightDepTerminal) || clean(row.FlightHTerminal), gate: clean(row.BoardGate),
+      departureTerminal: clean(row.FlightDepTerminal) || clean(row.FlightHTerminal),
+      arrivalTerminal: clean(row.FlightArrTerminal) || clean(row.FlightTerminal), gate: clean(row.BoardGate),
       boardingTime: plannedBoardingTime(row.scheduledBoardingTime || row.FlightBoardingTimePlanDate, departure.date, AIRPORT_TIMEZONES[dep]) };
     const key = JSON.stringify(record);
     if (!candidates.has(key)) candidates.set(key, { record, aircraftValues: new Set(), registrations: new Set(), stopEvidence: [] });
@@ -147,7 +148,8 @@ export function rotationRegistration(result, query) {
 }
 
 // Public schedules cannot supply a passenger, fare, seat, cabin, PNR or barcode.
-const scheduleFields = ['departureTime', 'flightDistance', 'airline', 'aircraft', 'terminal', 'gate', 'boardingTime'];
+const scheduleFields = ['departureTime', 'flightDistance', 'airline', 'aircraft', 'gate', 'boardingTime'];
+const airportTerminals = [['origin', 'departureTerminal'], ['destination', 'arrivalTerminal']];
 const timePairs = [['arrivalDate', 'arrivalTime'], ['actualDepartureDate', 'actualDepartureTime'], ['actualArrivalDate', 'actualArrivalTime']];
 const canFill = (record, field) => !record[field] && !record.lockedFields?.includes(field) && !ticketFieldLocked(record, field);
 const canFillFlightStop = record => canFill(record, 'flightStop') && record.fieldSources?.flightStop !== 'manual';
@@ -156,9 +158,9 @@ const canCompletePair = (record, [first, second]) =>
   (canFill(record, second) && record[first]);
 
 export function flightLookupNeeds(record) {
-  const incompleteAirport = ['origin', 'destination'].some(side => {
+  const incompleteAirport = airportTerminals.some(([side, terminal]) => {
     const code = side + 'Code';
-    return canCompletePair(record, [side, code]) &&
+    return (canCompletePair(record, [side, code]) || canFill(record, terminal)) &&
       ((!record[side] && !record[code]) || resolvePlace(record, side).status === 'matched');
   });
   return {
@@ -182,12 +184,13 @@ export function flightCompletion(record, candidate) {
     if (!canCompletePair(record, [date, time])) return;
     fill(date, candidate[date]); fill(time, candidate[time]);
   };
-  for (const side of ['origin', 'destination']) {
+  for (const [side, terminal] of airportTerminals) {
     const code = side + 'Code', existing = resolvePlace(record, side), found = resolvePlace(candidate, side);
     const blank = !record[side]?.trim() && !record[code]?.trim();
     if (blank || (existing.status === 'matched' && found.status === 'matched' && existing.code === found.code)) {
       // Never attach a provider airport code to an unrelated handwritten name.
       if (canCompletePair(record, [side, code])) { fill(side, candidate[side]); fill(code, candidate[code]); }
+      if (found.status === 'matched') fill(terminal, candidate[terminal]);
     }
   }
   for (const field of [...scheduleFields, 'aircraftRegistration', 'marketingCarrier']) fill(field, candidate[field]);

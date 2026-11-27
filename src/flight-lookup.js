@@ -10,7 +10,8 @@ import { BOARDING_METADATA_LABELS } from './boarding-metadata.js';
 
 const lookupLabels = {
   ...BOARDING_METADATA_LABELS, originCode: '出发机场', destinationCode: '到达机场',
-  airline: '航空公司', aircraft: '机型', aircraftRegistration: '飞机编号', terminal: '航站楼',
+  airline: '航空公司', aircraft: '机型', aircraftRegistration: '飞机编号',
+  departureTerminal: '出发航站楼', arrivalTerminal: '到达航站楼',
   flightDistance: '航程距离', flightStop: '经停机场'
 };
 
@@ -110,7 +111,7 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
     let summary = names.length ? `已补全 ${names.join('、')}。` : '';
     if (conflicts.length) summary += `机型有出入（${conflicts.join('、')}），请核对。`;
     if (!recordBeforeLookup.boardingTime && !recordBeforeLookup.lockedFields?.includes('boardingTime') && !candidate.boardingTime) {
-      summary += '飞常准未提供计划登机时间。';
+      summary += '飞常准未提供登机时间。';
     }
     await fillMissing(connector, summary, '本次没有可补全的航班信息。');
   }

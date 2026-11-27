@@ -11,7 +11,7 @@ const labels = {
   ...BOARDING_METADATA_LABELS, service: '航班号', departureDate: '出发日期',
   origin: '出发机场', destination: '到达机场', passenger: '旅客姓名',
   pnr: '订座编号 PNR', seat: '座位号', seatClass: '舱位代码', airline: '航空公司',
-  ticketNumber: '票号', gate: '登机口', actualBoardingTime: '实际登机时间', identity: '证件号'
+  ticketNumber: '票号', gate: '登机口', boardingTime: '登机时间', identity: '证件号'
 };
 const compact = value => String(value || '').normalize('NFKC').replace(/\s+/gu, '').toUpperCase();
 const nameKey = value => compact(value).replace(/[^\p{L}]/gu, '');
@@ -31,7 +31,8 @@ export function boardingScanReview(record, read, rescan, profile) {
     service: read.service, departureDate: date, origin: read.originCode, destination: read.destinationCode,
     passenger: read.passengerChinese || read.passenger,
     pnr: read.pnr, seat: read.seat, seatClass: read.cabin, airline: read.airline,
-    ticketNumber: read.ticketNumber, gate: read.gate, identity: document?.identity, ...boardingMetadataValues(read)
+    ticketNumber: read.ticketNumber, gate: read.gate, boardingTime: read.boardingTime,
+    identity: document?.identity, ...boardingMetadataValues(read)
   };
   const previous = rescan && record.boardingCodeSource === 'original' ? readBoardingCode(record.boardingCode, record.boardingLegIndex) : null;
   const airports = rescan ? { origin: airportCode(record, 'origin'), destination: airportCode(record, 'destination') } : {};

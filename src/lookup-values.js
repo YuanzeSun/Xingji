@@ -4,7 +4,7 @@ import {markFieldSources,importFieldSource,isRailLookupSource,railTimetableSourc
 import {ACTUAL_FLIGHT_FIELDS} from './flight-times.js';
 import {ticketFieldLocked} from './barcode-fields.js';
 
-export const LOOKUP_FIELDS = ['railBureau','railModel','railTrainsets','railPowerSupply','railMileage','railRunner','railCarOwner','railPlatform','departureTime','arrivalDate','arrivalTime','boardingTime',...ACTUAL_FLIGHT_FIELDS,'flightDistance','airline','marketingCarrier','aircraft','aircraftRegistration','terminal','gate','origin','destination','originCode','destinationCode'];
+export const LOOKUP_FIELDS = ['railBureau','railModel','railTrainsets','railPowerSupply','railMileage','railRunner','railCarOwner','railPlatform','departureTime','arrivalDate','arrivalTime','boardingTime',...ACTUAL_FLIGHT_FIELDS,'flightDistance','airline','marketingCarrier','aircraft','aircraftRegistration','departureTerminal','arrivalTerminal','gate','origin','destination','originCode','destinationCode'];
 export const isLookupValue = (record,key) => Object.hasOwn(record.lookupValues || {},key) && JSON.stringify(record.lookupValues[key]) === JSON.stringify(record[key]) && !record.lockedFields?.includes(key);
 export function normalizeLookupValues(input) {
   if(!input)return {};
