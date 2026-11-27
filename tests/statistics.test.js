@@ -6,6 +6,7 @@ import { createRecord } from '../src/model.js';
 import { journeyDate } from '../src/journey-date.js';
 import { statisticsOptions, todayDate, journeyStatistics, tripSeries } from '../src/statistics-model.js';
 import { mountStatistics } from '../src/statistics.js';
+import { rankingChartMarkup } from '../src/statistics-ranking.js';
 import { smoothArrivalDelays } from '../src/arrival-delay-chart.js';
 import { flightTrackRequest } from '../src/flight-track.js';
 import { createBoardingCode } from '../src/bcbp.js';
@@ -630,10 +631,16 @@ test('each ranking switches charts independently and keeps its grouping and date
     assert.equal(picked('rail-bureaus'), 'bars');
     assert.ok(card('rail-models').querySelector('.statistics-column-scroll'));
     assert.equal(root.querySelector('.statistics-trend'), trend);
-    const tail = card('aircraft').querySelector('.statistics-ring-other');
+    const aircraft = card('aircraft');
+    const entries = [...aircraft.querySelectorAll('.statistics-ring-entry')];
+    const colors = entries.map(entry => entry.querySelector('.statistics-ring-swatch').style.getPropertyValue('--slice'));
+    const slices = aircraft.querySelector('.statistics-ring').style.getPropertyValue('--slices');
     assert.match(card('aircraft').textContent, /未识别机型 · 1 次/);
-    assert.match(tail.querySelector('summary').textContent, /其他（2 项）2 次28\.6%/);
-    assert.equal(tail.querySelectorAll('li').length, 2);
+    assert.doesNotMatch(aircraft.textContent, /其他（/);
+    assert.equal(entries.length, 7);
+    assert.equal(new Set(colors).size, entries.length);
+    for (const color of colors) assert.ok(slices.includes(color));
+    assert.deepEqual(entries.map(entry => entry.querySelector('.statistics-ring-share').textContent), Array(7).fill('14.3%'));
     assert.equal(card('aircraft').querySelector('.statistics-ring strong').textContent, '7');
     change('[data-stat-option=railSubtypes]', { checked: false });
     assert.equal(picked('rail-models'), 'columns');
@@ -655,6 +662,26 @@ test('each ranking switches charts independently and keeps its grouping and date
     cleanup();
     dom.window.close();
   }
+});
+
+test('donuts show fifteen named colors before grouping the remaining categories', () => {
+  const rows = Array.from({ length: 19 }, (_, index) => ({ name: `线路 ${index + 1}`, count: 1 }));
+  const dom = new JSDOM(rankingChartMarkup('铁路线足迹', rows, 'donut'));
+  const { document } = dom.window;
+  const legend = document.querySelector('.statistics-ring-legend');
+  const group = legend.querySelector('.statistics-ring-other');
+  const named = [...legend.querySelectorAll(':scope > .statistics-ring-entry')];
+  const colors = [...legend.querySelectorAll('.statistics-ring-swatch')].map(swatch => swatch.style.getPropertyValue('--slice'));
+  try {
+    assert.deepEqual(named.map(entry => entry.querySelector('.statistics-ring-name').textContent), rows.slice(0, 15).map(row => row.name));
+    assert.equal(new Set(colors).size, 16);
+    assert.equal(group.open, false);
+    assert.match(group.querySelector('summary').textContent, /其他（4 项）4 次21\.1%/);
+    assert.deepEqual([...group.querySelectorAll('ul > li > .statistics-ring-name')].map(entry => entry.textContent),
+      rows.slice(15).map(row => row.name));
+    document.body.innerHTML = rankingChartMarkup('铁路线足迹', rows.slice(0, 15), 'donut');
+    assert.equal(document.querySelector('.statistics-ring-other'), null);
+  } finally { dom.window.close(); }
 });
 
 test('the automatic end date rolls over on return and a chosen date stays fixed', () => {
