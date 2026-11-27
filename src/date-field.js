@@ -1,17 +1,13 @@
 import { escape as e } from './html.js';
-import {journeyDate,calendarDate,monthDay,dateFromMonthDay,daysInYear} from './journey-date.js';
+import {journeyDate,calendarDate,monthDay,dateFromMonthDay} from './journey-date.js';
 import {fieldSourceBadge,railBarcodeFieldLocked,railImportFieldLocked} from './field-sources.js';
 import {ticketRequiredMark} from './ticket-form.js';
 import { RAIL_QR_YEAR_PERIOD } from './rail-qr-codec.js';
 
 export const barcodeDateDay=(record,key)=>key==='departureDate'&&record.type==='flight'&&record.boardingCodeSource==='original' &&
   record.fieldSources?.departureDate === 'barcode' ? journeyDate(record.departureDate)?.dayOfYear : null;
-const ordinalNote = day => day === 366 ? '条码日期为第 366 天，请填写闰年' : `条码日期：第 ${day} 天，待补充年份`;
-function dateFromBarcodeYear(value, dayOfYear) {
-  const year = value ? journeyDate(value).year : null;
-  if (year && dayOfYear > daysInYear(year)) throw new Error(ordinalNote(dayOfYear));
-  return { year, dayOfYear };
-}
+const ordinalNote = day => `条码日期：第 ${day} 天`;
+const dateFromBarcodeYear = (value, dayOfYear) => journeyDate({ year: value ? Number(value) : null, dayOfYear });
 const options=(count,current,unit)=>'<option value="">'+unit+'</option>'+Array.from({length:count},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}" ${Number(current)===i+1?'selected':''}>${i+1}${unit}</option>`).join('');
 const railQRYear = (record, key) => key === 'departureDate' && railBarcodeFieldLocked(record, key) ? journeyDate(record[key])?.year : null;
 const yearMinimum = qrYear => qrYear ? 1800 + (qrYear - 1800) % RAIL_QR_YEAR_PERIOD : 1800;

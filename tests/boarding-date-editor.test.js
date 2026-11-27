@@ -61,7 +61,7 @@ test('editing a scanned flight preserves the locked ordinal and validates the ch
 
     await edit('day-366');
     fillYear('2100');
-    assert.match(field('Year').validationMessage, /第 366 天.*闰年/);
+    assert.match(field('Year').validationMessage, /年内天数与年份不符/);
     assert.equal(field('Month').value, '');
     assert.equal(field('Day').value, '');
     assert.equal(field('').value, '');
@@ -69,7 +69,7 @@ test('editing a scanned flight preserves the locked ordinal and validates the ch
     assert.ok(form(), 'a common year cannot be saved for day 366');
     assert.deepEqual(server.records().find(ticket => ticket.id === 'day-366').departureDate, { year: 2024, dayOfYear: 366 });
     fillYear('');
-    assert.match(form().querySelector('#departureDate-ordinal-note').textContent, /第 366 天/);
+    assert.equal(form().querySelector('#departureDate-ordinal-note').textContent, '条码日期：第 366 天');
     fillYear('2000');
     assert.equal(field('Year').validationMessage, '');
     assert.equal(field('').value, '2000-12-31');
