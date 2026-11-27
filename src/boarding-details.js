@@ -7,7 +7,10 @@ import {resolvePlace} from './places.js';
 export function boardingMetadataDetails(record) {
   return BOARDING_METADATA_FIELDS.filter(key=>record[key]).map(key=>{
     const value=record[key];
-    return [key,key.endsWith('Carrier') ? airlineNameForCode(value)||value : key==='checkedBaggageCount' ? value+' 件' : value];
+    if (key.endsWith('Carrier')) return [key, airlineNameForCode(value) || value];
+    if (key === 'checkedBaggageCount') return [key, `${value} 件`];
+    if (key === 'checkedBaggageWeight') return [key, `${value} kg`];
+    return [key, value];
   });
 }
 export function boardingJourneyMarkup(record,records=[]) {

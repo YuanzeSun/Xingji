@@ -96,11 +96,21 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.equal(document.querySelector('[name="destinationCode"]').value,'CSG','a selected IATA code must survive a shared English airport name');
   fill('destination','HND');fill('aircraft','Airbus A330-300');fill('aircraftRegistration','B-0002');
   assert.match(document.querySelector('#editor-preview').textContent,/A330-300/);
+  click('[data-boarding-fields="baggage"] > summary');
+  fill('baggageTagNumbers', '0123456789');
+  fill('checkedBaggageCount', '01');
+  fill('checkedBaggageWeight', '9');
+  const baggage = () => document.querySelector('#editor-preview [data-boarding-baggage-sticker]').textContent;
+  assert.match(baggage(), /TO: HND\s+BAG: 01\/9\s+VIA:\s+0123456789/);
+  fill('baggageDestinationCode', 'sfo');
+  assert.match(baggage(), /TO: SFO\s+BAG: 01\/9\s+VIA: HND/);
   submit();await wait(()=>!document.querySelector('dialog'));
   const flight=(await db.get('records',[])).find(r=>r.type==='flight');
   assert.equal(flight.originCode,'PEK');assert.equal(flight.destinationCode,'HND');
   assert.equal(flight.identity,'P000001');assert.equal(flight.seat,'24K');
   assert.equal(flight.departureZone,'Asia/Shanghai');assert.equal(flight.arrivalZone,'Asia/Tokyo');
+  assert.deepEqual([flight.baggageTagNumbers, flight.checkedBaggageCount, flight.checkedBaggageWeight, flight.baggageDestinationCode],
+    ['0123456789', '1', '9', 'SFO']);
   assert.equal(document.querySelector('#city-reference'),null);
   click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
   const railOrigin=document.querySelector('[name="origin"]');railOrigin.focus();fill('origin','beijingnan');

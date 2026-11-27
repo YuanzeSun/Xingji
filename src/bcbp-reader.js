@@ -51,7 +51,6 @@ function readConditional(value,first,shared) {
   if(repeated.length>=18&&carrier(marketing))extra.marketingCarrier=marketing;
   if(repeated.length>=21&&carrier(program))extra.frequentFlyerCarrier=program;
   if(repeated.length>=37){const number=repeated.slice(21,37).trim();if(/^[A-Z0-9]{1,16}$/.test(number))extra.frequentFlyerNumber=number;}
-  if(repeated.length>=41){const allowance=repeated.slice(38,41).trim().toUpperCase();if(/^(?:\d{1,2}[KLP]|\dPC|\d{1,3})$/.test(allowance))extra.freeBaggageAllowance=allowance;}
   return extra;
 }
 function readAirlineExtras(value) {

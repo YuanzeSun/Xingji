@@ -125,7 +125,7 @@ test('a boarding QR fills available baggage, loyalty and marketing fields and le
   const withMetadata = payload.replace('>8', '>6').replace('0123456789002', '0123456789000').replace('20K', '40l');
   const withoutMetadata = payload.slice(0, 58) + '00';
   const metadata = {
-    baggageTagNumbers: '0123456789', checkedBaggageCount: '1', freeBaggageAllowance: '40L',
+    baggageTagNumbers: '0123456789', checkedBaggageCount: '1',
     frequentFlyerCarrier: 'CA', frequentFlyerNumber: '00000123456789', marketingCarrier: 'LH'
   };
   for (const [text, expected] of [[withMetadata, metadata], [withoutMetadata, {}]]) {

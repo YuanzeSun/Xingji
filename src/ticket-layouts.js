@@ -286,12 +286,18 @@ function boardingPenCircle(field, x, y, width, height, reverse = false) {
 function baggageSticker(record, departureDate, presentation, mark) {
   const tags = record.baggageTagNumbers?.trim() || '';
   const barcodeTag = /\b\d{10}\b/.exec(tags)?.[0];
-  const count = record.checkedBaggageCount?.trim();
-  const allowance = record.freeBaggageAllowance?.trim();
+  const count = record.checkedBaggageCount?.trim().replace(/^0+(?=\d)/, '') || '';
+  const weight = record.checkedBaggageWeight?.trim() || '';
+  const arrivalAirport = record.destinationCode || presentation.destination;
+  const finalAirport = record.baggageDestinationCode?.trim().toUpperCase();
+  const to = finalAirport || arrivalAirport;
+  const via = finalAirport && finalAirport !== arrivalAirport ? arrivalAirport : '';
+  const bag = count || weight ? `BAG: ${count && count.padStart(2, '0')}/${weight}` : '';
+  const barcode = { x: 6, y: 153, width: 255, height: 29 };
   const code = barcodeTag && renderCodeData({
     version: 1, format: 'ITF', rawBytes: btoa(barcodeTag), symbologyIdentifier: ']I0',
     eci: [], gs1: false, parameters: {}
-  }, { x: 6, y: 153, width: 255, height: 29, stretch: true, marker: 'baggage-tag-code' });
+  }, { ...barcode, stretch: true, marker: 'baggage-tag-code' });
   const outline = 'M1 2H268V191L247 191L241 194L202 192L157 195L151 192L103 194L99 191L57 193L49 190L1 192Z';
   const number = barcodeTag || ([...tags].length > 36 ? [...tags].slice(0, 35).join('') + '…' : tags);
   const { carrierNames, passenger } = presentation;
@@ -301,7 +307,7 @@ function baggageSticker(record, departureDate, presentation, mark) {
     text(x, y, value, Math.min(size, width / Math.max(1, textUnits(value || ''))), 'TicketMono,TicketHei', attrs);
   const right = 'text-anchor="end"';
   return `<g data-boarding-baggage-sticker="true" transform="translate(570 8) rotate(177 135 98)" fill="#26282a">
-    <title>${esc(['行李提取联', tags, count && `托运 ${count} 件`, allowance && `免费行李额 ${allowance}`].filter(Boolean).join(' · '))}</title>
+    <title>${esc(['行李提取联', tags, count && `托运 ${count} 件`, weight && `总重 ${weight} kg`, to && `目的地 ${to}`, via && `经由 ${via}`].filter(Boolean).join(' · '))}</title>
     <path d="${outline}" transform="translate(-2 -3)" fill="#e2e4df" stroke="#bcc2bc"/>
     <path d="${outline}" fill="#f8f8f5" stroke="#cacdca"/>
     ${mark ? `<image data-baggage-airline-logo="true" x="13" y="8" width="33" height="32" preserveAspectRatio="xMidYMid meet" href="${mark.image}"/>` : ''}
@@ -310,10 +316,10 @@ function baggageSticker(record, departureDate, presentation, mark) {
     ${print(14, 66, record.service, 127, 19)}
     ${print(254, 66, departureDate, 73, 17, right)}
     ${print(14, 83, passenger, 239, 14)}
-    ${print(14, 104, record.destinationCode && `TO: ${record.destinationCode}`, 129, 18)}
-    ${print(254, 104, count && `BAG ${count.padStart(2, '0')}`, 96, 16, right)}
-    ${print(14, 120, allowance && `ALLOWANCE ${allowance.slice(0, 16)}`, 239, 13)}
-    ${print(14, 149, number, 237, 23, 'font-weight="700" letter-spacing=".4"')}
+    ${print(14, 104, `TO:${to ? ` ${to}` : ''}`, 129, 18)}
+    ${print(254, 104, bag, 132, 16, right)}
+    ${print(14, 123, `VIA:${via ? ` ${via}` : ''}`, 129, 16)}
+    ${print(barcode.x + barcode.width / 2, 149, number, 237, 23, 'text-anchor="middle" font-weight="700" letter-spacing=".4"')}
     ${code || ''}
   </g>`;
 }

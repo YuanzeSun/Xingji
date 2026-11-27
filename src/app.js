@@ -992,9 +992,12 @@ function field(key, r, options = {}) {
   const required = requiredRecordFields(r).includes(key) || ['type', 'template'].includes(key);
   if(JOURNEY_DATE_FIELDS.includes(key))return ticketDateField(key,r,{label:ticketFieldLabel(key,r.type,labels[key]),required});
   const type = ['departureTime', 'arrivalTime', 'boardingTime', 'actualDepartureTime', 'actualArrivalTime', 'actualBoardingTime'].includes(key) ? 'time' : 'text';
-  const placeholders = { railBureau: '如：上海局', railModel: '如：25T、CR400BF-S', railPowerSupply:'如：DC600V、AC380V', railMileage:'如：1463', origin: r.type === 'rail' ? '如：北京南' : '如：PEK / 北京首都', destination: r.type === 'rail' ? '如：上海虹桥' : '如：HND / 东京羽田', service: r.type === 'rail' ? '如：G103' : '如：CA181', identity: '请输入完整证件号' };
+  const placeholders = { railBureau: '如：上海局', railModel: '如：25T、CR400BF-S', railPowerSupply:'如：DC600V、AC380V', railMileage:'如：1463', origin: r.type === 'rail' ? '如：北京南' : '如：PEK / 北京首都', destination: r.type === 'rail' ? '如：上海虹桥' : '如：HND / 东京羽田', service: r.type === 'rail' ? '如：G103' : '如：CA181', identity: '请输入完整证件号', baggageDestinationCode: '机场三字码，留空用到达机场' };
   const requiredAttrs = required ? 'required aria-required="true"' : '';
-  const control = options.options ? `<select name="${key}" ${requiredAttrs}>${selectOptions(options.options, r[key])}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${['price','railMileage','flightDistance','railSupplementFee','railSupplementSurcharge'].includes(key) ? 'inputmode="decimal"' : ''} ${key === 'identity' ? 'autocomplete="off" spellcheck="false"' : ''} />`;
+  const decimal = ['price', 'railMileage', 'flightDistance', 'railSupplementFee', 'railSupplementSurcharge', 'checkedBaggageWeight'].includes(key);
+  const inputMode = decimal ? 'inputmode="decimal"' : key === 'checkedBaggageCount' ? 'inputmode="numeric"' : '';
+  const noSuggestions = ['identity', 'baggageDestinationCode'].includes(key) ? 'autocomplete="off" spellcheck="false"' : '';
+  const control = options.options ? `<select name="${key}" ${requiredAttrs}>${selectOptions(options.options, r[key])}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${inputMode} ${noSuggestions} />`;
   const content = ['origin','destination','airline'].includes(key) ? `<span class="airport-picker">${control}<span class="airport-suggestions" role="listbox" hidden></span></span>` : control;
   const label = key === 'price' && isRefundReceipt(r) ? '退票费（元）'
     : key === 'issuer' && r.template === 'rail-supplement' ? '出票客运段'

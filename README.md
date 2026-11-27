@@ -27,7 +27,7 @@
 
 ![火车票票面预览，包括四版红色软纸票、蓝色磁介质票、列车移动补票、纸质报销凭证和退票费凭证](docs/images/rail-ticket-matrix.png)
 
-![带行李贴纸的登机牌](docs/images/boarding-pass.png)
+![带中转行李牌的登机牌](docs/images/boarding-pass.png)
 
 ### 票据详情
 
