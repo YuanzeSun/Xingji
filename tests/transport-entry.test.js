@@ -74,7 +74,7 @@ test('archive entries preselect each transport and share a switchable editor',as
     for (const key of ['arrivalDate', 'actualDepartureDate', 'actualArrivalDate']) {
       assert.deepEqual(['Year','Month','Day',''].map(part => form().elements[key + part].value), ['2026','06','','']);
       assert.equal(form().querySelector(`[data-field-source="${key}Year"]`).textContent, '默认值');
-      assert.equal(reference(key).textContent,'计划起飞日期 2026-06-30');
+      assert.equal(reference(key).textContent,'（注：计划起飞日期 2026-06-30）');
     }
     const expectIncomplete = key => {
       form().dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
@@ -88,7 +88,7 @@ test('archive entries preselect each transport and share a switchable editor',as
     fill('departureDateMonth','05');
     assert.equal(form().elements.arrivalDateMonth.value,'7');
     assert.equal(form().elements.actualArrivalDateMonth.value,'05');
-    assert.equal(reference('arrivalDate').textContent,'计划起飞日期 2026-05-30');
+    assert.equal(reference('arrivalDate').textContent,'（注：计划起飞日期 2026-05-30）');
     fill('departureDateMonth','06');
     expectIncomplete('arrivalDate');
     fill('arrivalDateDay','1');

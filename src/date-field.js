@@ -26,7 +26,7 @@ function refreshFlightDateDefaults(form) {
   for (const wrapper of form.querySelectorAll('[data-optional-flight-date]')) {
     const hint = wrapper.querySelector('[data-flight-departure-reference]');
     hint.hidden = departure.length !== 10;
-    hint.textContent = hint.hidden ? '' : `计划起飞日期 ${departure}`;
+    hint.textContent = hint.hidden ? '' : `（注：计划起飞日期 ${departure}）`;
     const [monthInput, dayInput] = monthDayControls(wrapper), yearInput = wrapper.querySelector('input[type="number"]');
     if (dayInput.value) continue;
     if (yearInput.hasAttribute(FLIGHT_DATE_DEFAULT_ATTR)) yearInput.value = year;
