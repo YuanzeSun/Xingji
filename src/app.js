@@ -1,5 +1,7 @@
 import {BOARDING_METADATA_LABELS,BOARDING_LOYALTY_FIELDS,BOARDING_MARKETING_FIELDS,BOARDING_BAGGAGE_FIELDS,hasOriginalBoardingCode} from './boarding-metadata.js';
-import {boardingBaggageIndex,occupiedBaggageFields,otherBaggageLegs,withBoardingBaggage} from './boarding-baggage.js';
+import {boardingBaggageIndex,withBoardingBaggage} from './boarding-baggage.js';
+import {FLIGHT_SHARED_FIELDS,flightTicketKey,prefillFlightTicket,sameTicketFlights} from './flight-ticket-shared.js';
+import {takeField} from './record-merge-metadata.js';
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
@@ -12,11 +14,11 @@ import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } fro
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
 import { renderCodeData } from './barcode-data.js';
 import { barcodePayloadMarkup } from './barcode-payload.js';
-import { createRecord, validateRecord, mergeThreeWay, deletionMarker, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, formatDate } from './model.js';
+import { createRecord, validateRecord, deletionMarker, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, formatDate } from './model.js';
 import { SUPPLEMENT_FIELDS, isRailReceiptTemplate, ticketTemplateChoices } from './rail-template.js';
 import { hasRailQRCode, railTicketFaceCode } from './ticket-code.js';
 import * as db from './db.js';
-import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageBackupRestore, stageTicket, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, adoptVerifiedArchive, replaceWithRemote } from './sync-state.js';
+import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageBackupRestore, stageTicket, stageTicketEdit, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, adoptVerifiedArchive, replaceWithRemote } from './sync-state.js';
 import { TicketImportReview } from './ticket-import-review.js';
 import { sharedSettings, sameSettings, maskedKey, wasUnlinked } from './shared-settings.js';
 import { watchAppUpdates } from './app-update.js';
@@ -176,7 +178,7 @@ async function verifyBeforeWrite(message) {
   if (state.syncMeta.rejection && canWrite()) return;
   if (!await doSync() || !canWrite()) throw new Error(message);
 }
-async function persist(records, { backupSettings, ticket, decision } = {}) {
+async function persist(records, { backupSettings, ticket, original, decision, sharedEdits } = {}) {
   if (!canWrite() || state.saving) throw new Error('当前不能修改票据，请先完成云端核对');
   const expected = { records: clone(state.records), settings: clone(state.settings) };
   const context = archiveContext();
@@ -185,7 +187,8 @@ async function persist(records, { backupSettings, ticket, decision } = {}) {
     await verifyBeforeWrite('云端尚未核对成功，修改未提交，请保留当前输入');
     if (!isArchiveContext(context)) throw new Error('票库已变化，请重新打开后核对。');
     const staged = await withCloudLock(() => {
-      if (ticket) return stageTicket(ticket, context, decision);
+      if (original) return stageTicketEdit(original, ticket, context, sharedEdits);
+      if (ticket) return stageTicket(ticket, context, decision, sharedEdits);
       if (backupSettings) return stageBackupRestore(records, expected.settings, backupSettings, context);
       return stageRecords(expected.records, records, context);
     });
@@ -928,10 +931,10 @@ function reviewDuplicateTicket(incoming, review) {
     dialog.showModal();
   });
 }
-async function saveReviewedTicket(ticket, form, context) {
+async function saveReviewedTicket(ticket, form, context, sharedEdits) {
   let decision;
   while (form.isConnected && isArchiveContext(context)) {
-    try { return await persist([], { ticket, decision }); }
+    try { return await persist([], { ticket, decision, sharedEdits }); }
     catch (error) {
       if (!(error instanceof TicketImportReview)) throw error;
       if (!form.isConnected || !isArchiveContext(context)) return null;
@@ -1092,7 +1095,7 @@ function flightEditorSections(record) {
     editorSection('计划起降', fields('departureTime', 'arrivalDate', 'arrivalTime'), FLIGHT_LOCAL_TIMES),
     editorSection('旅客与登机', fields('passenger', 'identity', 'seat', 'seatClass', 'gate', 'boardingTime')),
     `<section class="editor-extra editor-section" data-boarding-fields="baggage">
-      <h3>行李</h3><p class="flight-local-time" data-baggage-later-leg hidden>行李牌随首段登机牌展示。</p><p class="flight-local-time" data-baggage-occupied hidden></p>
+      <h3>行李</h3><p class="flight-local-time" data-baggage-later-leg hidden>行李牌随首段登机牌展示。</p><p class="flight-local-time" data-flight-shared hidden>保存后，同票号航段的行李和票价会一起更新。</p>
       <div class="form-grid">${fields(...BOARDING_BAGGAGE_FIELDS)}</div>
     </section>`,
     editorSection('航司与票务', fields('airline', 'aircraft', 'aircraftRegistration', 'flightDistance', 'pnr', 'ticketNumber', 'price')),
@@ -1136,8 +1139,9 @@ function editRecord(record, {
   const typeFixed = imported || editingSaved;
   const serviceFixed = editingSaved && Boolean(original.service);
   if (preserve && !typeFixed) Object.assign(draft, applyProfileDefaults(draft, state.settings.profile, { passengerEdited }));
-  editor = { original, draft, imported, editingSaved, serviceFixed, context, dirty: preserve, passengerEdited, photo, flightStopInput };
   const flight = draft.type === 'flight';
+  const sharedEdits = flight ? (preserve && editor?.sharedEdits || new Set()) : undefined;
+  editor = { original, draft, imported, editingSaved, serviceFixed, context, dirty: preserve, passengerEdited, photo, flightStopInput, sharedEdits };
   const ticketEntry = field('type', draft, { full: !flight, options: [['rail', '火车票'], ['flight', '机票']] })
     + (flight
       ? '<input type="hidden" name="template" value="air-boarding-pass" />'
@@ -1172,17 +1176,25 @@ function editRecord(record, {
   // openModal replaces the DOM, but keeps the editor state deliberately.
   const form = document.querySelector('#editor-form');
   form.closest('dialog').classList.add('ticket-editor-modal');
-  const baggageFieldsInUse = record => occupiedBaggageFields(otherBaggageLegs(record, state.records));
+  let displayedTicket;
+  function restoreUneditedSharedFields(record) {
+    for (const key of FLIGHT_SHARED_FIELDS) if (!sharedEdits.has(key)) takeField(record, original, key, true);
+    return record;
+  }
   function refreshPreview() {
     if (!flight) { form.querySelector('#editor-preview').innerHTML = ticketSVG(draft); return; }
-    const related = otherBaggageLegs(draft, state.records);
-    const index = boardingBaggageIndex([draft, ...related]);
+    const key = flightTicketKey(draft);
+    const related = sameTicketFlights(draft, state.records).filter(record => record.id !== draft.id);
+    if (displayedTicket !== key) {
+      displayedTicket = key;
+      Object.assign(draft, prefillFlightTicket(restoreUneditedSharedFields(draft), state.records, sharedEdits));
+      for (const field of FLIGHT_SHARED_FIELDS) if (!sharedEdits.has(field)) form.elements[field].value = draft[field];
+      refreshFieldSources(form, draft);
+    }
+    const baggage = Object.fromEntries(BOARDING_BAGGAGE_FIELDS.map(field => [field, draft[field]]));
+    const index = boardingBaggageIndex([draft, ...related.map(record => ({ ...record, ...baggage }))]);
     form.querySelector('[data-baggage-later-leg]').hidden = !index.get(draft.id)?.laterLeg;
-    const occupied = occupiedBaggageFields(related);
-    const note = form.querySelector('[data-baggage-occupied]');
-    note.hidden = occupied.length === 0;
-    note.textContent = occupied.length ? '联程其他航段已填写' + occupied.map(key => BOARDING_METADATA_LABELS[key]).join('、') + '。' : '';
-    for (const key of BOARDING_BAGGAGE_FIELDS) form.elements[key].disabled = occupied.includes(key) && !draft[key]?.trim();
+    form.querySelector('[data-flight-shared]').hidden = !related.length;
     form.querySelector('#editor-preview').innerHTML = ticketSVG(withBoardingBaggage(draft, index));
   }
   refreshPreview();
@@ -1231,7 +1243,7 @@ function editRecord(record, {
     if(input.matches('[data-refund-receipt]'))input.dispatchEvent(new window.Event('input',{bubbles:true}));
     if(input.tagName==='SELECT'&&FIELDS.includes(input.name)&&draft[input.name]!==input.value)input.dispatchEvent(new window.Event('input',{bubbles:true}));
   });
-  codeCleanup = bindTicketCodeEditor(form, draft, ({previousRecord={...draft},automatic=false,codeStatus='',railFields,rescan}={}) => {
+  codeCleanup = bindTicketCodeEditor(form, draft, ({previousRecord={...draft},automatic=false,codeStatus='',railFields,rescan,scannedFields}={}) => {
     if(automatic){
       refreshFieldSources(form,draft);
       refreshPreview();
@@ -1258,6 +1270,7 @@ function editRecord(record, {
     updatePersonalFields(previousRecord);
     editor.dirty=true;
     if (flight) {
+      for (const field of scannedFields ?? []) if (FLIGHT_SHARED_FIELDS.includes(field)) sharedEdits.add(field);
       const loyalty = form.querySelector('[data-boarding-fields="loyalty"]');
       if (hasOriginalBoardingCode(draft) !== Boolean(form.elements.marketingFlightNumber)) loyalty.outerHTML = boardingLoyaltyEditor(draft);
       else if (BOARDING_LOYALTY_FIELDS.some(key => draft[key])) loyalty.open = true;
@@ -1269,7 +1282,6 @@ function editRecord(record, {
     refreshPreview();
   }, {
     onCameraStart:stopRailCamera,
-    baggageFieldsInUse,
     profile:state.settings.profile, preserveGenerator:!!generatorSettings, referenceURL:localFileURL, editingSaved,
     savedService: serviceFixed ? original.service : '',
     isCurrent:() => form.isConnected && !form.dataset.pending && canWrite() && isArchiveContext(context),
@@ -1282,11 +1294,6 @@ function editRecord(record, {
     const changedKey=target.name || (target.matches('[data-seat-preset]') ? 'seatClass'
       : target.matches('[data-seat-number],[data-berth]') ? 'seat'
       : target.matches('[data-rail-standing]') ? 'railStanding' : '');
-    if (flight && BOARDING_BAGGAGE_FIELDS.includes(changedKey) && target.value.trim() &&
-        baggageFieldsInUse(draft).includes(changedKey)) {
-      target.value = draft[changedKey];
-      return;
-    }
     if (!lookupApplying && changedKey === 'type') {
       if (typeFixed || ticketFieldLocked(draft,'type')) { form.elements.type.value=draft.type; return; }
       if (['rail','flight'].includes(event.target.value) && event.target.value !== draft.type) {
@@ -1332,6 +1339,7 @@ function editRecord(record, {
         markFieldSources(draft, [year.name], year.hasAttribute(FLIGHT_DATE_DEFAULT_ATTR) ? 'default' : 'manual');
       }
       else if(FIELDS.includes(key))markManualFields(draft,[key,...(['origin','destination'].includes(key) ? [key+'Code'] : [])]);
+      if (sharedEdits && FLIGHT_SHARED_FIELDS.includes(key)) sharedEdits.add(key);
       if (previousQuery!==lookupContext(draft)) clearEditorLookupValues();
     }
     if (draft.railJourney && !railJourneyMatches(draft)) draft.railJourney='';
@@ -1383,27 +1391,17 @@ function editRecord(record, {
         try{draft[key]=readTicketDate(form,key,draft,{strict:true});}catch(error){error.fields??=[key];throw error;}
       }
       validateTicketForm(draft);
-      if (flight) {
-        const fields = baggageFieldsInUse(draft).filter(key => draft[key]?.trim());
-        if (fields.length) {
-          throw Object.assign(new Error('联程其他航段已填写' + fields.map(key => BOARDING_METADATA_LABELS[key]).join('、') + '，请清空本段重复项。'), { fields });
-        }
-      }
       flightStopEditor?.commit();
     } catch (error) { showError(error); return; }
     release = freezeForm(form, '保存中…');
     try {
-      const checked = validateRecord({ ...draft, updatedAt: now(), lockedFields: draft.lockedFields, sources: draft.sources.length ? draft.sources : [{ kind: 'manual', label: '录入', at: now() }] });
-      const index = imported ? -1 : state.records.findIndex(record => record.id === checked.id);
+      const saveDraft = flight ? restoreUneditedSharedFields({ ...draft }) : draft;
+      const checked = validateRecord({ ...saveDraft, updatedAt: now(), sources: draft.sources.length ? draft.sources : [{ kind: 'manual', label: '录入', at: now() }] });
       let result;
-      if (index >= 0) {
-        const records = clone(state.records);
-        const merged = mergeThreeWay([original], [checked], [records[index]]);
-        if (merged.conflicts.length) throw new Error('此票的同一字段已在同步时更新。请先复制你的修改，关闭并重新打开这张票后校对。');
-        records[index] = merged.records[0];
-        await persist(records);
+      if (editingSaved && !imported) {
+        await persist([], { ticket: checked, original, sharedEdits });
       } else {
-        result = await saveReviewedTicket(checked, form, context);
+        result = await saveReviewedTicket(checked, form, context, sharedEdits);
         if (!result) return;
       }
       if (!isArchiveContext(context) || !form.isConnected) return;

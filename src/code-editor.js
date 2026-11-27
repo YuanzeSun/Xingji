@@ -51,7 +51,7 @@ export function ticketCodeEditor(record, { fromScan = false, editingSaved = fals
 }
 export function bindTicketCodeEditor(form, draft, changed, {
   referenceURL = '', autoRead = false, editingSaved = false, savedService = editingSaved ? draft.service : '',
-  profile, preserveGenerator = false, onCameraStart, isCurrent = () => true, baggageFieldsInUse = () => [],
+  profile, preserveGenerator = false, onCameraStart, isCurrent = () => true,
   loadRebuilder = async () => (await import('./code-reader.js')).rebuildCodesFromImage, cameraOptions = {}
 } = {}) {
   const section = form.querySelector('[data-code-editor]'); if (!section) return () => {};
@@ -153,10 +153,8 @@ export function bindTicketCodeEditor(form, draft, changed, {
     }
     const adopted = review?.conflicts.filter(({ key }) => selection?.choices[key] === 'scanned') || [];
     const values = Object.assign({}, review?.values, ...adopted.map(({ update }) => update));
-    const skipped = baggageFieldsInUse({ ...previousRecord, ...values }).filter(key => Object.hasOwn(values, key));
-    for (const key of skipped) delete values[key];
-    const added = (review?.added || 0) - skipped.filter(key => !previousRecord[key]).length;
-    const replaceCode = !draft.boardingCode || !rescan || added || values.identity || adopted.some(({ key }) => Object.hasOwn(values, key));
+    const added = review?.added || 0;
+    const replaceCode = !draft.boardingCode || !rescan || added || values.identity || adopted.length;
     reset();
     status.textContent = !rescan ? '已读取并重建 ' + code.format :
       added ? `已补充 ${added} 项资料` : review?.conflicts.length ? '已按选择核对扫码资料' : '扫码资料一致';
@@ -194,7 +192,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
     refreshFieldSources(form, draft);
     refreshTicketFieldLocks(form, draft);
     showSaved(); showDifferences();
-    changed({ previousRecord, rescan });
+    changed({ previousRecord, rescan, scannedFields: filled });
   }
   function use(code) {
     if (!isCurrent()) return;

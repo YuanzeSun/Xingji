@@ -35,7 +35,8 @@ test('individually archived legs retain their barcode metadata and display links
     return createRecord(values);
   });
   assert.equal(rows[0].boardingTime,'18:21');assert.equal(rows[0].baggageTagNumbers,'0123456789–0123456790');
-  for(const key of ['boardingTime','checkedBaggageCount','frequentFlyerNumber','marketingCarrier'])assert.equal(ticketFieldLocked(rows[0],key),true,key);
+  for(const key of ['boardingTime','frequentFlyerNumber','marketingCarrier'])assert.equal(ticketFieldLocked(rows[0],key),true,key);
+  assert.equal(ticketFieldLocked(rows[0],'checkedBaggageCount'),false);
   assert.equal(rows[0].checkedBaggageWeight, '');
   assert.equal(rows[1].checkedBaggageCount, '');
   assert.equal(rows[1].baggageTagNumbers, '');

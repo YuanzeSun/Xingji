@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { boardingBaggageIndex, occupiedBaggageFields, otherBaggageLegs, withBoardingBaggage } from '../src/boarding-baggage.js';
+import { boardingBaggageIndex, withBoardingBaggage } from '../src/boarding-baggage.js';
 import { createRecord } from '../src/model.js';
 import { ticketDimensions, ticketSVG } from '../src/tickets.js';
 import { createBoardingCode, readBoardingCode } from '../src/bcbp.js';
@@ -42,8 +42,6 @@ test('separate M1 codes with the same ticket number share baggage regardless of 
   assert.match(ticketSVG(withBoardingBaggage(first, full)), /TO: CTU<.*VIA: PVG CA1234 01JAN</s);
   assert.equal(full.get('first').sticker.checkedBaggageWeight, '9.75');
   assert.deepEqual(full.get('second'), { sticker: null, laterLeg: true });
-  assert.deepEqual(occupiedBaggageFields(otherBaggageLegs(first, [second, first])), Object.keys(tag));
-  assert.deepEqual(occupiedBaggageFields(otherBaggageLegs(second, [second, first])), []);
 });
 
 test('flights with distinct ticket numbers keep their own stickers', () => {

@@ -40,13 +40,3 @@ export function boardingBaggageIndex(records) {
   }
   return result;
 }
-
-export function otherBaggageLegs(record, records) {
-  const number = record.type === 'flight' && flightTicketNumber(record.ticketNumber);
-  return number ? records.filter(other => other.id !== record.id && activeFlight(other) &&
-    flightTicketNumber(other.ticketNumber) === number) : [];
-}
-
-export function occupiedBaggageFields(legs) {
-  return BOARDING_BAGGAGE_FIELDS.filter(key => legs.some(other => other[key]?.trim()));
-}

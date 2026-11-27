@@ -216,9 +216,7 @@ test('a boarding QR fills available baggage, loyalty and marketing fields and le
     baggageTagNumbers: '0123456789', checkedBaggageCount: '1',
     frequentFlyerCarrier: 'CA', frequentFlyerNumber: '00000123456789', marketingCarrier: 'LH'
   };
-  const remaining = { ...metadata };
-  delete remaining.checkedBaggageCount;
-  for (const [text, expected, occupied = []] of [[withMetadata, metadata], [withoutMetadata, {}], [withMetadata, remaining, ['checkedBaggageCount']]]) {
+  for (const [text, expected] of [[withMetadata, metadata], [withoutMetadata, {}]]) {
     const bytes = Uint8Array.from(text, character => character.charCodeAt(0));
     const { symbol } = await writeBarcode(bytes, { format: 'QRCode' });
     const result = await rebuildCodeSymbols(symbolImage(symbol, 'flight'), 'flight', { boardingPass: true });
@@ -230,8 +228,7 @@ test('a boarding QR fills available baggage, loyalty and marketing fields and le
     const dom = new JSDOM(`<form>${inputs}${ticketCodeEditor(draft)}</form>`);
     const form = dom.window.document.querySelector('form');
     const dispose = bindTicketCodeEditor(form, draft, () => {}, {
-      loadRebuilder: async () => async () => result,
-      baggageFieldsInUse: record => record.ticketNumber === '1230000000001' ? occupied : []
+      loadRebuilder: async () => async () => result
     });
     try {
       const input = form.querySelector('#code-photo');
@@ -242,7 +239,7 @@ test('a boarding QR fills available baggage, loyalty and marketing fields and le
       const saved = createRecord(draft);
       for (const key of BOARDING_METADATA_FIELDS) {
         assert.equal(form.elements[key].value, expected[key] ?? '', key);
-        assert.equal(form.elements[key].readOnly, key in expected, key);
+        assert.equal(form.elements[key].readOnly, key in expected && key !== 'baggageTagNumbers' && key !== 'checkedBaggageCount', key);
         assert.equal(saved[key], expected[key] ?? (key === 'marketingFlightNumber' ? undefined : ''), key);
       }
     } finally { dispose(); dom.window.close(); }
