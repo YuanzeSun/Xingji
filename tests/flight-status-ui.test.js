@@ -6,7 +6,7 @@ import { indexedDB } from 'fake-indexeddb';
 import { prepareCloud } from './helpers/cloud.js';
 import { createRecord } from '../src/model.js';
 
-test('an OPEN ticket requires a date, can omit its flight number and remains outside travel counts', async()=>{
+test('an OPEN ticket can be saved without a flight or date, edited to invalid and retained in the archive outside travel counts', async()=>{
  const dom=new JSDOM('<div id="app"></div><div id="modal-root"></div><div id="toast-root"></div>',{url:'http://localhost/'}),{window}=dom;
  for(const key of ['window','document','location','history','sessionStorage','FormData'])Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true});
  Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});Object.defineProperty(globalThis,'indexedDB',{value:indexedDB,configurable:true});window.scrollTo=()=>{};window.confirm=()=>true;
@@ -32,19 +32,18 @@ test('an OPEN ticket requires a date, can omit its flight number and remains out
   const originInput=document.querySelector('#editor-form [name="origin"]');fill('origin','PEK');
   assert.equal(document.querySelector('#editor-form [name="origin"]'),originInput,'ordinary flight typing must not replace the form or lose focus');
   fill('flightStatus','open');
-  assert.equal(document.querySelector('[name="service"]').required,false);assert.equal(document.querySelector('[name="departureDate"]').required,true);
+  assert.equal(document.querySelector('[name="service"]').required,false);assert.equal(document.querySelector('[name="departureDate"]').required,false);
   assert.equal(document.querySelector('[name="departureDateYear"]').value,'');
   assert.equal(document.querySelector('[data-seat-preset]').required,false);
   assert.equal(document.querySelector('[name="seatClass"]').getAttribute('aria-required'),'false');
   fill('origin','LHR');fill('destination','SYD');fill('passenger','TEST/USER');
   assert.equal(document.querySelectorAll('#editor-preview [data-flight-status="open"]').length,2);
-  submit();assert.match(document.querySelector('#editor-error').textContent,/计划起飞日期/);
-  fill('departureDate','2023-11-19');
   submit();await wait(async()=>server.records().length===2&&!document.querySelector('#editor-form')&&!(await db.get('syncMeta')).pending);
-  let special=server.records().find(r=>r.id!==normal.id);assert.equal(special.flightStatus,'open');assert.equal(calendarDate(special.departureDate),'2023-11-19');assert.equal(special.service,'');
+  let special=server.records().find(r=>r.id!==normal.id);assert.equal(special.flightStatus,'open');assert.equal(calendarDate(special.departureDate),'');assert.equal(special.service,'');
   const stats=document.querySelector('.stats').textContent;assert.match(stats,/机票1程/);assert.match(stats,/涉及城市2城/);assert.deepEqual([...document.querySelectorAll('.transport-tag.flight')].map(tag=>tag.textContent),['机票','机票']);
   document.querySelector(`.ticket-preview[data-id="${special.id}"]`).click();await wait(()=>document.querySelector('[data-action="edit"]'));assert.doesNotMatch(document.querySelector('.ticket-detail-groups').textContent,/铺位/);assert.match(document.querySelector('[data-ticket-detail=booking] .detail-grid').textContent,/机票状态OPEN/);document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));fill('flightStatus','invalid');submit();
   await wait(()=>server.records().find(r=>r.id===special.id).flightStatus==='invalid'&&!document.querySelector('#editor-form'));
+  assert.equal(calendarDate(server.records().find(r=>r.id===special.id).departureDate),'');
   assert.deepEqual([...document.querySelectorAll('.transport-tag.flight')].map(tag=>tag.textContent),['机票','机票']);
   document.querySelector(`.ticket-preview[data-id="${special.id}"]`).click();await wait(()=>document.querySelector('[data-action="edit"]'));document.querySelector('[data-action="edit"]').click();await wait(()=>document.querySelector('#editor-form'));fill('flightStatus','normal');
   assert.equal(document.querySelector('[name="service"]').required,true);submit();await wait(()=>document.querySelector('#editor-error').textContent.includes('航班号'));

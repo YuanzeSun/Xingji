@@ -26,7 +26,7 @@ const passengerFields = ['passenger', 'seat', 'seatClass'];
 const flightFields = [...journeyFields, ...passengerFields];
 const railFields = [...journeyFields, 'departureTime', ...passengerFields];
 export function requiredTicketFields(type, template, flightStatus = 'normal', railStanding = false) {
-  if (type === 'flight') return ['open', 'invalid'].includes(flightStatus) ? ['origin', 'destination', 'departureDate', 'passenger'] : flightFields;
+  if (type === 'flight') return ['open', 'invalid'].includes(flightStatus) ? ['origin', 'destination', 'passenger'] : flightFields;
   if (template === 'rail-supplement') return ['origin', 'destination', 'service', 'departureDate'];
   const fields = template === 'rail-refund-receipt'
     ? ['origin', 'destination', 'service', 'departureDate', 'passenger', 'price']
