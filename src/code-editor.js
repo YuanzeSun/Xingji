@@ -10,6 +10,7 @@ import {fieldSourceBadge,markFieldSources,railBarcodeFieldLocked,railCodeEntryLo
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
 import { codeCameraMarkup, bindCodeCamera } from './code-camera.js';
 import { renderCodeData } from './barcode-data.js';
+import { barcodePayloadMarkup } from './barcode-payload.js';
 import { hasRailQRCode, isLinearTicketCode, normalizeTicketCode } from './ticket-code.js';
 import { normalizeBoardingCode } from './boarding-code.js';
 import { DEMO_BOARDING_CODE } from './demo-boarding-code.js';
@@ -45,7 +46,7 @@ export function ticketCodeEditor(record, { fromScan = false, editingSaved = fals
   const remove = codeRemovalLocked(record, editingSaved) ? '' : `<button type="button" class="button small secondary" id="code-remove" ${removable(record, field, editingSaved) ? '' : 'hidden'}>移除</button>`;
   const controls = `<div class="saved-code" id="saved-code" ${saved ? '' : 'hidden'}>${thumbnail(saved)}</div><div class="code-actions">${referenceButton}<button type="button" class="button small secondary" data-code-start${disabled}>相机扫描</button>${upload}${remove}</div>`;
   const scan = `<div class="boarding-code-scan"><div class="boarding-code-controls">${controls}</div>${flight ? boardingExamplesMarkup(record[field]) : railExampleMarkup(record)}</div>`;
-  return `<section data-code-editor class="editor-extra${flight ? '' : ' full-field rail-code-entry'}" ${flight ? '' : 'data-rail-code-entry'} id="code-editor"><h3>${title}${fieldSourceBadge(field,record)}</h3>${scan}${codeCameraMarkup()}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p></section>`;
+  return `<section data-code-editor class="editor-extra${flight ? '' : ' full-field rail-code-entry'}" ${flight ? '' : 'data-rail-code-entry'} id="code-editor"><h3>${title}${fieldSourceBadge(field,record)}</h3>${scan}${codeCameraMarkup()}<p class="fine-print" id="code-status" role="status"></p><p id="code-consistency" class="code-consistency" role="status" hidden></p><div id="code-choices" class="code-choices" hidden></div><button type="button" class="text-button" id="code-cancel" hidden>取消选择</button><p class="form-error" id="code-error" role="alert"></p><div data-editor-barcode-payload>${barcodePayloadMarkup(saved)}</div></section>`;
 }
 export function bindTicketCodeEditor(form, draft, changed, {
   referenceURL = '', autoRead = false, editingSaved = false, savedService = editingSaved ? draft.service : '',
@@ -63,6 +64,8 @@ export function bindTicketCodeEditor(form, draft, changed, {
     const saved = find('saved-code');
     saved.innerHTML = thumbnail(draft[field]);
     saved.hidden = !draft[field];
+    const payload = section.querySelector('[data-editor-barcode-payload]');
+    payload.innerHTML = barcodePayloadMarkup(draft[field], { open: payload.firstElementChild?.open });
     const remove = find('code-remove');
     if (remove) remove.hidden = !removable(draft, field, editingSaved);
     const reference = find('code-use-scan');

@@ -6,11 +6,14 @@ export const normalizeTicketCode = value => normalizeCodeData(value, FORMATS);
 export const isLinearTicketCode = value => value?.format === 'Code128';
 export const hasRailQRCode = record => record.type === 'rail' && !!record.ticketCode && !isLinearTicketCode(record.ticketCode);
 
-export function renderTicketCode(record, x, y, width, height = width) {
+export function railTicketFaceCode(record) {
   if (record.type !== 'rail') return '';
   const code = record.ticketCode || createRailTicketQR(record);
+  return code && isLinearTicketCode(code) === (record.template === 'rail-red-barcode') ? code : '';
+}
+
+export function renderTicketCode(record, x, y, width, height = width) {
+  const code = railTicketFaceCode(record);
   if (!code) return '';
-  const linear = isLinearTicketCode(code);
-  if (linear !== (record.template === 'rail-red-barcode')) return '';
-  return renderCodeData(normalizeTicketCode(code), { x, y, width, height, stretch: linear, marker: 'ticket-code' });
+  return renderCodeData(normalizeTicketCode(code), { x, y, width, height, stretch: isLinearTicketCode(code), marker: 'ticket-code' });
 }

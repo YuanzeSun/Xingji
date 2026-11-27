@@ -239,6 +239,7 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, true);
     assert.equal(receipt().disabled, true);
     assert.ok(form().querySelector('[data-code-examples][hidden]'));
+    assert.equal(form().querySelector('[data-barcode-payload] code').textContent, atob(originalCode.rawBytes));
     assert.deepEqual(fieldStars('price'), []);
     assert.deepEqual(fieldStars('saleCode'), []);
     assert.deepEqual(fieldStars('origin'), ['必填']);
@@ -283,6 +284,7 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     await waitFor(() => document.querySelector('[data-action="view"]'));
     document.querySelector('[data-action="view"]').click();
     await waitFor(() => document.querySelector('[data-action="edit"]:not(:disabled)'));
+    assert.equal(document.querySelector('.detail-body [data-barcode-payload] code').textContent, atob(originalCode.rawBytes));
     document.querySelector('[data-action="edit"]').click();
     await waitFor(form);
     assert.equal(field('service').readOnly, true);
@@ -320,7 +322,9 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     assert.equal(photoEntry().querySelector('[data-rail-photo-controls]').disabled, false);
     assert.equal(receipt().disabled, false);
     assert.ok(form().querySelector('#editor-preview [data-ticket-code][aria-label^="Code128"]'));
+    assert.equal(form().querySelector('[data-barcode-payload] code').textContent, atob(DEMO_RAIL_LINEAR_CODE.rawBytes));
     form().querySelector('#code-remove').click();
+    assert.equal(form().querySelector('[data-barcode-payload]'), null);
     assert.ok(form().querySelector('.rail-linear-example:not([hidden])'));
     const barcodeFile = form().querySelector('#code-photo');
     Object.defineProperty(barcodeFile, 'files', { value: [imageBlob] });

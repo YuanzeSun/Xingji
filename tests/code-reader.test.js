@@ -116,6 +116,9 @@ test('the QR fills the single boarding time and preserves city tags and unknown 
     assert.equal(form.querySelector('[data-bcbp="passenger"]').value,'ZHANGSAN');assert.equal(form.querySelector('[data-bcbp="electronic"]'),null);assert.equal(form.querySelector('[data-bcbp-fields]').disabled,true);
     for(const origin of ['PEK','LHR']){const presentation=boardingPresentation({...draft,origin,originCode:origin});assert.equal(presentation.language,origin==='PEK'?'zh':'en');assert.equal(presentation.passenger,'张三');}
     const expected=bytes.slice();expected[22]=32;assert.deepEqual(codeBytes(draft.boardingCode.rawBytes),expected);
+    const payload=form.querySelector('[data-barcode-payload]');
+    assert.equal(payload.open,false);
+    assert.equal(payload.querySelector('code').textContent,new TextDecoder().decode(expected));
     const [displayed] = await readBarcodes(result.codes[0].image, { formats: ['PDF417'] });
     assert.deepEqual(displayed.bytes, expected);
     for(const key of ['passenger','service','origin','destination','seat','seatClass','airline','ticketNumber','gate','departureDate'])assert.equal(draft.fieldSources[key],'barcode',key);

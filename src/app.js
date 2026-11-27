@@ -11,9 +11,10 @@ import {markManualFields,applyLookupValues,lookupContext,clearLookupValues} from
 import { createArithmeticChallenge, arithmeticField, checkArithmeticAnswer } from './arithmetic-confirm.js';
 import { archiveSelectionMarkup, reconcileSelection } from './archive-selection.js';
 import { renderCodeData } from './barcode-data.js';
+import { barcodePayloadMarkup } from './barcode-payload.js';
 import { createRecord, validateRecord, mergeThreeWay, deletionMarker, DEFAULT_RAIL_TEMPLATE, FIELDS, now, clone, formatDate } from './model.js';
 import { SUPPLEMENT_FIELDS, isRailReceiptTemplate, ticketTemplateChoices } from './rail-template.js';
-import { hasRailQRCode } from './ticket-code.js';
+import { hasRailQRCode, railTicketFaceCode } from './ticket-code.js';
 import * as db from './db.js';
 import { readSyncState, readResetState, activeBinding, sameArchiveBaseline, activateD1, bindRepository, signOutCloud, keepUnlinkedArchive, saveArchiveResetProgress, stageBackupRestore, stageTicket, stageRecords, stageSettings, rejectPendingChange, discardRejectedChange, acknowledgeSync, adoptVerifiedArchive, replaceWithRemote } from './sync-state.js';
 import { TicketImportReview } from './ticket-import-review.js';
@@ -959,6 +960,8 @@ function viewRecord(id) {
   const reference = railReferenceNotice(record);
   const [artwork] = ticketArtwork([record], records);
   const preview = ticketSVG(artwork);
+  const hasRailCode = preview.includes('data-ticket-code=');
+  const code = record.type === 'flight' ? record.boardingCode : record.ticketCode || (hasRailCode ? railTicketFaceCode(record) : '');
   const services = record.type === 'rail'
     ? railJourneyMarkup(record, records) + (isJourneyRecord(record) ? '<section class="rail-route" data-rail-route hidden aria-label="铁路线路"></section>' : '')
     : boardingJourneyMarkup(record, records) + (record.flightTrack ? '<section class="rail-route flight-track" data-flight-track aria-label="飞行航迹"></section>' : '');
@@ -972,7 +975,8 @@ function viewRecord(id) {
     <div class="detail-preview">${preview}</div>
     <div class="detail-body">
       ${reference ? `<div class="code-consistency" data-rail-reference>${reference}</div>` : ''}
-      ${ticketDetailsMarkup(record, labels, preview.includes('data-ticket-code='))}
+      ${barcodePayloadMarkup(code)}
+      ${ticketDetailsMarkup(record, labels, hasRailCode)}
       ${services}
       ${sources}
     </div>
