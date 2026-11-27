@@ -183,16 +183,15 @@ async function verifyBeforeWrite(message) {
 async function persist(records, { backupSettings, ticket, decision } = {}) {
   if (!canWrite() || state.saving) throw new Error('当前不能修改票据，请先完成云端核对');
   const expected = { records: clone(state.records), settings: clone(state.settings) };
-  const { config, d1 } = state;
   const context = archiveContext();
   state.saving = true;
   try {
     await verifyBeforeWrite('云端尚未核对成功，修改未提交，请保留当前输入');
     if (!isArchiveContext(context)) throw new Error('票库已变化，请重新打开后核对。');
     const staged = await withCloudLock(() => {
-      if (ticket) return stageTicket(ticket, config, d1, decision);
-      if (backupSettings) return stageBackupRestore(records, config, d1, expected.settings, backupSettings);
-      return stageRecords(expected.records, records, config, d1);
+      if (ticket) return stageTicket(ticket, context, decision);
+      if (backupSettings) return stageBackupRestore(records, expected.settings, backupSettings, context);
+      return stageRecords(expected.records, records, context);
     });
     useSnapshot(staged);
     announce();
@@ -2248,13 +2247,13 @@ async function saveFlightSettings(event) {
   event.preventDefault(); state.settingsError = '';
   if (!canWrite() || state.saving) { state.settingsError = '请先恢复云端连接再保存设置'; render(); return; }
   const form = event.target, secret = String(new FormData(form).get('key') || '').trim(), expected = clone(state.settings);
-  const { config, d1 } = state;
+  const context = archiveContext();
   state.flightKeyDraft = secret; state.saving = true;
   const release = freezeForm(form);
   try {
     const proposed = sharedSettings({ ...expected, flightMcpKey: secret });
     await verifyBeforeWrite('云端核对未完成，Key 尚未提交');
-    useSnapshot(await withCloudLock(() => stageSettings(expected, proposed, config, d1))); announce();
+    useSnapshot(await withCloudLock(() => stageSettings(expected, proposed, context))); announce();
     await doSync(); state.flightKeyDraft = null; toast(savedMessage('连接设置已同步'));
   } catch (error) { state.settingsError = error.message; }
   finally { state.saving = false; release(); render(); }
@@ -2263,13 +2262,13 @@ async function savePersonalProfile(event) {
   event.preventDefault(); state.profileError = '';
   if (!canWrite() || state.saving) { state.profileError = '请先恢复云端连接再保存资料'; render(); return; }
   const form = event.target, expected = clone(state.profileBase || state.settings);
-  const { config, d1 } = state;
+  const context = archiveContext();
   state.profileDraft = collectPersonalProfile(form); state.profileDirty = true;
   state.saving = true; const release = freezeForm(form);
   try {
     const proposed = sharedSettings({ ...expected, profile:state.profileDraft });
     await verifyBeforeWrite('云端核对未完成，个人资料尚未提交');
-    useSnapshot(await withCloudLock(() => stageSettings(expected, proposed, config, d1))); announce();
+    useSnapshot(await withCloudLock(() => stageSettings(expected, proposed, context))); announce();
     await doSync(); state.profileDraft = null; state.profileBase = null; state.profileDirty = false;
     toast(savedMessage('个人资料已同步'));
   } catch (error) { state.profileError = error.message; }

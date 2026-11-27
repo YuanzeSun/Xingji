@@ -121,11 +121,12 @@ export function activateD1(captured, config, remote, { credential, github, cloud
   });
 }
 
-function stageChange(config, d1, change) {
+function stageChange(context, change) {
   return db.atomic(keys, raw => {
     const current = unpack(raw);
     if (current.archiveResetProgress) throw new Error('请先处理未完成的仓库重置');
-    if (!current.meta.verified || activeBinding(current) !== activeBinding({ config, d1 })) throw new Error('请先连接并同步云端票库');
+    if (!current.meta.verified || activeBinding(current) !== context.binding) throw new Error('请先连接并同步云端票库');
+    if ((current.meta.generation || '') !== context.generation) throw new Error('票库已重置，请重新打开后核对');
     const { records = current.records, settings = current.settings, ...result } = change(current);
     const meta = { ...current.meta, rejection: null, revision: current.meta.revision + 1, pending: !sameRecords(records, current.base) || !sameSettings(settings, current.settingsBase) };
     return { write: { records, settings, syncMeta: meta }, result: { ...current, records, settings, meta, ...result } };
@@ -141,20 +142,20 @@ function mergedSettings(expected, proposed, current) {
   if (conflicts.length) throw new Error('设置已在其他设备或标签页更新，请核对后再保存');
   return settings;
 }
-export function stageRecords(expected, proposed, config, d1 = null) {
-  return stageChange(config, d1, current => ({ records: mergedRecords(expected, proposed, current.records) }));
+export function stageRecords(expected, proposed, context) {
+  return stageChange(context, current => ({ records: mergedRecords(expected, proposed, current.records) }));
 }
-export function stageSettings(expected, proposed, config, d1 = null) {
-  return stageChange(config, d1, current => ({ settings: mergedSettings(expected, proposed, current.settings) }));
+export function stageSettings(expected, proposed, context) {
+  return stageChange(context, current => ({ settings: mergedSettings(expected, proposed, current.settings) }));
 }
-export function stageBackupRestore(records, config, d1, expectedSettings, settings) {
-  return stageChange(config, d1, current => ({
+export function stageBackupRestore(records, expectedSettings, settings, context) {
+  return stageChange(context, current => ({
     records: mergeBackupRecords(current.records, records),
     settings: mergedSettings(expectedSettings, { ...settings, connections: expectedSettings.connections }, current.settings)
   }));
 }
-export function stageTicket(candidate, config, d1, decision) {
-  return stageChange(config, d1, current => applyReviewedTicket(current.records, candidate, decision));
+export function stageTicket(candidate, context, decision) {
+  return stageChange(context, current => applyReviewedTicket(current.records, candidate, decision));
 }
 export function rejectPendingChange(captured, message) {
   return db.atomic(keys, raw => {

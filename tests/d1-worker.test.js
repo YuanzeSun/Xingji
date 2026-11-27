@@ -171,6 +171,8 @@ test('D1 whole replacements are atomic and stale clients cannot delete or overwr
   assert.equal(reset.head, resetId);
   assert.equal(reset.generation, resetId);
   await assert.rejects(store.replace(reset, [], reset.settings, { resetId }), { status: 400 });
+  await assert.rejects(store.write([replacement, { ...mark, updatedAt: '2026-11-27T00:01:00Z' }], beforeReset, beforeReset.settings), { status: 409 });
+  assert.equal(db.sqlite.prepare('SELECT count(*) AS count FROM tickets').get().count, 0);
   assert.deepEqual(await store.read(), reset);
 });
 

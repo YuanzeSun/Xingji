@@ -2,16 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { indexedDB } from 'fake-indexeddb';
 import { MemoryGitHub } from './helpers/cloud.js';
-import { createRecord } from '../src/model.js';
+import { createRecord, deletionMarker } from '../src/model.js';
 import { GitHubStore, synchronize } from '../src/github.js';
-import { bindRepository, readSyncState, replaceWithRemote, acknowledgeSync } from '../src/sync-state.js';
+import { activeBinding, bindRepository, readSyncState, replaceWithRemote, acknowledgeSync, stageRecords } from '../src/sync-state.js';
 
 globalThis.indexedDB = indexedDB;
 const ticket = year => createRecord({ id: 'ticket-' + year, service: 'G103', origin: '北京南', destination: '上海虹桥', departureDate: `${year}-01-01` });
 const config = () => ({ owner: 'user', repo: 'data', branch: 'main', id: 77 });
 
 test('file deletion stops ordinary writes; explicit reset empties all current files and creates a new generation', async () => {
-  const records = [ticket(2024), ticket(2025)], server = new MemoryGitHub(records, { profile: { chineseName: '示例' } }), store = new GitHubStore(config(), 'test', server.fetch);
+  const records = [ticket(2024), ticket(2025), deletionMarker(ticket(2023))];
+  const server = new MemoryGitHub(records, { profile: { chineseName: '示例' } }), store = new GitHubStore(config(), 'test', server.fetch);
   const original = server.head; server.corrupt('notes.txt', 'keep me'); server.corrupt('archive/index.json', null);
   let request;
   await assert.rejects(synchronize(store, records, records, {}, { baseHead: original }), error => { request = error; return error.code === 'ARCHIVE_FILES_MISSING'; });
@@ -19,6 +20,7 @@ test('file deletion stops ordinary writes; explicit reset empties all current fi
   const reset = await store.resetRepository(request.snapshot.head,{profile:{chineseName:'示例'}});
   assert.deepEqual(reset.records, []); assert.equal(reset.settings.profile.chineseName,'示例'); assert.ok(reset.generation);
   const result = await store.read(); assert.equal(result.initialized, true); assert.equal(result.generation, reset.generation);
+  assert.deepEqual(result.records, []);
   assert.deepEqual(result.paths, []);
   const files = server.trees.get(server.commits.get(server.head).tree);
   assert.equal(files['notes.txt'],undefined);assert.deepEqual(Object.keys(files),['archive/index.json']);assert.equal(server.ancestor(original,server.head),true);
@@ -49,16 +51,21 @@ test('deleting every archive file is a reset request for an existing device, whi
   assert.deepEqual((await synchronize(new GitHubStore(config(), 'test', fresh.fetch), [], records)).records, records);
 });
 
-test('accepting a reset clears local records and settings atomically and retains generation on ordinary acknowledgements', async () => {
+test('accepting a reset clears the cache and prevents a stale tab from writing tickets or deletion markers back', async () => {
   const db = await import('../src/db.js');
+  const records = [ticket(2025), deletionMarker(ticket(2024))];
   await bindRepository(config());
-  await db.setMany([['records', [ticket(2025)]], ['base', [ticket(2025)]], ['settings', { profile: { chineseName: '示例' } }], ['settingsBase', {}], ['syncMeta', { revision: 2, head: 'before', verified: true, pending: true }]]);
+  await db.setMany([['records', records], ['base', records], ['settings', { profile: { chineseName: '示例' } }], ['settingsBase', {}], ['syncMeta', { revision: 2, head: 'before', generation: 'old-generation', verified: true, pending: true }]]);
   const captured = await readSyncState();
   const remote = { records: [], settings: {}, head: 'after', generation: 'new-generation' };
   const accepted = await replaceWithRemote(captured, remote);
   assert.deepEqual(accepted.records, []); assert.deepEqual(accepted.base, []); assert.deepEqual(accepted.settings, { flightMcpKey: '' });
   assert.equal(accepted.config.id, 77); assert.equal(accepted.meta.generation, 'new-generation'); assert.equal(accepted.meta.pending, false);
   const confirmed = await acknowledgeSync(accepted, remote); assert.equal(confirmed.meta.generation, 'new-generation');
+  const context = { binding: activeBinding(captured), generation: captured.meta.generation };
+  await assert.rejects(stageRecords(records, [{ ...records[0], seat: '08F' }, records[1]], context), /已重置/);
+  const current = await readSyncState();
+  assert.deepEqual(current.records, []); assert.deepEqual(current.base, []); assert.equal(current.meta.pending, false);
   await assert.rejects(replaceWithRemote(captured, remote), /变化/);
 });
 

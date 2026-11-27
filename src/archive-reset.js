@@ -97,7 +97,7 @@ export function archiveResetMarkup(request, captured, challenge) {
     ...(d1 ? [`<li>D1 · <strong>${e(d1)}</strong></li>`] : [])
   ].join('');
   const description = remote ? '采用新票库会清理本机的旧票据和设置。'
-    : '重置会清空所列票库的票据和相关资料，分别保留个人资料、MCP 和账号设置。';
+    : '重置会清空所列票库的票据、删除标记和相关资料，保留个人资料、MCP 和账号设置。';
   const history = !remote && github ? '<p>GitHub 当前分支的其他文件也会清除，Git 历史保留。</p>' : '';
   const unlink = !remote && github && d1 ? `<label class="checkbox-row"><input type="checkbox" name="unlink-clouds" ${request.unlinkStarted ? 'checked disabled' : ''} />同时解除关联</label><fieldset class="conflict" data-keep-cloud ${request.unlinkStarted ? '' : 'hidden disabled'}><legend>重置后继续使用</legend><label><input type="radio" name="keep-cloud" value="github" required />GitHub</label><label><input type="radio" name="keep-cloud" value="d1" required />Cloudflare D1</label></fieldset>` : '';
   const action = remote ? '使用新票库' : '重置仓库';

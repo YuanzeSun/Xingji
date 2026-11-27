@@ -4,11 +4,12 @@ import { indexedDB } from 'fake-indexeddb';
 import { sharedSettings, sameSettings, maskedKey } from '../src/shared-settings.js';
 import { createRecord, archive } from '../src/model.js';
 import { GitHubStore, synchronize } from '../src/github.js';
-import { stageSettings, stageRecords, readSyncState, acknowledgeSync } from '../src/sync-state.js';
+import { activeBinding, stageSettings, stageRecords, readSyncState, acknowledgeSync } from '../src/sync-state.js';
 import * as db from '../src/db.js';
 import { MemoryGitHub } from './helpers/cloud.js';
 Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true });
 const config = { owner: 'user', repo: 'data', id: 77, branch: 'main' }, base = createRecord({ id: 'trip', origin: '清河', destination: '上海虹桥', service: 'G103', departureDate: '2026-11-15' });
+const context = { binding: activeBinding({ config }), generation: '' };
 const settings = key => ({ flightMcpKey: key }), store = server => new GitHubStore({ ...config }, 'test-key', server.fetch);
 const sync = (server, records, local, baseline, head = server.head) => synchronize(store(server), [base], records, {}, { baseHead: head, baseSettings: baseline, localSettings: local });
 async function seed(server, value) { await db.setMany([['records', [base]], ['base', [base]], ['github', config], ['settings', value], ['settingsBase', value], ['syncMeta', { verified: true, pending: false, head: server.head, revision: 1 }]]); }
@@ -47,13 +48,13 @@ test('competing keys require a checked choice and an outdated choice cannot over
 
 test('pending settings survive a lost upload reply and a later local ticket edit until atomic confirmation', async () => {
   const server = new MemoryGitHub([base], settings('old')); await seed(server, settings('old'));
-  await stageSettings(settings('old'), settings('new'), config); const captured = await readSyncState(); server.loseAcknowledgement = true;
+  await stageSettings(settings('old'), settings('new'), context); const captured = await readSyncState(); server.loseAcknowledgement = true;
   await assert.rejects(sync(server, captured.records, captured.settings, captured.settingsBase, captured.meta.head), /Connection lost/);
-  await stageRecords([base], [{ ...base, price: '500' }], config);
+  await stageRecords([base], [{ ...base, price: '500' }], context);
   const reopened = await readSyncState(); assert.equal(reopened.meta.pending, true); assert.equal(reopened.settings.flightMcpKey, 'new');
   const result = await sync(server, reopened.records, reopened.settings, reopened.settingsBase, reopened.meta.head);
   const accepted = await acknowledgeSync(reopened, result);
   assert.equal(accepted.meta.pending, false); assert.equal(accepted.settingsBase.flightMcpKey, 'new'); assert.equal(accepted.base[0].price, '500');
   assert.equal(server.records().length, 1); assert.equal(server.settings().flightMcpKey, 'new');
-  await assert.rejects(stageSettings(settings('old'), settings('competing'), config), /更新/);
+  await assert.rejects(stageSettings(settings('old'), settings('competing'), context), /更新/);
 });

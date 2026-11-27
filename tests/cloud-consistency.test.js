@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { indexedDB } from 'fake-indexeddb';
 import { createRecord } from '../src/model.js';
 import { GitHubStore, synchronize } from '../src/github.js';
-import { readSyncState, stageRecords, acknowledgeSync, bindRepository } from '../src/sync-state.js';
+import { activeBinding, readSyncState, stageRecords, acknowledgeSync, bindRepository } from '../src/sync-state.js';
 import * as db from '../src/db.js';
 import { MemoryGitHub } from './helpers/cloud.js';
 
 Object.defineProperty(globalThis, 'indexedDB', { value: indexedDB, configurable: true });
 const config = () => ({ owner: 'user', repo: 'data', branch: 'main', id: 77 });
+const context = { binding: activeBinding({ config: config() }), generation: '' };
 const ticket = (extra = {}) => createRecord({ id: 'ticket', service: 'G103', departureDate: '2026-11-15', origin: '清河', destination: '上海虹桥', passenger: '张三', seat: '01A', price: '500', ...extra });
 const store = server => new GitHubStore(config(), 'test-key', server.fetch);
 async function seed(records, head = 'h0') { await db.setMany([['records', structuredClone(records)], ['base', structuredClone(records)], ['github', config()], ['syncMeta', { head, revision: 1, verified: true, pending: false }], ['lastSync', null]]); }
@@ -18,7 +19,7 @@ test('editing a saved rail ticket keeps separately stored entries intact', async
   const second = ticket({ id: 'b', service: 'G104', ticketNumber: 'X000002', gate: '13A' });
   const proposed = { ...second, service: first.service };
   await seed([first, second]);
-  const staged = await stageRecords([first, second], [first, proposed], config());
+  const staged = await stageRecords([first, second], [first, proposed], context);
   assert.equal(staged.records.length, 2);
   assert.equal(staged.records.find(row => row.id === 'a').ticketNumber, 'X000001');
   assert.equal(staged.records.find(row => row.id === 'b').ticketNumber, 'X000002');
@@ -69,7 +70,7 @@ test('an upload acknowledged only by the server is retried without duplicating r
 
 test('a restart reloads pending edits and confirms an already accepted upload without duplication', async () => {
   const base = ticket(), server = new MemoryGitHub([base]); await seed([base], server.head);
-  await stageRecords([base], [{ ...base, price: '600' }], config());
+  await stageRecords([base], [{ ...base, price: '600' }], context);
   const beforeShutdown = await readSyncState(); server.loseAcknowledgement = true;
   await assert.rejects(synchronize(store(server), beforeShutdown.base, beforeShutdown.records, {}, { baseHead: beforeShutdown.meta.head }), /Connection lost/);
   // Reopen application state entirely from storage; no in-memory sync response survives.
@@ -103,17 +104,17 @@ test('sync preserves separately recorded tickets with different seats on the sam
 
 test('local transactions preserve edits from two tabs and reject competing changes to the same field', async () => {
   const base = ticket(); await seed([base]);
-  await Promise.all([stageRecords([base], [{ ...base, seat: '02A' }], config()), stageRecords([base], [{ ...base, price: '600' }], config())]);
+  await Promise.all([stageRecords([base], [{ ...base, seat: '02A' }], context), stageRecords([base], [{ ...base, price: '600' }], context)]);
   const current = await readSyncState(); assert.equal(current.records[0].seat, '02A'); assert.equal(current.records[0].price, '600'); assert.equal(current.meta.pending, true);
   await seed([base]);
-  const results = await Promise.allSettled([stageRecords([base], [{ ...base, seat: '02A' }], config()), stageRecords([base], [{ ...base, seat: '03A' }], config())]);
+  const results = await Promise.allSettled([stageRecords([base], [{ ...base, seat: '02A' }], context), stageRecords([base], [{ ...base, seat: '03A' }], context)]);
   assert.equal(results.filter(r => r.status === 'rejected').length, 1);
   await assert.rejects(bindRepository({ ...config(), id: 99 }), /其他仓库/);
 });
 
 test('an in-flight sync retains later edits, while a stale acknowledgement cannot replace a newer baseline', async () => {
   const base = ticket(); await seed([base]); const captured = await readSyncState();
-  await stageRecords([base], [{ ...base, price: '600' }], config());
+  await stageRecords([base], [{ ...base, price: '600' }], context);
   const result = await acknowledgeSync(captured, { records: [{ ...base, seat: '02A' }], head: 'h1' });
   assert.equal(result.records[0].price, '600'); assert.equal(result.records[0].seat, '02A'); assert.equal(result.meta.pending, true);
   const stale = await acknowledgeSync(captured, { records: [base], head: 'old' });
