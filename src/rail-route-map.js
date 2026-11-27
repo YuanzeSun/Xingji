@@ -1,7 +1,6 @@
 import { RAIL_ROUTE_SOURCE } from './rail-route.js';
 import {savedRailRoute} from './rail-route-snapshot.js';
 import { railMapPoint } from './rail-projection.js';
-export { railMapPoint } from './rail-projection.js';
 import { createMapBasemap } from './map-basemap.js';
 import { createRailMapContext, railMapAnnotations } from './rail-map-context.js';
 import { geographicLabelMarkup, mapLabelText } from './map-labels.js';
@@ -48,6 +47,7 @@ function bindRailPlayback(container, svg, segments, route, followElevation) {
     }
   }
   function paint(distance) {
+    if (traveled === distance) return;
     traveled = distance;
     for (const segment of paths) {
       const { path, start, length } = segment;
@@ -99,11 +99,12 @@ function bindRailPlayback(container, svg, segments, route, followElevation) {
   };
 }
 
-function mountMap(container, route) {
+function mountMap(container, route, lineLabels) {
   const frame = container.querySelector('.rail-route-frame'), svg = frame.querySelector('svg');
   const basemap = createMapBasemap(frame.querySelector('canvas'), frame.ownerDocument.defaultView, { provinceContrast: true });
   const full=route.fullRoute || route,selectedNames=new Set(route.stops.map(stop=>stop.name));
-  const segments = route.segments.map(line => line.map(railMapPoint)), fullSegments=full.segments.map(line=>line.map(railMapPoint));
+  const segments = route.segments.map(line => line.map(railMapPoint));
+  const fullSegments = route.fullRoute ? full.segments.map(line => line.map(railMapPoint)) : segments;
   const stops = full.stops.map((stop,i) => ({ ...stop, point:railMapPoint(stop.coordinates),mySegment:selectedNames.has(stop.name),endpoint:stop.name===route.origin || stop.name===route.destination || i===0 || i===full.stops.length-1 }));
   const context = createRailMapContext(fullSegments);
   const background = basemap ? '' : `<g class="rail-base"><path class="rail-land" d="${LAND_PATH}"/><path class="rail-countries" d="${COUNTRY_PATH}"/><path class="rail-provinces" d="${PROVINCE_PATH}"/></g>`;
@@ -111,6 +112,8 @@ function mountMap(container, route) {
   const track=paths(segments);
   svg.innerHTML = `${background}<g class="rail-full-track">${route.fullRoute ? paths(fullSegments) : ''}</g><g class="rail-track-halo">${track}</g><g class="rail-track">${track}</g><g data-rail-lines></g><g data-rail-context></g><g data-rail-stops></g><g data-rail-elevation-marker aria-hidden="true"><circle r="6"/><circle r="2"/></g>`;
   const stationLayer = svg.querySelector('[data-rail-stops]');
+  const lineLayer = svg.querySelector('[data-rail-lines]');
+  const labelLayer = svg.querySelector('[data-rail-context]');
   const marker = svg.querySelector('[data-rail-elevation-marker]');
   let markerPoint, mapUnit;
   function drawMarker() {
@@ -130,11 +133,10 @@ function mountMap(container, route) {
     // Scale the playback stroke separately so its dashes stay in the same units as the path.
     svg.style.setProperty('--rail-playback-width', String(4 * unit));
     basemap?.draw(viewport, width, height, interactive);
-    const annotations = railMapAnnotations(context, stops, viewport, width, height,{lineLabels:[...(route.lineLabels||[]),...(route.fullRoute?.lineLabels||[])]});
+    const annotations = railMapAnnotations(context, stops, viewport, width, height, { lineLabels });
     const text = row => mapLabelText(row, unit);
-    const lineLabels=annotations.lines;
-    svg.querySelector('[data-rail-lines]').innerHTML=lineLabels.map(row=>`<g class="rail-line-name" data-rail-line-name="${e(row.name)}" transform="translate(${row.point})">${text(row)}</g>`).join('');
-    svg.querySelector('[data-rail-context]').innerHTML = geographicLabelMarkup(annotations, unit);
+    lineLayer.innerHTML = annotations.lines.map(row => `<g class="rail-line-name" data-rail-line-name="${e(row.name)}" transform="translate(${row.point})">${text(row)}</g>`).join('');
+    labelLayer.innerHTML = geographicLabelMarkup(annotations, unit);
     stationLayer.innerHTML = annotations.stops.map(stop => {
       return `<g data-rail-segment="${stop.mySegment ? 'selected' : 'outside'}" transform="translate(${stop.point})"><circle r="${(stop.endpoint ? 5 : 3) * unit}" class="rail-stop ${stop.endpoint ? 'endpoint' : ''}"/><title>${e(stop.name)}</title>${text(stop)}</g>`;
     }).join('');
@@ -146,10 +148,16 @@ function mountMap(container, route) {
 }
 
 export function mountRailRoute(container, record) {
-  const route=savedRailRoute(record);
-  if(!container.isConnected || !route)return ()=>{};
-    container.innerHTML = `<div class="rail-route-heading"><h3>铁路线路</h3><div class="rail-route-actions"><span>按现行线路推定</span><button type="button" class="button secondary small" data-rail-play-route>播放行程</button></div><span class="visually-hidden" role="status" data-rail-play-status></span></div><div class="rail-route-frame"><canvas aria-hidden="true"></canvas><svg tabindex="0" role="group" aria-label="${e(route.service + ' ' + route.origin + '至' + route.destination)}铁路线路图，可拖动及缩放"></svg>${detailMapControls('铁路线路')}<div class="rail-route-legend"><span>乘坐区间</span>${route.fullRoute ? '<span class="rail-full-line">区间外</span>' : ''}<span class="rail-border">省界</span></div></div><p class="rail-route-caption">${route.fullRoute ? e(route.fullRoute.stops[0].name)+' → '+e(route.fullRoute.stops.at(-1).name)+' · 乘坐：' : ''}${e(route.origin)} → ${e(route.destination)} · <a href="${RAIL_ROUTE_SOURCE}" target="_blank" rel="noopener noreferrer">线路数据：RailGo</a>${route.lineLabels?.length || route.fullRoute?.lineLabels?.length ? ` · ${e([...new Set([...(route.lineLabels||[]),...(route.fullRoute?.lineLabels||[])].map(label=>label.name))].join('、'))} · <a href="${RAIL_LINE_SOURCE}" target="_blank" rel="noopener noreferrer">线路名称：迷雾资料库</a>` : ''} · 查询于 ${e(route.queriedAt.slice(0, 10))}</p>`;
+  const route = savedRailRoute(record);
+  if (!container.isConnected || !route) return () => {};
+  const full = route.fullRoute;
+  const lineLabels = [...(route.lineLabels || []), ...(full?.lineLabels || [])];
+  const fullTrip = full ? `${e(full.stops[0].name)} → ${e(full.stops.at(-1).name)} · 乘坐：` : '';
+  const lineNames = [...new Set(lineLabels.map(label => label.name))].join('、');
+  const lineCredit = lineNames ? ` · ${e(lineNames)} · <a href="${RAIL_LINE_SOURCE}" target="_blank" rel="noopener noreferrer">线路名称：迷雾资料库</a>` : '';
+  container.innerHTML = `<div class="rail-route-heading"><h3>铁路线路</h3><div class="rail-route-actions"><span>按现行线路推定</span><button type="button" class="button secondary small" data-rail-play-route>播放行程</button></div><span class="visually-hidden" role="status" data-rail-play-status></span></div>
+    <div class="rail-route-frame"><canvas aria-hidden="true"></canvas><svg tabindex="0" role="group" aria-label="${e(`${route.service} ${route.origin}至${route.destination}`)}铁路线路图，可拖动及缩放"></svg>${detailMapControls('铁路线路')}<div class="rail-route-legend"><span>乘坐区间</span>${full ? '<span class="rail-full-line">区间外</span>' : ''}<span class="rail-border">省界</span></div></div>
+    <p class="rail-route-caption">${fullTrip}${e(route.origin)} → ${e(route.destination)} · <a href="${RAIL_ROUTE_SOURCE}" target="_blank" rel="noopener noreferrer">线路数据：RailGo</a>${lineCredit} · 查询于 ${e(route.queriedAt.slice(0, 10))}</p>${railElevationMarkup}`;
   container.hidden = false;
-  container.insertAdjacentHTML('beforeend', railElevationMarkup);
-  return mountMap(container, route);
+  return mountMap(container, route, lineLabels);
 }

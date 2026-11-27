@@ -64,16 +64,15 @@ export function sampleRailElevation(segments, projected) {
   return { samples, total, pick, atMapDistance };
 }
 
-export async function readRailElevation(samples, { signal, fetcher = globalThis.fetch } = {}) {
+export async function readRailElevation(samples, signal) {
   const params = new URLSearchParams({
     latitude: samples.map(({ coordinate }) => coordinate[1].toFixed(5)).join(','),
     longitude: samples.map(({ coordinate }) => coordinate[0].toFixed(5)).join(',')
   });
   const key = String(params), cached = cache.get(key);
   if (cached) return cached;
-  const timeout = AbortSignal.timeout(12000);
-  const response = await fetcher.call(globalThis, 'https://api.open-meteo.com/v1/elevation?' + key, {
-    credentials: 'omit', referrerPolicy: 'no-referrer', signal: signal ? AbortSignal.any([signal, timeout]) : timeout
+  const response = await fetch('https://api.open-meteo.com/v1/elevation?' + key, {
+    credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.any([signal, AbortSignal.timeout(12000)])
   });
   if (!response.ok) throw new Error('暂时无法获取地表海拔');
   const { elevation } = await response.json();

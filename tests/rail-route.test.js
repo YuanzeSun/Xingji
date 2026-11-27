@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRecord, archive, readArchive } from '../src/model.js';
 import { normalizeRailRoute } from '../src/rail-route-snapshot.js';
 import { selectRailRoute, fetchRailRoute } from '../src/rail-route.js';
-import { railMapPoint } from '../src/rail-route-map.js';
+import { railMapPoint } from '../src/rail-projection.js';
 
 const record = extra => createRecord({ type: 'rail', service: 'D3759', origin: '柳州', destination: '来宾北', departureDate: '2023-05-26', ...extra });
 const payload = () => ({ success: true, data: {

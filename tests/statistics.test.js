@@ -281,7 +281,7 @@ test('statistics default to an unbounded start and today, compare dates only and
   assert.deepEqual(statisticsOptions({}, '2026-11-16'), { ...range, period: 'year', year: '', chartZoom:1, mergeDirections:true, railUnits:false, railSubtypes:true, aircraftSubtypes:true, marketingAirlines:false, includeStopoverAirports:false });
   const rows = [rail({ id: 'past' }), flight({ id: 'today', departureDate: '2026-11-16', departureTime: '23:59' }), rail({ id: 'future', departureDate: '2026-11-17' }), rail({ id: 'deleted', deleted: true }), rail({ id: 'undated', departureDate: '' })];
   const result = journeyStatistics(rows, range);
-  assert.deepEqual(result.records.map(row => row.id), ['past', 'today']); assert.equal(result.omittedDates, 1);
+  assert.deepEqual(result.records.map(row => row.id), ['past', 'today']);
   assert.equal(journeyStatistics(rows, { dateFrom: '2026-11-16', dateTo: '2026-11-17' }).records.length, 2);
   assert.equal(journeyStatistics(rows, { dateFrom: '', dateTo: '' }).records.length, 3);
   const today = todayDate();
@@ -299,7 +299,7 @@ test('statistics default to an unbounded start and today, compare dates only and
 test('imprecise dates count only when their whole known interval fits, without invented months', () => {
   const rows = [rail({ departureDate: '2023' }), flight({ departureDate: '2024-02-01' }), rail({ departureDate: '2026' })];
   const result = journeyStatistics(rows, range);
-  assert.equal(result.records.length, 2); assert.equal(result.omittedDates, 1);
+  assert.equal(result.records.length, 2);
   assert.equal(journeyStatistics(rows, { dateFrom: '2023-02-01', dateTo: '2023-12-31' }).records.length, 0);
   const annual = tripSeries(result.records);
   assert.deepEqual(annual.map(row => [row.key, row.rail, row.flight]), [['2023', 1, 0], ['2024', 0, 1]]);
@@ -315,7 +315,7 @@ test('statistics keep airport and station identities, combine return air routes 
   assert.equal(data.stations.length, 2); assert.equal(data.airports.length, 3);
   assert.equal(data.routes.length, 2); assert.equal(data.routes.find(route => route.id === 'HND-PEK').count, 2);
   assert.deepEqual(data.aircraft, [{ name: '737-800', count: 2 }, { name: 'A320（子型号未确认）', count: 1 }]);
-  assert.equal(data.unknownAircraft, 1); assert.equal(data.unknownRoutes, 1); assert.equal(data.unknownPlaces, 1);
+  assert.equal(data.unknownAircraft, 1);
   assert.deepEqual(data.countries.map(row => row.code).sort(), ['CN', 'JP']);
   assert.equal(JSON.stringify(rows), before);
 });
@@ -497,9 +497,9 @@ test('route direction mode separates reverse flights without changing any other 
   assert.deepEqual(directed.routes.map(route=>[route.id,route.count]),[['PEK-HND',2],['HND-PEK',1]]);
   for(const key of ['rail','flight','airports','countries','continents','aircraft'])assert.deepEqual(directed[key],merged[key]);
   const dom=new JSDOM('<div id="root"></div>'),root=dom.window.document.querySelector('#root'),options={...range},cleanup=mountStatistics(root,rows,{options});
-  const toggle=root.querySelector('[data-stat-merge-routes]');assert.equal(toggle.checked,true);toggle.checked=false;toggle.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
+  const toggle=root.querySelector('[data-stat-option="mergeDirections"]');assert.equal(toggle.checked,true);toggle.checked=false;toggle.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
   assert.equal(options.mergeDirections,false);assert.equal(root.querySelectorAll('.statistics-routes tbody tr').length,2);assert.ok([...root.querySelectorAll('.statistics-route-arrow')].every(node=>node.textContent==='→'));
-  cleanup();const again=mountStatistics(root,rows,{options});assert.equal(root.querySelector('[data-stat-merge-routes]').checked,false);
+  cleanup();const again=mountStatistics(root,rows,{options});assert.equal(root.querySelector('[data-stat-option="mergeDirections"]').checked,false);
   again();dom.window.close();
 });
 

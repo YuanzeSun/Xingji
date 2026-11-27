@@ -25,8 +25,9 @@ export function bindSuggestionPicker(input, onChoose, { search = searchAirports,
   };
   const activate = index => {
     active = index;
-    for (const [i, option] of [...list.querySelectorAll('[role="option"]')].entries()) option.setAttribute('aria-selected', String(i === active));
-    const option = list.querySelectorAll('[role="option"]')[active];
+    const options = list.querySelectorAll('[role="option"]');
+    options.forEach((option, i) => option.setAttribute('aria-selected', String(i === active)));
+    const option = options[active];
     if (option) {
       input.setAttribute('aria-activedescendant', option.id);
       option.scrollIntoView?.({ block:'nearest' });
@@ -38,10 +39,15 @@ export function bindSuggestionPicker(input, onChoose, { search = searchAirports,
     if (!input.value.trim()) { matches = []; list.innerHTML = ''; close(); return; }
     matches = search(input.value);
     list.innerHTML = matches.length ? matches.map((place, index) => {
-      if (renderOption) return `<span id="${list.id}-${index}" role="option" aria-selected="false" data-airport-index="${index}" class="airport-option">${renderOption(place)}</span>`;
-      const name = place.chineseFullName || place.englishName;
-      const detail = [place.cities?.join(' / ') || place.city || place.municipality, regions?.of(place.country) || place.country, place.englishName !== name ? place.englishName : ''].filter(Boolean).join(' · ');
-      return `<span id="${list.id}-${index}" role="option" aria-selected="false" data-airport-index="${index}" class="airport-option" title="${e(name + ' · ' + detail)}"><span class="airport-option-code">${e(place.code)}</span><span class="airport-option-name"><strong>${e(name)}</strong><small>${e(detail)}</small></span></span>`;
+      let content, title = '';
+      if (renderOption) content = renderOption(place);
+      else {
+        const name = place.chineseFullName || place.englishName;
+        const detail = [place.cities?.join(' / ') || place.city || place.municipality, regions?.of(place.country) || place.country, place.englishName !== name ? place.englishName : ''].filter(Boolean).join(' · ');
+        title = ` title="${e(name + ' · ' + detail)}"`;
+        content = `<span class="airport-option-code">${e(place.code)}</span><span class="airport-option-name"><strong>${e(name)}</strong><small>${e(detail)}</small></span>`;
+      }
+      return `<span id="${list.id}-${index}" role="option" aria-selected="false" data-airport-index="${index}" class="airport-option"${title}>${content}</span>`;
     }).join('') : `<span class="airport-empty" role="status">${e(empty)}</span>`;
     const rect = input.getBoundingClientRect(), viewport = input.ownerDocument.defaultView.innerWidth;
     const modal = input.closest('dialog'), dialog = modal?.getBoundingClientRect();

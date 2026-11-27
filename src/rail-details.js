@@ -10,7 +10,7 @@ const RAIL_BUREAUS = [
   ['V','太原局','太局'], ['W','成都局','成局'], ['X','香港铁路公司','港铁'], ['Y','西安局','西局'], ['Z','南宁局','宁局']
 ];
 const names = new Map();
-for (const [code, name, ...aliases] of RAIL_BUREAUS) {
+for (const [, name, ...aliases] of RAIL_BUREAUS) {
   for (const alias of [name, ...aliases, ...(name.endsWith('局') ? [name.replace(/局$/, '铁路局'), '中国铁路' + name + '集团有限公司', name + '集团'] : [])]) names.set(alias, name);
 }
 export const bureauFromCode = code => RAIL_BUREAUS.find(row => row[0] === code)?.[1] || '';

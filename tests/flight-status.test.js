@@ -41,7 +41,7 @@ test('special tickets remain in the archive but never contribute to any journey 
  assert.equal(journeyCities([normal,...special]).length,2);
  assert.equal(tripSeries([normal,...special])[0].flight,1);
  assert.match(timeline([normal,...special],()=>''),/data-id="special-0"/);assert.match(timeline([normal,...special],()=>''),/data-id="special-1"/);
- assert.equal(journeyStatistics(special,{dateTo:'2023-12-31'}).omittedDates,0);
+ assert.deepEqual(journeyStatistics(special,{dateTo:'2023-12-31'}).records,[]);
 });
 test('Provider, archive and cloud round trips preserve state, and automatic deduplication cannot change a normal journey into an invalid one',async()=>{
  const invalid=flight({id:'invalid',flightStatus:'invalid'}),normal=flight({id:'normal'});

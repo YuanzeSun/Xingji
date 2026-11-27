@@ -108,7 +108,7 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       <div class="statistics-columns">${repeatedVehiclesPanel('多次乘坐的列车', 'rail', data.repeatedTrainsets)}${repeatedVehiclesPanel('多次乘坐的飞机', 'flight', data.repeatedAircraft)}</div>
       <section class="statistics-panel"><header><h2>去过的大洲和国家</h2></header><h3>大洲 <span>${data.continents.length}</span></h3>${data.continents.length ? `<ul class="statistics-chips">${data.continents.map(row => `<li>${e(row.name)}</li>`).join('')}</ul>` : empty('暂无已识别的大洲')}<h3>国家 <span>${data.countries.length}</span></h3>${data.countries.length ? `<ul class="statistics-chips countries">${data.countries.map(row => `<li>${e(row.name)}</li>`).join('')}</ul>` : empty('暂无已识别的国家')}</section>
       <div class="statistics-columns">${placesPanel('去过的机场', data.airports, 'airport', options.includeStopoverAirports)}${placesPanel('去过的火车站', data.stations, 'station')}</div>
-      <section class="statistics-panel" data-stat-routes><header><h2>乘坐过的航线</h2><div class="statistics-route-controls"><label><input type="checkbox" data-stat-merge-routes ${options.mergeDirections ? 'checked' : ''}/>合并双向航线</label><span>${data.routes.length} 条</span></div></header>${data.routes.length ? `<div class="statistics-table-scroll"><table class="statistics-routes"><thead><tr><th>航线</th><th>次数</th></tr></thead><tbody>${data.routes.map(route => `<tr><td><div class="statistics-route-pair"><span class="statistics-route-endpoint">${e(route.from.name)} <code>${e(route.from.code)}</code></span><span class="statistics-route-arrow" role="img" aria-label="${options.mergeDirections ? '双向' : '前往'}">${options.mergeDirections ? '↔' : '→'}</span><span class="statistics-route-endpoint">${e(route.to.name)} <code>${e(route.to.code)}</code></span></div></td><td>${route.count}</td></tr>`).join('')}</tbody></table></div>` : empty('暂无可识别的航线')}</section>`}`;
+      <section class="statistics-panel" data-stat-routes><header><h2>乘坐过的航线</h2><div class="statistics-route-controls"><label><input type="checkbox" data-stat-option="mergeDirections" ${options.mergeDirections ? 'checked' : ''}/>合并双向航线</label><span>${data.routes.length} 条</span></div></header>${data.routes.length ? `<div class="statistics-table-scroll"><table class="statistics-routes"><thead><tr><th>航线</th><th>次数</th></tr></thead><tbody>${data.routes.map(route => `<tr><td><div class="statistics-route-pair"><span class="statistics-route-endpoint">${e(route.from.name)} <code>${e(route.from.code)}</code></span><span class="statistics-route-arrow" role="img" aria-label="${options.mergeDirections ? '双向' : '前往'}">${options.mergeDirections ? '↔' : '→'}</span><span class="statistics-route-endpoint">${e(route.to.name)} <code>${e(route.to.code)}</code></span></div></td><td>${route.count}</td></tr>`).join('')}</tbody></table></div>` : empty('暂无可识别的航线')}</section>`}`;
     const stopTripChart = bindTripChart(container,series,options,{onZoom:()=>{const scroll=container.querySelector('.statistics-chart-scroll');if(scroll)scrolled({target:scroll});}});
     const stopDelayChart = bindArrivalDelayChart(container, data.arrivalDelays);
     chartCleanup = () => { stopTripChart(); stopDelayChart(); };
@@ -194,14 +194,10 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       if (scroll) scrollPositions[options.period] = scroll.scrollLeft;
       render();
       container.querySelector(`[data-stat-option="${key}"]${radio ? ':checked' : ''}`).focus({ preventScroll: true });
-      return;
+    } else if (target.matches('[data-stat-year]')) {
+      options.year = target.value;
+      scrollToYear();
     }
-    else if (target.matches('[data-stat-merge-routes]')) {
-      options.mergeDirections=target.checked;
-      const scroll=container.querySelector('.statistics-chart-scroll'); if(scroll) scrollPositions[options.period]=scroll.scrollLeft;
-      render(); container.querySelector('[data-stat-merge-routes]').focus(); return;
-    }
-    else if (target.matches('[data-stat-year]')) { options.year = target.value; scrollToYear(); }
   };
   const click = event => {
     const date = event.target.closest('[data-stat-date]');

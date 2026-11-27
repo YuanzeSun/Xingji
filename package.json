@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
-    "preview": "node scripts/serve.mjs --dist",
+    "preview": "node scripts/serve.mjs",
     "test": "node --test tests/*.test.js",
     "update:locations": "node scripts/update-locations.mjs",
     "update:timezones": "node scripts/update-airport-timezones.mjs",

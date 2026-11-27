@@ -9,7 +9,7 @@ const viewHeight = 176, left = 52, right = 16, top = 16, bottom = 139;
 const meters = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 });
 const kilometers = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 });
 
-function bindProfile(content, route, { samples, total }, elevation, markLocation, isPlaying) {
+function bindProfile(content, route, { samples, total }, elevation, { markLocation, isPlaying, signal }) {
   content.innerHTML = `<div class="rail-elevation-ends"><strong>${e(route.origin)}</strong><strong>${e(route.destination)}</strong></div>
     <div class="rail-elevation-plot">
       <svg aria-hidden="true"></svg>
@@ -107,37 +107,29 @@ function bindProfile(content, route, { samples, total }, elevation, markLocation
     if (isPlaying()) slider.value = String(selection.index);
     else select(Number(slider.value));
   };
-  slider.addEventListener('input', fromSlider);
-  svg.addEventListener('pointermove', fromPointer);
-  svg.addEventListener('click', fromPointer);
+  slider.addEventListener('input', fromSlider, { signal });
+  svg.addEventListener('pointermove', fromPointer, { signal });
+  svg.addEventListener('click', fromPointer, { signal });
   draw();
   const observer = window.ResizeObserver ? new window.ResizeObserver(draw) : null;
   if (observer) observer.observe(frame);
-  else window.addEventListener('resize', draw);
+  else window.addEventListener('resize', draw, { signal });
 
   return {
     select, follow, show() { markLocation(selection.point.mapPoint); },
-    dispose() {
-      observer?.disconnect();
-      window.removeEventListener('resize', draw);
-      slider.removeEventListener('input', fromSlider);
-      svg.removeEventListener('pointermove', fromPointer);
-      svg.removeEventListener('click', fromPointer);
-    }
+    dispose() { observer?.disconnect(); }
   };
 }
 
 export function bindRailElevation(container, route, projected, markLocation) {
   const details = container.querySelector('[data-rail-elevation]');
   const content = details.querySelector('[data-rail-elevation-content]');
-  let sampling, profile, request, playbackDistance, appliedDistance, playing = false;
-  function showProfile() {
-    if (playbackDistance !== appliedDistance) {
-      profile.follow(sampling.atMapDistance(playbackDistance));
-      appliedDistance = playbackDistance;
-    } else {
-      profile.show();
-    }
+  const listeners = new container.ownerDocument.defaultView.AbortController();
+  const { signal } = listeners;
+  let sampling, profile, request, pendingDistance, playing = false;
+  function applyPlayback() {
+    profile.follow(sampling.atMapDistance(pendingDistance));
+    pendingDistance = undefined;
   }
   async function load() {
     if (request) return;
@@ -146,10 +138,14 @@ export function bindRailElevation(container, route, projected, markLocation) {
     const active = request = new AbortController();
     content.innerHTML = '<p role="status">正在读取沿线海拔…</p>';
     try {
-      const elevation = await readRailElevation(sampling.samples, { signal: active.signal });
+      const elevation = await readRailElevation(sampling.samples, active.signal);
       if (!active.signal.aborted && details.open) {
-        profile = bindProfile(content, route, sampling, elevation, point => { if (details.open) markLocation(point); }, () => playing);
-        showProfile();
+        profile = bindProfile(content, route, sampling, elevation, {
+          markLocation: point => { if (details.open) markLocation(point); },
+          isPlaying: () => playing,
+          signal
+        });
+        if (pendingDistance !== undefined) applyPlayback();
       }
     } catch {
       if (!active.signal.aborted) {
@@ -161,30 +157,32 @@ export function bindRailElevation(container, route, projected, markLocation) {
   }
   function toggle() {
     if (details.open) {
-      if (profile) showProfile(); else void load();
+      if (!profile) void load();
+      else if (pendingDistance !== undefined) applyPlayback();
+      else profile.show();
     } else {
       request?.abort();
       request = null;
       markLocation(null);
     }
   }
-  const retry = event => { if (event.target.closest('[data-retry-rail-elevation]')) void load(); };
-  details.addEventListener('toggle', toggle);
-  content.addEventListener('click', retry);
+  details.addEventListener('toggle', toggle, { signal });
+  content.addEventListener('click', event => {
+    if (event.target.closest('[data-retry-rail-elevation]')) void load();
+  }, { signal });
   return {
     follow(distance, active) {
-      playbackDistance = distance;
+      pendingDistance = distance;
       playing = active;
-      if (details.open && profile) showProfile();
+      if (details.open && profile) applyPlayback();
     },
     pick(point, unit) {
-      if (details.open && profile) profile.select(sampling.pick(point, 12 * unit));
+      if (details.open && profile && !playing) profile.select(sampling.pick(point, 12 * unit));
     },
     dispose() {
       request?.abort();
       profile?.dispose();
-      details.removeEventListener('toggle', toggle);
-      content.removeEventListener('click', retry);
+      listeners.abort();
       markLocation(null);
     }
   };
