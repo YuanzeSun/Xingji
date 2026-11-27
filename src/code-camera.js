@@ -20,16 +20,20 @@ export function bindCodeCamera(section, onCapture, {
   const doc = section.ownerDocument, win = doc.defaultView;
   const shutter = panel.querySelector('[data-code-shutter]');
   const controls = bindCodeCameraControls(panel, video, mediaDevices);
-  let stream, timer, generation = 0, disposed = false, reading = -1, frame = 0;
+  let stream, timer, generation = 0, disposed = false, reading = -1, frame = 0, shutterPending = false;
   function stop() {
-    generation++; frame = 0; unschedule(timer); timer = null;
+    generation++; frame = 0; shutterPending = false; unschedule(timer); timer = null;
     controls.stop();
     stopCameraStream(stream);
     stream = null; if (video.srcObject) video.pause(); video.srcObject = null; panel.hidden = true; trigger.disabled = false;
     shutter.disabled = true;
   }
   async function capture(request = generation, manual = false) {
-    if (disposed || !stream || reading === request || request !== generation) return;
+    if (disposed || !stream || request !== generation) return;
+    if (reading === request) {
+      if (manual) shutterPending = true;
+      return;
+    }
     reading = request; unschedule(timer); timer = null;
     try {
       if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {
@@ -46,7 +50,11 @@ export function bindCodeCamera(section, onCapture, {
     } catch (error) { if (request === generation) status.textContent = error.message || '暂未读到码，请调整距离重试'; }
     finally {
       if (reading === request) reading = -1;
-      if (!disposed && stream && request === generation) timer = schedule(() => capture(request), 200);
+      if (!disposed && stream && request === generation) {
+        const manualNext = shutterPending;
+        shutterPending = false;
+        timer = schedule(() => capture(request, manualNext), manualNext ? 0 : 200);
+      }
     }
   }
   async function open(request) {

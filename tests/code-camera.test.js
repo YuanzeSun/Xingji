@@ -58,26 +58,38 @@ test('camera opens only on request, captures and rebuilds code data, then releas
   assert.equal(f.queue.size, 0); dispose(); f.dom.window.close();
 });
 
-test('the boarding-code camera retries promptly and the shutter uses the full image search', async () => {
+test('the boarding-code camera retries promptly and queues a shutter press during a live scan', async () => {
   const f = fixture({ type: 'flight', template: 'air-boarding-pass' });
   const code = createBoardingCode({ passenger: 'EXAMPLE/TRAVELER', pnr: 'ABC123', origin: 'JFK', destination: 'LHR',
     carrier: 'BA', flightNumber: '321', date: '2026-05-18', cabin: 'Y', seat: '12A', sequence: '42', status: '1' });
   const modes = [];
+  let finishFrame;
   f.options.loadRebuilder = async () => async (image, type, { cameraFrame }) => {
     assert.equal(image.width, 1920);
     assert.equal(type, 'flight');
     modes.push(cameraFrame);
+    if (cameraFrame === 2) await new Promise(resolve => { finishFrame = resolve; });
     return { codes: cameraFrame ? [] : [{ format: 'PDF417', data: code }], issues: [] };
   };
   const dispose = bindTicketCodeEditor(f.form, f.draft, () => {}, f.options);
   try {
     f.form.querySelector('[data-code-start]').click(); await settle();
-    const [id, fn] = f.queue.entries().next().value;
-    f.queue.delete(id); await fn();
+    const advance = () => {
+      const [id, fn] = f.queue.entries().next().value;
+      f.queue.delete(id);
+      return fn();
+    };
+    await advance();
     assert.deepEqual(f.delays, [80, 200]);
     assert.deepEqual(modes, [1]);
-    f.form.querySelector('[data-code-shutter]').click(); await settle();
-    assert.deepEqual(modes, [1, 0]);
+    const scanning = advance();
+    await settle();
+    f.form.querySelector('[data-code-shutter]').click();
+    finishFrame();
+    await scanning;
+    assert.deepEqual(f.delays, [80, 200, 0]);
+    await advance();
+    assert.deepEqual(modes, [1, 2, 0]);
     assert.deepEqual(f.draft.boardingCode, code);
     assert.equal(f.stopped(), 1);
     assert.equal(f.queue.size, 0);

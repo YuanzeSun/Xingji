@@ -17,8 +17,12 @@ const pdfFormats = ['PDF417', 'CompactPDF417', 'MicroPDF417'];
 const flightFormats = [...pdfFormats, 'Aztec', 'QRCode', 'DataMatrix', 'Code128'];
 const formatsFor = type => type === 'flight' ? flightFormats : RAIL_TICKET_CODE_FORMATS;
 const options = { tryHarder: true, tryRotate: true, tryInvert: true, tryDownscale: false, maxNumberOfSymbols: 8, textMode: 'Plain' };
+const boardingOptions = { ...options, formats: flightFormats };
+const pdfOptions = { ...options, formats: pdfFormats };
 const boardingStripOptions = { ...options, formats: [...pdfFormats, 'Code128'], minLineCount: 1 };
 const railStripOptions = { ...options, formats: ['Code128'], minLineCount: 1 };
+const stripContrast = { clip: .01, minRange: 20 };
+const faintPDFContrast = { clip: .001, minRange: 8 };
 const rawText = result => String.fromCharCode(...result.bytes);
 const isBoardingResult = result => result.bytes.length <= MAX_CODE_BYTES && !!readBCBP(rawText(result));
 
@@ -65,7 +69,7 @@ async function withCodeImage(source, read) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-function imagePixels(source, { x = 0, y = 0, width, height, edge, upscale = false, enhance = false } = {}) {
+function imagePixels(source, { x = 0, y = 0, width, height, edge, upscale = false, contrast } = {}) {
   width ??= source.naturalWidth || source.width;
   height ??= source.naturalHeight || source.height;
   if (!width || !height) throw new Error('图片无法读取');
@@ -79,20 +83,20 @@ function imagePixels(source, { x = 0, y = 0, width, height, edge, upscale = fals
     context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(source, x, y, width, height, 0, 0, canvas.width, canvas.height);
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-    return enhance ? stretchCodeContrast(pixels) : pixels;
+    return contrast ? stretchCodeContrast(pixels, contrast) : pixels;
   } finally { canvas.width = canvas.height = 1; }
 }
 
-function stretchCodeContrast(pixels) {
+function stretchCodeContrast(pixels, { clip, minRange }) {
   const { data } = pixels, histogram = new Uint32Array(256);
   const luminance = i => (77 * data[i] + 150 * data[i + 1] + 29 * data[i + 2]) >> 8;
   for (let i = 0; i < data.length; i += 16) histogram[luminance(i)]++;
-  const cutoff = Math.floor(Math.ceil(data.length / 16) / 100);
+  const cutoff = Math.floor(Math.ceil(data.length / 16) * clip);
   let low = 0, high = 255, count = 0;
   while (low < high && (count += histogram[low]) <= cutoff) low++;
   count = 0;
   while (high > low && (count += histogram[high]) <= cutoff) high--;
-  if (high - low < 20) return pixels;
+  if (high - low < minRange) return pixels;
   const scale = 255 / (high - low);
   for (let i = 0; i < data.length; i += 4) data[i] = data[i + 1] = data[i + 2] = (luminance(i) - low) * scale;
   return pixels;
@@ -101,7 +105,7 @@ function stretchCodeContrast(pixels) {
 function centeredBarcodeFrames(width, height) {
   const stripWidth = Math.ceil(width / 2), stripHeight = Math.ceil(height / 2);
   const longest = Math.max(width, height);
-  const enhanced = { edge: longest <= 1200 ? longest * 2 : 2400, upscale: longest <= 1200, enhance: true };
+  const enhanced = { edge: longest <= 1200 ? longest * 2 : 2400, upscale: longest <= 1200, contrast: stripContrast };
   // Keep both ends and quiet zones visible for a horizontal or vertical strip.
   return [
     { ...enhanced, width, y: Math.floor((height - stripHeight) / 2), height: stripHeight },
@@ -112,16 +116,17 @@ function centeredBarcodeFrames(width, height) {
 function* boardingFrames(source, fullSearch) {
   const width = source.naturalWidth || source.width, height = source.naturalHeight || source.height;
   const longest = Math.max(width, height);
-  yield { edge: 1800 };
+  yield { edge: 1800, reader: boardingOptions };
+  // Keep the small barcode at native resolution and exclude the bright margins from its histogram.
+  const centerWidth = Math.ceil(width * .65), centerHeight = Math.ceil(height * .65);
+  yield { x: Math.floor((width - centerWidth) / 2), y: Math.floor((height - centerHeight) / 2),
+    width: centerWidth, height: centerHeight, edge: 2400, contrast: faintPDFContrast, reader: pdfOptions };
   yield* centeredBarcodeFrames(width, height);
-  if (!fullSearch) {
-    yield { edge: Math.min(2400, Math.round(longest * 1.5)), upscale: true, enhance: true };
-    return;
-  }
+  if (!fullSearch) return;
   if (longest > 1100) yield { edge: 1100 };
   if (longest > 1800) yield { edge: 2600 };
   if (longest < 1800) yield { edge: 1800, upscale: true };
-  yield { edge: Math.min(2400, Math.round(longest * 1.5)), upscale: true, enhance: true };
+  yield { edge: Math.min(2400, Math.round(longest * 1.5)), upscale: true, contrast: stripContrast };
   // Keep the full width or height so a long code does not get split across tiles.
   const stripHeight = Math.ceil(height * .67), stripWidth = Math.ceil(width * .67);
   yield { width, height: stripHeight, edge: 1800 };
@@ -133,13 +138,12 @@ function* boardingFrames(source, fullSearch) {
 async function readFlightImage(source, cameraFrame = 0) {
   await prepareCodeReader();
   return withCodeImage(source, async image => {
-    let fallback = [], issues = [], readOptions = { ...options, formats: flightFormats };
+    let fallback = [], issues = [];
     // Every fourth camera frame gets the same full search as an uploaded photo.
-    for (const frame of boardingFrames(image, cameraFrame % 4 === 0)) {
+    for (const { reader = boardingStripOptions, ...frame } of boardingFrames(image, cameraFrame % 4 === 0)) {
       const pixels = imagePixels(image, frame);
-      const results = (await readBarcodes(pixels, readOptions)).filter(result => result.isValid);
-      if (readOptions !== boardingStripOptions) fallback = results;
-      readOptions = boardingStripOptions;
+      const results = (await readBarcodes(pixels, reader)).filter(result => result.isValid);
+      if (!cameraFrame && reader === boardingOptions) fallback = results;
       const boarding = results.filter(isBoardingResult);
       if (!boarding.length) continue;
       const rebuilt = await rebuildResults(boarding, 'flight', true);
@@ -159,7 +163,7 @@ export async function rebuildCodesFromImage(source, type = 'rail', { cameraFrame
       const first = await rebuildCodeSymbols(imagePixels(image), type);
       if (first.codes.length) return first;
       const frames = centeredBarcodeFrames(width, height);
-      if (!cameraFrame || cameraFrame % 4 === 0) frames.push({ edge: 2400, upscale: true, enhance: true });
+      if (!cameraFrame || cameraFrame % 4 === 0) frames.push({ edge: 2400, upscale: true, contrast: stripContrast });
       for (const frame of frames) {
         const codes = await readBarcodes(imagePixels(image, frame), railStripOptions);
         if (!codes.length) continue;

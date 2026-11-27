@@ -70,6 +70,46 @@ test('the first camera frame can recover a faded Code128 with only one readable 
   assert.equal(qr.crops.length, 1, 'a readable QR requires only the full-frame pass');
 });
 
+test('a native-resolution crop recovers a small low-contrast PDF417 in either camera orientation', async () => {
+  const text = encodeBCBP({ passenger: 'DEMO/PASSENGER', pnr: 'ABC123', origin: 'PEK', destination: 'CTU',
+    carrier: 'CA', flightNumber: '1234', date: '2026-07-31', cabin: 'Y', seat: '12A', sequence: '25', status: '1' }) +
+    ' AIRTICKET DEMO EXTENSION 170098744060 DEN2010 '.repeat(3);
+  const [symbol] = bwip.raw({ bcid: 'pdf417', text, columns: 8, rowmult: 2 });
+  const codeHeight = Math.round(symbol.pixy * .75), rowScale = symbol.pixx * symbol.pixy / symbol.pixs.length;
+  for (const portrait of [false, true]) {
+    const width = portrait ? 1350 : 2400, height = portrait ? 2400 : 1350;
+    const data = new Uint8ClampedArray(width * height * 4).fill(255);
+    const left = Math.floor((width - (portrait ? codeHeight : symbol.pixx)) / 2);
+    const top = Math.floor((height - (portrait ? symbol.pixx : codeHeight)) / 2);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const col = portrait ? y - top : x - left, row = portrait ? codeHeight - 1 - (x - left) : y - top;
+      const bar = col >= 0 && col < symbol.pixx && row >= 0 && row < codeHeight &&
+        symbol.pixs[Math.floor(row * symbol.pixy / codeHeight / rowScale) * symbol.pixx + col];
+      const lightness = 230 - Math.abs((x - width / 2) / (width / 2)) * 8 - (bar ? 10 : 0);
+      const pixel = (y * width + x) * 4;
+      data[pixel] = data[pixel + 1] = data[pixel + 2] = lightness;
+    }
+    const image = { data, width, height };
+    assert.equal((await rebuildCodeSymbols(image, 'flight', { boardingPass: true })).codes.length, 0);
+    const frame = rasterSource(image);
+    const result = await rebuildCodesFromImage(frame, 'flight', { cameraFrame: 1 });
+    assert.equal(result.codes[0]?.data.rawBytes, btoa(text));
+    assert.equal(frame.crops.length, 2);
+  }
+});
+
+test('live boarding scan keeps looking after an unrelated symbol while the shutter can archive it', async () => {
+  const unrelated = await writeBarcode('XINGJI DEMO CODE', { format: 'PDF417' });
+  const image = symbolImage(unrelated.symbol, 'flight');
+  assert.deepEqual((await rebuildCodesFromImage(rasterSource(image), 'flight', { cameraFrame: 1 })).codes, []);
+  assert.equal((await rebuildCodesFromImage(rasterSource(image), 'flight', { cameraFrame: 0 })).codes[0]?.data.rawBytes, btoa('XINGJI DEMO CODE'));
+  const boardingQR = await writeBarcode(taggedBoardingPayload(), { format: 'QRCode' });
+  const qr = rasterSource(symbolImage(boardingQR.symbol, 'flight'));
+  const result = await rebuildCodesFromImage(qr, 'flight', { cameraFrame: 1 });
+  assert.equal(readBoardingCode(result.codes[0]?.data)?.service, 'CA1234');
+  assert.equal(qr.crops.length, 1);
+});
+
 test('compact and MicroPDF417 boarding passes rebuild into verified standard PDF417', async () => {
   const text = encodeBCBP({ passenger: 'EXAMPLE/TRAVELER', pnr: 'ABC123', origin: 'JFK', destination: 'LHR', carrier: 'BA', flightNumber: '321', date: '2026-05-18', cabin: 'Y', seat: '12A', sequence: '42', status: '1' });
   for (const bcid of ['pdf417compact', 'micropdf417']) {
