@@ -33,7 +33,7 @@
 
 ![火车票详情、时刻表、车厢示意图和沿线地表海拔](docs/images/rail-ticket-details.jpg)
 
-![登机牌详情、计划与实际起降对照、行李和带经停标记的示例航迹](docs/images/boarding-pass-details.jpg)
+![登机牌详情、含登机时间的起降对照、行李和带经停标记的示例航迹](docs/images/boarding-pass-details.jpg)
 
 ### 行程地图与路线播放
 

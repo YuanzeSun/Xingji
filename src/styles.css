@@ -200,16 +200,25 @@ p:empty{display:none}
 .flight-timing-clock small{color:var(--muted);font-size:11px;margin-top:4px}
 .flight-timing-axis{--axis-color:#5e7581;position:relative;display:block;height:18px;margin:0 5px}
 .flight-timing-axis::before{content:"";position:absolute;inset:8px 0 auto;border-top:1px solid var(--line)}
-.flight-timing-axis>span{position:absolute;inset:7px calc(100% - var(--to)) auto var(--from);border-top:3px dashed var(--axis-color)}
-.flight-timing-axis>span::before,.flight-timing-axis>span::after{content:"";position:absolute;top:-5px;width:8px;height:8px;border:2px solid var(--axis-color);border-radius:50%;background:var(--surface)}
-.flight-timing-axis>span::before{left:-4px}.flight-timing-axis>span::after{right:-4px}
+.flight-timing-range{position:absolute;inset:7px calc(100% - var(--to)) auto var(--from);border-top:3px dashed var(--axis-color)}
+.flight-timing-range::before,.flight-timing-range::after{content:"";position:absolute;top:-5px;width:8px;height:8px;border:2px solid var(--axis-color);border-radius:50%;background:var(--surface)}
+.flight-timing-range::before{left:-4px}.flight-timing-range::after{right:-4px}
 .flight-timing-row.actual .flight-timing-axis{--axis-color:var(--green)}
-.flight-timing-row.actual .flight-timing-axis>span{border-top-style:solid}
-.flight-timing-row.actual .flight-timing-axis>span::before,.flight-timing-row.actual .flight-timing-axis>span::after{background:var(--axis-color)}
+.flight-timing-row.actual .flight-timing-range{border-top-style:solid}
+.flight-timing-row.actual .flight-timing-range::before,.flight-timing-row.actual .flight-timing-range::after{background:var(--axis-color)}
+.flight-timing-axis:has(.flight-timing-boarding)::after{content:"";position:absolute;top:5px;left:var(--boarding);width:8px;height:8px;border:1.5px solid var(--axis-color);background:var(--surface);transform:translateX(-50%) rotate(45deg)}
+.flight-timing-boarding{position:absolute;top:18px;left:clamp(0px,calc(var(--boarding) - 2.5rem),calc(100% - min(100%,5rem)));width:min(100%,5rem);text-align:center;white-space:nowrap;color:var(--green);font-size:11px;font-variant-numeric:tabular-nums;line-height:1.2}
 .flight-timing-differences{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 12px;margin:14px 0 0;padding:10px 0 0;border-top:1px solid var(--line)}
 .flight-timing-differences dd{margin:2px 0 0;font-size:14px;font-weight:600;color:var(--green)}
 @media(max-width:600px){.ticket-detail-group{padding:13px}.ticket-detail-group .detail-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px 14px}}
-@media(max-width:460px){.flight-timing-row{grid-template-columns:2.35rem 60px minmax(0,1fr) 60px;gap:7px}.flight-timing-clock strong{font-size:16px}.flight-timing-clock small{font-size:10px}.flight-timing-differences{column-gap:7px}.flight-timing-differences :is(dt,dd){font-size:12px}}
+@media(max-width:460px){
+  .flight-timing-row{grid-template-columns:2.35rem minmax(0,1fr) auto minmax(0,1fr);gap:4px 7px}
+  .flight-timing-row>:last-child{text-align:right;grid-column:4;grid-row:1}
+  .flight-timing-axis{grid-area:2/2/3/-1}
+  .flight-timing-row.actual:has(.flight-timing-boarding){padding-bottom:18px}
+  .flight-timing-clock strong{font-size:16px}.flight-timing-clock small{font-size:10px}
+  .flight-timing-differences{column-gap:7px}.flight-timing-differences :is(dt,dd){font-size:12px}
+}
 dialog:is(.ticket-editor-modal,.ticket-detail-modal)::backdrop{backdrop-filter:none}
 .duplicate-review{display:grid;gap:16px;overflow-wrap:anywhere}
 .duplicate-review h3{font-size:15px;margin:0 0 5px}

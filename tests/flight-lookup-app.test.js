@@ -84,6 +84,7 @@ test('the editor fills a flight through the provider, preserves private input an
     const timeline = document.querySelector('[data-flight-time-comparison]');
     assert.match(timeline.querySelector('.planned').textContent, /23:45[\s\S]*03:50/);
     assert.match(timeline.querySelector('.actual').textContent, /00:15[\s\S]*04:15/);
+    assert.equal(timeline.querySelector('.actual .flight-timing-boarding').textContent, '登机 23:05');
     assert.match(timeline.textContent, /起飞较计划晚 30 分钟[\s\S]*落地较计划晚 25 分钟[\s\S]*在途较计划少用 5 分钟/);
     assert.doesNotMatch(document.querySelector('.detail-preview').textContent,/00:15|04:15/);
     assert.match(document.querySelector('[data-detail-field=flightStop]').textContent, /经停机场.*KIX/);

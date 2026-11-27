@@ -234,6 +234,12 @@ test('a flight time comparison shares one axis across an overnight trip and two 
     assert.deepEqual([...document.querySelectorAll('dd')].map(element => element.textContent),
       ['晚 35 分钟', '晚 12 分钟', '少用 23 分钟']);
     assert.equal(document.querySelector('.actual time').dateTime, '2026-11-27T00:20');
+    const overnight = { ...record, departureDate: '2026-11-27', departureTime: '00:05', boardingTime: '23:35' };
+    document.body.innerHTML = flightTimeComparison(overnight);
+    assert.equal(document.querySelector('.planned .flight-timing-boarding'), null);
+    assert.equal(document.querySelector('.actual .flight-timing-boarding').dateTime, '2026-11-26T23:35');
+    assert.equal(document.querySelector('.actual .flight-timing-axis').style.getPropertyValue('--boarding'), '0.000%');
+    assert.ok(parseFloat(document.querySelector('.planned .flight-timing-axis').style.getPropertyValue('--from')) > 0);
     assert.equal(flightTimeComparison({ ...record, actualArrivalDate: '' }), '');
   } finally { dom.window.close(); }
 });
