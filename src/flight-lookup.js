@@ -129,9 +129,9 @@ export function bindFlightLookup(form, { getRecord, getKey, canQuery, desktop, a
   async function query(signal) {
     list.innerHTML = ''; candidates = [];
     const request = flightQuery(getRecord()), needs = flightLookupNeeds(getRecord());
-    if (!needs.schedule && !needs.registration) { status.textContent = '已有信息均已填写。'; return; }
+    if (!needs.schedule && !needs.registration && !needs.stopover) { status.textContent = '已有信息均已填写。'; return; }
     const connector = connectorFor(signal), original = stamp();
-    if (!needs.schedule && request.dep && request.arr) {
+    if (!needs.schedule && needs.registration && request.dep && request.arr) {
       status.textContent = '';
       const message = await fillRegistration(connector);
       if (!disposed && form.isConnected) status.textContent = message || '已有信息均已填写。';

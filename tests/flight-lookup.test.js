@@ -127,7 +127,7 @@ test('departure-terminal and airline aliases are reused without introducing anot
   assert.equal(fallback.airline, '中国国际航空');
   assert.equal(fallback.aircraftRegistration, 'B-5846');
   assert.equal(fallback.marketingCarrier, '');
-  assert.deepEqual(flightLookupNeeds(fallback), { schedule: false, registration: false });
+  assert.deepEqual(flightLookupNeeds(fallback), { schedule: false, registration: false, stopover: true });
   const [arrivalOnly] = flightCandidates(payload([row({ FlightDepTerminal: '', FlightArrTerminal: 'T1', FlightTerminal: 'T1' })]), input);
   assert.equal(arrivalOnly.terminal, '');
 });
@@ -167,7 +167,7 @@ test('only explicit scheduled boarding times fill the planned boarding field', (
 });
 
 test('a missing registration queries only the aircraft rotation, despite a missing track', async () => {
-  const [complete] = flightCandidates(payload([row()]), input);
+  const [complete] = flightCandidates(payload([row({ StopFlag: '1', StopAirportCode: 'KIX', LegFlag: '0' })]), input);
   const instance = component({ rows: [complete], applyTrack: () => assert.fail('unexpected track query') });
   const calls = [], previousFetch = globalThis.fetch;
   const response = (arr = 'HND') => ({ structuredContent: { kind: 'item', item: {
@@ -203,7 +203,24 @@ test('typing never calls a provider; one candidate fills automatically and repea
     assert.equal(instance.calls, 1); assert.equal(instance.applied, 1); assert.equal(instance.current.originCode, 'PEK');
     instance.form.querySelector('[data-flight-lookup]').click(); await settle();
     assert.equal(instance.calls, 1); assert.equal(instance.applied, 1);
-    assert.match(instance.form.querySelector('[data-flight-status]').textContent, /均已填写/);
+    assert.match(instance.form.querySelector('[data-flight-status]').textContent, /没有可补全/);
+  } finally { instance.dispose(); instance.dom.window.close(); }
+});
+
+test('a lookup fills the stopover when every other provider field is already known', async () => {
+  const [current] = flightCandidates(payload([row()]), input);
+  const [candidate] = flightCandidates(payload([row({ StopFlag: '1', StopAirportCode: 'KIX', LegFlag: '0' })]), input);
+  const instance = component({ rows: [candidate] });
+  try {
+    Object.assign(instance.current, current, { gate: 'E99' });
+    const button = instance.form.querySelector('[data-flight-lookup]');
+    button.click(); await settle();
+    assert.equal(instance.calls, 1);
+    assert.deepEqual(instance.current.flightStop, candidate.flightStop);
+    assert.equal(instance.current.gate, 'E99');
+    assert.match(instance.form.querySelector('[data-flight-status]').textContent, /已补全 经停机场/);
+    button.click(); await settle();
+    assert.equal(instance.calls, 1);
   } finally { instance.dispose(); instance.dom.window.close(); }
 });
 

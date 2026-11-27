@@ -149,6 +149,7 @@ export function rotationRegistration(result, query) {
 const scheduleFields = ['departureTime', 'flightDistance', 'airline', 'aircraft', 'terminal', 'gate', 'boardingTime'];
 const timePairs = [['arrivalDate', 'arrivalTime'], ['actualDepartureDate', 'actualDepartureTime'], ['actualArrivalDate', 'actualArrivalTime']];
 const canFill = (record, field) => !record[field] && !record.lockedFields?.includes(field);
+const canFillFlightStop = record => canFill(record, 'flightStop') && record.fieldSources?.flightStop !== 'manual';
 const canCompletePair = (record, [first, second]) =>
   (canFill(record, first) && (record[second] || canFill(record, second))) ||
   (canFill(record, second) && record[first]);
@@ -161,7 +162,8 @@ export function flightLookupNeeds(record) {
   });
   return {
     schedule: incompleteAirport || scheduleFields.some(field => canFill(record, field)) || timePairs.some(pair => canCompletePair(record, pair)),
-    registration: canFill(record, 'aircraftRegistration')
+    registration: canFill(record, 'aircraftRegistration'),
+    stopover: canFillFlightStop(record)
   };
 }
 
@@ -189,7 +191,7 @@ export function flightCompletion(record, candidate) {
   }
   for (const field of [...scheduleFields, 'aircraftRegistration', 'marketingCarrier']) fill(field, candidate[field]);
   for (const [date, time] of timePairs) fillTimePair(date, time);
-  if (!record.flightStop && record.fieldSources?.flightStop !== 'manual') {
+  if (canFillFlightStop(record)) {
     const stop = normalizeFlightStop({ ...record, ...changes }, candidate.flightStop);
     if (stop) changes.flightStop = stop;
   }
