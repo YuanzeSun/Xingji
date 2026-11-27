@@ -7,9 +7,11 @@ const template = await readFile(new URL('../src/sw.template.js', import.meta.url
 const model = './ocr/paddle/model.tar';
 const runtime = './vendor/paddle/index.mjs';
 const shell = './index-pinned.html', installedBuild = 20;
+const entry = './src/app-NEW.js';
 const html = (builtAt, body) => `<meta name="xingji-build" content="${builtAt}" />${body}`;
 const script = (version, ocrVersion) => template.replace('__VERSION__', version)
   .replace('__BUILT_AT__', installedBuild).replace('__SHELL_PAGE__', JSON.stringify(shell))
+  .replace('__APP_ENTRY__', JSON.stringify(entry))
   .replace('__SHELL__', '[]').replace('__OCR_VERSION__', ocrVersion)
   .replace('__OCR_FILES__', JSON.stringify([model, runtime]));
 const source = script('test', 'models');
@@ -79,7 +81,7 @@ test('online navigation accepts newer app HTML without replacing the pinned offl
 
 test('the worker reports its entry URL so a suspended mobile page can detect an outdated client', () => {
   let handler, reply;
-  runInNewContext(source.replace('const SHELL = [];', 'const SHELL = ["./src/app-NEW.js", "./src/chunks/other.js"];'), {
+  runInNewContext(source, {
     URL, self: { location: new URL('https://example.com/Xingji/sw.js'), addEventListener: (name, fn) => { if (name === 'message') handler = fn; } }
   });
   const sender = { postMessage: message => { reply = message; } };

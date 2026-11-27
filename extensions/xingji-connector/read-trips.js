@@ -32,9 +32,10 @@ export async function readTrips(start, end) {
     if (!successful(session.data?.flag)) throw new Error(loggedOut);
     const points = new Map();
     const pageSize = 10;
+    const dates = { queryStartDate: start.replaceAll('-', ''), queryEndDate: end.replaceAll('-', '') };
     for (let pageIndex = 1; ; pageIndex++) {
       const response = await post('memberInfo/pointSimpleQuery', {
-        queryType: '0', queryStartDate: start.replaceAll('-', ''), queryEndDate: end.replaceAll('-', ''), pageIndex, pageSize
+        queryType: '0', ...dates, pageIndex, pageSize
       });
       if (!successful(response.status)) throw new Error(`12306 未能返回第 ${pageIndex} 页积分流水，请在官网用相同日期查询确认。`);
       const rows = response.data ?? [];
@@ -50,6 +51,11 @@ export async function readTrips(start, end) {
       if (total > 0 ? pageIndex * pageSize >= total : rows.length < pageSize) break;
     }
 
+    const safe = value => {
+      if (typeof value !== 'string' && typeof value !== 'number') return '';
+      const text = String(value).normalize('NFKC').trim();
+      return text.includes('*') ? '' : text.slice(0, 100);
+    };
     const rides = [];
     async function readDetail({ tradeId, tradeType }) {
       const response = await post('memberInfo/PointDetailQuery', { queryType: tradeType, trade_id: tradeId });
@@ -61,11 +67,6 @@ export async function readTrips(start, end) {
       for (const row of response.data) {
         if (!row || ['fc', 'fr'].includes(row.query_type)) continue;
         const prefix = ['tg', 'ts'].includes(row.query_type) ? 'resign_' : '';
-        const safe = value => {
-          if (typeof value !== 'string' && typeof value !== 'number') return '';
-          const text = String(value).normalize('NFKC').trim();
-          return text.includes('*') ? '' : text.slice(0, 100);
-        };
         rides.push({
           event: safe(row.query_type), service: safe(row[prefix + 'station_train_code']), date: safe(row[prefix + 'train_date']),
           originCode: safe(row[prefix + 'board_station_telecode']), destinationCode: safe(row[prefix + 'arrive_station_telecode']),

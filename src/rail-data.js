@@ -109,16 +109,23 @@ function retainSavedDetails(journey, saved, { emuPossible }) {
   }
 }
 
+const sameSegments = (route, saved) => route && saved &&
+  JSON.stringify(route.segments) === JSON.stringify(saved.segments);
+
 function retainFullRoute(route, saved, stops) {
   const coversJourney = candidate => candidate?.stops[0]?.name === stops[0].station
     && candidate.stops.at(-1)?.name === stops.at(-1).station;
   if (!coversJourney(route.fullRoute)) delete route.fullRoute;
   if (!route.fullRoute && coversJourney(saved?.fullRoute)
-      && JSON.stringify(route.segments) === JSON.stringify(saved.segments)
+      && sameSegments(route, saved)
       && JSON.stringify(route.stops) === JSON.stringify(saved.stops)) {
     route.fullRoute = structuredClone(saved.fullRoute);
   }
   return route;
+}
+
+function retainLineLabels(route, saved) {
+  if (!route.lineLabels?.length && saved.lineLabels?.length) route.lineLabels = structuredClone(saved.lineLabels);
 }
 
 export async function lookupRailDetails(query, { fetcher = globalThis.fetch, signal, enrich = true, railRoute = '', railJourney = '', allowReference = false, onTimetableResponse } = {}) {
@@ -168,28 +175,25 @@ export async function lookupRailDetails(query, { fetcher = globalThis.fetch, sig
     if (!validRailDistances(rows.map(stop => stop.distance))) return;
     journey.stops.forEach((stop,i)=>{stop.distanceKm=rows[i].distance;});journey.distanceQueriedAt=queriedAt;
   };
-  const extras = await Promise.allSettled([stocks(),coaches(),mileage(),access(), (async () => {
+  const track = async () => {
     const route = await fetchRailRoute(routeRecord, options);
-    if (route) {
-      const sameGeometry = previousRoute && JSON.stringify(route.segments) === JSON.stringify(previousRoute.segments);
-      const savedElevation = sameGeometry ? previousRoute.elevation : undefined;
-      const [namedRoute, elevation] = await Promise.all([
-        loadRailLineNames(retainFullRoute(route, savedRoute, journey.stops), options),
-        savedElevation ?? queryRailElevation(route.segments, options).catch(() => undefined)
-      ]);
-      if (elevation) namedRoute.elevation = elevation;
-      else result.railElevationUnavailable = true;
-      result.railRoute = namedRoute;
-      // A name-source outage must not erase labels already verified for this geometry.
-      for (const section of ['', 'fullRoute']) {
-        const current=section ? result.railRoute[section] : result.railRoute, savedGeometry=section ? previousRoute?.[section] : previousRoute;
-        if (current && !current.lineLabels?.length && savedGeometry?.lineLabels?.length &&
-            (section ? JSON.stringify(current.segments) === JSON.stringify(savedGeometry.segments) : sameGeometry)) {
-          current.lineLabels = structuredClone(savedGeometry.lineLabels);
-        }
-      }
+    if (!route) return;
+    const sameGeometry = sameSegments(route, previousRoute);
+    const savedElevation = sameGeometry ? previousRoute.elevation : undefined;
+    const [namedRoute, elevation] = await Promise.all([
+      loadRailLineNames(retainFullRoute(route, savedRoute, journey.stops), options),
+      savedElevation ?? queryRailElevation(route.segments, options).catch(() => undefined)
+    ]);
+    if (elevation) namedRoute.elevation = elevation;
+    else result.railElevationUnavailable = true;
+    // Keep verified labels for the same geometry if the name source is unavailable.
+    if (sameGeometry) retainLineLabels(namedRoute, previousRoute);
+    if (sameSegments(namedRoute.fullRoute, previousRoute?.fullRoute)) {
+      retainLineLabels(namedRoute.fullRoute, previousRoute.fullRoute);
     }
-  })()]);
+    result.railRoute = namedRoute;
+  };
+  const extras = await Promise.allSettled([stocks(), coaches(), mileage(), access(), track()]);
   if (signal?.aborted) throw signal.reason;
   const fresh = normalizeRailJourney(journey);
   retainSavedDetails(fresh, saved, {emuPossible: !result.railModel || isEmuModel(result.railModel)});

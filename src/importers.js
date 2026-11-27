@@ -24,9 +24,9 @@ export async function readRailInvoicePDF(file) {
   const pdfjs = await import('pdfjs-dist/build/pdf.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', location.href).href;
   const doc = await pdfjs.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false, useSystemFonts: true, cMapUrl: new URL('./vendor/cmaps/', location.href).href, cMapPacked: true, standardFontDataUrl: new URL('./vendor/standard_fonts/', location.href).href }).promise;
-  if (doc.numPages > 50) { await doc.destroy(); throw new Error('请按50页以内拆分PDF'); }
   let invoice;
   try {
+    if (doc.numPages > 50) throw new Error('请按50页以内拆分PDF');
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i);
       const { items } = await page.getTextContent();

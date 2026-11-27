@@ -164,8 +164,12 @@ export function validateRecord(input) {
 }
 export function archive(records) { return { format: 'xingji-archive', schemaVersion: SCHEMA_VERSION, exportedAt: now(), records: records.map(validateRecord) }; }
 export function readArchive(input) {
-  if (!input || input.format !== 'xingji-archive' || input.schemaVersion !== SCHEMA_VERSION || !Array.isArray(input.records)) throw new Error('档案格式无效');
-  const records = input.records.map((record, index) => {
+  if (!input || input.format !== 'xingji-archive' || input.schemaVersion !== SCHEMA_VERSION) throw new Error('档案格式无效');
+  return validateRecords(input.records);
+}
+export function validateRecords(input) {
+  if (!Array.isArray(input)) throw new Error('档案格式无效');
+  const records = input.map((record, index) => {
     try { return validateRecord(record); }
     catch (error) { throw new Error(`第 ${index + 1} 条票据：${error.message}`, { cause: error }); }
   });

@@ -1,5 +1,4 @@
 import { parseScanText } from '../src/scan-engine.js';
-import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRecord,archive,readArchive,mergeThreeWay,resolveRecordConflict,deduplicateRecords} from '../src/model.js';

@@ -1,5 +1,5 @@
 import {calendarDate} from '../src/journey-date.js';
-import { codeDataFromResult, symbolFromCodeData, codeBytes, renderCodeData } from '../src/barcode-data.js';
+import { symbolFromCodeData, codeBytes, renderCodeData } from '../src/barcode-data.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';

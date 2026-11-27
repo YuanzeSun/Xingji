@@ -6,26 +6,49 @@ const service = value => String(value || '').trim().toUpperCase();
 export const isRailCoordinate = value => Array.isArray(value) && value.length === 2 && value.every(Number.isFinite) && Math.abs(value[0]) <= 180 && Math.abs(value[1]) < 90;
 
 function geometry(value) {
-  if (!Array.isArray(value.segments) || !value.segments.length || value.segments.length > 1000 || value.segments.some(line => !Array.isArray(line) || line.length < 2 || !line.every(isRailCoordinate)) || value.segments.reduce((count,line) => count + line.length,0) > 50000) throw new Error('铁路线路坐标格式不正确');
-  if (!Array.isArray(value.stops) || value.stops.length < 2 || value.stops.length > 300 || value.stops.some(stop => !stop || !railStationKey(stop.name) || !isRailCoordinate(stop.coordinates)) || new Set(value.stops.map(stop=>railStationKey(stop.name))).size!==value.stops.length) throw new Error('铁路线路车站资料不正确');
-  if(value.lineLabels!==undefined&&(!Array.isArray(value.lineLabels)||value.lineLabels.length>400||value.lineLabels.some(label=>!label||typeof label.name!=='string'||!label.name.trim()||label.name.length>100||!isRailCoordinate(label.coordinates))))throw new Error('铁路线路名称格式不正确');
-  return {segments:value.segments.map(line=>line.map(coordinates=>[...coordinates])),stops:value.stops.map(stop=>({name:railStationKey(stop.name).slice(0,100),coordinates:[...stop.coordinates]})),...(value.lineLabels?.length?{lineLabels:value.lineLabels.map(label=>({name:label.name.trim(),coordinates:[...label.coordinates]}))}:{})};
+  const { segments, stops, lineLabels } = value;
+  if (!Array.isArray(segments) || !segments.length || segments.length > 1000 ||
+      segments.some(line => !Array.isArray(line) || line.length < 2 || !line.every(isRailCoordinate)) ||
+      segments.reduce((count, line) => count + line.length, 0) > 50000) throw new Error('铁路线路坐标格式不正确');
+  if (!Array.isArray(stops) || stops.length < 2 || stops.length > 300 ||
+      stops.some(stop => !stop || !railStationKey(stop.name) || !isRailCoordinate(stop.coordinates)) ||
+      new Set(stops.map(stop => railStationKey(stop.name))).size !== stops.length) throw new Error('铁路线路车站资料不正确');
+  if (lineLabels !== undefined && (!Array.isArray(lineLabels) || lineLabels.length > 400 ||
+      lineLabels.some(label => !label || typeof label.name !== 'string' || !label.name.trim() ||
+        label.name.length > 100 || !isRailCoordinate(label.coordinates)))) throw new Error('铁路线路名称格式不正确');
+  return {
+    segments: segments.map(line => line.map(coordinates => [...coordinates])),
+    stops: stops.map(({ name, coordinates }) => ({ name: railStationKey(name).slice(0, 100), coordinates: [...coordinates] })),
+    ...(lineLabels?.length && { lineLabels: lineLabels.map(({ name, coordinates }) => ({ name: name.trim(), coordinates: [...coordinates] })) })
+  };
 }
 
 export function normalizeRailRoute(value) {
   if (!value) return '';
-  if (typeof value !== 'object' || Array.isArray(value) || !/^[A-Z]?\d{1,5}(?:\/[A-Z]?\d{1,5})*$/.test(service(value.service)) || !railStationKey(value.origin) || !railStationKey(value.destination) || railStationKey(value.origin) === railStationKey(value.destination) || typeof value.queriedAt !== 'string' || !/^\d{4}-\d\d-\d\dT/.test(value.queriedAt) || !Number.isFinite(Date.parse(value.queriedAt))) throw new Error('铁路线路资料格式不正确');
-  const selected=geometry(value);
-  if(selected.stops[0].name!==railStationKey(value.origin) || selected.stops.at(-1).name!==railStationKey(value.destination))throw new Error('铁路线路车站资料不正确');
+  const train = service(value.service), origin = railStationKey(value.origin), destination = railStationKey(value.destination);
+  const { queriedAt, elevation } = value;
+  if (typeof value !== 'object' || Array.isArray(value) || !/^[A-Z]?\d{1,5}(?:\/[A-Z]?\d{1,5})*$/.test(train) ||
+      !origin || !destination || origin === destination || typeof queriedAt !== 'string' ||
+      !/^\d{4}-\d\d-\d\dT/.test(queriedAt) || !Number.isFinite(Date.parse(queriedAt))) throw new Error('铁路线路资料格式不正确');
+  const selected = geometry(value);
+  if (selected.stops[0].name !== origin || selected.stops.at(-1).name !== destination) throw new Error('铁路线路车站资料不正确');
   let fullRoute;
-  if(value.fullRoute){
-    fullRoute=geometry(value.fullRoute);
-    const from=fullRoute.stops.findIndex(stop=>stop.name===railStationKey(value.origin)),to=fullRoute.stops.findIndex(stop=>stop.name===railStationKey(value.destination));
-    const keys=fullRoute.segments.map(line=>JSON.stringify(line)),segment=keys.indexOf(JSON.stringify(selected.segments[0]));
-    if(from<0 || to<=from || fullRoute.stops.slice(from,to+1).map(stop=>stop.name).join('\0')!==selected.stops.map(stop=>stop.name).join('\0') || segment<0 || selected.segments.some((line,i)=>JSON.stringify(line)!==keys[segment+i]))throw new Error('列车全程线路与乘坐区间不一致');
+  if (value.fullRoute) {
+    fullRoute = geometry(value.fullRoute);
+    const fullStops = fullRoute.stops.map(stop => stop.name);
+    const from = fullStops.indexOf(origin), to = fullStops.indexOf(destination);
+    const fullSegments = fullRoute.segments.map(line => JSON.stringify(line));
+    const selectedSegments = selected.segments.map(line => JSON.stringify(line));
+    const firstSegment = fullSegments.indexOf(selectedSegments[0]);
+    if (from < 0 || to <= from || fullStops.slice(from, to + 1).join('\0') !== selected.stops.map(stop => stop.name).join('\0') ||
+        firstSegment < 0 || selectedSegments.some((segment, i) => segment !== fullSegments[firstSegment + i])) {
+      throw new Error('列车全程线路与乘坐区间不一致');
+    }
   }
-  return { service:service(value.service), origin:railStationKey(value.origin).slice(0,100), destination:railStationKey(value.destination).slice(0,100), ...selected,...(fullRoute ? {fullRoute} : {}), queriedAt:value.queriedAt.slice(0,40),
-    ...(value.elevation === undefined ? {} : { elevation: normalizeRailElevation(value.elevation) }) };
+  return {
+    service: train, origin, destination, ...selected, ...(fullRoute && { fullRoute }), queriedAt: queriedAt.slice(0, 40),
+    ...(elevation === undefined ? {} : { elevation: normalizeRailElevation(elevation) })
+  };
 }
 
 export const savedRailRoute = record => railRouteMatches(record) ? normalizeRailRoute(record.railRoute) : null;

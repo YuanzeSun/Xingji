@@ -1,6 +1,7 @@
 const CACHE = 'xingji-__VERSION__';
 const BUILT_AT = __BUILT_AT__;
 const SHELL_PAGE = new URL(__SHELL_PAGE__, self.location.href);
+const APP_URL = new URL(__APP_ENTRY__, self.location.href).href;
 const APP_ROOT = new URL('./', self.location.href).pathname;
 const SHELL = __SHELL__;
 const OCR_CACHE = 'xingji-ocr-__OCR_VERSION__';
@@ -9,8 +10,7 @@ self.addEventListener('install', event => { event.waitUntil(caches.open(CACHE).t
 self.addEventListener('activate', event => { event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('xingji-') && k !== CACHE && k !== OCR_CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('message', event => {
   if (event.data?.type !== 'XINGJI_CHECK_APP_VERSION') return;
-  const app = SHELL.find(path => /^\.\/src\/app-[^/]+\.js$/.test(path));
-  if (app) event.source?.postMessage({ type: 'XINGJI_APP_VERSION', appUrl: new URL(app, self.location.href).href, builtAt: BUILT_AT });
+  event.source?.postMessage({ type: 'XINGJI_APP_VERSION', appUrl: APP_URL, builtAt: BUILT_AT });
 });
 async function loadHome(request) {
   const saved = async () => (await caches.open(CACHE)).match(SHELL_PAGE);

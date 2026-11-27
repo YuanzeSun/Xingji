@@ -1,4 +1,4 @@
-import { SCHEMA_VERSION, readArchive, validateRecord } from './model.js';
+import { validateRecords, validateRecord } from './model.js';
 import { sameSettings, sharedSettings } from './shared-settings.js';
 import { workerURL } from './cloud-connections.js';
 export { workerURL };
@@ -46,9 +46,7 @@ export class D1Store {
 
   async read() {
     const result = await this.readRaw(this.cached?.head);
-    return result ? {
-      ...result, records: readArchive({ format: 'xingji-archive', schemaVersion: SCHEMA_VERSION, records: result.records })
-    } : this.cached;
+    return result ? { ...result, records: validateRecords(result.records) } : this.cached;
   }
 
   async readRaw(head) {
