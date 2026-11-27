@@ -28,6 +28,7 @@ test('the editor fills a flight through the provider, preserves private input an
     const db = await import('../src/db.js'); await import('../src/app.js'); await wait(() => document.querySelector('[data-action=new]:not(:disabled)'));
     document.querySelector('[data-action=new]').click(); await wait(() => document.querySelector('#editor-form'));
     fill('type', 'flight'); assert.ok(document.querySelector('.flight-lookup'));
+    assert.match(document.querySelector('.flight-lookup-note').textContent, /可能有误.*航旅纵横/);
     fill('service', 'CA181'); fill('departureDate', '2026-07-18'); fill('passenger', 'LI/MING'); fill('identity', 'P000001'); fill('seat', '24K'); fill('seatClass', 'Y'); fill('price', '580'); fill('pnr', 'ABC123'); fill('aircraftRegistration', 'B-0001');
     assert.equal(providerCalls.length, 0);
     document.querySelector('[data-flight-lookup]').click(); await wait(() => document.querySelector('[data-flight-status]').textContent.includes('已带入飞行航迹'));

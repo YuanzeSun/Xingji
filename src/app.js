@@ -634,7 +634,7 @@ function journeyMapPage() {
   return header('行程地图', '') + (guestDemoNotice() || (state.showDemo ? '<div class="demo-banner">' + icon('info') + '<span><strong>示例数据</strong> · 虚构记录</span></div>' : '')) + '<div id="journey-map-root"><div class="map-loading" role="status">正在加载地图…</div></div>';
 }
 function statisticsPage() {
-  return header('数据统计', '从票据中回看走过的旅程') + (guestDemoNotice() || (state.showDemo ? '<div class="demo-banner">' + icon('info') + '<span><strong>示例数据</strong> · 虚构记录</span></div>' : '')) + '<div id="statistics-root"><div class="map-loading" role="status">正在整理统计…</div></div>';
+  return header('数据统计') + (guestDemoNotice() || (state.showDemo ? '<div class="demo-banner">' + icon('info') + '<span><strong>示例数据</strong> · 虚构记录</span></div>' : '')) + '<div id="statistics-root"><div class="map-loading" role="status">正在整理统计…</div></div>';
 }
 let connectorInstalled = false, checkingConnector = false;
 async function refreshConnectorStatus() {

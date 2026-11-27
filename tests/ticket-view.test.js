@@ -47,6 +47,8 @@ test('both grid sizes group dates and the small grid shows only ticket faces',()
   function render(){root.innerHTML=ticketViewControls(value)+ticketCollection([rail('a')],value,{icon});bindTicketViewControls(root,{value,change:mode=>{changed=mode;value.mode=mode;render();}});}
   render();
   assert.equal(root.querySelector('.ticket-grid').style.getPropertyValue('--ticket-min'),'390px');
+  assert.equal(root.querySelector('.ticket-card [data-action="view"]'), root.querySelector('.ticket-preview'));
+  assert.equal(root.querySelectorAll('.ticket-card [data-action="view"]').length, 1);
   assert.equal(root.querySelector('[type="range"]'),null);
   assert.deepEqual([...root.querySelectorAll('[data-ticket-size]')].map(button=>button.textContent),['小','中']);
   root.querySelector('[data-ticket-size="small"]').click();

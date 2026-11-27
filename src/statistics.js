@@ -61,7 +61,7 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       : option ? `<label><input type="checkbox" data-stat-option="${option}" ${options[option] ? 'checked' : ''}/>${label}</label>` : '';
     const unidentified = statistics[unknown] ? `<p class="fine-print">${unknownLabel} · ${statistics[unknown]} 次</p>` : '';
     const coverage = kind === 'rail-lines'
-      ? `<p class="statistics-coverage">${statistics.railLineTrips} / ${statistics.rail} 程已识别线路。同一程经过同一线路计一次。</p>` : '';
+      ? `<p class="statistics-coverage">${statistics.railLineTrips} / ${statistics.rail} 程已识别线路</p>` : '';
     return `<section class="statistics-panel statistics-ranking" data-stat-ranking="${kind}"><header><h2>${title}</h2><span>${rows.length} ${unit}</span></header><div class="statistics-ranking-controls"><div class="statistics-view-picker" role="group" aria-label="${title}图表样式">${chooser}</div>${grouping}</div><div data-stat-plot>${rankingPlot(kind, view)}</div>${unidentified}${coverage}</section>`;
   }
   function render() {
