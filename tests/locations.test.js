@@ -6,7 +6,6 @@ import { searchTickets } from '../src/search.js';
 import { STATIONS } from '../src/data/location-reference.js';
 import {AIRPORT_SERVICE_CITIES,AIRPORT_CITY_REFERENCE} from '../src/data/airport-cities.js';
 import {searchAirports} from '../src/places.js';
-import {suggestCities} from '../src/reference-suggestions.js';
 const record = (values = {}) => createRecord({ id: 'city-test', origin: '清河', destination: '上海虹桥', service: 'G1', departureDate: '2026-11-15', ...values });
 
 test('railway city lookup uses exact official records, including stations without a city prefix', () => {
@@ -79,7 +78,6 @@ test('domestic airports use the CAAC named service city across codes, localized 
     const place=searchAirports(code)[0];assert.equal(place.city,city);
     for(const origin of [code,place.name,place.chineseFullName])assert.equal(resolveCity({type:'flight',origin},'origin').city,city,origin);
     assert.ok(searchAirports(city,20).some(row=>row.code===code),city);
-    assert.ok(suggestCities(code).some(row=>row.name===city),code);
   }
   assert.equal(searchAirports('XNN')[0].municipality,'Haidong','physical geography is retained separately');
   assert.equal(resolveCity({type:'flight',origin:'西宁曹家堡',originCode:'LXA'},'origin').status,'conflict');

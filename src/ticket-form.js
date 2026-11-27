@@ -27,16 +27,16 @@ const flightFields = [...journeyFields, ...passengerFields];
 const railFields = [...journeyFields, 'departureTime', ...passengerFields];
 export function requiredTicketFields(type, template, flightStatus = 'normal', railStanding = false) {
   if (type === 'flight') return ['open', 'invalid'].includes(flightStatus) ? ['origin', 'destination', 'passenger'] : flightFields;
-  if (template === 'rail-supplement') return ['origin', 'destination', 'service', 'departureDate'];
+  if (template === 'rail-supplement') return journeyFields;
   const fields = template === 'rail-refund-receipt'
-    ? ['origin', 'destination', 'service', 'departureDate', 'passenger', 'price']
+    ? [...journeyFields, 'passenger', 'price']
     : railStanding ? railFields.filter(key => key !== 'seat') : [...railFields, 'carriage'];
   return isAnonymousRedTemplate(template) ? fields.filter(key => key !== 'passenger') : fields;
 }
 
 export function requiredRecordFields(record) {
   if (record.template !== 'rail-refund-receipt' && isRailPointsRecord(record)) {
-    return ['origin', 'destination', 'service', 'departureDate'];
+    return journeyFields;
   }
   return requiredTicketFields(record.type, record.template, record.flightStatus, record.railStanding);
 }

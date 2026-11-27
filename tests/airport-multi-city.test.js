@@ -5,7 +5,6 @@ import {createRecord,archive,readArchive} from '../src/model.js';
 import {resolveCities,cityLabel,journeyCities,placesInCity} from '../src/locations.js';
 import {searchAirports,resolvePlace} from '../src/places.js';
 import {searchTickets} from '../src/search.js';
-import {suggestCities} from '../src/reference-suggestions.js';
 import {bindAirportPicker} from '../src/airport-picker.js';
 import {searchPanel} from '../src/search-panel.js';
 import {journeyStatistics} from '../src/statistics-model.js';
@@ -21,7 +20,6 @@ test('all nine named or cross-city airports display both cities and match either
     for(const name of [code,searchAirports(code)[0].name,searchAirports(code)[0].chineseFullName])assert.deepEqual(resolveCities({type:'flight',origin:name},'origin'),cities,name);
     for(const city of cities){
       assert.ok(searchAirports(city,20).some(place=>place.code===code),code+' airport candidate for '+city);
-      assert.ok(suggestCities(code).some(row=>row.name===city),code+' city candidate for '+city);
       assert.equal(searchTickets(rows,{city}).records.length,2);assert.equal(searchTickets(rows,{query:city}).records.length,2);
       assert.deepEqual(searchTickets(rows,{originCity:city,destinationCity:'上海'}).records.map(row=>row.id),['out']);
       assert.equal(searchTickets(rows,{originCity:city,destinationCity:'上海',bothDirections:true}).records.length,2);

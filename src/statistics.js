@@ -1,8 +1,8 @@
 import {tripChartMarkup,bindTripChart} from './statistics-chart.js';
 import { bindArrivalDelayChart } from './arrival-delay-chart.js';
 import { escape as e } from './html.js';
-import { dateLabel } from './journey-date.js';
-import { journeyStatistics, statisticsOptions, todayDate, tripSeries, countryName } from './statistics-model.js';
+import { dateLabel, todayDate } from './journey-date.js';
+import { journeyStatistics, statisticsOptions, tripSeries, countryName } from './statistics-model.js';
 import { rankingViews, rankingChartMarkup } from './statistics-ranking.js';
 
 const empty = text => `<p class="statistics-empty">${text}</p>`;
@@ -76,7 +76,7 @@ export function mountStatistics(container, records, { options = {} } = {}) {
     chartCleanup();
     renderedDay = todayDate();
     const data = statistics = journeyStatistics(records, options, renderedDay);
-    const yearChoices = data.years.length ? Array.from({ length: Number(data.years.at(-1)) - Number(data.years[0]) + 1 }, (_, i) => String(Number(data.years[0]) + i)) : [todayDate().slice(0, 4)];
+    const yearChoices = data.years.length ? Array.from({ length: Number(data.years.at(-1)) - Number(data.years[0]) + 1 }, (_, i) => String(Number(data.years[0]) + i)) : [renderedDay.slice(0, 4)];
     if (!yearChoices.includes(options.year)) options.year = yearChoices.at(-1);
     series = data.records.length ? tripSeries(data.records, options) : [];
     const rangeButton = (key, label, attr) => {

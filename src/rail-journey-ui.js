@@ -1,4 +1,4 @@
-import {calendarDate,sameDate} from './journey-date.js';
+import {calendarDate,sameDate,todayDate} from './journey-date.js';
 import { escape as e } from './html.js';
 import { railJourneyMatches, railJourneyRange, railTrainsetIds, isEmuModel, RAIL_TIMETABLE_REFERENCES } from './rail-journey.js';
 import { isJourneyRecord } from './record-kind.js';
@@ -7,7 +7,6 @@ import { railLookupDataDate } from './rail-lookup-model.js';
 const source = (url, text, date, name = 'RailGo', dataDate) => `<p class="rail-journey-source"><a href="${url}" target="_blank" rel="noopener noreferrer">${text}：${name}</a>${dataDate ? ` · 资料日期 ${e(dataDate)}` : ''}${date ? ` · 查询于 ${e(new Date(date).toLocaleDateString('zh-CN'))}` : ''}</p>`;
 const facts = entries => `<dl class="rail-facts">${entries.filter(([,value])=>value).map(([name,value])=>`<div${String(value).length>35 ? ' class="rail-fact-wide"' : ''}><dt>${e(name)}</dt><dd>${e(value)}</dd></div>`).join('')}</dl>`;
 const carriageNumber = value => Number(/^\s*(\d+)(?:车厢?)?\s*$/.exec(value || '')?.[1]) || 0;
-const localToday = () => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`; };
 
 export function railReferenceNotice(record) {
   if (!railJourneyMatches(record)) return '';
@@ -22,8 +21,13 @@ function stockMarkup(record, journey, records) {
   if (!stocks.length) return ids.length || isEmuModel(record.railModel) ? '<p class="rail-empty">暂未查到该车组的详细资料。</p>' : '';
   const tracker = record.fieldSources?.railTrainsets === 'open-crh-tracker';
   const stockDate = record.railFieldDates?.railTrainsets || calendarDate(journey.query.startDate);
+  const today = todayDate();
   return `<section class="rail-journey-section"><div class="rail-section-heading"><h3>乘坐的车组</h3><span>${e(stockDate)} 始发${journey.coupling ? ' · 重联' : ''}</span></div><div class="rail-stock-grid">${stocks.map(stock=>{
-    const encounters = records.filter(other=>other.id!==record.id && !other.deleted && isJourneyRecord(other) && calendarDate(other.departureDate) && calendarDate(other.departureDate) <= localToday() && railTrainsetIds(other).includes(stock.id)).sort((a,b)=>calendarDate(b.departureDate).localeCompare(calendarDate(a.departureDate))).slice(0,3);
+    const encounters = records.filter(other => {
+      if (other.id === record.id || !isJourneyRecord(other)) return false;
+      const date = calendarDate(other.departureDate);
+      return date && date <= today && railTrainsetIds(other).includes(stock.id);
+    }).sort((a,b)=>calendarDate(b.departureDate).localeCompare(calendarDate(a.departureDate))).slice(0,3);
     return `<article class="rail-stock-card"><h4>${e(stock.id)}</h4>${facts([['车型',[stock.model,stock.subModel].filter(Boolean).join(' · ')],['出厂年月',stock.manufactureMonth],['制造厂家',stock.manufacturer],['拖车制造厂家',stock.trailerManufacturer && stock.trailerManufacturer !== stock.manufacturer ? stock.trailerManufacturer : ''],['配属单位',stock.trainDepot],['运用所',stock.depot],['插座位置',stock.socket],['定制类型',stock.customType],['车型备注',stock.modelRemark],['车组备注',stock.carRemark]])}${stock.queriedAt ? `<p class="rail-snapshot">配属及设施资料：${e(new Date(stock.queriedAt).toLocaleDateString('zh-CN'))} 查询快照</p>` : ''}${encounters.length ? `<div class="rail-reunion"><strong>你也曾坐过这组车</strong>${encounters.map(other=>`<button type="button" class="text-button" data-action="view" data-id="${e(other.id)}">${e(calendarDate(other.departureDate))} · ${e(other.origin)} → ${e(other.destination)}</button>`).join('')}</div>` : ''}</article>`;
   }).join('')}</div>${tracker ? source('https://crh.lihugang.top/docs/api/history-train','车组资料',journey.queriedAt,'Open CRH Tracker',record.railFieldDates?.railTrainsets) : source('https://api.railgo.dev/507418598e0','车组资料',journey.queriedAt,'RailGo',record.railFieldDates?.railTrainsets)}</section>`;
 }

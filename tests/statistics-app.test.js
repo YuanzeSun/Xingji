@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { indexedDB } from 'fake-indexeddb';
-import { todayDate } from '../src/statistics-model.js';
+import { todayDate } from '../src/journey-date.js';
 import { createRecord } from '../src/model.js';
 import { prepareCloud } from './helpers/cloud.js';
 

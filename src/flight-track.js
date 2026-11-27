@@ -1,12 +1,12 @@
 import { flightQuery } from './flight-query.js';
-import { isInactiveFlight } from './flight-status.js';
+import { isFlightJourney } from './record-kind.js';
 import { pathDistanceKm } from './geo-distance.js';
 
 export const FLIGHT_TRACK_SOURCE = 'https://cmcp.variflight.com/tools/#getFlightTrackLine';
 const MAX_POINTS = 12000;
 
 export function flightTrackRequest(record) {
-  if (record.type !== 'flight' || record.deleted || isInactiveFlight(record)) throw new Error('这张机票无法查询航迹');
+  if (!isFlightJourney(record)) throw new Error('这张机票无法查询航迹');
   const { fnum, date, dep, arr } = flightQuery(record);
   if (!dep || !arr) throw new Error('请先补全出发和到达机场');
   return [fnum, dep, arr, date, '0'].join('_');

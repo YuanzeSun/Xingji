@@ -22,7 +22,7 @@ for (const [english, chinese] of Object.entries(INTERNATIONAL_CITIES)) {
 }
 for (const city of Object.values(AIRPORT_SERVICE_CITIES)) add(cityAliases, city, city);
 for (const [city,aliases] of Object.entries(AIRPORT_CITY_ALIASES)) for(const alias of [city,...aliases]) add(cityAliases,alias,city);
-export function canonicalCity(value) {
+function canonicalCity(value) {
   const cleaned = String(value || '').trim();
   const aliases = cityAliases.get(cityKey(cleaned));
   return aliases?.size === 1 ? [...aliases][0] : cleaned.replace(/市$/, '');

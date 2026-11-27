@@ -52,7 +52,7 @@ import { railJourneyMatches, railService } from './rail-journey.js';
 import { openRailCamera } from './rail-camera.js';
 import { parseScanText, railPhotoChanges } from './scan-engine.js';
 import { normalizePlaces, resolvePlace } from './places.js';
-import { bindReferenceFields } from './reference-suggestions.js';
+import { bindAirlinePicker } from './reference-suggestions.js';
 import { bindAirportPicker } from './airport-picker.js';
 import { bindStationPicker } from './station-picker.js';
 import { FLIGHT_STATUSES } from './flight-status.js';
@@ -1235,7 +1235,7 @@ function editRecord(record, {
   bindSeatFields(form);
   bindDatePickers(form);
   bindPlaceFields(form);
-  bindReferenceFields(form, state.records);
+  if (flight) bindAirlinePicker(form.elements.airline);
   function clearEditorLookupValues() {
     const cleared=clearLookupValues(draft);
     for (const key of Object.keys(cleared)) {

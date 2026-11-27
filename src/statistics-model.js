@@ -1,4 +1,4 @@
-import {calendarDate} from './journey-date.js';
+import {calendarDate, todayDate} from './journey-date.js';
 import { resolvePlace } from './places.js';
 import { aircraftClassification, normalizeAircraftRegistration } from './aircraft.js';
 import { airlineNameForCode, airlineNameForLabel } from './airline-codes.js';
@@ -37,9 +37,6 @@ function repeatedVehicleTrips(collection) {
     })).sort(rankOrder);
 }
 export const countryName = code => code === 'CN' ? '中国' : regionNames.of(code) || code;
-export function todayDate(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
 export function statisticsOptions(input = {}, today = todayDate()) {
   const selectedEnd = input.dateTo || today;
   const dateTo = dateInterval(selectedEnd)?.end > today ? today : selectedEnd;

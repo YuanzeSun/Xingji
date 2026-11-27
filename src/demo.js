@@ -1,5 +1,5 @@
 import {createRecord,FIELDS} from './model.js';
-import {JOURNEY_DATE_FIELDS, journeyDate} from './journey-date.js';
+import {JOURNEY_DATE_FIELDS, journeyDate, todayDate} from './journey-date.js';
 import {DEMO_TICKET_CODE} from './demo-code.js';
 import {DEMO_RAIL_DETAILS} from './data/demo-rail.js';
 import {boardingCodeDefaults,createBoardingCode} from './bcbp.js';
@@ -9,7 +9,6 @@ import {markFieldSources} from './field-sources.js';
 import {flightTrackRequest} from './flight-track.js';
 import {flightQuery} from './flight-query.js';
 
-const localToday=()=>{const date=new Date();return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;};
 const verifiedAt='2026-11-17T00:00:00.000Z';
 
 function railExample(record){
@@ -37,7 +36,7 @@ function railExample(record){
     fieldSources:Object.fromEntries(Object.entries(values).filter(([,value])=>value).map(([key])=>[key,'railgo']))};
 }
 
-export function demoRecords(today=localToday()){
+export function demoRecords(today=todayDate()){
   const recent=days=>shiftRailDate(today,-days);
   const domesticFlight = {
     type: 'flight', template: 'air-boarding-pass', origin: '上海虹桥', destination: '成都双流', originCode: 'SHA', destinationCode: 'CTU',

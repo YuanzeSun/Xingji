@@ -1,14 +1,13 @@
 import { BOARDING_BAGGAGE_FIELDS, flightTicketNumber } from './boarding-metadata.js';
-import { isInactiveFlight } from './flight-status.js';
+import { isFlightJourney } from './record-kind.js';
 import { flightsInDepartureOrder } from './journey-duration.js';
 
 const hasBags = data => BOARDING_BAGGAGE_FIELDS.some(key => data[key]?.trim());
-const activeFlight = record => record.type === 'flight' && !record.deleted && !isInactiveFlight(record);
 const destination = record => record.destinationCode || record.destination || '';
 
 export function boardingBaggage(record) {
   if (Object.hasOwn(record, 'boardingSticker')) return record.boardingSticker;
-  return activeFlight(record) && hasBags(record) ? record : null;
+  return isFlightJourney(record) && hasBags(record) ? record : null;
 }
 
 export function withBoardingBaggage(record, index) {
@@ -18,7 +17,7 @@ export function withBoardingBaggage(record, index) {
 export function boardingBaggageIndex(records) {
   const result = new Map(), groups = new Map();
   for (const record of records) {
-    if (!activeFlight(record)) continue;
+    if (!isFlightJourney(record)) continue;
     const key = flightTicketNumber(record.ticketNumber);
     if (!key) {
       if (hasBags(record)) result.set(record.id, { sticker: record, laterLeg: false });

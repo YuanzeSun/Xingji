@@ -1,11 +1,10 @@
 import { BOARDING_BAGGAGE_FIELDS, flightTicketNumber } from './boarding-metadata.js';
-import { isInactiveFlight } from './flight-status.js';
+import { isFlightJourney } from './record-kind.js';
 import { flightsInDepartureOrder } from './journey-duration.js';
 import { markFieldSources } from './field-sources.js';
 
 export const FLIGHT_SHARED_FIELDS = [...BOARDING_BAGGAGE_FIELDS, 'price'];
-export const flightTicketKey = record => record.type === 'flight' && !record.deleted && !isInactiveFlight(record)
-  ? flightTicketNumber(record.ticketNumber) : '';
+export const flightTicketKey = record => isFlightJourney(record) ? flightTicketNumber(record.ticketNumber) : '';
 
 export function sameTicketFlights(record, records) {
   const key = flightTicketKey(record);

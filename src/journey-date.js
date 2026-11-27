@@ -3,6 +3,10 @@ const yearValid=year=>Number.isInteger(year)&&year>=1800&&year<=2200;
 const leapYear=year=>year%4===0&&(year%100!==0||year%400===0);
 export const daysInYear=year=>leapYear(year)?366:365;
 
+export function todayDate(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export function journeyDate(value) {
   if(value===undefined||value===null||value==='')return '';
   if(typeof value==='string'){
@@ -30,7 +34,7 @@ export function calendarDate(value) {
 }
 export const sameDate=(a,b)=>JSON.stringify(journeyDate(a))===JSON.stringify(journeyDate(b));
 export const fullDate=value=>{const date=journeyDate(value);return !!date&&date.year!==null&&date.dayOfYear!==null;};
-export function monthDay(value) {return fullDate(value) ? calendarDate(value).slice(5) : '';}
+export const monthDay = value => calendarDate(value).slice(5);
 export function dateFromMonthDay(year,value) {
   if(!value)return year ? journeyDate({year:Number(year),dayOfYear:null}) : '';
   if(!year)throw new Error('请先填写年份');
