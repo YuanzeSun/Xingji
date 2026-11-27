@@ -1977,7 +1977,7 @@ async function showFieldMigration() {
     const { captured, store, snapshot, plan } = preview;
     const target = captured.d1 ? 'Cloudflare D1 主票库' : `GitHub · ${captured.config.owner}/${captured.config.repo}`;
     const focus = modalFocus;
-    openModal(modalHead('迁移预览') + migration.archiveFieldMigrationMarkup(plan, target, labels));
+    openModal(modalHead('迁移预览') + migration.archiveFieldMigrationMarkup(plan, target));
     modalFocus = focus;
     const form = modalRoot.querySelector('[data-field-migration-form]');
     form.addEventListener('submit', async event => {

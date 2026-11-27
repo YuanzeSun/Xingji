@@ -2,7 +2,6 @@ import { dateLabel } from './journey-date.js';
 import { fieldsForTransport, SCHEMA_VERSION, validateRecord, yearOf } from './model.js';
 import { isFieldSourceEntry, normalizeFieldSources } from './field-sources.js';
 import { LOOKUP_FIELDS } from './lookup-values.js';
-import { FLIGHT_TIME_LABELS } from './flight-times.js';
 import { escape as e } from './html.js';
 
 const plainObject = value => value && typeof value === 'object' && !Array.isArray(value);
@@ -97,46 +96,27 @@ export async function writeArchiveFieldMigration(store, snapshot, plan) {
   return store.write(plan.records, { ...snapshot, records: plan.records, contents }, snapshot.settings, 'Migrate Xingji ticket fields');
 }
 
-const changeCategories = [['removed', '移除字段'], ['added', '补齐字段'], ['updated', '调整字段']];
-const fieldMetadata = new Set(['fieldSources', 'lookupValues', 'railFieldDates']);
-const migrationFieldLabels = {
-  fieldSources: '字段来源', lookupValues: '自动补全记录', lockedFields: '锁定字段', railFieldDates: '查询日期',
-  boardingCodeSource: '条码来源', boardingLegIndex: '条码航段', flightStops: '旧经停资料', sources: '资料来源',
-  createdAt: '归档创建时间', updatedAt: '最近修改时间', mergedIds: '合并记录编号',
-  offsetX: '整张票面的横向偏移', offsetY: '整张票面的纵向偏移'
-};
+const changeCategories = [['removed', '删除字段'], ['added', '补充字段'], ['updated', '调整字段']];
 
-function fieldNames(paths, labels) {
-  const fields = new Set(paths), names = new Set();
-  const wholeFaceOffset = fields.has('offsetX') && fields.has('offsetY');
-  for (const path of fields) {
-    const parts = path.split('.'), [field, key] = parts;
-    if (fieldMetadata.has(field) && fields.has(key)) continue;
-    if (wholeFaceOffset && (path === 'offsetX' || path === 'offsetY')) {
-      names.add('整张票面的位置微调（横向和纵向）');
-    } else names.add(parts.map(part => Object.hasOwn(labels, part) ? labels[part] : part).join(' / '));
-  }
-  return [...names].sort();
-}
-
-function groupChanges(changes, labels) {
+function groupChanges(changes) {
   const groups = new Map();
   for (const change of changes) {
     const fields = changeCategories.filter(([key]) => change[key].length)
-      .map(([key, label]) => [label, fieldNames(change[key], labels)]);
+      .map(([key, label]) => [label, [...change[key]].sort()]);
     const key = JSON.stringify(fields);
-    if (!groups.has(key)) groups.set(key, { fields, tickets: [] });
-    groups.get(key).tickets.push(change.title);
+    if (!groups.has(key)) groups.set(key, { fields, items: [] });
+    groups.get(key).items.push(change);
   }
-  return [...groups.values()].sort((a, b) => b.tickets.length - a.tickets.length);
+  return [...groups.values()].sort((a, b) => b.items.length - a.items.length);
 }
 
-export function archiveFieldMigrationMarkup(plan, target, ticketLabels) {
+export function archiveFieldMigrationMarkup(plan, target) {
   const ticketChanges = plan.changes.filter(change => !change.deleted);
-  const groups = groupChanges(ticketChanges, { ...FLIGHT_TIME_LABELS, ...ticketLabels, ...migrationFieldLabels });
+  const deletionChanges = plan.changes.filter(change => change.deleted);
+  const groups = [...groupChanges(ticketChanges), ...groupChanges(deletionChanges)];
   const hasChanges = plan.changes.length > 0;
   const canApply = hasChanges && !plan.errors.length;
-  const tickets = ticketChanges.length, deleted = plan.changes.length - tickets;
+  const tickets = ticketChanges.length, deleted = deletionChanges.length;
   const affected = [
     tickets && `整理 ${tickets} 张票据的字段`,
     deleted && `精简 ${deleted} 条删除标记`
@@ -148,13 +128,13 @@ export function archiveFieldMigrationMarkup(plan, target, ticketLabels) {
       <p class="migration-target">${e(target)}</p>
       ${hasChanges ? `<p><strong>将${affected}</strong></p>` : ''}
       <p>${message}</p>
-      ${tickets ? `<ul class="migration-records">${groups.map(group => `<li>
-        <dl>${group.fields.map(([label, fields]) =>
-          `<div><dt>${label}</dt><dd>${e(fields.join('、'))}</dd></div>`).join('')}</dl>
-        <details open><summary>涉及 ${group.tickets.length} 张票据</summary>
-          <ul class="migration-ticket-list">${group.tickets.map(title => `<li>${e(title)}</li>`).join('')}</ul></details>
+      ${hasChanges ? `<ul class="migration-records">${groups.map(({ fields, items }) => `<li>
+        <dl>${fields.map(([label, paths]) =>
+          `<div><dt>${label}</dt><dd>${paths.map(path => `<code>${e(path)}</code>`).join('、')}</dd></div>`).join('')}</dl>
+        ${items[0].deleted ? `<p class="migration-deleted">涉及 ${items.length} 条删除标记</p>` :
+          `<details open><summary>涉及 ${items.length} 张票据</summary>
+            <ul class="migration-ticket-list">${items.map(({ title }) => `<li>${e(title)}</li>`).join('')}</ul></details>`}
       </li>`).join('')}</ul>` : ''}
-      ${deleted ? '<p class="migration-deleted">移除删除标记里残留的票据字段，保留跨设备同步所需的标识和更新时间。</p>' : ''}
       ${plan.errors.length ? `<ul class="migration-records">${plan.errors.map(item =>
         `<li><strong>${e(item.title)}</strong><p>${e(item.message)}</p></li>`).join('')}</ul>` : ''}
       <p class="form-error" data-field-migration-error role="alert"></p>

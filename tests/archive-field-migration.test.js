@@ -62,11 +62,16 @@ test('GitHub migration previews changes, cancels without writing, and updates on
     const text = preview().textContent;
     assert.equal(preview().querySelector('.migration-ticket-list li').textContent, '2025-11-15 · CA181 · 北京首都 → 东京羽田');
     assert.doesNotMatch(text, /flight-old/);
-    const [removed] = preview().querySelectorAll('dd');
-    assert.deepEqual(new Set(removed.textContent.split('、')),
-      new Set(['订单号', '旧经停资料', '整张票面的位置微调（横向和纵向）']));
-    assert.match(text, /补齐.*实际登机时间/);
-    assert.doesNotMatch(text, /TRAVEL-ORDER/);
+    const fieldNames = category => [...preview().querySelectorAll('dl div')]
+      .find(row => row.querySelector('dt').textContent === category)
+      ?.querySelectorAll('code');
+    assert.deepEqual([...fieldNames('删除字段')].map(code => code.textContent),
+      ['fieldSources.flightStops', 'fieldSources.offsetX', 'fieldSources.offsetY', 'fieldSources.orderNumber',
+        'flightStops', 'offsetX', 'offsetY', 'orderNumber']);
+    assert.deepEqual([...fieldNames('补充字段')].map(code => code.textContent),
+      ['actualBoardingTime', 'fieldSources.flightStop', 'flightStop']);
+    assert.deepEqual([...fieldNames('调整字段')].map(code => code.textContent), ['lockedFields']);
+    assert.doesNotMatch(text, /TRAVEL-ORDER|订单号|实际登机时间|位置微调/);
     preview().querySelector('[data-action="close-modal"]').click();
     await until(() => !preview());
     assert.equal(server.head, previewHead);
@@ -138,11 +143,12 @@ test('the preview groups matching ticket changes and summarizes previously delet
     oldFlight, { ...second, flightStops: { ...second.flightStops, fnum: second.service } },
     { ...deleted, offsetX: '0', offsetY: '0' }
   ] });
-  const markup = archiveFieldMigrationMarkup(plan, 'Cloudflare D1 主票库', { orderNumber: '订单号' });
+  const markup = archiveFieldMigrationMarkup(plan, 'Cloudflare D1 主票库');
   assert.match(markup, /将整理 2 张票据的字段，并精简 1 条删除标记/);
   assert.match(markup, /涉及 2 张票据<\/summary>\s*<ul[^>]*>.*CA181.*CA182.*?<\/li><\/ul>/s);
-  assert.equal(markup.match(/订单号/g)?.length, 1);
-  assert.equal(markup.match(/整张票面的位置微调/g)?.length, 1);
+  assert.equal(markup.match(/<code>orderNumber<\/code>/g)?.length, 1);
+  assert.equal(markup.match(/<code>fieldSources\.orderNumber<\/code>/g)?.length, 1);
+  assert.match(markup, /<code>offsetX<\/code>、<code>offsetY<\/code><\/dd><\/div><\/dl>\s*<p class="migration-deleted">涉及 1 条删除标记<\/p>/);
   assert.doesNotMatch(markup, /previously-deleted|second-flight/);
   assert.deepEqual(plan.records.at(-1), { id: deleted.id, deleted: true, updatedAt: deleted.updatedAt });
   assert.equal(planArchiveFieldMigration({ records: plan.records }).changes.length, 0);
