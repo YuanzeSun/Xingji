@@ -6,6 +6,7 @@ import { normalizeAircraftRegistration, reconcileAircraft } from './aircraft.js'
 import { flightNumber, flightQuery } from './flight-query.js';
 import { airlineNameForCode } from './airline-codes.js';
 import { airportCode, normalizeFlightStop } from './flight-stop.js';
+import { ticketFieldLocked } from './barcode-fields.js';
 
 const clean = value => typeof value === 'string' && !/^(?:-+|null|undefined|n\/?a)$/i.test(value.trim()) ? value.trim().slice(0, 1000) : '';
 const flightIdentity = value => flightNumber(value).replace(/^([A-Z0-9]{2})0+(?=\d)/, '$1');
@@ -148,7 +149,7 @@ export function rotationRegistration(result, query) {
 // Public schedules cannot supply a passenger, fare, seat, cabin, PNR or barcode.
 const scheduleFields = ['departureTime', 'flightDistance', 'airline', 'aircraft', 'terminal', 'gate', 'boardingTime'];
 const timePairs = [['arrivalDate', 'arrivalTime'], ['actualDepartureDate', 'actualDepartureTime'], ['actualArrivalDate', 'actualArrivalTime']];
-const canFill = (record, field) => !record[field] && !record.lockedFields?.includes(field);
+const canFill = (record, field) => !record[field] && !record.lockedFields?.includes(field) && !ticketFieldLocked(record, field);
 const canFillFlightStop = record => canFill(record, 'flightStop') && record.fieldSources?.flightStop !== 'manual';
 const canCompletePair = (record, [first, second]) =>
   (canFill(record, first) && (record[second] || canFill(record, second))) ||

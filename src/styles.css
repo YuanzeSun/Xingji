@@ -600,9 +600,7 @@ dialog.related-tickets-dialog::backdrop{backdrop-filter:none}
 .map-railway-status{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 18px;padding:6px 12px;background:#10263a;color:#a2bacb;border-top:1px solid #2a4459;font-size:11px}.map-railway-status strong{font-weight:500;color:#d4e3ec}.map-legend:empty{display:none}
 .flight-lookup{grid-column:1/-1;padding:15px 16px;margin:0 0 20px;background:#eff3e9;border:1px solid #dce5d4;border-radius:8px;min-width:0}
 .flight-lookup-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;font-size:13px;color:#59714f}
-.flight-lookup-actions{margin:0 0 0 auto}
-.flight-lookup-actions [hidden]{display:none}
-.flight-lookup-heading .button{flex:none;font-size:13px}
+.flight-lookup-heading .button{flex:none;margin-inline-start:auto;font-size:13px}
 .flight-lookup-note{font-size:12px;color:var(--muted);margin:8px 0 0}
 .flight-lookup-status{font-size:13px;line-height:1.8;color:#5a754c;margin:10px 0 0;overflow-wrap:anywhere}
 .flight-lookup-status:empty{display:none}

@@ -15,6 +15,8 @@ const flight = createRecord({
   origin: 'NRT', destination: 'LAX', departureDate: '2026-11-23', passenger: 'TEST/PASSENGER', identity: 'P000001', seat: '12A', seatClass: 'Y',
   departureTime: '18:00', arrivalDate: '2026-11-23', arrivalTime: '11:00',
   actualDepartureDate: '2026-11-23', actualDepartureTime: '18:10', actualArrivalDate: '2026-11-23', actualArrivalTime: '11:20',
+  flightDistance: '8800', airline: '日本航空', aircraft: '787-9', aircraftRegistration: 'JA123A',
+  terminal: 'T1', gate: '31', boardingTime: '17:20',
   flightStop: { fnum: 'JL62', date: '2026-11-23', dep: 'NRT', arr: 'LAX', airport: 'ANC' }
 });
 const flightStr = 'JL62_NRT_LAX_2026-11-23_0';
@@ -102,8 +104,12 @@ test('flight track queries run in the editor and saved tracks replay in details'
     if (message.method === 'initialize') result = { protocolVersion: '2025-03-26' };
     else if (message.params.name === 'getFlightStatus') result = { structuredContent: { kind: 'collection', items: [{
       FlightNo: 'MF8179', FlightDepcode: 'PKX', FlightArrcode: 'XNN', FlightDeptimePlanDate: '2026-08-11 18:05:00',
-      FlightArrtimePlanDate: '2026-08-11 20:30:00', FlightCompany: '厦门航空', aircraftNumber: 'B5846',
+      FlightArrtimePlanDate: '2026-08-11 20:30:00', FlightCompany: '厦门航空',
     }] }};
+    else if (message.params.name === 'getAircraftRotation') result = { structuredContent: { kind: 'item', item: {
+      fnum: 'MF8179', date: '2026-08-11', aircraftNumber: 'B5846',
+      currentFlight: { fnum: 'MF8179', departureCode: 'PKX', arrivalCode: 'XNN' }
+    } }};
     else if (message.params.arguments.flightStr === domesticFlightStr) {
       await new Promise(resolve => { finishTrack = resolve; });
       result = { structuredContent: domesticTrack };
@@ -126,19 +132,23 @@ test('flight track queries run in the editor and saved tracks replay in details'
     element('[data-action=view]').click();
     await waitFor(() => element('.ticket-detail-modal'));
     assert.equal(element('[data-flight-track]'), null);
-    assert.equal(element('[data-flight-track-query]'), null);
+    assert.equal(element('[data-flight-lookup]'), null);
     element('[data-action=edit]').click();
-    const query = await waitFor(() => element('[data-flight-track-query]:not(:disabled)'));
+    const query = await waitFor(() => element('[data-flight-lookup]:not(:disabled)'));
+    assert.deepEqual([...element('.flight-lookup').querySelectorAll('button')].map(button => button.textContent), ['查询并补全']);
     assert.equal(requests.length, 0);
     query.click();
     query.click();
     await waitFor(() => element('[data-flight-status]')?.textContent.includes('已带入飞行航迹'));
+    await waitFor(() => !query.disabled);
+    query.click();
+    await waitFor(() => element('[data-flight-status]')?.textContent.includes('已有信息均已填写'));
     assert.equal(server.records()[0].flightTrack, undefined);
     element('#editor-form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     await waitFor(() => !element('dialog'));
     element('[data-action=view]').click();
     const play = await waitFor(() => element('[data-flight-track-play]:not([hidden])'));
-    assert.equal(element('[data-flight-track-query]'), null);
+    assert.equal(element('[data-flight-lookup]'), null);
     assert.deepEqual(requests, [{ name: 'getFlightTrackLine', arguments: { flightStr } }]);
     assert.deepEqual(server.records()[0].flightTrack.segments, coordinates);
     assert.equal(server.records()[0].passenger, 'TEST/PASSENGER');
@@ -232,6 +242,7 @@ test('flight track queries run in the editor and saved tracks replay in details'
     assert.equal(server.records().length, 1);
     finishTrack();
     const savedFlight = await waitFor(() => server.records().find(record => record.service === 'MF8179'));
+    assert.equal(savedFlight.aircraftRegistration, 'B-5846');
     assert.deepEqual(savedFlight.flightTrack.segments, domesticCoordinates);
     const mileage = journeyStatistics(server.records(), { dateTo: '2026-11-24' }, '2026-11-24');
     assert.equal(mileage.actualFlightDistanceTrips, 2);
@@ -239,6 +250,7 @@ test('flight track queries run in the editor and saved tracks replay in details'
     assert.equal(mileage.actualFlightDistance, expected);
     assert.deepEqual(requests.slice(1), [
       { name: 'getFlightStatus', arguments: { fnum: 'MF8179', date: '2026-08-11' } },
+      { name: 'getAircraftRotation', arguments: { fnum: 'MF8179', date: '2026-08-11', dep: 'PKX', arr: 'XNN' } },
       { name: 'getFlightTrackLine', arguments: { flightStr: domesticFlightStr } },
     ]);
     assert.equal(connections, 2);
