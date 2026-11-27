@@ -164,6 +164,8 @@ test('only explicit scheduled boarding times fill the boarding time when the pas
   assert.equal(planned.boardingTime, '07:05');
   const [other] = flightCandidates(payload([row({ scheduledBoardingTime: '', EstimateBoardingStartTime: '07:05', actualBoardingTime: '07:10' })]), input);
   assert.equal(other.boardingTime, '');
+  const [fallback] = flightCandidates(payload([row({ scheduledBoardingTime: '--', FlightBoardingTimePlanDate: '2026-07-18 07:25:00' })]), input);
+  assert.equal(fallback.boardingTime, '07:25');
   const scanned = { ...record(), boardingTime: '07:15', lockedFields: ['boardingTime'],
     fieldSources: { boardingTime: 'barcode' } };
   assert.equal(flightCompletion(scanned, planned).boardingTime, undefined);

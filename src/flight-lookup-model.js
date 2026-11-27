@@ -97,7 +97,8 @@ export function flightCandidates(result, input) {
       flightDistance: /^(?:0|[1-9]\d{0,5})(?:\.\d{1,3})?$/.test(distance) && Number(distance) > 0 && Number(distance) <= 100000 ? distance : '',
       departureTerminal: clean(row.FlightDepTerminal) || clean(row.FlightHTerminal),
       arrivalTerminal: clean(row.FlightArrTerminal) || clean(row.FlightTerminal), gate: clean(row.BoardGate),
-      boardingTime: plannedBoardingTime(row.scheduledBoardingTime || row.FlightBoardingTimePlanDate, departure.date, AIRPORT_TIMEZONES[dep]) };
+      boardingTime: plannedBoardingTime(row.scheduledBoardingTime, departure.date, AIRPORT_TIMEZONES[dep]) ||
+        plannedBoardingTime(row.FlightBoardingTimePlanDate, departure.date, AIRPORT_TIMEZONES[dep]) };
     const key = JSON.stringify(record);
     if (!candidates.has(key)) candidates.set(key, { record, aircraftValues: new Set(), registrations: new Set(), stopEvidence: [] });
     const { aircraftValues, registrations, stopEvidence } = candidates.get(key);

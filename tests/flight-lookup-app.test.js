@@ -17,8 +17,8 @@ test('the editor fills a flight through the provider, preserves private input an
     if (message.method === 'notifications/initialized') return new Response(null, { status: 202 });
     const result = message.method === 'initialize' ? { protocolVersion: '2025-03-26' } :
       message.params.name === 'getFlightTrackLine' ? { structuredContent: { kind: 'collection', items: [{
-        fnum: 'CA181', dep: 'PEK', arr: 'HND', date: '2026-07-18_0', coordinates: '40.08,116.59;35.55,139.78',
-      }] }} : { structuredContent: { kind: 'collection', items: [{ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-18 08:45:00', FlightArrtimePlanDate: '2026-07-18 12:50:00', FlightDeptimeDate: '2026-07-18 09:15:00', FlightArrtimeDate: '2026-07-18 13:15:00', distance: 2100, LegFlag: '0', StopFlag: '1', StopAirportCode: 'KIX', FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', FlightTerminal: 'T2', BoardGate: 'E12', scheduledBoardingTime: '2026-07-18 08:05:00', aircraftNumber: 'B306R', aircraftType: '空客', miniAirplaneModels: 'A330-343', generic: 'A333' }] } };
+        fnum: 'CA181', dep: 'PEK', arr: 'HND', date: '2026-07-31_0', coordinates: '40.08,116.59;35.55,139.78',
+      }] }} : { structuredContent: { kind: 'collection', items: [{ FlightNo: 'CA181', FlightDepcode: 'PEK', FlightArrcode: 'HND', FlightDeptimePlanDate: '2026-07-31 23:45:00', FlightArrtimePlanDate: '2026-07-31T18:50:00Z', FlightDeptimeDate: '2026-07-31T16:15:00Z', FlightArrtimeDate: '2026-07-31T19:15:00Z', distance: 2100, LegFlag: '0', StopFlag: '1', StopAirportCode: 'KIX', FlightCompany: '中国国际航空', FlightDepTerminal: 'T3', FlightTerminal: 'T2', BoardGate: 'E12', scheduledBoardingTime: '2026-07-31 23:05:00', aircraftNumber: 'B306R', aircraftType: '空客', miniAirplaneModels: 'A330-343', generic: 'A333' }] } };
     return Response.json({ id: message.id, result }, { headers: { 'Mcp-Session-Id': 'fixture-session' } });
   };
   const wait = async fn => { for (let i = 0; i < 250; i++) { if (await fn()) return; await new Promise(resolve => setTimeout(resolve, 5)); } assert.fail('Flight lookup did not settle'); };
@@ -29,20 +29,25 @@ test('the editor fills a flight through the provider, preserves private input an
     document.querySelector('[data-action=new]').click(); await wait(() => document.querySelector('#editor-form'));
     fill('type', 'flight'); assert.ok(document.querySelector('.flight-lookup'));
     assert.match(document.querySelector('.flight-lookup-note').textContent, /可能有误.*航旅纵横/);
-    fill('service', 'CA181'); fill('departureDate', '2026-07-18'); fill('passenger', 'LI/MING'); fill('identity', 'P000001'); fill('seat', '24K'); fill('seatClass', 'Y'); fill('price', '580'); fill('pnr', 'ABC123'); fill('aircraftRegistration', 'B-0001');
+    fill('service', 'CA181'); fill('departureDate', '2026-07-31'); fill('passenger', 'LI/MING'); fill('identity', 'P000001'); fill('seat', '24K'); fill('seatClass', 'Y'); fill('price', '580'); fill('pnr', 'ABC123'); fill('aircraftRegistration', 'B-0001');
+    const flightDates = ['arrivalDate', 'actualDepartureDate', 'actualArrivalDate'];
+    const dateParts = key => ['', 'Month', 'Day'].map(part => document.querySelector(`[name="${key + part}"]`).value);
+    for (const key of flightDates) assert.deepEqual(dateParts(key), ['', '07', '']);
+    fill('actualDepartureTime', '00:15');
     assert.equal(providerCalls.length, 0);
     document.querySelector('[data-flight-lookup]').click(); await wait(() => document.querySelector('[data-flight-status]').textContent.includes('已带入飞行航迹'));
     const summary = document.querySelector('[data-flight-status]').textContent;
     assert.match(summary, /已补全.*出发机场.*到达机场.*计划起飞时间.*经停机场/);
     assert.doesNotMatch(summary, /飞机编号/);
     assert.equal(document.querySelector('[name=originCode]').value, 'PEK'); assert.equal(document.querySelector('[name=destinationCode]').value, 'HND');
-    assert.equal(document.querySelector('[name=departureTime]').value, '08:45'); assert.equal(document.querySelector('[name=arrivalDate]').value, '2026-07-18'); assert.equal(document.querySelector('[name=arrivalTime]').value, '12:50');
-    assert.equal(document.querySelector('[name=boardingTime]').value, '08:05');
+    for (const key of flightDates) assert.deepEqual(dateParts(key), ['2026-08-01', '08', '01']);
+    assert.equal(document.querySelector('[name=departureTime]').value, '23:45'); assert.equal(document.querySelector('[name=arrivalTime]').value, '03:50');
+    assert.equal(document.querySelector('[name=boardingTime]').value, '23:05');
     assert.equal(document.querySelector('[name=departureTerminal]').value, 'T3');
     assert.equal(document.querySelector('[name=arrivalTerminal]').value, 'T2');
     assert.equal(document.querySelector('[name=flightStopAirport]').value, 'KIX');
     assert.equal(document.querySelector('[data-flight-stop-source]').textContent, '飞常准');
-    assert.equal(document.querySelector('[name=actualDepartureTime]').value,'09:15');assert.equal(document.querySelector('[name=actualArrivalTime]').value,'13:15');assert.equal(document.querySelector('[name=flightDistance]').value,'2100');
+    assert.equal(document.querySelector('[name=actualDepartureTime]').value,'00:15');assert.equal(document.querySelector('[name=actualArrivalTime]').value,'04:15');assert.equal(document.querySelector('[name=flightDistance]').value,'2100');
     assert.match(document.querySelector('[name=departureTime]').closest('.field').textContent,/计划起飞时间/);assert.equal(document.querySelector('[name=actualDepartureTime]').required,false);assert.equal(document.querySelector('[name=actualDepartureDateYear]').type,'number');
     assert.match(document.querySelector('[name=departureTime]').closest('section').textContent, /起飞、登机按出发地当地时间，落地按到达地当地时间/);
     assert.equal(document.querySelector('[name=aircraft]').value, 'A330-343'); assert.equal(document.querySelector('[name=gate]').value, 'E12');
@@ -52,15 +57,16 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.match(document.querySelector('#editor-preview').textContent, /A330-343/);
     document.querySelector('[data-flight-lookup]').click(); await wait(() => document.querySelector('[data-flight-status]').textContent.includes('均已填写'));
     assert.deepEqual(providerCalls.filter(call => call.method === 'tools/call').map(call => call.params), [
-      { name: 'getFlightStatus', arguments: { fnum: 'CA181', date: '2026-07-18' } },
-      { name: 'getFlightTrackLine', arguments: { flightStr: 'CA181_PEK_HND_2026-07-18_0' } },
+      { name: 'getFlightStatus', arguments: { fnum: 'CA181', date: '2026-07-31' } },
+      { name: 'getFlightTrackLine', arguments: { flightStr: 'CA181_PEK_HND_2026-07-31_0' } },
     ]);
     submit(); await wait(() => !document.querySelector('dialog'));
     const saved = (await db.get('records', []))[0];
     assert.equal(Object.hasOwn(saved, 'orderNumber'), false);
     assert.equal(saved.departureZone,'Asia/Shanghai');assert.equal(saved.arrivalZone,'Asia/Tokyo');
-    assert.equal(saved.departureTime, '08:45'); assert.equal(saved.arrivalTime, '12:50'); assert.equal(saved.seat, '24K'); assert.equal(saved.pnr, 'ABC123');
-    assert.equal(saved.actualDepartureTime,'09:15');assert.equal(saved.actualArrivalTime,'13:15');assert.equal(saved.flightDistance,'2100');assert.equal(saved.fieldSources.actualDepartureTime,'variflight');
+    assert.equal(saved.departureTime, '23:45'); assert.equal(saved.arrivalTime, '03:50'); assert.equal(saved.seat, '24K'); assert.equal(saved.pnr, 'ABC123');
+    assert.equal(saved.actualDepartureTime,'00:15');assert.equal(saved.actualArrivalTime,'04:15');assert.equal(saved.flightDistance,'2100');assert.equal(saved.fieldSources.actualDepartureTime,'manual');
+    for (const key of flightDates) assert.equal(saved.fieldSources[key], 'variflight');
     assert.equal(saved.fieldSources.departureTime,'variflight');assert.equal(saved.fieldSources.passenger,'manual');
     assert.equal(saved.fieldSources.boardingTime,'variflight');
     assert.equal(saved.flightStop.airport, 'KIX');
@@ -72,10 +78,10 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.match(document.querySelector('[data-detail-field=destination]').textContent, /东京羽田机场.*HND.*T2/);
     assert.equal(document.querySelector('[data-detail-field=originCity], [data-detail-field=destinationCity]'), null);
     const timeline = document.querySelector('[data-flight-time-comparison]');
-    assert.match(timeline.querySelector('.planned').textContent, /08:45[\s\S]*12:50/);
-    assert.match(timeline.querySelector('.actual').textContent, /09:15[\s\S]*13:15/);
+    assert.match(timeline.querySelector('.planned').textContent, /23:45[\s\S]*03:50/);
+    assert.match(timeline.querySelector('.actual').textContent, /00:15[\s\S]*04:15/);
     assert.match(timeline.textContent, /起飞较计划晚 30 分钟[\s\S]*落地较计划晚 25 分钟[\s\S]*在途较计划少用 5 分钟/);
-    assert.doesNotMatch(document.querySelector('.detail-preview').textContent,/09:15|13:15/);
+    assert.doesNotMatch(document.querySelector('.detail-preview').textContent,/00:15|04:15/);
     assert.match(document.querySelector('[data-detail-field=flightStop]').textContent, /经停机场.*KIX/);
     document.querySelector('[data-action="edit"]').click(); await wait(() => document.querySelector('#editor-form'));
     const airport = document.querySelector('[name=flightStopAirport]');
