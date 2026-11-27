@@ -47,8 +47,11 @@ test('editing a scanned flight preserves the locked ordinal and validates the ch
     await edit('day-60');
     fillYear('2025');
     assert.equal(field('').value, '2025-03-01');
+    assert.equal(form().elements.arrivalDateMonth.value, '03');
     fillYear('2028');
     assert.equal(field('').value, '2028-02-29');
+    assert.equal(form().elements.arrivalDateMonth.value, '02');
+    assert.equal(form().elements.arrivalDateDay.value, '');
     await save();
     const saved = server.records().find(ticket => ticket.id === 'day-60');
     assert.deepEqual(saved.departureDate, { year: 2028, dayOfYear: 60 });

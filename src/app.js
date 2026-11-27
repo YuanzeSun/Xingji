@@ -1182,6 +1182,7 @@ function editRecord(record, {
   bindRailPhoto(form);
   bindIdentityInput(form.elements.identity);
   bindTicketDates(form,()=>draft);
+  if (flight) refreshFieldSources(form,draft);
   form.elements.type.toggleAttribute('data-transport-fixed', typeFixed);
   form.elements.type.disabled = typeFixed;
   form.elements.service.toggleAttribute('data-service-fixed', serviceFixed);
@@ -1313,7 +1314,8 @@ function editRecord(record, {
       if(event.target.closest('.ticket-mark-row'))markManualFields(draft,['ticketMarks']);
       if (dateKey) {
         if (!barcodeDateDay(previousRecord, dateKey)) markManualFields(draft, [dateKey]);
-        markFieldSources(draft, [dateKey + 'Year'], 'manual');
+        const year = form.elements[dateKey + 'Year'];
+        markFieldSources(draft, [year.name], year.hasAttribute('data-flight-date-default') ? 'default' : 'manual');
       }
       else if(FIELDS.includes(key))markManualFields(draft,[key,...(['origin','destination'].includes(key) ? [key+'Code'] : [])]);
       if (previousQuery!==lookupContext(draft)) clearEditorLookupValues();
@@ -1364,7 +1366,7 @@ function editRecord(record, {
         throw new Error(flight ? '已保存的机票不能更改航班号' : '已保存的火车票不能更改车次');
       }
       for(const key of JOURNEY_DATE_FIELDS)if(form.elements[key+'Year']){
-        try{draft[key]=readTicketDate(form,key,draft,{strict:true});}catch(error){error.fields=[key];throw error;}
+        try{draft[key]=readTicketDate(form,key,draft,{strict:true});}catch(error){error.fields??=[key];throw error;}
       }
       validateTicketForm(draft);
       if (flight) {

@@ -94,7 +94,8 @@ export function fieldSourceBadge(key,record) {
 export function refreshFieldSources(root,record) {
   for(const badge of root.querySelectorAll('[data-field-source]')){
     const key=badge.dataset.fieldSource;if(key.startsWith('bcbp:'))continue;
-    const label=fieldSourceLabel(record,key);
-    badge.textContent=label;badge.title='信息来源：'+label;badge.dataset.sourceKind=fieldSourceKind(record, key);
+    const defaultYear = key.endsWith('DateYear') && badge.closest('label')?.querySelector('[data-flight-date-default]')?.value;
+    const label=defaultYear ? FIELD_SOURCES.default : fieldSourceLabel(record,key);
+    badge.textContent=label;badge.title='信息来源：'+label;badge.dataset.sourceKind=defaultYear ? 'default' : fieldSourceKind(record,key);
   }
 }

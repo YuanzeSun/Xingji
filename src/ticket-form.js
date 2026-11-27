@@ -86,6 +86,8 @@ export function ticketFormFeedback(form, getRecord) {
     refresh();
     if (!submitted || !missingTicketFields(getRecord()).length) { summary.textContent = error.message; summary.hidden = false; }
     const field = form.querySelector('.field-invalid');
+    const section = field?.closest('details');
+    if (section) section.open = true;
     const target = field ? field.querySelector('input:not([type="hidden"]):not([hidden]),select:not([hidden])') : summary;
     target?.scrollIntoView?.({ block:'center' });
     target?.focus({ preventScroll:true });
