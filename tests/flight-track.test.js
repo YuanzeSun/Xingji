@@ -4,13 +4,17 @@ import { JSDOM } from 'jsdom';
 import { indexedDB } from 'fake-indexeddb';
 import { createRecord, validateRecord } from '../src/model.js';
 import { flightTrackDistanceKm, flightTrackRequest, readFlightTrack } from '../src/flight-track.js';
-import { journeyNetwork, networkGeometry } from '../src/journey-map-model.js';
+import { journeyNetwork, longitudeCenter, networkGeometry } from '../src/journey-map-model.js';
 import { journeyStatistics } from '../src/statistics-model.js';
 import { prepareCloud } from './helpers/cloud.js';
+import { solarTerminator, subsolarPoint } from '../src/solar-terminator.js';
+import { AIRPORT_POINTS } from '../src/data/map-reference.js';
 
 const flight = createRecord({
   id: 'test-flight', type: 'flight', template: 'air-boarding-pass', service: 'JL62',
   origin: 'NRT', destination: 'LAX', departureDate: '2026-11-23', passenger: 'TEST/PASSENGER', identity: 'P000001', seat: '12A', seatClass: 'Y',
+  departureTime: '18:00', arrivalDate: '2026-11-23', arrivalTime: '11:00',
+  actualDepartureDate: '2026-11-23', actualDepartureTime: '18:10', actualArrivalDate: '2026-11-23', actualArrivalTime: '11:20',
   flightStop: { fnum: 'JL62', date: '2026-11-23', dep: 'NRT', arr: 'LAX', airport: 'ANC' }
 });
 const flightStr = 'JL62_NRT_LAX_2026-11-23_0';
@@ -45,6 +49,20 @@ test('flight tracks are keyed to the dated airport pair and never change the jou
   assert.deepEqual(routeWithStops.nodes.map(node => node.code), ['NRT', 'LAX']);
   assert.deepEqual(readFlightTrack({ structuredContent: domesticTrack }, domesticFlightStr).segments, domesticCoordinates);
   assert.throws(() => readFlightTrack({ structuredContent: { items: [{ ...domesticRow, date: '2026-08-12_0' }] } }, domesticFlightStr), /无法识别/);
+});
+
+test('the terminator shades the pole opposite the sun and wraps off-center maps', () => {
+  const june = Date.parse('2026-06-21T12:00:00Z'), december = Date.parse('2026-12-21T12:00:00Z');
+  const summer = subsolarPoint(june), winter = subsolarPoint(december);
+  assert.ok(Math.abs(summer.longitude) < 1 && Math.abs(winter.longitude) < 1);
+  assert.ok(summer.declination * 180 / Math.PI > 23);
+  assert.ok(winter.declination * 180 / Math.PI < -23);
+  assert.match(solarTerminator(june, 0).night, /L1000,500H0Z$/);
+  assert.match(solarTerminator(december, 180).night, /L1500,0H500Z$/);
+  const { boundary } = solarTerminator(Date.parse('2026-03-20T12:00:00Z'), 180);
+  assert.match(boundary, /^M500\.000,[\d.]+L/);
+  assert.match(boundary, /L1500\.000,[\d.]+$/);
+  assert.doesNotMatch(boundary, /NaN|Infinity/);
 });
 
 test('flight track queries run in the editor and saved tracks replay in details', async () => {
@@ -133,9 +151,14 @@ test('flight track queries run in the editor and saved tracks replay in details'
     assert.match(marker?.querySelector('title').textContent ?? '', /经停.*ANC/);
     assert.match(marker?.querySelector('text').textContent ?? '', /经停/);
     assert.equal(svg.hasAttribute('data-flight-track-played'), false);
+    const boundary = element('[data-flight-terminator]');
+    const center = longitudeCenter([...coordinates.flat(), AIRPORT_POINTS.ANC].map(point => point[0]));
+    assert.equal(boundary.hasAttribute('d'), false);
     play.click();
+    assert.equal(boundary.getAttribute('d'), solarTerminator(Date.parse('2026-11-23T09:10:00Z'), center).boundary);
     step(0);
     step(1950);
+    assert.equal(boundary.getAttribute('d'), solarTerminator(Date.parse('2026-11-23T12:28:15Z'), center).boundary);
     assert.ok(Number(first.style.strokeDashoffset) < 1);
     assert.equal(second.style.strokeDashoffset, '1');
     assert.ok(svg.querySelector('[data-flight-track-aircraft]').hasAttribute('transform'));
@@ -218,6 +241,10 @@ test('flight track queries run in the editor and saved tracks replay in details'
     const labels = await waitFor(() => element('[data-flight-track-labels]'));
     assert.deepEqual([...labels.querySelectorAll('.route-city.along-route text')].map(label => label.textContent), ['北京', '西宁']);
     assert.ok([...labels.querySelectorAll('.route-province text')].some(label => label.textContent === '山西'));
+    element('[data-flight-track-play]').click();
+    const domesticCenter = longitudeCenter(domesticCoordinates.flat().map(point => point[0]));
+    assert.equal(element('[data-flight-terminator]').getAttribute('d'),
+      solarTerminator(Date.parse('2026-08-11T10:05:00Z'), domesticCenter).boundary);
   } finally {
     window.dispatchEvent(new window.Event('offline'));
     window.close();

@@ -41,7 +41,7 @@
 
 ![G21 从北京南到南京南，沿京沪高速线播放](docs/images/rail-route-playback.gif)
 
-![北京首都至东京羽田的示例飞行航迹播放](docs/images/flight-track-playback.gif)
+![北京首都至东京羽田的示例航迹回放与晨昏线](docs/images/flight-track-playback.gif)
 
 ### 数据统计
 
