@@ -424,12 +424,10 @@ function updateSearch(key, value, immediate = false) {
 }
 
 function newPersonalRecord(type) {
-  const flight = type === 'flight';
   const values = applyProfileDefaults({
-    type, template: flight ? 'air-boarding-pass' : DEFAULT_RAIL_TEMPLATE,
-    departureDate: flight ? { year: new Date().getFullYear(), dayOfYear: null } : ''
+    type, template: type === 'flight' ? 'air-boarding-pass' : DEFAULT_RAIL_TEMPLATE
   }, state.settings.profile);
-  markFieldSources(values, ['type', 'template', 'departureDateYear'], 'default');
+  markFieldSources(values, ['type', 'template'], 'default');
   return createRecord(values);
 }
 function railReceiptControls() {

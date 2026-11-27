@@ -112,9 +112,9 @@ test('reading an original barcode fills the generator, carrier and supplied cabi
   }finally{page.dispose();}
 });
 
-test('a day-366 scan clears a common-year default and keeps the scanned ordinal', async () => {
+test('a day-366 scan clears a previously entered common year and keeps the scanned ordinal', async () => {
   const code = createBoardingCode({ ...values, date: '2024-12-31' }, 'QRCode');
-  const draft = flight({ departureDate: '2025', fieldSources: { departureDateYear: 'default' } });
+  const draft = flight({ departureDate: '2025', fieldSources: { departureDateYear: 'manual' } });
   const page = editor(draft, { loadRebuilder: async () => async () => ({ codes: [{ data: code, format: code.format }], issues: [] }) });
   try {
     const photo = page.form.querySelector('#code-photo');

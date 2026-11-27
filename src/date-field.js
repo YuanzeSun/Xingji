@@ -6,7 +6,6 @@ import { RAIL_QR_YEAR_PERIOD } from './rail-qr-codec.js';
 
 export const barcodeDateDay=(record,key)=>key==='departureDate'&&record.type==='flight'&&record.boardingCodeSource==='original' &&
   record.fieldSources?.departureDate === 'barcode' ? journeyDate(record.departureDate)?.dayOfYear : null;
-const ordinalNote = day => `条码日期：第 ${day} 天`;
 const dateFromBarcodeYear = (value, dayOfYear) => journeyDate({ year: value ? Number(value) : null, dayOfYear });
 const options=(count,current,unit)=>'<option value="">'+unit+'</option>'+Array.from({length:count},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}" ${Number(current)===i+1?'selected':''}>${i+1}${unit}</option>`).join('');
 const railQRYear = (record, key) => key === 'departureDate' && railBarcodeFieldLocked(record, key) ? journeyDate(record[key])?.year : null;
@@ -14,7 +13,7 @@ const yearMinimum = qrYear => qrYear ? 1800 + (qrYear - 1800) % RAIL_QR_YEAR_PER
 export function ticketDateField(key,record,{label,required=false}={}) {
   const date=journeyDate(record[key]),md=monthDay(date),ordinal=barcodeDateDay(record,key),locked=!!ordinal||railBarcodeFieldLocked(record,key)||railImportFieldLocked(record,key);
   const qrYear = railQRYear(record, key);
-  return `<fieldset class="field journey-date-field" data-journey-date="${key}"><legend>${e(label)}${ticketRequiredMark(record, key, required)}</legend><input type="hidden" name="${key}" ${required?'required':''} value="${e(calendarDate(date))}"/><div class="ticket-date-parts"><label><span>年份${fieldSourceBadge(key+'Year',record)}</span><input name="${key}Year" type="number" inputmode="numeric" min="${yearMinimum(qrYear)}" max="2200" step="${qrYear ? RAIL_QR_YEAR_PERIOD : 1}" placeholder="年份" value="${date?.year??''}" aria-label="${e(label)}年份"/></label><div class="month-day-part"><span>月日${fieldSourceBadge(key,record)}</span><div class="month-day-selects"><select name="${key}Month" aria-label="${e(label)}月份" ${locked?'disabled':''}>${options(12,md.slice(0,2),'月')}</select><select name="${key}Day" aria-label="${e(label)}日" ${locked?'disabled':''}>${options(31,md.slice(3),'日')}</select></div></div></div><small id="${key}-ordinal-note" class="date-ordinal-note" data-date-note ${ordinal&&!date?.year?'':'hidden'}>${ordinal?ordinalNote(ordinal):''}</small></fieldset>`;
+  return `<fieldset class="field journey-date-field" data-journey-date="${key}"><legend>${e(label)}${ticketRequiredMark(record, key, required)}</legend><input type="hidden" name="${key}" ${required?'required':''} value="${e(calendarDate(date))}"/><div class="ticket-date-parts"><label><span>年份${fieldSourceBadge(key+'Year',record)}</span><input name="${key}Year" type="number" inputmode="numeric" min="${yearMinimum(qrYear)}" max="2200" step="${qrYear ? RAIL_QR_YEAR_PERIOD : 1}" placeholder="年份" value="${date?.year??''}" aria-label="${e(label)}年份"/></label><div class="month-day-part"><span>月日${fieldSourceBadge(key,record)}</span><div class="month-day-selects"><select name="${key}Month" aria-label="${e(label)}月份" ${locked?'disabled':''}>${options(12,md.slice(0,2),'月')}</select><select name="${key}Day" aria-label="${e(label)}日" ${locked?'disabled':''}>${options(31,md.slice(3),'日')}</select></div></div></div></fieldset>`;
 }
 export function readTicketDate(form,key,record,{strict=false}={}) {
   if(railImportFieldLocked(record,key))return record[key];
@@ -68,10 +67,6 @@ export function refreshTicketDateLocks(root,record) {
     wrapper.querySelectorAll('select').forEach(input=>{input.disabled=locked;input.toggleAttribute('data-barcode-lock',locked);});
     const part=wrapper.querySelector('.month-day-part');part.toggleAttribute('data-barcode-locked',locked);
     const badge=part.querySelector('[data-field-source]');badge?.toggleAttribute('data-source-locked',locked);
-    const note=wrapper.querySelector('[data-date-note]');note.hidden=!ordinal||!!journeyDate(record[key])?.year;
-    if (ordinal) note.textContent = ordinalNote(ordinal);
-    if (note.hidden) year.removeAttribute('aria-describedby');
-    else year.setAttribute('aria-describedby', note.id);
     if (record.type === 'flight' && key === 'departureDate' && !ordinal) year.setCustomValidity('');
   }
 }

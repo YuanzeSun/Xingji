@@ -16,7 +16,6 @@ test('archive entries preselect each transport and share a switchable editor',as
   const wait=async predicate=>{for(let i=0;i<300;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('Transport editor did not settle: '+(document.querySelector('#editor-error')?.textContent || ''));};
   const form=()=>document.querySelector('#editor-form');
   const entry=type=>document.querySelector(`.page-header [data-action="new"][data-type="${type}"]`);
-  const year=String(new Date().getFullYear());
   const fill=(key,value,event='input')=>{const input=form().elements[key];assert.ok(input,key);input.value=value;input.dispatchEvent(new window.Event(event,{bubbles:true}));};
   const fillAll=values=>{for(const [key,value] of Object.entries(values))fill(key,value);};
   const controls=()=>[...form().querySelectorAll('input[name],select[name]')].map(input=>[input.name,input.value,input.checked]);
@@ -43,7 +42,7 @@ test('archive entries preselect each transport and share a switchable editor',as
     assert.equal(form().elements.passenger.value,'DOE/JANE');assert.equal(form().elements.identity.value,'');
     for(const key of ['origin','destination','originCode','destinationCode','service','departureTime','arrivalDate','arrivalTime','seat','gate','price'])assert.equal(form().elements[key].value,'',key);
     assert.equal(form().elements.orderNumber, undefined);
-    assert.equal(form().elements.departureDateYear.value,year);
+    assert.equal(form().elements.departureDateYear.value,'');
     assert.equal(form().elements.offsetX, undefined);assert.equal(form().elements.offsetY, undefined);assert.equal(document.querySelector('[data-field-source="passenger"]').textContent,'个人资料');
     fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDate:'2026-11-17',departureTime:'09:00',arrivalDate:'2026-11-17',arrivalTime:'13:00',actualDepartureDate:'2026-11-17',actualDepartureTime:'09:10',actualArrivalDate:'2026-11-17',actualArrivalTime:'13:15',passenger:'OLD/NAME',identity:'OLDPASSPORT',seat:'20C',seatClass:'S',airline:'中国国际航空',aircraft:'777-300ER',aircraftRegistration:'B-0001',flightDistance:'8000',pnr:'ABC123',ticketNumber:'1230000000001',terminal:'T3',boardingTime:'08:30',gate:'B20',price:'5000'});
     fill('type','rail');
@@ -59,16 +58,16 @@ test('archive entries preselect each transport and share a switchable editor',as
     entry('flight').click();await wait(form);
     assert.equal(form().elements.type.value,'flight');
     assert.equal(form().elements.type.disabled,false);
-    assert.equal(form().elements.departureDateYear.value,year);
+    assert.equal(form().elements.departureDateYear.value,'');
     assert.equal(form().elements.departureDateMonth.value,'');
     assert.equal(form().elements.departureDateDay.value,'');
     assert.equal(form().elements.departureTime.required,false);
-    assert.equal(form().querySelector('[data-field-source="departureDateYear"]').textContent,'默认值');
+    assert.equal(form().querySelector('[data-field-source="departureDateYear"]').textContent,'未填写');
     assert.equal(form().querySelector('[data-field-source="departureDate"]').textContent,'未填写');
     fill('flightStopAirport','法兰克福机场');
-    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDateMonth:'11',departureDateDay:'17',seat:'20C',seatClass:'Y'});await submit();
+    fillAll({origin:'PEK',destination:'LHR',service:'CA937',departureDateYear:'2026',departureDateMonth:'11',departureDateDay:'17',seat:'20C',seatClass:'Y'});await submit();
     const flight=server.records().find(row=>row.type==='flight');
-    assert.equal(calendarDate(flight.departureDate),year+'-11-17');
+    assert.equal(calendarDate(flight.departureDate),'2026-11-17');
     assert.equal(flight.departureTime,'');
     assert.equal(flight.flightStop.airport,'FRA');
     assert.equal(flight.fieldSources.flightStop,'manual');
