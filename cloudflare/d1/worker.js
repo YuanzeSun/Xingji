@@ -1,4 +1,13 @@
 const readState = 'SELECT id, head, generation, settings FROM archive_state WHERE singleton = 1';
+const pageRows = 100, pageBytes = 4 * 1024 * 1024;
+const readTicketPage = `SELECT tickets.id, tickets.payload, page.candidates
+  FROM (
+    SELECT id, count(*) OVER () AS candidates, row_number() OVER (ORDER BY id) AS position,
+           sum(bytes) OVER (ORDER BY id ROWS UNBOUNDED PRECEDING) AS bytes_used
+    FROM (SELECT id, length(CAST(payload AS BLOB)) AS bytes FROM tickets WHERE id > ? ORDER BY id LIMIT ?)
+  ) AS page JOIN tickets ON tickets.id = page.id
+  WHERE page.bytes_used <= ? AND page.position <= ?
+  ORDER BY tickets.id`;
 const newHead = 'EXISTS (SELECT 1 FROM archive_state WHERE singleton = 1 AND head = ?)';
 const validId = id => typeof id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(id);
 const validResetId = id => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id);
@@ -19,19 +28,31 @@ async function authorized(header, secret) {
   return left.reduce((difference, byte, index) => difference | (byte ^ right[index]), 0) === 0;
 }
 
-async function readArchive(db, tag, respond) {
+const archiveTag = ({ id, head }) => `"${id}:${head}"`;
+
+async function readArchive(db, request, params, respond) {
+  const after = params.get('after') ?? '';
+  const match = request.headers.get('If-Match');
+  if (after && (!validId(after) || !match)) return respond({ error: '票库分页参数无效' }, 400);
+  const tag = !after && request.headers.get('If-None-Match');
   if (tag) {
     const state = await db.prepare(readState).first();
-    if (state && tag === `"${state.id}:${state.head}"`) return respond(null, 304);
+    if (state && tag === archiveTag(state)) return respond(null, 304);
   }
   const [metadata, rows] = await db.batch([
     db.prepare(readState),
-    db.prepare('SELECT payload FROM tickets ORDER BY id')
+    db.prepare(readTicketPage).bind(after, pageRows + 1, pageBytes, pageRows)
   ]);
   const state = metadata.results[0];
   if (!state) return missingSchema(respond);
+  if (match && match !== archiveTag(state)) return respond({ error: 'D1 票库已变化，请重新读取' }, 409);
+  const page = rows.results;
+  const next = page[0]?.candidates > page.length ? page.at(-1).id : null;
+  // A client that did not request paging must never mistake a partial archive for a complete one.
+  if (next && !params.has('after')) return respond({ error: '请先更新行迹，以分页读取票库' }, 426);
   const { id, head, generation, settings } = state;
-  return respond({ id, head, generation, settings: JSON.parse(settings), records: rows.results.map(row => JSON.parse(row.payload)) });
+  return respond({ id, head, generation, ...(!after && { settings: JSON.parse(settings) }),
+    records: page.map(row => JSON.parse(row.payload)), next });
 }
 
 async function writeArchive(request, db, respond) {
@@ -73,10 +94,11 @@ export default {
   async fetch(request, env) {
     const headers = { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store', 'Content-Type': 'application/json; charset=utf-8' };
     const respond = (body, status = 200) => new Response(body === null ? null : JSON.stringify(body), { status, headers });
-    if (new URL(request.url).pathname !== '/v1/archive') return respond({ error: '接口不存在' }, 404);
+    const url = new URL(request.url);
+    if (url.pathname !== '/v1/archive') return respond({ error: '接口不存在' }, 404);
     if (request.method === 'OPTIONS') {
       headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
-      headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, If-None-Match';
+      headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, If-None-Match, If-Match';
       headers['Access-Control-Max-Age'] = '600';
       return respond(null, 204);
     }
@@ -87,7 +109,7 @@ export default {
       return respond({ code: 'D1_BINDING_MISSING', error: 'Worker 缺少 ARCHIVE 数据库绑定' }, 503);
     }
     try {
-      if (request.method === 'GET') return await readArchive(db, request.headers.get('If-None-Match'), respond);
+      if (request.method === 'GET') return await readArchive(db, request, url.searchParams, respond);
       return await writeArchive(request, db, respond);
     } catch (error) {
       const reason = [error?.message, error?.cause?.message].join(' ');

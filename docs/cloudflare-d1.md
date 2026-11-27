@@ -10,7 +10,9 @@
 
 ### 已有数据库升级
 
-对已完成初始化的 D1 库应用 [0002 票据结构迁移](../cloudflare/d1/migrations/0002_ticket_payload.sql)，再通过 **Edit Code → Deploy** 更新 [Worker 源码](../cloudflare/d1/worker.js)。迁移保留现有票据、数据库身份、重置代次和设置，清除旧关联编号，并在数据库层约束删除标记的结构。字段来源仍可在行迹的「数据迁移」中按需清理。
+分页读取使用现有票据主键。已完成 `0002` 迁移的数据库可直接部署 [新版 Worker 源码](../cloudflare/d1/worker.js)。
+
+若数据库只执行过 `0001`，先应用 [0002 票据结构迁移](../cloudflare/d1/migrations/0002_ticket_payload.sql)，再通过 **Edit Code → Deploy** 更新 [Worker 源码](../cloudflare/d1/worker.js)。迁移保留现有票据、数据库身份、重置代次和设置，清除旧关联编号，并在数据库层约束删除标记的结构。字段来源仍可在行迹的「数据迁移」中按需清理。
 
 已用 Wrangler 登记初始化迁移时，执行 `npx wrangler d1 migrations apply <数据库> --remote`。如果之前是在控制台手动运行初始化 SQL，只执行新增文件 `npx wrangler d1 execute <数据库> --remote --file=cloudflare/d1/migrations/0002_ticket_payload.sql`。[Cloudflare Wrangler 命令](https://developers.cloudflare.com/d1/wrangler-commands/)
 

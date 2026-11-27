@@ -18,7 +18,7 @@ test('D1 worker accepts any origin but requires the bearer token for reads and w
   assert.equal(cors.status, 204);
   assert.equal(cors.headers.get('Access-Control-Allow-Origin'), '*');
   assert.match(cors.headers.get('Access-Control-Allow-Methods'), /POST/);
-  assert.match(cors.headers.get('Access-Control-Allow-Headers'), /Authorization.*Content-Type.*If-None-Match/);
+  assert.match(cors.headers.get('Access-Control-Allow-Headers'), /Authorization.*Content-Type.*If-None-Match.*If-Match/);
   const first = await db.fetch(api, { headers });
   assert.equal(first.status, 200);
   assert.equal(first.headers.get('Access-Control-Allow-Origin'), '*');
@@ -69,6 +69,58 @@ test('D1 archive responses require the reset generation and settings', async () 
     const store = new D1Store({ url: endpoint }, token, async () => Response.json(response));
     await assert.rejects(store.read(), /接口返回无效/);
   }
+});
+
+test('D1 reads bounded pages and clients assemble the complete archive in ID order', async () => {
+  const rows = Array.from({ length: 105 }, (_, index) => createRecord({ id: `ticket-${String(index).padStart(3, '0')}` }));
+  rows[99] = { id: rows[99].id, deleted: true, updatedAt: rows[99].updatedAt };
+  const db = memoryD1(rows, { flightMcpKey: 'test-key' });
+  const store = new D1Store({ url: endpoint }, token, db.fetch.bind(db));
+  const api = endpoint + '/v1/archive';
+  const headers = { Authorization: 'Bearer ' + token };
+  assert.equal((await db.fetch(api, { headers })).status, 426);
+  const first = await (await db.fetch(api + '?after=', { headers })).json();
+  assert.equal(first.records.length, 100);
+  assert.equal(first.next, rows[99].id);
+  assert.equal((await db.fetch(`${api}?after=${first.next}`, { headers })).status, 400);
+
+  const snapshot = await store.read();
+  assert.deepEqual(snapshot.records, rows);
+  assert.deepEqual(snapshot.settings, { flightMcpKey: 'test-key' });
+  const cached = new D1Store({ id: snapshot.id, url: endpoint }, token, db.fetch.bind(db), { cached: snapshot });
+  const count = db.calls.length;
+  assert.equal(await cached.read(), snapshot);
+  assert.equal(db.calls.length, count + 1);
+});
+
+test('D1 page selection uses UTF-8 bytes and restarts if the archive changes mid-read', async () => {
+  const rows = Array.from({ length: 7 }, (_, index) => createRecord({ id: `large-${index}`, fieldSources: { fixture: '票'.repeat(230000) } }));
+  const db = memoryD1(rows);
+  const api = endpoint + '/v1/archive';
+  const headers = { Authorization: 'Bearer ' + token };
+  const firstPage = await db.fetch(api + '?after=', { headers });
+  const preview = await firstPage.json();
+  assert.equal(preview.records.length, 6);
+  assert.equal(preview.next, 'large-5');
+  const traces = [];
+  let written = false;
+  const store = new D1Store({ url: endpoint }, token, async (url, options) => {
+    const response = await db.fetch(url, options);
+    const after = new URL(url).searchParams.get('after');
+    traces.push([after, response.status]);
+    if (!written) {
+      written = true;
+      const edited = createRecord({ ...rows[0], service: 'G105' });
+      const result = await db.fetch(api, { method: 'POST', headers, body: JSON.stringify({ id: preview.id, head: preview.head, records: [edited], removed: [] }) });
+      assert.equal(result.status, 200);
+    }
+    return response;
+  });
+  const snapshot = await store.read();
+  assert.notEqual(snapshot.head, preview.head);
+  assert.deepEqual(snapshot.records.map(record => record.id), rows.map(record => record.id));
+  assert.equal(snapshot.records[0].service, 'G105');
+  assert.deepEqual(traces, [['', 200], ['large-5', 409], ['', 200], ['large-5', 200]]);
 });
 
 test('the browser D1 client validates ticket structure before sending updates or replacements', async () => {

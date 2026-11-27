@@ -21,12 +21,14 @@ export class D1Store {
     this.cached = cached;
   }
 
-  async request({ body, head } = {}) {
+  async request({ body, head, after = '', match } = {}) {
     const headers = { Authorization: `Bearer ${this.token}` };
     if (body) headers['Content-Type'] = 'application/json';
     if (head) headers['If-None-Match'] = `"${this.config.id}:${head}"`;
+    if (match) headers['If-Match'] = match;
     const timeout = AbortSignal.timeout(30000);
-    const response = await this.fetcher(workerURL(this.config.url) + '/v1/archive', {
+    const url = workerURL(this.config.url) + '/v1/archive' + (body ? '' : `?${new URLSearchParams({ after })}`);
+    const response = await this.fetcher(url, {
       method: body ? 'POST' : 'GET', headers, body: body && JSON.stringify(body), redirect: 'error', cache: 'no-store', credentials: 'omit',
       signal: this.signal ? AbortSignal.any([this.signal, timeout]) : timeout
     });
@@ -50,16 +52,43 @@ export class D1Store {
   }
 
   async readRaw(head) {
-    const result = await this.request({ head });
-    if (!result) return null;
-    if (typeof result.generation !== 'string' || !Object.hasOwn(result, 'settings') || !Array.isArray(result.records)) {
+    for (let attempt = 0; ; attempt++) {
+      try { return await this.#readSnapshot(head); }
+      catch (error) {
+        if (error.status !== 409) throw error;
+        if (attempt >= 2) throw new Error('D1 票库持续更新，请稍后重试', { cause: error });
+      }
+    }
+  }
+
+  async #readSnapshot(cachedHead) {
+    const first = await this.request({ head: cachedHead });
+    if (!first) return null;
+    if (typeof first.generation !== 'string' || !Object.hasOwn(first, 'settings') || !Array.isArray(first.records)) {
       throw new Error('Worker 票库接口返回无效');
     }
-    return {
-      id: result.id, head: result.head, generation: result.generation,
-      records: result.records,
-      settings: sharedSettings(result.settings)
-    };
+    const { id, head, generation, settings } = first;
+    const records = [...first.records];
+    const match = `"${id}:${head}"`;
+    let page = first, after = '';
+    while (page.next != null) {
+      const cursor = page.next;
+      if (typeof cursor !== 'string' || cursor <= after || cursor !== page.records.at(-1)?.id) {
+        throw new Error('Worker 票库分页游标无效');
+      }
+      after = cursor;
+      page = await this.request({ after, match });
+      if (page.id !== id) throw new Error('D1 数据库身份已变化，已保留本机缓存');
+      if (page.head !== head || page.generation !== generation) {
+        throw Object.assign(new Error('D1 票库已变化，请重新读取'), { status: 409 });
+      }
+      const firstId = Array.isArray(page.records) && page.records[0]?.id;
+      if (typeof firstId !== 'string' || firstId <= after || !Object.hasOwn(page, 'next')) {
+        throw new Error('Worker 票库分页内容无效');
+      }
+      records.push(...page.records);
+    }
+    return { id, head, generation, records, settings: sharedSettings(settings) };
   }
 
   async write(records, snapshot, settings) {
