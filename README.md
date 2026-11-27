@@ -19,7 +19,7 @@
 
 ### 票据录入
 
-![按月份整理的票夹及机票、火车票录入入口](docs/images/ticket-entry.jpg)
+![按月份整理的票夹、联程登机牌与票据录入入口](docs/images/ticket-entry.jpg)
 
 ![从 12306 积分明细选择乘车记录](docs/images/rail-points-import.jpg)
 

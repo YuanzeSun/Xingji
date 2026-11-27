@@ -1,6 +1,6 @@
 import { BOARDING_BAGGAGE_FIELDS, flightTicketNumber } from './boarding-metadata.js';
 import { isInactiveFlight } from './flight-status.js';
-import { flightDepartureOrder, compareFlightDeparture } from './journey-duration.js';
+import { flightsInDepartureOrder } from './journey-duration.js';
 
 const hasBags = data => BOARDING_BAGGAGE_FIELDS.some(key => data[key]?.trim());
 const activeFlight = record => record.type === 'flight' && !record.deleted && !isInactiveFlight(record);
@@ -30,7 +30,7 @@ export function boardingBaggageIndex(records) {
   }
 
   for (const group of groups.values()) {
-    const legs = group.length > 1 ? group.map(flightDepartureOrder).sort(compareFlightDeparture).map(entry => entry.record) : group;
+    const legs = flightsInDepartureOrder(group);
     const fields = Object.fromEntries(BOARDING_BAGGAGE_FIELDS.map(key =>
       [key, legs.find(record => record[key]?.trim())?.[key] || '']));
     const sticker = Object.values(fields).some(Boolean) ? {

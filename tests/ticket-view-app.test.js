@@ -22,12 +22,12 @@ test('archive opens in medium newest-first grid and combines layouts with shared
     assert.equal(document.querySelector('[data-ticket-view="grid"]').getAttribute('aria-pressed'),'true');assert.equal(document.querySelector('[data-ticket-size="medium"]').getAttribute('aria-pressed'),'true');assert.equal(document.querySelector('#search-sort').value,'newest');
     assert.deepEqual([...document.querySelector('#search-sort').options].map(option=>option.value),['newest','oldest','price-asc','price-desc']);
     assert.match(document.querySelector('[data-action="load-more"]').textContent,/49 \/ 80/);
-    const back = '.ticket-stack-layer [data-action="view"][data-id="trip-48"]';
+    const back = '.ticket-stack-leg:nth-child(2) [data-action="view"][data-id="trip-48"]';
     click(back);
     await wait(()=>document.querySelector('.detail-grid'));
     assert.ok(document.querySelector('[data-action="edit"][data-id="trip-48"]'));
     click('[data-action="close-modal"]');await wait(()=>!document.querySelector('dialog'));
-    click('.ticket-stack-front [data-archive-select="trip-40"]');
+    click('.ticket-stack-leg:first-child [data-archive-select="trip-40"]');
     click(back);
     assert.equal(document.querySelector('[data-archive-select="trip-48"]').checked,true);
     assert.equal(document.querySelector('[data-archive-select="trip-40"]').checked,true);

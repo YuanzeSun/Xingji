@@ -1,6 +1,6 @@
 import { BOARDING_BAGGAGE_FIELDS, flightTicketNumber } from './boarding-metadata.js';
 import { isInactiveFlight } from './flight-status.js';
-import { flightDepartureOrder, compareFlightDeparture } from './journey-duration.js';
+import { flightsInDepartureOrder } from './journey-duration.js';
 import { markFieldSources } from './field-sources.js';
 
 export const FLIGHT_SHARED_FIELDS = [...BOARDING_BAGGAGE_FIELDS, 'price'];
@@ -23,8 +23,7 @@ function applySharedValues(record, values) {
 export function prefillFlightTicket(record, records, edits) {
   const matches = sameTicketFlights(record, records);
   if (!matches.length) return record;
-  const linked = matches.length > 1
-    ? matches.map(flightDepartureOrder).sort(compareFlightDeparture).map(entry => entry.record) : matches;
+  const linked = flightsInDepartureOrder(matches);
   const values = {};
   for (const key of FLIGHT_SHARED_FIELDS) {
     if (edits?.has(key)) continue;

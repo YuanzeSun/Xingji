@@ -2,7 +2,7 @@ import {ticketCard,ticketListRow} from './ticket-card.js';
 import {ticketSpaceMarkup} from './ticket-space.js';
 import {timeline,ticketPeriods} from './timeline.js';
 import {flightTicketKey} from './flight-ticket-shared.js';
-import {flightDepartureOrder,compareFlightDeparture} from './journey-duration.js';
+import {flightsInDepartureOrder} from './journey-duration.js';
 
 const modes = [['list','列表','<path d="M8 6h13M8 12h13M8 18h13M3 6h1M3 12h1M3 18h1"/>'],['grid','网格','<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'],['space','3D 空间','<path d="m12 2 9 5v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10"/>']];
 const sizes = {small:{label:'小',scale:.4},medium:{label:'中',scale:1}};
@@ -26,7 +26,7 @@ export function ticketViewEntries(records, view) {
   const stacks = new Map(), behind = new Set();
   for (const matches of groups.values()) {
     if (matches.length < 2) continue;
-    const [front, ...stackedFlights] = matches.map(flightDepartureOrder).sort(compareFlightDeparture).map(entry => entry.record);
+    const [front, ...stackedFlights] = flightsInDepartureOrder(matches);
     stacks.set(front.id, { ...front, stackedFlights });
     for (const leg of stackedFlights) behind.add(leg.id);
   }
@@ -40,7 +40,7 @@ export function ticketCollection(records, value, options) {
   const groupByDate=['newest','oldest'].includes(options.sort ?? 'newest');
   if(value.mode==='list'&&value.size==='medium')return timeline(records,options.icon,{...options,selectable:options.selectable ?? true,groupByDate});
   const list=value.mode==='list',render=list ? ticketListRow : ticketCard;
-  const renderRows=rows=>`<div class="ticket-collection ${list ? 'ticket-list' : 'ticket-grid'}" data-faces-only="${!list&&value.size==='small'}" style="${ticketGridStyle(value.size)}">${rows.map(record=>render(record,{...options,selected:options.selected?.has(record.id),selectedIds:options.selected})).join('')}</div>`;
+  const renderRows=rows=>`<div class="ticket-collection ${list ? 'ticket-list' : 'ticket-grid'}" data-faces-only="${!list&&value.size==='small'}" style="${ticketGridStyle(value.size)}">${rows.map(record=>render(record,options)).join('')}</div>`;
   return groupByDate ? `<section class="ticket-chronology">${ticketPeriods(records,renderRows,visibleTicketCount)}</section>` : renderRows(records);
 }
 export function appendTicketCollection(container, records, view, options) {

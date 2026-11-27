@@ -27,6 +27,7 @@ function addAircraft(name, aliases, models, icaoCodes = []) {
   const label = models.length === 1 ? models[0] : name + '（子型号未确认）';
   const aircraft = { name, series, label, models };
   for (const input of [name, ...aliases]) aircraftByName.set(key(input), aircraft);
+  if (/^A\d{3}(?:-|$)/.test(name)) aircraftByName.set(key(name.slice(1)), aircraft);
   for (const code of icaoCodes) {
     aircraftByName.set(code, aircraft);
     aircraftByIcaoCode.set(code, aircraft);

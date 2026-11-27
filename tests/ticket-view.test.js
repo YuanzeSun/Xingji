@@ -85,6 +85,8 @@ test('grid stacks stay together under the first visible flight and count every l
       const root = dom.window.document.body;
       appendTicketCollection(root, entries.slice(1), view, options);
       const stack = root.querySelector('.ticket-period[data-ticket-period="2026-11"] .ticket-stack');
+      assert.equal(stack.querySelector('.card-service').textContent, 'CA181 / NH006');
+      assert.deepEqual([...stack.querySelectorAll('.route-endpoint')].map(node => node.textContent), [first.origin, first.destination, next.destination]);
       assert.deepEqual([...stack.querySelectorAll('[data-action="view"]')].map(button => button.dataset.id), ['first', 'next']);
       assert.equal(stack.querySelectorAll('.ticket-preview > svg').length, 2);
       assert.equal(stack.querySelector('[data-archive-select="next"]').checked, true);

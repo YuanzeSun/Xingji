@@ -46,6 +46,11 @@ export function compareFlightDeparture(a, b) {
     (a.record.departureTime || '').localeCompare(b.record.departureTime || '') || a.record.id.localeCompare(b.record.id);
 }
 
+export function flightsInDepartureOrder(records) {
+  if (records.length < 2) return records;
+  return records.map(flightDepartureOrder).sort(compareFlightDeparture).map(entry => entry.record);
+}
+
 const durationMinutes = (departure, arrival) => arrival > departure ? Math.round((arrival - departure) / MINUTE) : 0;
 
 export function flightTiming(record) {
