@@ -1282,7 +1282,10 @@ function editRecord(record, {
     if(!lookupApplying){
       const key=changedKey || (target.matches('[data-refund-receipt]') ? 'template' : '');
       if(event.target.closest('.ticket-mark-row'))markManualFields(draft,['ticketMarks']);
-      if(dateKey){markManualFields(draft,[dateKey]);markFieldSources(draft,[dateKey+'Year'],'manual');if(barcodeDateDay(draft,dateKey))draft.fieldSources[dateKey]='barcode';}
+      if (dateKey) {
+        if (!barcodeDateDay(previousRecord, dateKey)) markManualFields(draft, [dateKey]);
+        markFieldSources(draft, [dateKey + 'Year'], 'manual');
+      }
       else if(FIELDS.includes(key))markManualFields(draft,[key,...(['origin','destination'].includes(key) ? [key+'Code'] : [])]);
       if (previousQuery!==lookupContext(draft)) clearEditorLookupValues();
     }

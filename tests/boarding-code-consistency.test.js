@@ -112,6 +112,31 @@ test('reading an original barcode fills the generator, carrier and supplied cabi
   }finally{page.dispose();}
 });
 
+test('a day-366 scan clears a common-year default and keeps the scanned ordinal', async () => {
+  const code = createBoardingCode({ ...values, date: '2024-12-31' }, 'QRCode');
+  const draft = flight({ departureDate: '2025', fieldSources: { departureDateYear: 'default' } });
+  const page = editor(draft, { loadRebuilder: async () => async () => ({ codes: [{ data: code, format: code.format }], issues: [] }) });
+  try {
+    const photo = page.form.querySelector('#code-photo');
+    Object.defineProperty(photo, 'files', { value: [new Blob(['fixture'])] });
+    photo.dispatchEvent(new page.dom.window.Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.deepEqual(draft.departureDate, { year: null, dayOfYear: 366 });
+    assert.equal(draft.fieldSources.departureDate, 'barcode');
+  } finally { page.dispose(); }
+});
+
+test('a first scan in an existing ticket marks a matching departure day as scanned', async () => {
+  const draft = flight({ seatClass: 'Y', fieldSources: { departureDate: 'manual' } });
+  const page = savedEditor(draft);
+  try {
+    await page.scan(createBoardingCode(values, 'QRCode'));
+    assert.equal(draft.boardingCodeSource, 'original');
+    assert.equal(draft.fieldSources.departureDate, 'barcode');
+    assert.equal(calendarDate(draft.departureDate), '2026-11-17');
+  } finally { page.dispose(); }
+});
+
 test('generated codes update after edits, preserve adopted settings, and synchronously flush before saving',async()=>{
   const draft=flight({boardingCode:createBoardingCode(values),boardingCodeSource:'generated'}),page=editor(draft);
   try{

@@ -63,6 +63,8 @@ export function boardingScanReview(record, read, rescan) {
       if (!present) added++;
     } else if (!same(key, old, value)) {
       conflicts.push({ key, label: labels[key], existing: describe(key, old, oldCode), scanned: describe(key, value), update });
+    } else if (key === 'departureDate') {
+      values.departureDate = value;
     }
   }
   const conflicting = key => conflicts.some(conflict => conflict.key === key);
