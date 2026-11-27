@@ -52,7 +52,13 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.equal(document.querySelector('[data-flight-stop-source]').textContent, '飞常准');
     assert.equal(document.querySelector('[name=actualDepartureTime]').value,'00:15');assert.equal(document.querySelector('[name=actualArrivalTime]').value,'04:15');assert.equal(document.querySelector('[name=flightDistance]').value,'2100');
     assert.match(document.querySelector('[name=departureTime]').closest('.field').textContent,/计划起飞时间/);assert.equal(document.querySelector('[name=actualDepartureTime]').required,false);assert.equal(document.querySelector('[name=actualDepartureDateYear]').type,'number');
-    assert.match(document.querySelector('[name=departureTime]').closest('section').textContent, /起飞、登机按出发地当地时间，落地按到达地当地时间/);
+    for (const [key, side] of [['departureTime','出发地'],['boardingTime','出发地'],['arrivalTime','到达地'],
+      ['actualDepartureTime','出发地'],['actualArrivalTime','到达地']]) {
+      const input = document.querySelector(`[name="${key}"]`);
+      const hint = document.getElementById(input.getAttribute('aria-describedby'));
+      assert.equal(hint.textContent, side + '当地时间');
+      assert.equal(hint.closest('.field'), input.closest('.field'));
+    }
     assert.equal(document.querySelector('[name=aircraft]').value, 'A330-343'); assert.equal(document.querySelector('[name=gate]').value, 'E12');
     assert.equal(document.querySelector('[data-field-source="aircraft"]').textContent,'飞常准');assert.equal(document.querySelector('[data-field-source="passenger"]').textContent,'手动输入');
     assert.equal(document.querySelector('[name=passenger]').value, 'LI/MING'); assert.equal(document.querySelector('[name=price]').value, '580'); assert.equal(document.querySelector('[name=aircraftRegistration]').value, 'B-0001');

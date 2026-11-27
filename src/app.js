@@ -5,7 +5,7 @@ import {takeField} from './record-merge-metadata.js';
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
-import {ACTUAL_FLIGHT_FIELDS, FLIGHT_DATE_DEFAULT_ATTR, FLIGHT_LOCAL_TIMES} from './flight-times.js';
+import {ACTUAL_FLIGHT_FIELDS, FLIGHT_DATE_DEFAULT_ATTR, flightTimeZoneLabel} from './flight-times.js';
 import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
 import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railImportFieldLocked,refreshFieldSources} from './field-sources.js';
 import { bindIdentityInput, maskIdentity, printedIdentityHint } from './identity.js';
@@ -1016,13 +1016,14 @@ function field(key, r, options = {}) {
   const decimal = ['price', 'railMileage', 'flightDistance', 'railSupplementFee', 'railSupplementSurcharge', 'checkedBaggageWeight'].includes(key);
   const inputMode = decimal ? 'inputmode="decimal"' : key === 'checkedBaggageCount' ? 'inputmode="numeric"' : '';
   const noSuggestions = key === 'identity' ? 'autocomplete="off" spellcheck="false"' : '';
-  const description = options.hint ? `aria-describedby="${key}-hint"` : '';
+  const hintText = options.hint ?? (r.type === 'flight' ? flightTimeZoneLabel(key) : '');
+  const description = hintText ? `aria-describedby="${key}-hint"` : '';
   const control = options.options ? `<select name="${key}" ${requiredAttrs} ${description}>${selectOptions(options.options, r[key])}</select>` : `<input name="${key}" ${requiredAttrs} type="${type}" value="${e(r[key])}" placeholder="${e(placeholders[key] || '')}" ${inputMode} ${noSuggestions} ${description} />`;
   const content = ['origin','destination','airline'].includes(key) ? `<span class="airport-picker">${control}<span class="airport-suggestions" role="listbox" hidden></span></span>` : control;
   const label = key === 'price' && isRefundReceipt(r) ? '退票费（元）'
     : key === 'issuer' && r.template === 'rail-supplement' ? '出票客运段'
     : ticketFieldLabel(key, r.type, labels[key]);
-  const hint = options.hint ? `<small class="field-hint" id="${key}-hint">${e(options.hint)}</small>` : '';
+  const hint = hintText ? `<small class="field-hint" id="${key}-hint">${e(hintText)}</small>` : '';
   return `<label class="field ${options.full ? 'full-field' : ''}"><span>${e(label)}${ticketRequiredMark(r, key, required)}${fieldSourceBadge(key,r)}</span>${content}${hint}</label>`;
 }
 function bindPlaceFields(container) {
@@ -1072,9 +1073,9 @@ function railTicketOptions(draft) {
   </div>`;
 }
 
-function editorSection(title, content, note = '') {
+function editorSection(title, content) {
   return `<section class="editor-extra editor-section">
-    <h3>${e(title)}</h3>${note ? `<p class="flight-local-time">${e(note)}</p>` : ''}
+    <h3>${e(title)}</h3>
     <div class="form-grid">${content}</div>
   </section>`;
 }
@@ -1098,7 +1099,7 @@ function flightEditorSections(record) {
     `<div data-boarding-journey>${boardingJourneyMarkup(record)}</div>`,
     editorSection('航班行程', fields('origin', 'departureTerminal', 'destination', 'arrivalTerminal', 'service') + flightStopField() +
       fields('departureDate') + flightLookupMarkup()),
-    editorSection('计划起降', fields('departureTime', 'arrivalDate', 'arrivalTime'), FLIGHT_LOCAL_TIMES),
+    editorSection('计划起降', fields('departureTime', 'arrivalDate', 'arrivalTime')),
     editorSection('旅客与登机', fields('passenger', 'identity', 'seat', 'seatClass', 'gate', 'boardingTime')),
     `<section class="editor-extra editor-section" data-boarding-fields="baggage">
       <h3>行李</h3><p class="flight-local-time" data-baggage-later-leg hidden>行李牌随首段登机牌展示。</p><p class="flight-local-time" data-flight-shared hidden>保存后，同票号航段的行李和票价会一起更新。</p>
@@ -1106,7 +1107,7 @@ function flightEditorSections(record) {
     </section>`,
     editorSection('航司与票务', fields('airline', 'aircraft', 'aircraftRegistration', 'flightDistance', 'pnr', 'ticketNumber', 'price')),
     `<details class="editor-extra" ${ACTUAL_FLIGHT_FIELDS.some(key => record[key]) ? 'open' : ''}>
-      <summary>实际起降</summary><p class="flight-local-time">${e(FLIGHT_LOCAL_TIMES)}</p>
+      <summary>实际起降</summary>
       <div class="form-grid">${fields(...ACTUAL_FLIGHT_FIELDS)}</div>
     </details>`,
     boardingLoyaltyEditor(record)
