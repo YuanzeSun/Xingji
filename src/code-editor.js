@@ -65,7 +65,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
     saved.innerHTML = thumbnail(draft[field]);
     saved.hidden = !draft[field];
     const payload = section.querySelector('[data-editor-barcode-payload]');
-    payload.innerHTML = barcodePayloadMarkup(draft[field], { open: payload.firstElementChild?.open });
+    payload.innerHTML = barcodePayloadMarkup(draft[field]);
     const remove = find('code-remove');
     if (remove) remove.hidden = !removable(draft, field, editingSaved);
     const reference = find('code-use-scan');

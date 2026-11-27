@@ -1,7 +1,7 @@
 import { codeBytes, decodeCodeText } from './barcode-data.js';
 import { escape } from './html.js';
 
-export function barcodePayloadMarkup(code, { open = false } = {}) {
+export function barcodePayloadMarkup(code) {
   if (!code) return '';
   const bytes = codeBytes(code.rawBytes);
   const boardingPass = bytes[0] === 77 && bytes[1] >= 49 && bytes[1] <= 52;
@@ -11,6 +11,5 @@ export function barcodePayloadMarkup(code, { open = false } = {}) {
   const kind = code.format.endsWith('QRCode') ? '二维码' : code.format === 'Code128' ? '条形码' : '条码';
   const label = kind + (binary ? '原始字节（十六进制）' : '原始字符串');
   const content = escape(raw).replace(/\r/g, '&#13;');
-  return '<details class="barcode-payload" data-barcode-payload' + (open ? ' open' : '') + '><summary>' + label +
-    '</summary><pre><code dir="ltr">' + content + '</code></pre></details>';
+  return `<figure class="barcode-payload" data-barcode-payload><figcaption>${label}</figcaption><pre><code dir="ltr">${content}</code></pre></figure>`;
 }

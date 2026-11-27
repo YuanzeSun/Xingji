@@ -86,8 +86,8 @@
 .code-actions{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
 .saved-code{display:flex;gap:12px;align-items:center;margin-top:12px}
 .saved-code svg{width:76px;height:76px;object-fit:contain;border:1px solid var(--line)}
-.barcode-payload{min-width:0}
-.barcode-payload summary{min-height:44px;padding:12px 0;color:var(--green);font-size:14px}
+.barcode-payload{min-width:0;margin:8px 0 0}
+.barcode-payload figcaption{margin-bottom:6px;color:var(--green);font-size:14px}
 .barcode-payload pre{max-height:12em;overflow:auto;margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;color:var(--ink);font:13px/1.5 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}
 .boarding-code-scan{display:flex;flex-wrap:wrap;gap:4px 18px;align-items:center}
 .boarding-code-controls{flex:1 1 12rem;min-width:0}

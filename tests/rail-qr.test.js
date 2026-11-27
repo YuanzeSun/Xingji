@@ -283,7 +283,8 @@ test('rail entry locks QR fields and keeps Code128 archival capture separate fro
     await waitFor(() => document.querySelector('[data-action="view"]'));
     document.querySelector('[data-action="view"]').click();
     await waitFor(() => document.querySelector('[data-action="edit"]:not(:disabled)'));
-    assert.equal(document.querySelector('.detail-body [data-barcode-payload] code').textContent, atob(originalCode.rawBytes));
+    const payload = document.querySelector('.detail-body figure[data-barcode-payload]');
+    assert.equal(payload.querySelector('code').textContent, atob(originalCode.rawBytes));
     document.querySelector('[data-action="edit"]').click();
     await waitFor(form);
     assert.equal(field('service').readOnly, true);
