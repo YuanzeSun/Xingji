@@ -1,7 +1,6 @@
 import { BOARDING_BAGGAGE_FIELDS, flightTicketNumber } from './boarding-metadata.js';
 import { isInactiveFlight } from './flight-status.js';
-import { journeyDate } from './journey-date.js';
-import { localInstant } from './journey-duration.js';
+import { flightDepartureOrder, compareFlightDeparture } from './journey-duration.js';
 
 const hasBags = data => BOARDING_BAGGAGE_FIELDS.some(key => data[key]?.trim());
 const activeFlight = record => record.type === 'flight' && !record.deleted && !isInactiveFlight(record);
@@ -14,23 +13,6 @@ export function boardingBaggage(record) {
 
 export function withBoardingBaggage(record, index) {
   return record.type === 'flight' ? { ...record, boardingSticker: index.get(record.id)?.sticker ?? null } : record;
-}
-
-function departureOrder(record) {
-  const date = journeyDate(record.departureDate);
-  return {
-    record,
-    instant: localInstant(date, record.departureTime, record.departureZone),
-    year: date?.year ?? 0,
-    ordinal: date?.dayOfYear ?? 367
-  };
-}
-
-function compareDeparture(a, b) {
-  if (Number.isFinite(a.instant) && Number.isFinite(b.instant)) return a.instant - b.instant;
-  return a.year - b.year || a.ordinal - b.ordinal ||
-    (a.record.departureTime || '').localeCompare(b.record.departureTime || '') ||
-    a.record.id.localeCompare(b.record.id);
 }
 
 export function boardingBaggageIndex(records) {
@@ -48,7 +30,7 @@ export function boardingBaggageIndex(records) {
   }
 
   for (const group of groups.values()) {
-    const legs = group.length > 1 ? group.map(departureOrder).sort(compareDeparture).map(entry => entry.record) : group;
+    const legs = group.length > 1 ? group.map(flightDepartureOrder).sort(compareFlightDeparture).map(entry => entry.record) : group;
     const fields = Object.fromEntries(BOARDING_BAGGAGE_FIELDS.map(key =>
       [key, legs.find(record => record[key]?.trim())?.[key] || '']));
     const sticker = Object.values(fields).some(Boolean) ? {

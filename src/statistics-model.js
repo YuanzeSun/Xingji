@@ -4,6 +4,7 @@ import { aircraftClassification, normalizeAircraftRegistration } from './aircraf
 import { airlineNameForCode, airlineNameForLabel } from './airline-codes.js';
 import { readBoardingCode } from './bcbp.js';
 import { operatingFlight } from './boarding-code-state.js';
+import { flightTicketNumber } from './boarding-metadata.js';
 import { flightNumber } from './flight-query.js';
 import { dateInterval } from './search.js';
 import { CONTINENT_AIRPORT_CODES } from './data/airport-geography.js';
@@ -13,7 +14,7 @@ import { normalizeRailBureau } from './rail-details.js';
 import { railModelsForRecord } from './rail-model-statistics.js';
 import { railText, railTrainsetIds } from './rail-journey.js';
 import { railRouteMatches } from './rail-route-snapshot.js';
-import { journeyTiming } from './journey-duration.js';
+import { compareFlightDeparture, flightDepartureOrder, journeyTiming } from './journey-duration.js';
 
 const CONTINENTS = Object.freeze({ AF: '非洲', AN: '南极洲', AS: '亚洲', EU: '欧洲', NA: '北美洲', OC: '大洋洲', SA: '南美洲' });
 const airportContinents = new Map(Object.entries(CONTINENT_AIRPORT_CODES).flatMap(([continent, codes]) => codes.split(' ').filter(Boolean).map(code => [code, continent])));
@@ -22,6 +23,7 @@ const laoStations = new Set(['YTM', 'VBM', 'VJM', 'VFM', 'VCM', 'VOM']);
 const regionNames = new Intl.DisplayNames(['zh-CN'], { type: 'region' });
 const compare = new Intl.Collator('zh-CN', { numeric: true }).compare;
 const rankOrder = (a, b) => b.count - a.count || compare(a.name, b.name);
+const fareCents = record => Math.round(Number(record.price) * 100);
 function addVehicleTrip(collection, name, record) {
   if (!collection.has(name)) collection.set(name, []);
   collection.get(name).push(record);
@@ -87,12 +89,20 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   let railLineTrips = 0, arrivalDelayTrips = 0;
   const travelTime = { rail: { minutes: 0, trips: 0 }, flight: { minutes: 0, trips: 0 } };
   const fares = { rail: { cents: 0, trips: 0 }, flight: { cents: 0, trips: 0 } };
+  const pricedFlightTickets = new Map();
   const arrivalDelays = new Map();
   for (const record of rows) {
     if (record.price) {
       const fare = fares[record.type];
-      fare.cents += Math.round(Number(record.price) * 100);
       fare.trips++;
+      const ticket = record.type === 'flight' && flightTicketNumber(record.ticketNumber);
+      if (!ticket) fare.cents += fareCents(record);
+      else {
+        const previous = pricedFlightTickets.get(ticket);
+        if (!previous || (compareFlightDeparture(flightDepartureOrder(record), flightDepartureOrder(previous)) || record.id.localeCompare(previous.id)) < 0) {
+          pricedFlightTickets.set(ticket, record);
+        }
+      }
     }
     const { minutes, arrivalDifference: delay } = journeyTiming(record);
     if (minutes) {
@@ -158,6 +168,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     if (!routes.has(id)) routes.set(id, { id, from: pair[0], to: pair[1], count: 0 });
     routes.get(id).count++;
   }
+  for (const record of pricedFlightTickets.values()) fares.flight.cents += fareCents(record);
   const byName = values => [...values].sort((a, b) => compare(a.name, b.name));
   const years = [...new Set(rows.map(record => calendarDate(record.departureDate).slice(0, 4)))].sort();
   const ranked = collection => [...collection].map(([name, count]) => ({ name, count })).sort(rankOrder);

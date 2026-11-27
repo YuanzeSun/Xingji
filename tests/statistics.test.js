@@ -157,6 +157,21 @@ test('ticket fare totals follow the journey date range and distinguish zero pric
   }
 });
 
+test('connecting flights count one fare per ticket, using the first priced leg within the date range', () => {
+  const first = flight({ ticketNumber: '999-0000001001/1', price: '888.50' });
+  const second = flight({ ticketNumber: '9990000001001/2', price: '888.50', departureDate: '2024-03-02' });
+  const unpriced = flight({ ticketNumber: '9990000001002/1' });
+  const laterPrice = flight({ ticketNumber: '9990000001002/2', price: '300', departureDate: '2024-03-02' });
+  const separate = flight({ ticketNumber: '9990000001003', price: '888.50' });
+  const rows = [second, first, unpriced, laterPrice, separate, flight({ price: '1' }), flight({ price: '2' })];
+
+  const statistics = journeyStatistics(rows, range);
+  assert.equal(statistics.flight, 7);
+  assert.deepEqual(statistics.fares.flight, { cents: 208000, trips: 6 });
+  assert.deepEqual(journeyStatistics(rows, { ...range, dateFrom: '2024-03-02' }).fares.flight, { cents: 118850, trips: 2 });
+  assert.equal(journeyStatistics([{ ...second, price: '900' }, first], range).fares.flight.cents, 88850);
+});
+
 test('railway footprints count each named line once per ridden section within the date range', () => {
   const [beijing, tianjin, shanghai] = [[116.38, 39.86], [117.06, 39.05], [121.33, 31.19]];
   const stops = [

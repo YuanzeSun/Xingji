@@ -1,4 +1,4 @@
-import { calendarDate } from './journey-date.js';
+import { calendarDate, journeyDate } from './journey-date.js';
 
 const DAY = 86_400_000;
 const MINUTE = 60_000;
@@ -28,6 +28,22 @@ export function localInstant(date, time, zone) {
   const offsets = new Set([-DAY, 0, DAY].map(delta => offsetAt(formatter, local + delta)));
   const candidates = [...offsets].filter(offset => Number.isFinite(offset) && offsetAt(formatter, local - offset) === offset);
   return candidates.length === 1 ? local - candidates[0] : NaN;
+}
+
+export function flightDepartureOrder(record) {
+  const date = journeyDate(record.departureDate);
+  return {
+    record,
+    instant: localInstant(date, record.departureTime, record.departureZone),
+    year: date?.year ?? 0,
+    ordinal: date?.dayOfYear ?? 367
+  };
+}
+
+export function compareFlightDeparture(a, b) {
+  if (Number.isFinite(a.instant) && Number.isFinite(b.instant)) return a.instant - b.instant;
+  return a.year - b.year || a.ordinal - b.ordinal ||
+    (a.record.departureTime || '').localeCompare(b.record.departureTime || '') || a.record.id.localeCompare(b.record.id);
 }
 
 const durationMinutes = (departure, arrival) => arrival > departure ? Math.round((arrival - departure) / MINUTE) : 0;
