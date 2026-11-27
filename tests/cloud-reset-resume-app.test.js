@@ -10,7 +10,7 @@ import { answerArithmetic } from './helpers/arithmetic.js';
 test('a paired reset waits after reload, recognizes a lost D1 response, and keeps the confirmed provider', async () => {
   let window = browser();
   const github = new MemoryGitHub([]);
-  const memberships = [{ id: 'test-plan', program: '示例会员计划', number: '0000123456', tier: '示例等级' }];
+  const memberships = [{ id: 'test-plan', program: 'CA', number: '0000123456' }];
   const d1 = memoryD1([createRecord({ id: 'ticket', service: 'G21' })], { flightMcpKey: 'reset-setting', profile: { memberships } });
   useServers(github, d1);
   const writes = () => d1.calls.filter(call => call.method === 'POST').length;

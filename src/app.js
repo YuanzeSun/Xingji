@@ -58,7 +58,7 @@ import { bindStationPicker } from './station-picker.js';
 import { FLIGHT_STATUSES } from './flight-status.js';
 import { isRefundReceipt, isJourneyRecord } from './record-kind.js';
 import { bindUppercaseInputs } from './uppercase-input.js';
-import { applyProfileDefaults, applyTicketIdentity } from './personal-profile.js';
+import { applyProfileDefaults, applyTicketIdentity, profileMembershipNumber } from './personal-profile.js';
 import { personalProfilePanel, collectPersonalProfile, bindPersonalProfileForm, personalProfileSummary } from './personal-profile-form.js';
 import { journeyCities } from './locations.js';
 import { DEFAULT_SEARCH, searchOptions, searchTickets, clearSearchField } from './search.js';
@@ -1346,6 +1346,14 @@ function editRecord(record, {
         markFieldSources(draft, [year.name], year.hasAttribute(FLIGHT_DATE_DEFAULT_ATTR) ? 'default' : 'manual');
       }
       else if(FIELDS.includes(key))markManualFields(draft,[key,...(['origin','destination'].includes(key) ? [key+'Code'] : [])]);
+      if (key === 'frequentFlyerCarrier' && !ticketFieldLocked(draft, 'frequentFlyerNumber') &&
+          (!draft.frequentFlyerNumber || draft.fieldSources.frequentFlyerNumber === 'profile')) {
+        const number = profileMembershipNumber(state.settings.profile, draft.frequentFlyerCarrier);
+        if (number !== draft.frequentFlyerNumber) {
+          draft.frequentFlyerNumber = form.elements.frequentFlyerNumber.value = number;
+          markFieldSources(draft, ['frequentFlyerNumber'], 'profile');
+        }
+      }
       if (sharedEdits && FLIGHT_SHARED_FIELDS.includes(key)) sharedEdits.add(key);
       if (previousQuery!==lookupContext(draft)) clearEditorLookupValues();
     }

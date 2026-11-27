@@ -685,7 +685,7 @@ dialog.related-tickets-dialog::backdrop{backdrop-filter:none}
 select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;line-height:1.5;padding-right:32px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23788371' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;background-size:12px 8px;text-overflow:ellipsis}
 .field select{display:block;min-height:var(--control-height);height:var(--control-height);max-height:var(--control-height)}
 .personal-profile .field select{padding-right:32px}
-.profile-membership .profile-document-fields{grid-template-columns:repeat(3,minmax(0,1fr))}
+.profile-membership .profile-document-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media(max-width:680px){.profile-membership .profile-document-fields{grid-template-columns:minmax(0,1fr)}}
 /* 16px avoids iOS enlarging the page when a form control receives focus. */
 @media(max-width:680px){.field input,.field select,.field textarea,.editor-fields .field input,.editor-fields .field select,.personal-profile .field input,.personal-profile .field select,.archive-search .filter-inputs select,.search-result-actions select,.statistics-period-controls select,.statistics-range input,.map-year select{font-size:16px}}
@@ -759,6 +759,7 @@ select:not([multiple]){-webkit-appearance:none;appearance:none;min-width:0;max-w
 .field .field-source,.editor-extra h3 .field-source{margin-left:auto;font-size:11px;font-weight:400;line-height:1.5;white-space:nowrap;color:#687b70;background:#edf2ec;border:1px solid #dce5db;border-radius:4px;padding:1px 6px}.editor-extra h3 .field-source{margin-left:8px;vertical-align:middle}.field .field-source[data-source-kind="manual"]{color:#6c715d;background:#f1f0e7}
 .editor-fields .field{justify-content:space-between}.editor-fields .field>span{column-gap:4px}
 [data-boarding-fields="loyalty"] .field{justify-content:flex-start}
+@media(max-width:480px){[data-boarding-fields="loyalty"] .form-grid{grid-template-columns:1fr}}
 .editor-section{margin-bottom:13px}.editor-section h3{font-size:15px;font-weight:600;color:var(--ink)}
 .field .field-hint,.flight-local-time{color:var(--muted);font-size:12px;line-height:1.5}
 p.flight-local-time{margin:-4px 0 13px}

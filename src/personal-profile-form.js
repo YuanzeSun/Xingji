@@ -1,4 +1,4 @@
-import { PROFILE_FIELDS, DOCUMENT_TYPES, personalProfile, hasPersonalProfile, GENDER_OPTIONS } from './personal-profile.js';
+import { PROFILE_FIELDS, DOCUMENT_TYPES, personalProfile, hasPersonalProfile, GENDER_OPTIONS, MAX_MEMBERSHIPS } from './personal-profile.js';
 import { bindIdentityInput, maskIdentity, maskRailIdentity } from './identity.js';
 import { escape as e } from './html.js';
 import { bindUppercaseInputs } from './uppercase-input.js';
@@ -7,15 +7,14 @@ const documentName = doc => doc.label || DOCUMENT_TYPES[doc.type] || '其他证�
 const maskedDocument = (number, type) => maskRailIdentity(number, { isNationalId: type === 'national-id' });
 const profileNumbers = new WeakMap();
 function membershipFields(memberships) {
-  if (!memberships.length) return '';
   const rows = memberships.map((entry, index) => `<fieldset class="profile-document profile-membership" data-membership-id="${e(entry.id)}">
     <legend><span>会员计划 ${index + 1}</span><button type="button" class="text-button danger" data-membership-remove aria-label="移除会员计划 ${index + 1}" data-setting-control>移除</button></legend>
     <div class="profile-document-fields">
-      <label class="field"><span>计划名称</span><input data-membership-field="program" value="${e(entry.program)}" placeholder="如 凤凰知音、铁路畅行" maxlength="80" autocomplete="off" data-setting-control /></label>
+      <label class="field"><span>计划航司代码</span><input data-membership-field="program" value="${e(entry.program)}" placeholder="如 CA、MF、LH" maxlength="2" autocomplete="off" spellcheck="false" data-setting-control /></label>
       <label class="field"><span>会员号</span><input data-membership-field="number" value="${e(maskIdentity(entry.number))}" maxlength="64" autocomplete="off" spellcheck="false" data-setting-control /></label>
-      <label class="field"><span>会员等级（可选）</span><input data-membership-field="tier" value="${e(entry.tier)}" maxlength="40" autocomplete="off" data-setting-control /></label>
     </div></fieldset>`).join('');
-  return `<h3>常旅客资料</h3><div class="profile-documents">${rows}</div>`;
+  const add = memberships.length < MAX_MEMBERSHIPS ? '<button type="button" class="button secondary small" data-membership-add data-setting-control>＋ 添加常旅客计划</button>' : '';
+  return `<h3>常旅客资料</h3>${rows ? `<div class="profile-documents">${rows}</div>` : ''}${add}`;
 }
 export function personalProfilePanel(value, error = '') {
   const profile = { ...personalProfile(), ...value };
@@ -78,12 +77,19 @@ export function bindPersonalProfileForm(form, { profile = {}, change, restructur
     restructure(draft);
     form.ownerDocument.querySelector('#profile-form [data-profile-add]')?.focus();
   });
+  form.querySelector('[data-membership-add]')?.addEventListener('click', () => {
+    const draft = collectPersonalProfile(form);
+    const id = crypto.randomUUID();
+    draft.memberships.push({ id, program: '', number: '' });
+    restructure(draft);
+    form.ownerDocument.querySelector(`[data-membership-id="${id}"] [data-membership-field="program"]`)?.focus();
+  });
   for (const button of form.querySelectorAll('[data-membership-remove]')) button.addEventListener('click', () => {
     const id = button.closest('[data-membership-id]').dataset.membershipId;
     const draft = collectPersonalProfile(form);
     draft.memberships = draft.memberships.filter(entry => entry.id !== id);
     restructure(draft);
-    form.ownerDocument.querySelector('#profile-form [data-membership-remove], #profile-form [type="submit"]')?.focus();
+    form.ownerDocument.querySelector('#profile-form [data-membership-add]')?.focus();
   });
 }
 export function personalProfileSummary(value) {
@@ -91,5 +97,5 @@ export function personalProfileSummary(value) {
   if (!hasPersonalProfile(profile)) return '未设置';
   return [...PROFILE_FIELDS.filter(([key])=>profile[key]).map(([key,label])=>`${label}：${profile[key]}`),
     ...profile.documents.map(doc=>`${documentName(doc)}：${maskedDocument(doc.number, doc.type) || '未填号码'}${doc.expiry ? ' · 有效期至 '+doc.expiry : ''}`),
-    ...(profile.memberships || []).map(entry => `${entry.program}：${maskIdentity(entry.number)}${entry.tier ? ' · ' + entry.tier : ''}`)].join('\n');
+    ...(profile.memberships || []).map(entry => `${entry.program}：${maskIdentity(entry.number)}`)].join('\n');
 }

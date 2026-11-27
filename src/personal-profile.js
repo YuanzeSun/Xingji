@@ -11,7 +11,8 @@ export const PROFILE_FIELDS = [
 ];
 export const GENDER_OPTIONS = [['','未设置'],['男','男'],['女','女']];
 export const DOCUMENT_TYPES = { 'national-id':'居民身份证', passport:'护照', 'hk-macau-permit':'港澳通行证', 'taiwan-permit':'台湾通行证', 'residence-permit':'居留证', other:'其他证件' };
-const MAX_MEMBERSHIPS = 20;
+export const MAX_MEMBERSHIPS = 20;
+const membershipProgram = value => value.normalize('NFKC').trim().toUpperCase();
 const text = (value, label, max = 100) => {
   if (value === undefined) return '';
   if (typeof value !== 'string' || value.length > max) throw new Error(`${label}格式无效或过长`);
@@ -26,21 +27,29 @@ const fullDate = (value, label) => {
 function normalizeMemberships(value = []) {
   if (!Array.isArray(value) || value.length > MAX_MEMBERSHIPS) throw new Error(`最多保存 ${MAX_MEMBERSHIPS} 个常旅客计划`);
   const ids = new Set();
+  const programs = new Set();
   const entries = [];
   for (const entry of value) {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('常旅客资料格式无效');
-    const program = text(entry.program, '计划名称', 80);
+    const program = membershipProgram(text(entry.program, '计划航司代码'));
     const number = text(entry.number, '会员号', 64).normalize('NFKC').replace(/\s+/gu, '').toUpperCase();
-    const tier = text(entry.tier, '会员等级', 40);
-    if (!program && !number && !tier) continue;
-    if (!program || !number) throw new Error('常旅客计划请填写计划名称和会员号');
+    if (!program && !number) continue;
+    if (!program || !number) throw new Error('请填写计划航司代码和会员号');
+    if (!/^(?:[A-Z][A-Z0-9]|\d[A-Z])$/.test(program)) throw new Error('计划航司请填写两位代码，如 CA 或 MF');
+    if (programs.has(program)) throw new Error(`计划航司 ${program} 已添加，每个计划航司只能保存一个会员号`);
     if (!/^[A-Z0-9][A-Z0-9-]{0,63}$/.test(number)) throw new Error('会员号请填写完整号码，可包含字母、数字和连字符');
     const id = text(entry.id, '常旅客资料编号');
     if (!/^[A-Za-z0-9_-]{1,100}$/.test(id) || ids.has(id)) throw new Error('常旅客资料编号无效或重复');
     ids.add(id);
-    entries.push({ id, program, number, tier });
+    programs.add(program);
+    entries.push({ id, program, number });
   }
   return entries;
+}
+
+export function profileMembershipNumber(profile, carrier) {
+  const program = membershipProgram(carrier);
+  return profile?.memberships?.find(entry => entry.program === program)?.number || '';
 }
 export function personalProfile(value = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('个人资料格式无效');
