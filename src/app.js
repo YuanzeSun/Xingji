@@ -5,7 +5,7 @@ import {takeField} from './record-merge-metadata.js';
 import {boardingJourneyMarkup} from './boarding-details.js';
 import {calendarDate,JOURNEY_DATE_FIELDS} from './journey-date.js';
 import {ticketFieldLocked,refreshTicketFieldLocks} from './barcode-fields.js';
-import {ACTUAL_FLIGHT_FIELDS, FLIGHT_DATE_DEFAULT_ATTR, flightTimeZoneLabel} from './flight-times.js';
+import {ACTUAL_FLIGHT_FIELDS, FLIGHT_DATE_DEFAULT_ATTR, flightTimeWarnings, flightTimeZoneLabel} from './flight-times.js';
 import {boardingGeneratorMarkup,readBoardingGenerator,refreshBoardingPassenger} from './boarding-code-generator.js';
 import {fieldSourceBadge,hasFieldValue,isRailPointsRecord,markFieldSources,railImportFieldLocked,refreshFieldSources} from './field-sources.js';
 import { bindIdentityInput, maskIdentity, printedIdentityHint } from './identity.js';
@@ -895,6 +895,30 @@ function setImportReference(image) {
   localFileURL = image ? URL.createObjectURL(image) : null;
 }
 const modalHead = (title, subtitle = '') => `<div class="modal-heading"><div><h2>${title}</h2>${subtitle ? `<p>${subtitle}</p>` : ''}</div><button class="icon-button" data-action="close-modal" aria-label="关闭对话框">${icon('close')}</button></div>`;
+function reviewFlightTimes(warnings) {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'modal';
+  dialog.setAttribute('aria-labelledby', 'flight-time-review-title');
+  dialog.setAttribute('aria-describedby', 'flight-time-review-details');
+  dialog.innerHTML = `<div class="modal-heading"><h2 id="flight-time-review-title">核对航班时间</h2></div>
+    <div class="detail-body" id="flight-time-review-details"><ul>${warnings.map(warning => `<li>${e(warning)}</li>`).join('')}</ul></div>
+    <div class="modal-footer"><button class="button secondary" type="button" autofocus>返回修改</button>
+    <div class="spacer"></div><button class="button primary" type="button" data-confirm-flight-times>仍然保存</button></div>`;
+  return new Promise(resolve => {
+    const finish = accepted => {
+      modalCancel = null;
+      dialog.close();
+      dialog.remove();
+      resolve(accepted);
+    };
+    modalCancel = () => finish(false);
+    dialog.addEventListener('cancel', event => { event.preventDefault(); finish(false); });
+    dialog.querySelector('[autofocus]').addEventListener('click', () => finish(false));
+    dialog.querySelector('[data-confirm-flight-times]').addEventListener('click', () => finish(true));
+    modalRoot.append(dialog);
+    dialog.showModal();
+  });
+}
 function reviewDuplicateTicket(incoming, review) {
   const ticketLine = record => [record.service, formatDate(record.departureDate), record.departureTime,
     `${record.origin || '出发地'} → ${record.destination || '到达地'}`, record.passenger].filter(Boolean).join(' · ');
@@ -1429,10 +1453,17 @@ function editRecord(record, {
       validateTicketForm(draft);
       flightStopEditor?.commit();
     } catch (error) { showError(error); return; }
-    release = freezeForm(form, '保存中…');
+    let returnToEditor = false;
     try {
       const saveDraft = flight ? restoreUneditedSharedFields({ ...draft }) : draft;
       const checked = validateRecord({ ...saveDraft, updatedAt: now(), sources: draft.sources.length ? draft.sources : [{ kind: 'manual', label: '录入', at: now() }] });
+      const warnings = flightTimeWarnings(checked);
+      release = freezeForm(form, warnings.length ? '核对时间…' : '保存中…');
+      if (warnings.length) {
+        if (!(await reviewFlightTimes(warnings))) { returnToEditor = true; return; }
+        if (!form.isConnected || !isArchiveContext(context)) return;
+        form.querySelector('[type="submit"]').innerHTML = icon('refresh', 'spin') + '保存中…';
+      }
       let result;
       if (editingSaved && !imported) {
         await persist([], { ticket: checked, original, sharedEdits });
@@ -1450,7 +1481,12 @@ function editRecord(record, {
         render();
         toast(savedMessage());
       }
-    } catch (err) { release(); release = () => {}; applyAccessPolicy(); showError(err); } finally { release(); applyAccessPolicy(); }
+    } catch (err) { release(); release = () => {}; applyAccessPolicy(); showError(err); }
+    finally {
+      release();
+      applyAccessPolicy();
+      if (returnToEditor && form.isConnected) form.querySelector('[type="submit"]').focus();
+    }
   });
   function applyEditorLookup(changes, source) {
     lookupApplying=true;

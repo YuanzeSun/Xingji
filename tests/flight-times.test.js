@@ -1,7 +1,7 @@
 import {calendarDate} from '../src/journey-date.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {ACTUAL_FLIGHT_FIELDS,validateFlightTimes} from '../src/flight-times.js';
+import {ACTUAL_FLIGHT_FIELDS,flightTimeWarnings,validateFlightTimes} from '../src/flight-times.js';
 import {flightCandidates,flightCompletion} from '../src/flight-lookup-model.js';
 import {createRecord,archive,readArchive} from '../src/model.js';
 import {mapFlightResult} from '../src/importers.js';
@@ -37,6 +37,20 @@ test('flight saves reject reversed planned and actual trips using airport time z
   });
   assert.doesNotThrow(() => check({ destination:'LHR', departureTime:'18:00', arrivalDate:'2026-11-16', arrivalTime:'16:00' }));
   assert.doesNotThrow(() => check({ arrivalDate:'2026-11-17', arrivalTime:'00:30' }));
+});
+
+test('flight time warnings compare clocks across dates and use inclusive duration thresholds', () => {
+  const warnings = extra => flightTimeWarnings(createRecord({ ...base, ...extra }));
+  assert.deepEqual(warnings({}), []);
+  assert.deepEqual(warnings({ actualDepartureDate:'2026-11-17', actualDepartureTime:'23:30' }), [
+    '计划和实际起飞时间相同（23:30）。'
+  ]);
+  const actual = { actualDepartureDate:'2026-11-16', actualDepartureTime:'23:40', actualArrivalDate:'2026-11-17' };
+  // PEK to HND adds one clock hour. The planned duration is 180 minutes.
+  assert.match(warnings({ ...actual, actualArrivalTime:'06:40' })[0], /2 倍.*360 分钟.*180 分钟/);
+  assert.match(warnings({ ...actual, actualArrivalTime:'02:10' })[0], /一半.*90 分钟.*180 分钟/);
+  assert.deepEqual(warnings({ ...actual, actualArrivalTime:'06:39' }), []);
+  assert.deepEqual(warnings({ ...actual, actualArrivalTime:'02:11' }), []);
 });
 
 test('provider timestamps map to distinct airport-local events, and distance accepts only the documented kilometre value',()=>{

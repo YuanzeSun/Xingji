@@ -135,7 +135,15 @@ test('archive entries preselect each transport and share a switchable editor',as
         fillAll({arrivalDateYear:'',arrivalDateMonth:'',arrivalDateDay:'',arrivalTime:'',
           actualArrivalDateYear:'',actualArrivalDateMonth:'',actualArrivalDateDay:'',actualArrivalTime:''});
       }
-      fill('price','123');await submit();assert.equal(server.records().find(row=>row.id===ticket.id).type,ticket.type);
+      fill('price','123');
+      const saved = submit();
+      if (ticket.type === 'flight') {
+        const review = document.querySelector('dialog[aria-labelledby="flight-time-review-title"]');
+        assert.match(review.textContent, /起飞时间相同/);
+        review.querySelector('[data-confirm-flight-times]').click();
+      }
+      await saved;
+      assert.equal(server.records().find(row=>row.id===ticket.id).type,ticket.type);
       if (ticket.type === 'flight') {
         const updated = server.records().find(row=>row.id===ticket.id);
         assert.equal(updated.arrivalDate,'');

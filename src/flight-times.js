@@ -41,3 +41,20 @@ export function validateFlightTimes(record) {
     }
   }
 }
+
+export function flightTimeWarnings(record) {
+  if (record.type !== 'flight') return [];
+  const warnings = [];
+  const { departureTime, actualDepartureTime, arrivalTime, actualArrivalTime } = record;
+  if (departureTime && departureTime === actualDepartureTime) warnings.push(`计划和实际起飞时间相同（${departureTime}）。`);
+  if (arrivalTime && arrivalTime === actualArrivalTime) warnings.push(`计划和实际到达时间相同（${arrivalTime}）。`);
+
+  const { plannedDeparture, plannedArrival, actualDeparture, actualArrival, plannedMinutes, actualMinutes } = flightTiming(record);
+  const planned = plannedArrival - plannedDeparture;
+  const actual = actualArrival - actualDeparture;
+  if (planned > 0 && actual >= 0) {
+    const difference = actual >= planned * 2 ? '达到计划的 2 倍或以上' : actual * 2 <= planned ? '只有计划的一半或更短' : '';
+    if (difference) warnings.push(`实际在途时间${difference}（实际 ${actualMinutes} 分钟，计划 ${plannedMinutes} 分钟）。`);
+  }
+  return warnings;
+}
