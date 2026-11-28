@@ -1113,10 +1113,7 @@ function flightEditorSections(record) {
       <div class="form-grid">${fields(...BOARDING_BAGGAGE_FIELDS)}</div>
     </section>`,
     editorSection('航司与票务', fields('airline', 'aircraft', 'aircraftRegistration', 'flightDistance', 'pnr', 'ticketNumber', 'price')),
-    `<details class="editor-extra" ${ACTUAL_FLIGHT_FIELDS.some(key => record[key]) ? 'open' : ''}>
-      <summary>实际起降</summary>
-      <div class="form-grid">${fields(...ACTUAL_FLIGHT_FIELDS)}</div>
-    </details>`,
+    editorSection('实际起降', fields(...ACTUAL_FLIGHT_FIELDS)),
     boardingLoyaltyEditor(record)
   ].join('');
 }
