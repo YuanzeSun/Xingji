@@ -5,7 +5,6 @@ import { indexedDB } from 'fake-indexeddb';
 import { createRecord, validateRecord } from '../src/model.js';
 import { flightTrackDistanceKm, flightTrackRequest, readFlightTrack } from '../src/flight-track.js';
 import { journeyNetwork, longitudeCenter, networkGeometry } from '../src/journey-map-model.js';
-import { journeyStatistics } from '../src/statistics-model.js';
 import { prepareCloud } from './helpers/cloud.js';
 import { solarTerminator, subsolarPoint } from '../src/solar-terminator.js';
 import { AIRPORT_POINTS } from '../src/data/map-reference.js';
@@ -152,7 +151,8 @@ test('flight track queries run in the editor and saved tracks replay in details'
     assert.deepEqual(requests, [{ name: 'getFlightTrackLine', arguments: { flightStr } }]);
     assert.deepEqual(server.records()[0].flightTrack.segments, coordinates);
     assert.equal(server.records()[0].passenger, 'TEST/PASSENGER');
-    assert.match(element('[data-flight-track-source]').textContent, /航迹约 [\d,.]+ km/);
+    const distanceLabel = flightTrackDistanceKm({ segments: coordinates }).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+    assert.ok(element('[data-flight-track-source]').textContent.includes(`航迹约 ${distanceLabel} km`));
     const svg = element('.flight-track-frame svg'), [first, second] = svg.querySelectorAll('.flight-track-highlight path');
     assert.ok(Number(svg.getAttribute('viewBox').split(' ')[2]) < 400, 'fits across the date line');
     const cityLabels = [...svg.querySelectorAll('.route-city text')].map(label => label.textContent);
@@ -244,10 +244,6 @@ test('flight track queries run in the editor and saved tracks replay in details'
     const savedFlight = await waitFor(() => server.records().find(record => record.service === 'MF8179'));
     assert.equal(savedFlight.aircraftRegistration, 'B-5846');
     assert.deepEqual(savedFlight.flightTrack.segments, domesticCoordinates);
-    const mileage = journeyStatistics(server.records(), { dateTo: '2026-11-24' }, '2026-11-24');
-    assert.equal(mileage.actualFlightDistanceTrips, 2);
-    const expected = flightTrackDistanceKm({ segments: coordinates }) + flightTrackDistanceKm({ segments: domesticCoordinates });
-    assert.equal(mileage.actualFlightDistance, expected);
     assert.deepEqual(requests.slice(1), [
       { name: 'getFlightStatus', arguments: { fnum: 'MF8179', date: '2026-08-11' } },
       { name: 'getAircraftRotation', arguments: { fnum: 'MF8179', date: '2026-08-11', dep: 'PKX', arr: 'XNN' } },

@@ -55,27 +55,27 @@ test('repeat visits group physical vehicle IDs and expose only the included trip
   }
 });
 
-test('rail mileage and flown distance share the date filter and show independent coverage', () => {
-  const base = flight({ id: 'tracked', service: 'CA123', flightDistance: '750' });
+test('rail and flight mileage count recorded values within the date range independently of tracks', () => {
+  const base = flight({ id: 'tracked', service: 'CA123', flightDistance: '750.5' });
   const tracked = createRecord({ ...base, flightTrack: {
     flightStr: flightTrackRequest(base), queriedAt: '2024-03-02T00:00:00Z',
     segments: [[[179, 0], [-179, 0]], [[30, 0], [31, 0]]]
   } });
   const rows = [
     rail({ railMileage: '1318' }), tracked, flight({ id: 'untracked', flightDistance: '9999' }),
+    createRecord({ ...tracked, id: 'track-only', flightDistance: '' }),
     createRecord({ ...tracked, id: 'void', flightStatus: 'invalid' }),
     createRecord({ ...tracked, id: 'deleted', deleted: true })
   ];
   const all = journeyStatistics(rows, range);
   assert.equal(all.railMileage, 1318);
   assert.equal(all.railMileageTrips, 1);
-  assert.equal(all.flight, 2);
-  assert.equal(all.actualFlightDistanceTrips, 1);
-  // These are two disconnected segments at the equator, spanning two degrees and one degree.
-  assert.ok(Math.abs(all.actualFlightDistance - 333.585) < 0.001);
+  assert.equal(all.flight, 3);
+  assert.equal(all.flightMileageTrips, 2);
+  assert.equal(all.flightMileage, 10749.5);
   const beforeFlight = journeyStatistics(rows, { ...range, dateTo: '2024-02-29' });
-  assert.equal(beforeFlight.actualFlightDistance, 0);
-  assert.equal(beforeFlight.actualFlightDistanceTrips, 0);
+  assert.equal(beforeFlight.flightMileage, 0);
+  assert.equal(beforeFlight.flightMileageTrips, 0);
   assert.equal(beforeFlight.railMileage, 1318);
 
   const dom = new JSDOM('<div id="root"></div>');
@@ -83,7 +83,7 @@ test('rail mileage and flown distance share the date filter and show independent
   const unmount = mountStatistics(root, rows, { options: { ...range } });
   const [railCard, flightCard] = root.querySelectorAll('.statistics-journey-metrics > section');
   assert.match(railCard.textContent, /铁路里程.*1,318 km.*1 \/ 1/);
-  assert.match(flightCard.textContent, /实际飞行航程.*333\.6 km.*1 \/ 2/);
+  assert.match(flightCard.textContent, /飞行里程.*10,749\.5 km.*2 \/ 3 程已收录里程/);
   unmount();
   dom.window.close();
 });
@@ -116,7 +116,7 @@ test('rail and flight travel times are totaled independently across dates, time 
   const cards = () => [...root.querySelectorAll('.statistics-journey-metrics > section')];
   assert.deepEqual(cards().map(card => card.querySelector('h2').textContent), ['火车', '飞机']);
   assert.deepEqual(cards().map(card => [...card.querySelectorAll('dt')].map(label => label.textContent)), [
-    ['乘坐次数', '火车站数', '铁路里程', '总在途时间', '总金额'], ['航班数', '机场数', '实际飞行航程', '总在途时间', '总金额']
+    ['乘坐次数', '火车站数', '铁路里程', '总在途时间', '总金额'], ['航班数', '机场数', '飞行里程', '总在途时间', '总金额']
   ]);
   const duration = index => [...cards()[index].querySelectorAll('dt')].find(label => label.textContent === '总在途时间').parentElement.textContent;
   assert.match(duration(0), /总在途时间.*1 小时 40 分.*1 \/ 3 程可计算/);

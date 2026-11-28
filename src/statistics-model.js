@@ -9,7 +9,6 @@ import { flightNumber } from './flight-query.js';
 import { dateInterval } from './search.js';
 import { CONTINENT_AIRPORT_CODES } from './data/airport-geography.js';
 import { isJourneyRecord } from './record-kind.js';
-import { flightTrackDistanceKm } from './flight-track.js';
 import { normalizeRailBureau } from './rail-details.js';
 import { railModelsForRecord } from './rail-model-statistics.js';
 import { railText, railTrainsetIds } from './rail-journey.js';
@@ -81,7 +80,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   const railModels = new Map(), railBureaus = new Map(), airlines = new Map(), railLines = new Map();
   const trainsets = new Map(), registrations = new Map(), unknownAircraftCounts = new Map();
   let unknownAirlines = 0;
-  let actualFlightDistance = 0, actualFlightDistanceTrips = 0;
+  let flightMileage = 0, flightMileageTrips = 0;
   let rail = 0, flight = 0, railMileage = 0, railMileageTrips = 0;
   let railLineTrips = 0, arrivalDelayTrips = 0;
   const travelTime = { rail: { minutes: 0, trips: 0 }, flight: { minutes: 0, trips: 0 } };
@@ -150,10 +149,9 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     const airline = flightAirline(record, options.marketingAirlines);
     if (airline) airlines.set(airline, (airlines.get(airline) || 0) + 1);
     else unknownAirlines++;
-    const trackDistance = flightTrackDistanceKm(record.flightTrack);
-    if (trackDistance > 0) {
-      actualFlightDistance += trackDistance;
-      actualFlightDistanceTrips++;
+    if (record.flightDistance) {
+      flightMileage += Number(record.flightDistance);
+      flightMileageTrips++;
     }
     const classification = aircraftClassification(record.aircraft);
     if (classification) {
@@ -178,7 +176,8 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     continents: [...continents].sort().map(code => ({ code, name: CONTINENTS[code] })),
     aircraft: ranked(aircraft), airlines: ranked(airlines), unidentifiedAircraft,
     railMileage: Math.round(railMileage * 1000) / 1000,
-    railMileageTrips, actualFlightDistance, actualFlightDistanceTrips, travelTime, fares,
+    flightMileage: Math.round(flightMileage * 1000) / 1000,
+    railMileageTrips, flightMileageTrips, travelTime, fares,
     railModels: ranked(railModels), railBureaus: ranked(railBureaus),
     railLines: ranked(railLines), railLineTrips, arrivalDelayTrips,
     arrivalDelays: [...arrivalDelays].sort(([a], [b]) => a - b).map(([minutes, count]) => ({ minutes, count })),

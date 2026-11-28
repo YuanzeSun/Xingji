@@ -95,7 +95,7 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       ['飞机', data.flight, [
         ['航班数', metricMarkup(data.flight, '班')],
         ['机场数', metricMarkup(data.airports.length, '个')],
-        ['实际飞行航程', metricMarkup(data.actualFlightDistance, 'km', 1), data.actualFlightDistanceTrips, '程已收录航迹'],
+        ['飞行里程', metricMarkup(data.flightMileage, 'km', 1), data.flightMileageTrips, '程已收录里程'],
         ['总在途时间', durationMarkup(flight.minutes), flight.trips, '程可计算'],
         fareMetric(data.fares.flight)
       ]]
