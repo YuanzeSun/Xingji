@@ -13,6 +13,7 @@ test('a fresh visitor can browse examples without GitHub, then return to the con
   const requests=[];globalThis.fetch=async url=>{requests.push(String(url));return new Response('{}',{status:404});};
   const db=await import('../src/db.js');
   const sampleCount=demoRecords().length;
+  const renderedTickets=()=>document.querySelectorAll('.ticket-card .ticket-preview').length;
   const wait=async predicate=>{for(let i=0;i<300;i++){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail('Guest demo did not settle');};
   const click=selector=>{const button=document.querySelector(selector);assert.ok(button,selector);button.click();};
   try{
@@ -20,7 +21,10 @@ test('a fresh visitor can browse examples without GitHub, then return to the con
     assert.equal(document.querySelector('[data-action="enter-demo"]').textContent,'进入示例模式');
     const owner=document.querySelector('[name="owner"]');owner.value='draft-owner';owner.dispatchEvent(new window.Event('input',{bubbles:true}));
     click('[data-action="enter-demo"]');
-    await wait(()=>document.querySelectorAll('.ticket-card').length===sampleCount);
+    await wait(()=>renderedTickets()===sampleCount);
+    const stack=document.querySelector('.ticket-stack');
+    assert.match(stack.querySelector('.card-service').textContent,/CA181 \/ NH108/);
+    assert.equal(stack.querySelectorAll('[data-boarding-baggage-sticker]').length,1);
     assert.equal(await db.get('showDemo'),true);assert.equal(document.querySelector('.cloud-setup'),null);
     for(const page of ['map','statistics','archive']){
       click('nav [data-page="'+page+'"]');await wait(()=>document.querySelector('nav [data-page="'+page+'"][aria-current="page"]'));
@@ -35,8 +39,9 @@ test('a fresh visitor can browse examples without GitHub, then return to the con
     assert.equal(await db.get('showDemo'), false);
     assert.equal(document.querySelector('[name="owner"]').value, 'draft-owner');
     click('[data-action="enter-demo"]');
-    await wait(() => document.querySelectorAll('.ticket-card').length === sampleCount);
-    click('[data-action="view"][data-id="demo-2"]');await wait(()=>document.querySelector('.detail-grid'));
+    await wait(() => renderedTickets() === sampleCount);
+    click('.ticket-stack [data-action="view"][data-id="demo-12"]');await wait(()=>document.querySelector('.detail-grid'));
+    assert.equal(document.querySelector('.heading-service').textContent,'NH108');
     assert.equal(document.querySelector('#modal-root [data-action="edit"],#modal-root [data-action="delete"]'),null);click('[data-action="close-modal"]');
     for(const page of ['data','import']){location.hash=page;await wait(()=>location.hash==='#archive');assert.equal(document.querySelector('#github-form,#profile-form,#import-text'),null);}
     assert.deepEqual(await db.get('records',[]),[]);assert.equal(await db.get('github'),undefined);

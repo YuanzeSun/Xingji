@@ -50,6 +50,19 @@ export function demoRecords(today=todayDate()){
     aircraft, aircraftRegistration, actualArrivalTime, pnr: `DEMO0${3 + index}`, ticketNumber: `781000000000${2 + index}`,
     ...(index === 0 ? { baggageTagNumbers: '7810000102', checkedBaggageCount: '1', checkedBaggageWeight: '9' } : {})
   }));
+  const tokyoConnection = {
+    type: 'flight', template: 'air-boarding-pass', departureDate: recent(3),
+    passenger: 'EXAMPLE/TRAVELER', identity: 'P00000000', pnr: 'DEMO02', ticketNumber: '9990000000002', price: '2680.00',
+    baggageTagNumbers: '9990000201–9990000202', checkedBaggageCount: '2', checkedBaggageWeight: '23',
+    frequentFlyerCarrier: 'CA', frequentFlyerNumber: '000087654321', seatClass: 'Y'
+  };
+  const onward = {
+    ...tokyoConnection, id: 'demo-12', service: 'NH108', airline: '全日空', marketingCarrier: 'NH',
+    origin: '东京羽田', destination: '旧金山', originCode: 'HND', destinationCode: 'SFO',
+    departureTime: '22:55', arrivalTime: '15:30', actualDepartureTime: '23:07', actualArrivalTime: '15:44',
+    departureTerminal: 'T3', arrivalTerminal: 'I', gate: '109', boardingTime: '22:15', seat: '18A',
+    aircraft: '787-9', aircraftRegistration: 'JA-DEMO1', flightDistance: '8300'
+  };
   const g21 = {id:'demo-1',type:'rail',template:'rail-receipt',departureDate:recent(1),origin:'北京南',destination:'南京南',service:'G21',carriage:'05',seat:'08F',seatClass:'二等座',price:'503.0',issuer:'北京南',railShowIssuer:true,gate:'16A',railPlatform:'8'};
   const rows=[
     g21,
@@ -57,17 +70,24 @@ export function demoRecords(today=todayDate()){
     {id:'demo-3',type:'rail',template:'rail-blue',departureDate:'2018-10-01',origin:'杭州东',destination:'南京南',service:'G7602',carriage:'03',seat:'12A',seatClass:'二等座',price:'117.5',issuer:'杭州东',gate:'7',railPlatform:'7',provenance:'reconstruction'},
     {id:'demo-4',type:'rail',template:'rail-red-classic',departureDate:'2014-07-12',origin:'北京',destination:'齐齐哈尔',service:'Z83',carriage:'09',seat:'015号下铺',seatClass:'硬卧',price:'363.0',issuer:'北京',gate:'2',railPlatform:'5',provenance:'reconstruction'},
     {id:'demo-5',type:'rail',template:'rail-receipt',departureDate:recent(2),origin:'广州南',destination:'深圳北',service:'G6203',carriage:'07',seat:'06C',seatClass:'二等座',price:'74.5',issuer:'广州南',gate:'B18',railPlatform:'18'},
-    {id:'demo-6',type:'flight',template:'air-boarding-pass',departureDate:recent(3),departureTime:'15:40',arrivalTime:'19:50',boardingTime:'15:00',actualDepartureTime:'15:48',actualArrivalTime:'19:55',origin:'北京首都',destination:'东京羽田',originCode:'PEK',destinationCode:'HND',service:'CA181',airline:'中国国际航空',seat:'24K',seatClass:'Y',departureTerminal:'T3',arrivalTerminal:'T3',gate:'E23',aircraft:'A330-343',aircraftRegistration:'B-0002',flightDistance:'2100',pnr:'DEMO02',baggageTagNumbers:'9990000201–9990000202',checkedBaggageCount:'2',checkedBaggageWeight:'23',frequentFlyerCarrier:'CA',frequentFlyerNumber:'000087654321',marketingCarrier:'CA',price:'2680.00',ticketNumber:'9990000000002',passenger:'EXAMPLE/TRAVELER',identity:'P00000000'},
+    {
+      ...tokyoConnection, id: 'demo-6', service: 'CA181', airline: '中国国际航空', marketingCarrier: 'CA',
+      origin: '北京首都', destination: '东京羽田', originCode: 'PEK', destinationCode: 'HND',
+      departureTime: '15:40', arrivalTime: '19:50', actualDepartureTime: '15:48', actualArrivalTime: '19:55',
+      departureTerminal: 'T3', arrivalTerminal: 'T3', gate: 'E23', boardingTime: '15:00', seat: '24K',
+      aircraft: 'A330-343', aircraftRegistration: 'B-0002', flightDistance: '2100'
+    },
     {id:'demo-7',type:'rail',template:'rail-red',departureDate:'2017-09-10',origin:'北京南',destination:'天津',service:'C2021',carriage:'01',seat:'02A',seatClass:'二等座',price:'57.0',issuer:'北京南',gate:'18',railPlatform:'9',provenance:'reconstruction'},
     ...boeingExamples,
-    {...g21,id:'demo-11',departureDate:recent(7),seat:'10A'}
+    {...g21,id:'demo-11',departureDate:recent(7),seat:'10A'},
+    onward
   ];
   const marks={'demo-1':[{text:'网',shape:'circle'}],'demo-3':[{text:'网',shape:'plain'}],'demo-4':[{text:'网',shape:'circle'}],'demo-5':[{text:'网',shape:'circle'},{text:'学',shape:'circle'}],'demo-7':[{text:'网',shape:'plain'}]};
   return rows.map((row,index)=>{
     const serial = String(index + 1);
     const values={passenger:'示例旅客',identity:'110101199001010000',provenance:'commemorative',createdAt:verifiedAt,updatedAt:verifiedAt,...row};
-    const syntheticFlight = boeingExamples.includes(row);
-    const label = syntheticFlight ? '虚构航班与执飞记录，用于展示机型统计' : '示例行程，部分班次及线路引用公开资料';
+    const syntheticFlight = row === onward || boeingExamples.includes(row);
+    const label = row === onward ? '虚构联程航段' : syntheticFlight ? '虚构航班与执飞记录，用于展示机型统计' : '示例行程，部分班次及线路引用公开资料';
     values.sources=[{kind:'demo',label,at:verifiedAt}];
     values.fieldSources={};
     if(row.type==='rail'){

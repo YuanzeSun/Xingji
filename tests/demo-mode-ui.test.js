@@ -30,7 +30,7 @@ test('sample mode exposes only browsing pages and preserves private records when
     for(const page of ['data','import']){location.hash=page;await wait(()=>location.hash==='#archive');assert.equal(document.querySelector('#profile-form,#github-form,#import-text'),null);}
     await go('archive','我的票据');
     const sampleCount = demoRecords().length;
-    assert.equal(document.querySelectorAll('.ticket-card').length, sampleCount);
+    assert.equal(document.querySelectorAll('.ticket-card .ticket-preview').length, sampleCount);
     assert.equal(document.querySelector('.nav-count').textContent, String(sampleCount));
     assert.ok([...document.querySelectorAll('.ticket-card [data-action="view"]')].every(button => button.dataset.id.startsWith('demo-')));
     assert.deepEqual(await db.get('records'), [original]);

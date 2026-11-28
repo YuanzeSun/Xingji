@@ -10,15 +10,17 @@ import {readBoardingCode} from '../src/bcbp.js';
 import {validateTicketForm} from '../src/ticket-form.js';
 import {journeyStatistics} from '../src/statistics-model.js';
 import {ticketSVG} from '../src/tickets.js';
+import {boardingBaggageIndex,withBoardingBaggage} from '../src/boarding-baggage.js';
 
-test('four sample journeys stay recent across month and year boundaries while historical ticket styles keep their dates',()=>{
+test('recent sample journeys follow the date across month and year boundaries while historical tickets keep their dates',()=>{
   for(const today of ['2026-11-17','2027-01-02']){
     const rows=demoRecords(today),recent=rows.filter(record=>Date.parse(today)-Date.parse(calendarDate(record.departureDate))>0 && Date.parse(today)-Date.parse(calendarDate(record.departureDate))<=3*86400000);
-    assert.equal(rows.length,11);assert.equal(recent.length,4);assert.equal(recent.filter(record=>record.type==='rail').length,2);assert.equal(recent.filter(record=>record.type==='flight').length,2);
+    assert.equal(rows.length,12);assert.equal(recent.length,5);assert.equal(recent.filter(record=>record.type==='rail').length,2);assert.equal(recent.filter(record=>record.type==='flight').length,3);
     assert.equal(calendarDate(rows.find(record=>record.template==='rail-blue').departureDate),'2018-10-01');assert.equal(calendarDate(rows.find(record=>record.template==='rail-red-classic').departureDate),'2014-07-12');assert.equal(calendarDate(rows.find(record=>record.template==='rail-red').departureDate),'2017-09-10');
     for(const record of rows){assert.doesNotThrow(()=>validateTicketForm(record));assert.ok(calendarDate(record.departureDate)<=calendarDate(record.arrivalDate));for(const key of ['passenger','identity','origin','destination','departureTime','arrivalTime','price','gate','ticketNumber','departureZone','arrivalZone'])assert.ok(record[key],record.id+' '+key);assert.equal(Object.hasOwn(record, 'orderNumber'),record.type==='rail');}
     const statistics=journeyStatistics(rows,{dateTo:today},today);
-    assert.equal(statistics.flight,5);assert.equal(statistics.rail,6);
+    assert.equal(statistics.flight,6);assert.equal(statistics.rail,6);
+    assert.equal(statistics.fares.flight.cents, 612000);
     assert.deepEqual(statistics.repeatedTrainsets.map(({name,count})=>({name,count})),[{name:'CR400BF-B-5099',count:2}]);
     assert.deepEqual(statistics.repeatedAircraft.map(({name,count})=>({name,count})),[{name:'B-DEMO1',count:2}]);
   }
@@ -50,18 +52,23 @@ test('every sample train has an offline route with line names, a complete timeta
 
 test('demo flights have independent boarding codes and cover the aircraft grouping options',()=>{
   const rows=demoRecords('2026-11-17').filter(record=>record.type==='flight');
+  const baggage = boardingBaggageIndex(rows);
   for(const record of rows){
     const code=readBoardingCode(record.boardingCode);assert.equal(record.boardingCodeSource,'generated');assert.equal(code.service,record.service);assert.equal(code.originCode,record.originCode);assert.equal(code.destinationCode,record.destinationCode);assert.equal(code.seat,record.seat);assert.equal(code.cabin,record.seatClass);assert.equal(code.pnr,record.pnr);assert.equal(atob(record.boardingCode.rawBytes)[22],' ');
     for(const key of ['airline','aircraft','aircraftRegistration','departureTerminal','arrivalTerminal','boardingTime','pnr','flightStatus','flightDistance','actualDepartureDate','actualDepartureTime','actualArrivalDate','actualArrivalTime','frequentFlyerCarrier','frequentFlyerNumber','marketingCarrier'])assert.ok(record[key],record.service+' '+key);
-    assert.equal(ticketSVG(record).includes('data-boarding-baggage-sticker'), Boolean(record.checkedBaggageCount));
   }
-  assert.deepEqual(rows.filter(record => record.checkedBaggageCount).map(record => record.service), ['CA181', 'MU9901']);
+  assert.deepEqual(rows.filter(record => baggage.get(record.id)?.sticker).map(record => record.service), ['CA181', 'MU9901']);
+  const first = rows.find(record => record.service === 'CA181'), onward = rows.find(record => record.service === 'NH108');
+  assert.equal(first.ticketNumber, onward.ticketNumber);
+  assert.equal(first.destinationCode, onward.originCode);
+  assert.equal(first.checkedBaggageCount, onward.checkedBaggageCount);
+  assert.match(ticketSVG(withBoardingBaggage(first, baggage)), /TO: SFO NH108 14NOV<.*VIA: HND CA181 14NOV</s);
   assert.equal(rows.find(record=>record.service==='MU5403').destinationCode,'CTU');assert.equal(rows.find(record=>record.service==='CA181').destinationCode,'HND');assert.equal(rows.find(record=>record.service==='CA181').passenger,'EXAMPLE/TRAVELER');
   assert.equal(new Set(rows.map(record=>record.boardingCode.rawBytes)).size, rows.length);
-  assert.deepEqual(rows.slice(2).map(record=>record.aircraft),['737-8Q8','737-800','737-8']);
+  assert.deepEqual(rows.filter(record => record.service.startsWith('MU990')).map(record=>record.aircraft),['737-8Q8','737-800','737-8']);
   const counts = aircraftSubtypes => Object.fromEntries(journeyStatistics(rows,{aircraftSubtypes}).aircraft.map(({name,count})=>[name,count]));
-  assert.deepEqual(counts(true),{'737-800':2,'737 MAX 8':1,A321ceo:1,'A330-300':1});
-  assert.deepEqual(counts(false),{'737':3,A321:1,A330:1});
+  assert.deepEqual(counts(true),{'737-800':2,'737 MAX 8':1,A321ceo:1,'A330-300':1,'787-9':1});
+  assert.deepEqual(counts(false),{'737':3,'787':1,A321:1,A330:1});
   const mileage = journeyStatistics(rows, { dateTo: '2026-11-17' }, '2026-11-17');
   assert.equal(mileage.actualFlightDistanceTrips, 2);
   assert.equal(rows.find(record=>record.service==='MU9901').flightStop.airport, 'WUH');
