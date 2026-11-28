@@ -142,7 +142,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   const onward=(await db.get('records',[])).find(r=>r.service==='NH108');
   const face=id=>document.querySelector('[data-action="view"][data-id="'+id+'"]');
   const firstSticker=face(flight.id).querySelector('[data-boarding-baggage-sticker]');
-  assert.match(firstSticker.textContent,/BEIJING\s+TO: SFO\s+VIA: HND CA981 01JUL\s+BAG: 02\/12/);
+  assert.match(firstSticker.textContent,/BEIJING\s+TO: SFO NH108 02JUL\s+VIA: HND CA981 01JUL\s+BAG: 02\/12/);
   assert.equal(face(onward.id).querySelector('[data-boarding-baggage-sticker]'),null);
   const storedShared = () => server.records().filter(r => [flight.id, onward.id].includes(r.id)).map(record => shared.map(key => record[key]));
   assert.deepEqual(storedShared(), [['0123456789', '2', '12', '950'], ['0123456789', '2', '12', '950']]);

@@ -6,6 +6,10 @@ import { bindUppercaseInputs } from './uppercase-input.js';
 const documentName = doc => doc.label || DOCUMENT_TYPES[doc.type] || '其他证件';
 const maskedDocument = (number, type) => maskRailIdentity(number, { isNationalId: type === 'national-id' });
 const profileNumbers = new WeakMap();
+function profileList(kind, title, rows) {
+  const heading = `profile-${kind}-heading`;
+  return `<h3 id="${heading}">${title}</h3>${rows ? `<div class="profile-documents" data-profile-list="${kind}" role="region" aria-labelledby="${heading}" tabindex="0">${rows}</div>` : ''}`;
+}
 function membershipFields(memberships) {
   const rows = memberships.map((entry, index) => `<fieldset class="profile-document profile-membership" data-membership-id="${e(entry.id)}">
     <legend><span>会员计划 ${index + 1}</span><button type="button" class="text-button danger" data-membership-remove aria-label="移除会员计划 ${index + 1}" data-setting-control>移除</button></legend>
@@ -14,13 +18,13 @@ function membershipFields(memberships) {
       <label class="field"><span>会员号</span><input data-membership-field="number" value="${e(maskIdentity(entry.number))}" maxlength="64" autocomplete="off" spellcheck="false" data-setting-control /></label>
     </div></fieldset>`).join('');
   const add = memberships.length < MAX_MEMBERSHIPS ? '<button type="button" class="button secondary small" data-membership-add data-setting-control>＋ 添加常旅客计划</button>' : '';
-  return `<h3>常旅客资料</h3>${rows ? `<div class="profile-documents">${rows}</div>` : ''}${add}`;
+  return profileList('memberships', '常旅客资料', rows) + add;
 }
 export function personalProfilePanel(value, error = '') {
   const profile = { ...personalProfile(), ...value };
   const docs = value?.documents || [{id:'identity-card',type:'national-id'}, {id:'passport',type:'passport'}];
   const field = ([key,label,type,max]) => `<label class="field"><span>${e(label)}</span>${type === 'select' ? `<select name="${key}" data-setting-control>${GENDER_OPTIONS.map(([value,label])=>`<option value="${value}" ${profile[key] === value ? 'selected' : ''}>${label}</option>`).join('')}</select>` : `<input name="${key}" type="${type}" value="${e(profile[key])}" maxlength="${max}" autocomplete="off" data-setting-control />`}</label>`;
-  return `<section class="panel personal-profile"><div class="panel-heading"><h2>个人常用资料</h2></div><form id="profile-form"><div class="profile-basics form-grid">${PROFILE_FIELDS.map(field).join('')}</div><h3>常用证件</h3><div class="profile-documents">${docs.map((doc,index)=>`<fieldset class="profile-document" data-document-id="${e(doc.id)}"><legend><span>证件 ${index+1}</span><button type="button" class="text-button danger" data-profile-remove="${e(doc.id)}" aria-label="移除证件 ${index+1}" data-setting-control>移除</button></legend><div class="profile-document-fields"><label class="field"><span>证件类型</span><select data-doc-field="type" data-setting-control>${Object.entries(DOCUMENT_TYPES).map(([key,label])=>`<option value="${key}" ${key === doc.type ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="field"><span>证件号码</span><input data-doc-field="number" value="${e(maskedDocument(doc.number, doc.type))}" autocomplete="off" spellcheck="false" maxlength="128" data-setting-control /></label><label class="field"><span>证件备注名</span><input data-doc-field="label" value="${e(doc.label)}" placeholder="可选，如旧护照" maxlength="80" data-setting-control /></label><label class="field"><span>有效期至</span><input type="date" data-doc-field="expiry" value="${e(doc.expiry)}" data-setting-control /></label></div></fieldset>`).join('')}</div><button type="button" class="button secondary small" data-profile-add data-setting-control>＋ 添加其他证件</button>${membershipFields(profile.memberships || [])}<p class="form-error" role="alert">${e(error)}</p><div class="button-row"><button class="button primary" type="submit" data-setting-control>保存个人资料</button></div></form></section>`;
+  return `<section class="panel personal-profile"><div class="panel-heading"><h2>个人常用资料</h2></div><form id="profile-form"><div class="profile-basics form-grid">${PROFILE_FIELDS.map(field).join('')}</div>${profileList('documents', '常用证件', docs.map((doc,index)=>`<fieldset class="profile-document" data-document-id="${e(doc.id)}"><legend><span>证件 ${index+1}</span><button type="button" class="text-button danger" data-profile-remove="${e(doc.id)}" aria-label="移除证件 ${index+1}" data-setting-control>移除</button></legend><div class="profile-document-fields"><label class="field"><span>证件类型</span><select data-doc-field="type" data-setting-control>${Object.entries(DOCUMENT_TYPES).map(([key,label])=>`<option value="${key}" ${key === doc.type ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="field"><span>证件号码</span><input data-doc-field="number" value="${e(maskedDocument(doc.number, doc.type))}" autocomplete="off" spellcheck="false" maxlength="128" data-setting-control /></label><label class="field"><span>证件备注名</span><input data-doc-field="label" value="${e(doc.label)}" placeholder="可选，如旧护照" maxlength="80" data-setting-control /></label><label class="field"><span>有效期至</span><input type="date" data-doc-field="expiry" value="${e(doc.expiry)}" data-setting-control /></label></div></fieldset>`).join(''))}<button type="button" class="button secondary small" data-profile-add data-setting-control>＋ 添加其他证件</button>${membershipFields(profile.memberships || [])}<p class="form-error" role="alert">${e(error)}</p><div class="button-row"><button class="button primary" type="submit" data-setting-control>保存个人资料</button></div></form></section>`;
 }
 function collectRows(form, kind, field = kind) {
   return [...form.querySelectorAll(`[data-${kind}-id]`)].map(row => ({
@@ -62,34 +66,40 @@ export function bindPersonalProfileForm(form, { profile = {}, change, restructur
     const profile = collectPersonalProfile(form);
     change(profile);
   };
+  const rebuild = (draft, focusSelector) => {
+    const positions = new Map([...form.querySelectorAll('[data-profile-list]')].map(list => [list.dataset.profileList, list.scrollTop]));
+    restructure(draft);
+    const updated = form.ownerDocument.getElementById(form.id);
+    if (!updated) return;
+    for (const list of updated.querySelectorAll('[data-profile-list]')) list.scrollTop = positions.get(list.dataset.profileList) || 0;
+    updated.querySelector(focusSelector)?.focus();
+  };
   form.addEventListener('input',capture); form.addEventListener('change',capture); form.addEventListener('submit',submit);
   form.querySelector('[data-profile-add]').addEventListener('click',()=>{
     const profile = collectPersonalProfile(form);
     if (profile.documents.length >= 20) return;
-    profile.documents.push({id:crypto.randomUUID(),type:'other',label:'',number:'',expiry:''});
-    restructure(profile);
+    const id = crypto.randomUUID();
+    profile.documents.push({id,type:'other',label:'',number:'',expiry:''});
+    rebuild(profile, `[data-document-id="${id}"] [data-doc-field="type"]`);
   });
   for (const button of form.querySelectorAll('[data-profile-remove]')) button.addEventListener('click', () => {
     const draft = collectPersonalProfile(form);
     const selectedDocument = draft.documents.find(doc => doc.id === button.dataset.profileRemove);
     if (!selectedDocument || !form.ownerDocument.defaultView.confirm(`移除「${documentName(selectedDocument)}」？保存个人资料后，自动预填和证件匹配将跳过这份证件。`)) return;
     draft.documents = draft.documents.filter(doc => doc.id !== selectedDocument.id);
-    restructure(draft);
-    form.ownerDocument.querySelector('#profile-form [data-profile-add]')?.focus();
+    rebuild(draft, '[data-profile-add]');
   });
   form.querySelector('[data-membership-add]')?.addEventListener('click', () => {
     const draft = collectPersonalProfile(form);
     const id = crypto.randomUUID();
     draft.memberships.push({ id, program: '', number: '' });
-    restructure(draft);
-    form.ownerDocument.querySelector(`[data-membership-id="${id}"] [data-membership-field="program"]`)?.focus();
+    rebuild(draft, `[data-membership-id="${id}"] [data-membership-field="program"]`);
   });
   for (const button of form.querySelectorAll('[data-membership-remove]')) button.addEventListener('click', () => {
     const id = button.closest('[data-membership-id]').dataset.membershipId;
     const draft = collectPersonalProfile(form);
     draft.memberships = draft.memberships.filter(entry => entry.id !== id);
-    restructure(draft);
-    form.ownerDocument.querySelector('#profile-form [data-membership-add]')?.focus();
+    rebuild(draft, '[data-membership-add]');
   });
 }
 export function personalProfileSummary(value) {

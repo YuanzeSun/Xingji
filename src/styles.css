@@ -32,7 +32,8 @@
 .personal-profile .profile-basics{margin-top:22px;grid-template-columns:repeat(4,minmax(0,1fr))}
 .personal-profile h3{font-size:15px;margin:18px 0 12px}
 .personal-profile .button-row{margin-block-start:16px}
-.profile-documents{display:grid;gap:14px;margin-bottom:14px}
+.profile-documents{display:grid;gap:14px;max-height:min(24rem,50vh);margin-bottom:14px;padding:4px;overflow-y:auto;scroll-padding-block:4px;scrollbar-width:thin;scrollbar-color:#9cae96 #edf0e6}
+.profile-documents:focus-visible{outline:2px solid #76906b;outline-offset:2px}
 .profile-document{min-width:0;margin:0;padding:12px 15px;border:1px solid #e0e6dc;border-radius:8px}
 .profile-document legend{padding:0 5px;color:#788970;font-size:13px}
 .profile-document-fields{display:grid;grid-template-columns:1.1fr 1.4fr 1fr 1.1fr;gap:12px}

@@ -4,7 +4,11 @@ import { flightsInDepartureOrder } from './journey-duration.js';
 import { groupFlightTickets } from './flight-ticket-shared.js';
 
 const hasBags = data => BOARDING_BAGGAGE_FIELDS.some(key => data[key]?.trim());
-const destination = record => record.destinationCode || record.destination || '';
+const baggageLeg = record => ({
+  airport: record.destinationCode || record.destination || '',
+  service: record.service,
+  departureDate: record.departureDate
+});
 
 export function boardingBaggage(record) {
   if (Object.hasOwn(record, 'boardingSticker')) return record.boardingSticker;
@@ -27,7 +31,8 @@ export function boardingBaggageIndex(records) {
     const fields = Object.fromEntries(BOARDING_BAGGAGE_FIELDS.map(key =>
       [key, legs.find(record => record[key]?.trim())?.[key] || '']));
     const sticker = Object.values(fields).some(Boolean) ? {
-      ...fields, to: destination(legs.at(-1)), via: legs.slice(0, -1).map(destination).filter(Boolean)
+      ...fields, to: baggageLeg(legs.at(-1)),
+      via: legs.slice(0, -1).reverse().map(baggageLeg).filter(leg => leg.airport)
     } : null;
     legs.forEach((record, index) => result.set(record.id, { sticker: index === 0 ? sticker : null, laterLeg: index > 0 }));
   }
