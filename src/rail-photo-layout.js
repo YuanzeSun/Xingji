@@ -1,7 +1,7 @@
 import { ocrWords } from './ocr-layout.js';
 import { calendarDate } from './journey-date.js';
 import { readRailDateRow } from './scan-date.js';
-import { SEAT_CLASSES } from './seat-classes.js';
+import { RAIL_SEAT_CLASSES } from './seat-classes.js';
 import { printedRailNumber, railFareFromLine, railSeatFromLine, railStationFromRegion, trainCode } from './rail-ticket.js';
 
 function projection(line, anchor) {
@@ -151,7 +151,7 @@ export function railSplitFieldsFromLayout(lines, printed) {
     for (const line of confident.filter(line => /^新(?:\s*空|\s*$)/.test(line.text))) {
       for (const row of joinedRailRows(confident, line)) {
         const label = row.replace(/\s/g, '');
-        if (SEAT_CLASSES.rail.includes(label) && (!printed.seatClass || label === '新空调' + printed.seatClass)) labels.add(label);
+        if (RAIL_SEAT_CLASSES.includes(label) && (!printed.seatClass || label === '新空调' + printed.seatClass)) labels.add(label);
       }
     }
     if (labels.size === 1) fields.seatClass = labels.values().next().value;

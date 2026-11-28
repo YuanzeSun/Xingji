@@ -82,7 +82,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   let unknownAirlines = 0;
   let rail = 0, flight = 0, railMileage = 0, flightMileage = 0;
   let railLineTrips = 0, arrivalDelayTrips = 0;
-  const missing = { railMileage: [], flightMileage: [], railTravelTime: [], flightTravelTime: [] };
+  const missing = { railMileage: [], flightMileage: [], railTravelTime: [], flightTravelTime: [], railFare: [], flightFare: [] };
   const travelTime = { rail: { minutes: 0, trips: 0 }, flight: { minutes: 0, trips: 0 } };
   const fares = { rail: { cents: 0, trips: 0 }, flight: { cents: 0, trips: 0 } };
   const pricedFlightTickets = new Map();
@@ -99,7 +99,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
           pricedFlightTickets.set(ticket, record);
         }
       }
-    }
+    } else missing[record.type === 'rail' ? 'railFare' : 'flightFare'].push(record);
     const { minutes, arrivalDifference: delay } = journeyTiming(record);
     if (minutes) {
       travelTime[record.type].minutes += minutes;
@@ -155,7 +155,7 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
       aircraft.set(model, (aircraft.get(model) || 0) + 1);
     } else {
       const name = String(record.aircraft ?? '').trim();
-      unknownAircraftCounts.set(name, (unknownAircraftCounts.get(name) || 0) + 1);
+      if (name) unknownAircraftCounts.set(name, (unknownAircraftCounts.get(name) || 0) + 1);
     }
     if (endpoints.some(place => !place)) continue;
     const pair = options.mergeDirections ? [...endpoints].sort((a,b)=>a.code.localeCompare(b.code)) : endpoints, id=pair.map(place=>place.code).join('-');

@@ -33,8 +33,9 @@ test('the app saves generated code edits immediately, persists provenance, and k
     assert.ok(document.querySelector('[name="pnr"]').compareDocumentPosition(document.querySelector('[data-bcbp-generator]')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
     assert.equal(document.querySelector('[name="marketingCarrier"], [name="marketingFlightNumber"]'), null);
     assert.equal(document.querySelector('[data-bcbp="operatingFlight"]').disabled, false);
-    fill('seat','20C');submit();await wait(()=>!document.querySelector('dialog'));
+    fill('seat','20C');fill('seatClass','J');submit();await wait(()=>!document.querySelector('dialog'));
     let saved=server.records().find(record=>record.id==='generated');assert.equal(saved.seat,'20C');assert.equal(saved.boardingCodeSource,'generated');assert.equal(readBoardingCode(saved.boardingCode).seat,'20C');
+    assert.equal(saved.seatClass,'J');assert.equal(readBoardingCode(saved.boardingCode).cabin,'J');
     assert.equal(Object.hasOwn(saved,'marketingFlightNumber'),false);
     assert.equal(saved.fieldSources.seat,'manual');assert.equal(saved.fieldSources.boardingCode,'generated');
     await open('generated');assert.equal(document.querySelector('[data-bcbp="sequence"]').value,'0025');assert.equal(document.querySelector('[data-bcbp="status"]').value,'1');
@@ -70,11 +71,11 @@ test('the app saves generated code edits immediately, persists provenance, and k
       assert.match(field.textContent,/购票航班号.*MU7941/);
     });
     assert.equal(document.querySelector('[name="marketingFlightNumber"]').value,'MU7941');
-    assert.equal(document.querySelector('[name="type"]').disabled,true);assert.equal(document.querySelector('[name="service"]').readOnly,true);assert.equal(document.querySelector('[data-seat-preset]').disabled,true);assert.equal(document.querySelector('[name="departureDate"]').readOnly,false);
+    assert.equal(document.querySelector('[name="type"]').disabled,true);assert.equal(document.querySelector('[name="service"]').readOnly,true);assert.equal(document.querySelector('[name="seatClass"]').readOnly,true);assert.equal(document.querySelector('[name="departureDate"]').readOnly,false);
     assert.equal(document.querySelector('#code-remove'),null);
     assert.ok(document.querySelector('[data-code-start]:not(:disabled)'));
     assert.ok(document.querySelector('[data-code-upload]:not(:disabled)'));
     assert.equal(document.querySelector('[data-code-examples]').hidden, true);
-    fill('seat','30C');submit();await wait(()=>!document.querySelector('dialog'));saved=server.records().find(record=>record.id==='original');assert.equal(saved.seat,'12A');assert.deepEqual(saved.boardingCode,original.boardingCode);
+    fill('seat','30C');fill('seatClass','J');submit();await wait(()=>!document.querySelector('dialog'));saved=server.records().find(record=>record.id==='original');assert.equal(saved.seat,'12A');assert.equal(saved.seatClass,'Y');assert.deepEqual(saved.boardingCode,original.boardingCode);
   }finally{window.dispatchEvent(new window.Event('offline'));dom.window.close();}
 });

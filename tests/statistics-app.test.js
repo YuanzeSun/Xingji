@@ -72,7 +72,7 @@ test('statistics navigation reads the current archive, preserves its range acros
     applyStatisticsDate(document, '[data-stat-from]', '2024-01-01');
     assert.deepEqual(counts(), [['0 次', '0 个'], ['1 班', '2 个']]);
     assert.equal(document.querySelector('[data-stat-missing="railMileage"], [data-stat-missing="railTravelTime"]'), null);
-    for (const metric of ['flightMileage', 'flightTravelTime']) {
+    for (const metric of ['flightMileage', 'flightTravelTime', 'flightFare']) {
       const button = document.querySelector(`[data-stat-missing="${metric}"]`);
       button.click();
       missingDialog = document.querySelector('.related-tickets-dialog');

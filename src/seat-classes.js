@@ -1,9 +1,8 @@
-export const SEAT_CLASSES = Object.freeze({
-  rail: ['商务座', '特等座', '优选一等座', '一等座', '二等座', '高级软卧', '软卧', '硬卧', '一等卧', '二等卧', '动卧', '软座', '硬座', '新空调软卧', '新空调硬卧', '新空调软座', '新空调硬座'],
-  flight: [...new Set('YBMHKLQVWSTNUXJCDZIFAEGOPR')]
-});
+export const RAIL_SEAT_CLASSES = Object.freeze([
+  '商务座', '特等座', '优选一等座', '一等座', '二等座', '高级软卧', '软卧', '硬卧', '一等卧', '二等卧', '动卧', '软座', '硬座', '新空调软卧', '新空调硬卧', '新空调软座', '新空调硬座'
+]);
 
-const railSeatClassPattern = new RegExp([...SEAT_CLASSES.rail].sort((a, b) => b.length - a.length).join('|'), 'g');
+const railSeatClassPattern = new RegExp([...RAIL_SEAT_CLASSES].sort((a, b) => b.length - a.length).join('|'), 'g');
 const railSeatClassSuffix = new RegExp('(?:卧代)?(?:' + railSeatClassPattern.source + ')$');
 
 export const stripRailSeatClassSuffix = text => text.replace(railSeatClassSuffix, '');
@@ -32,5 +31,5 @@ export function normalizeSeatClass(value, type) {
     if (code) return code.toUpperCase();
   }
   const names = aliases[type] || {};
-  return (Object.hasOwn(names, key) ? names[key] : '') || SEAT_CLASSES[type]?.find(label => label === key) || trimmed;
+  return (Object.hasOwn(names, key) ? names[key] : '') || (type === 'rail' && RAIL_SEAT_CLASSES.includes(key) ? key : trimmed);
 }

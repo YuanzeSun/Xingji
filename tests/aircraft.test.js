@@ -83,7 +83,7 @@ test('provider completion accepts regional type codes including names without di
 test('aircraft statistics group equivalent spellings and keep generations and unresolved entries distinct', () => {
   const inputs = ['737-8Q8', '8Q8', 'B738', '738', 'B737', 'ICAO B737', '737-8', 'B38M', '737-8-200',
     'A320-214', 'A320-271N', 'A20N', 'A330-343', 'A333', '330', 'Q400', 'DH8D', 'DHC-8', 'DHC-8-402',
-    'E195-E2', 'E295', 'CRJ7', 'AT76', 'ATR72-600', 'A320-999', '73Q', ''];
+    'E195-E2', 'E295', 'CRJ7', 'AT76', 'ATR72-600', 'A320-999', '73Q', '', '  '];
   const records = inputs.map((aircraft, index) => ({ ...createRecord({ id: 'type-' + index, type: 'flight', template: 'air-boarding-pass', origin: 'PEK', destination: 'SHA', departureDate: '2023-11-18' }), aircraft }));
   const before = JSON.stringify(records), data = journeyStatistics(records, { dateTo: '2023-12-31' });
   assert.equal(data.flight, inputs.length);
@@ -91,7 +91,7 @@ test('aircraft statistics group equivalent spellings and keep generations and un
   assert.deepEqual(counts, { '737-800': 4, '737（子型号未确认）': 1, '737-700': 1, '737 MAX 8': 3,
     A320ceo: 1, A320neo: 2, 'A330-300': 2, 'A330（子型号未确认）': 1, 'DHC-8-400': 3, 'DHC-8（子型号未确认）': 1,
     'E195-E2': 2, 'CRJ7（子型号未确认）': 1, 'ATR 72-600': 2 });
-  assert.equal(data.unknownAircraft, 3);
+  assert.equal(data.unknownAircraft, 2);
   assert.equal(JSON.stringify(records), before);
 });
 

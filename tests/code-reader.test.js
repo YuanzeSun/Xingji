@@ -17,7 +17,7 @@ import {taggedBoardingPayload} from './helpers/tagged-boarding-code.js';
 import { multilegCode, multilegPayload } from './helpers/multileg-boarding-code.js';
 import { BOARDING_METADATA_FIELDS } from '../src/boarding-metadata.js';
 import {boardingPresentation} from '../src/boarding-language.js';
-import {seatClassField,bindSeatClassFields} from '../src/seat-class-field.js';
+import {seatClassField} from '../src/seat-class-field.js';
 import {ticketFieldLocked} from '../src/barcode-fields.js';
 import { symbolImage } from '../src/barcode-symbols.js';
 import { Resvg } from '@resvg/resvg-js';
@@ -184,12 +184,11 @@ test('the QR fills the single boarding time and preserves city tags and unknown 
   const draft=createRecord({type:'flight',template:'air-boarding-pass',boardingTime:'17:30'});
   const fields=[...BOARDING_SHARED_FIELDS.filter(key=>key!=='seatClass'),'airline'];
   const dom=new JSDOM('<form>'+fields.map(key=>`<input name="${key}" value="${draft[key]}">`).join('')+seatClassField(draft)+ticketCodeEditor(draft)+boardingGeneratorMarkup(draft)+'</form>'),form=dom.window.document.querySelector('form');
-  bindSeatClassFields(form);
   const cleanup=bindTicketCodeEditor(form,draft,()=>{},{loadRebuilder:async()=>async()=>result});
   try{
     const photo=form.querySelector('#code-photo');Object.defineProperty(photo,'files',{value:[new Blob(['synthetic QR'])]});photo.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await new Promise(resolve=>setTimeout(resolve,0));
     assert.equal(draft.passenger,'张三');assert.equal(form.elements.passenger.value,'张三');assert.equal(draft.ticketNumber,'1230000000001');assert.equal(form.elements.gate.value,'A101');
-    assert.equal(draft.seatClass,'Z');assert.equal(form.elements.seatClass.value,'Z');assert.equal(form.querySelector('[data-seat-preset]').value,'Z');assert.equal(form.elements.seatClass.hidden,true);
+    assert.equal(draft.seatClass,'Z');assert.equal(form.elements.seatClass.value,'Z');assert.equal(form.elements.seatClass.hidden,false);assert.equal(form.elements.seatClass.readOnly,true);
     assert.equal(draft.airline,'中国国际航空');assert.equal(form.elements.airline.value,'中国国际航空');
     assert.equal(draft.boardingTime,'18:21');assert.equal(calendarDate(draft.departureDate),'');assert.equal(readBoardingCode(draft.boardingCode).boardingTime,'18:21');
     assert.equal(form.elements.boardingTime.value,'18:21');

@@ -195,12 +195,6 @@ export function bindTicketCodeEditor(form, draft, changed, {
       if (key === 'departureDate') writeTicketDate(form, key, draft[key]);
       else if (form.elements[key]) form.elements[key].value = draft[key];
     }
-    if (filled.includes('seatClass')) {
-      const preset = form.querySelector('[data-seat-preset]'), input = form.elements.seatClass;
-      if (preset && input && [...preset.options].some(option => option.value === draft.seatClass)) {
-        preset.value = draft.seatClass; input.hidden = true; input.required = false;
-      }
-    }
     refreshBoardingGenerator(form, draft, { profile });
     refreshFieldSources(form, draft);
     refreshTicketFieldLocks(form, draft);
@@ -365,7 +359,7 @@ export function bindTicketCodeEditor(form, draft, changed, {
     } else {
       if(input.closest('[data-code-editor]'))return;
       if(ticketFieldLocked(draft,input.name)){refreshTicketFieldLocks(form,draft);return;}
-      if(!BOARDING_SHARED_FIELDS.includes(input.closest('[data-journey-date]')?.dataset.journeyDate || input.name) && !input.matches('[data-seat-preset]'))return;
+      if(!BOARDING_SHARED_FIELDS.includes(input.closest('[data-journey-date]')?.dataset.journeyDate || input.name))return;
     }
     clearTimeout(updateTimer);
     updateTimer=setTimeout(()=>{if(section.isConnected)updateGenerated();},150);

@@ -48,7 +48,7 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.equal(document.querySelector('[name=boardingTime]').value, '23:05');
     assert.equal(document.querySelector('[name=departureTerminal]').value, 'T3');
     assert.equal(document.querySelector('[name=arrivalTerminal]').value, 'T2');
-    assert.equal(document.querySelector('[name=flightStopAirport]').value, 'KIX');
+    assert.equal(document.querySelector('[name=flightStopAirport]').value, '关西国际机场');
     assert.equal(document.querySelector('[data-flight-stop-source]').textContent, '飞常准');
     assert.equal(document.querySelector('[name=actualDepartureTime]').value,'00:15');assert.equal(document.querySelector('[name=actualArrivalTime]').value,'04:15');assert.equal(document.querySelector('[name=flightDistance]').value,'2100');
     assert.match(document.querySelector('[name=departureTime]').closest('.field').textContent,/计划起飞时间/);assert.equal(document.querySelector('[name=actualDepartureTime]').required,false);assert.equal(document.querySelector('[name=actualDepartureDateYear]').type,'number');
@@ -96,7 +96,7 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.match(document.querySelector('[data-detail-field=flightStop]').textContent, /经停机场.*KIX/);
     document.querySelector('[data-action="edit"]').click(); await wait(() => document.querySelector('#editor-form'));
     const airport = document.querySelector('[name=flightStopAirport]');
-    assert.equal(airport.value, 'KIX');
+    assert.equal(airport.value, '关西国际机场');
     fill('flightStopAirport', 'PVG、KIX');
     submit();
     assert.equal(airport.getAttribute('aria-invalid'), 'true');
@@ -104,6 +104,9 @@ test('the editor fills a flight through the provider, preserves private input an
     fill('flightStopAirport', 'PEK');
     submit();
     assert.match(document.querySelector('#editor-error').textContent, /经停机场须与出发和到达机场不同/);
+    fill('flightStopAirport', 'PVG');
+    airport.dispatchEvent(new window.Event('change', { bubbles: true }));
+    assert.equal(airport.value, '上海浦东国际机场');
     airport.focus();
     fill('flightStopAirport', '上海');
     const suggestions = airport.closest('.airport-picker').querySelector('[role=listbox]');
@@ -112,7 +115,7 @@ test('the editor fills a flight through the provider, preserves private input an
     assert.ok(pudong);
     pudong.click();
     assert.equal(suggestions.hidden, true);
-    assert.equal(airport.value, 'PVG');
+    assert.equal(airport.value, '上海浦东国际机场');
     assert.equal(document.querySelector('[data-flight-stop-source]').textContent, '手动输入');
     submit(); await wait(() => !document.querySelector('dialog'));
     const corrected = (await db.get('records', []))[0];

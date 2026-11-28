@@ -42,19 +42,24 @@ export function bindFlightStopEditor(form, record, manualInput, onEdit) {
     source.dataset.sourceKind = edited ? 'manual' : fieldSourceKind(record, 'flightStop');
   }
   function refresh() {
-    airport.value = manualInput ?? record.flightStop?.airport ?? '';
+    const value = manualInput ?? record.flightStop?.airport ?? '';
+    const place = resolvePlace({ type: 'flight', origin: value }, 'origin');
+    airport.value = place.chineseFullName || place.name || value;
     refreshSource();
   }
-  function update() {
-    manualInput = airport.value;
-    refreshSource();
-    onEdit(manualInput);
+  function setManualInput(value) {
+    manualInput = value;
+    onEdit(value);
   }
   bindAirportPicker(airport, place => {
-    airport.value = place.code;
-    update();
+    setManualInput(place.code);
+    refresh();
   });
-  airport.addEventListener('input', update);
+  airport.addEventListener('input', () => {
+    setManualInput(airport.value);
+    refreshSource();
+  });
+  airport.addEventListener('change', refresh);
   refresh();
 
   return {

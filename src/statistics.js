@@ -9,12 +9,14 @@ import { showRelatedTickets } from './related-tickets.js';
 const empty = text => `<p class="statistics-empty">${text}</p>`;
 const metricMarkup = (value, unit, maximumFractionDigits = 0, minimumFractionDigits = 0) =>
   `${value.toLocaleString('zh-CN', { maximumFractionDigits, minimumFractionDigits })}<small> ${unit}</small>`;
-const fareMetric = ({ cents, trips }) => ['总金额', metricMarkup(cents / 100, '元', 2, 2), trips, '程已录入票价'];
+const fareMetric = ({ cents, trips }, metric) => ['总金额', metricMarkup(cents / 100, '元', 2, 2), trips, '程已录入票价', metric];
 const missingTitles = {
   railMileage: '缺少铁路里程',
   flightMileage: '缺少飞行里程',
   railTravelTime: '无法计算火车在途时间',
-  flightTravelTime: '无法计算飞机在途时间'
+  flightTravelTime: '无法计算飞机在途时间',
+  railFare: '缺少火车票价',
+  flightFare: '缺少航班票价'
 };
 function metricCoverage(count, total, label, metric, missing) {
   if (!label) return '';
@@ -58,7 +60,7 @@ function unknownRankingMarkup(label, count, details) {
   if (!count) return '';
   const summary = `${label} · ${count} 次`;
   if (!details) return `<p class="fine-print">${summary}</p>`;
-  const items = details.map(({ name, count }) => `<li><span>${e(name || '未填写')}</span><span>${count} 次</span></li>`).join('');
+  const items = details.map(({ name, count }) => `<li><span>${e(name)}</span><span>${count} 次</span></li>`).join('');
   return `<details class="statistics-unidentified"><summary>${summary}</summary><ul>${items}</ul></details>`;
 }
 
@@ -104,14 +106,14 @@ export function mountStatistics(container, records, { options = {}, canEdit = ()
         ['火车站数', metricMarkup(data.stations.length, '个')],
         ['铁路里程', metricMarkup(data.railMileage, 'km', 3), data.railMileageTrips, '程已收录里程', 'railMileage'],
         ['总在途时间', durationMarkup(rail.minutes), rail.trips, '程可计算', 'railTravelTime'],
-        fareMetric(data.fares.rail)
+        fareMetric(data.fares.rail, 'railFare')
       ]],
       ['飞机', data.flight, [
         ['航班数', metricMarkup(data.flight, '班')],
         ['机场数', metricMarkup(data.airports.length, '个')],
         ['飞行里程', metricMarkup(data.flightMileage, 'km', 1), data.flightMileageTrips, '程已收录里程', 'flightMileage'],
         ['总在途时间', durationMarkup(flight.minutes), flight.trips, '程可计算', 'flightTravelTime'],
-        fareMetric(data.fares.flight)
+        fareMetric(data.fares.flight, 'flightFare')
       ]]
     ];
     container.innerHTML = `<section class="statistics-range" aria-label="统计日期范围"><div>${rangeButton('dateFrom', '起始日期', 'data-stat-from')}<span class="statistics-range-dash">—</span>${rangeButton('dateTo', '截止日期', 'data-stat-to')}<button type="button" class="text-button" data-stat-reset aria-label="恢复默认日期" title="恢复默认日期"><span class="statistics-reset-symbol" aria-hidden="true">↺</span><span class="statistics-reset-label">恢复默认</span></button></div><p class="form-error" role="alert" ${data.error ? '' : 'hidden'}>${e(data.error)}</p></section>${data.error ? '' : `

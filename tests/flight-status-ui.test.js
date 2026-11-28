@@ -34,8 +34,7 @@ test('an OPEN ticket can be saved without a flight or date, edited to invalid an
   fill('flightStatus','open');
   assert.equal(document.querySelector('[name="service"]').required,false);assert.equal(document.querySelector('[name="departureDate"]').required,false);
   assert.equal(document.querySelector('[name="departureDateYear"]').value,'');
-  assert.equal(document.querySelector('[data-seat-preset]').required,false);
-  assert.equal(document.querySelector('[name="seatClass"]').getAttribute('aria-required'),'false');
+  assert.equal(document.querySelector('[name="seatClass"]').required,false);
   fill('origin','LHR');fill('destination','SYD');fill('passenger','TEST/USER');
   assert.equal(document.querySelectorAll('#editor-preview [data-flight-status="open"]').length,2);
   submit();await wait(async()=>server.records().length===2&&!document.querySelector('#editor-form')&&!(await db.get('syncMeta')).pending);

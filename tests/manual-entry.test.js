@@ -76,7 +76,10 @@ test('manual entry always previews, validates required fields and resolves airpo
   click('.duplicate-dialog [data-duplicate-value]:not([data-duplicate-value=""])');await wait(()=>!document.querySelector('dialog'));
   records=await db.get('records',[]);assert.equal(records.length,1);assert.equal(records[0].price,'100');assert.equal(records[0].seat,'08F');
   click('[data-action="new"]');await wait(()=>document.querySelector('#editor-form'));
-  fill('type','flight');fill('passenger','示例旅客');fill('identity','p000001');fill('seat','24k');fill('seatClass','Y');fill('departureTime','12:00');assert.match(document.querySelector('[name="seat"]').closest('.field').textContent.trim(),/^座位号\*/);assert.equal(document.querySelector('[data-field-source="seat"]').textContent,'手动输入');
+  fill('type','flight');fill('passenger','示例旅客');fill('identity','p000001');fill('seat','24k');fill('seatClass','m1');fill('departureTime','12:00');assert.match(document.querySelector('[name="seat"]').closest('.field').textContent.trim(),/^座位号\*/);assert.equal(document.querySelector('[data-field-source="seat"]').textContent,'手动输入');
+  const seatClass=document.querySelector('input[name="seatClass"]');
+  assert.equal(seatClass.value,'M1');assert.equal(seatClass.required,true);assert.equal(seatClass.hidden,false);
+  assert.equal(document.querySelector('[data-seat-preset]'),null);
   const englishName=document.querySelector('[data-bcbp="passenger"]');
   englishName.value='li/ming';englishName.dispatchEvent(new window.InputEvent('input',{bubbles:true}));
   assert.equal(englishName.value,'LI/MING');
@@ -116,7 +119,7 @@ test('manual entry always previews, validates required fields and resolves airpo
   assert.equal(flight.boardingCodeOperatingFlight, 'NH964');
   assert.equal(flight.service, 'CA981');
   assert.equal(flight.originCode,'PEK');assert.equal(flight.destinationCode,'HND');
-  assert.equal(flight.identity,'P000001');assert.equal(flight.seat,'24K');
+  assert.equal(flight.identity,'P000001');assert.equal(flight.seat,'24K');assert.equal(flight.seatClass,'M1');
   assert.equal(flight.departureZone,'Asia/Shanghai');assert.equal(flight.arrivalZone,'Asia/Tokyo');
   assert.deepEqual([flight.baggageTagNumbers, flight.checkedBaggageCount, flight.checkedBaggageWeight], ['0123456789', '1', '']);
   click('[data-action="new"][data-type="flight"]');await wait(()=>document.querySelector('#editor-form'));

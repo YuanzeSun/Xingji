@@ -139,9 +139,10 @@ test('rail and flight travel times are totaled independently across dates, time 
 test('ticket fare totals follow the journey date range and distinguish zero prices from missing prices', () => {
   const rows = [
     rail({ price: '0.1' }), rail({ price: '0.20', template: 'rail-supplement', railSupplementFee: '0.10' }),
-    rail({}), rail({ price: '20', template: 'rail-refund-receipt' }),
+    rail({ id: 'missing-rail-fare' }), rail({ price: '20', template: 'rail-refund-receipt' }),
     flight({ price: '0' }), flight({ price: '1024.57', departureDate: '2024-03-02' }),
-    flight({ price: '300', flightStatus: 'invalid' }), flight({ price: '400', departureDate: '2024-03-03' })
+    flight({ price: '300', flightStatus: 'invalid' }), flight({ price: '400', departureDate: '2024-03-03' }),
+    flight({ id: 'missing-flight-fare', departureDate: '2024-03-02' })
   ];
   const options = { dateTo: '2024-03-02' };
   assert.deepEqual(journeyStatistics(rows, options).fares, { rail: { cents: 30, trips: 2 }, flight: { cents: 102457, trips: 2 } });
@@ -153,9 +154,16 @@ test('ticket fare totals follow the journey date range and distinguish zero pric
   const amounts = () => [...root.querySelectorAll('.statistics-journey-card')].map(card =>
     [...card.querySelectorAll('dt')].find(label => label.textContent === '总金额').nextElementSibling.textContent);
   try {
-    assert.deepEqual(amounts(), ['0.30 元2 / 3 程已录入票价', '1,024.57 元2 / 2 程已录入票价']);
+    assert.deepEqual(amounts(), ['0.30 元2 / 3 程已录入票价', '1,024.57 元2 / 3 程已录入票价']);
+    for (const [metric, id] of [['railFare', 'missing-rail-fare'], ['flightFare', 'missing-flight-fare']]) {
+      root.querySelector(`[data-stat-missing="${metric}"]`).click();
+      const dialog = root.querySelector('.related-tickets-dialog');
+      assert.deepEqual([...dialog.querySelectorAll('[data-action="view"]')].map(button => button.dataset.id), [id]);
+      dialog.querySelector('[data-close-related]').click();
+    }
     applyStatisticsDate(root, '[data-stat-to]', '2024-03-01');
     assert.deepEqual(amounts(), ['0.30 元2 / 3 程已录入票价', '0.00 元1 / 1 程已录入票价']);
+    assert.equal(root.querySelector('[data-stat-missing="flightFare"]'), null);
     applyStatisticsDate(root, '[data-stat-to]', '2024-02-29');
     assert.deepEqual(amounts(), ['0.30 元2 / 3 程已录入票价', '—0 / 0 程已录入票价']);
   } finally {
@@ -344,7 +352,7 @@ test('statistics keep airport and station identities, combine return air routes 
   assert.equal(data.stations.length, 2); assert.equal(data.airports.length, 3);
   assert.equal(data.routes.length, 2); assert.equal(data.routes.find(route => route.id === 'HND-PEK').count, 2);
   assert.deepEqual(data.aircraft, [{ name: '737-800', count: 2 }, { name: 'A320（子型号未确认）', count: 1 }]);
-  assert.equal(data.unknownAircraft, 1);
+  assert.equal(data.unknownAircraft, 0);
   assert.deepEqual(data.countries.map(row => row.code).sort(), ['CN', 'JP']);
   assert.equal(JSON.stringify(rows), before);
 });
@@ -665,11 +673,11 @@ test('each ranking switches charts independently and keeps its grouping and date
     const slices = aircraft.querySelector('.statistics-ring').style.getPropertyValue('--slices');
     const unknown = aircraft.querySelector('.statistics-unidentified');
     assert.equal(unknown.open, false);
-    assert.equal(unknown.querySelector('summary').textContent, '未识别机型 · 4 次');
+    assert.equal(unknown.querySelector('summary').textContent, '未识别机型 · 3 次');
     unknown.querySelector('summary').click();
     assert.equal(unknown.open, true);
     const unknownRows = [...unknown.querySelectorAll('li')].map(row => [...row.children].map(cell => cell.textContent));
-    assert.deepEqual(Object.fromEntries(unknownRows), { '未知型号': '2 次', '实验机型 <X>': '1 次', '未填写': '1 次' });
+    assert.deepEqual(Object.fromEntries(unknownRows), { '未知型号': '2 次', '实验机型 <X>': '1 次' });
     assert.doesNotMatch(aircraft.textContent, /其他（/);
     assert.equal(entries.length, 7);
     assert.equal(new Set(colors).size, entries.length);
