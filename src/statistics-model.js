@@ -80,9 +80,9 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
   const railModels = new Map(), railBureaus = new Map(), airlines = new Map(), railLines = new Map();
   const trainsets = new Map(), registrations = new Map(), unknownAircraftCounts = new Map();
   let unknownAirlines = 0;
-  let flightMileage = 0, flightMileageTrips = 0;
-  let rail = 0, flight = 0, railMileage = 0, railMileageTrips = 0;
+  let rail = 0, flight = 0, railMileage = 0, flightMileage = 0;
   let railLineTrips = 0, arrivalDelayTrips = 0;
+  const missing = { railMileage: [], flightMileage: [], railTravelTime: [], flightTravelTime: [] };
   const travelTime = { rail: { minutes: 0, trips: 0 }, flight: { minutes: 0, trips: 0 } };
   const fares = { rail: { cents: 0, trips: 0 }, flight: { cents: 0, trips: 0 } };
   const pricedFlightTickets = new Map();
@@ -104,13 +104,11 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     if (minutes) {
       travelTime[record.type].minutes += minutes;
       travelTime[record.type].trips++;
-    }
+    } else missing[record.type === 'rail' ? 'railTravelTime' : 'flightTravelTime'].push(record);
     if (record.type === 'rail') {
       rail++;
-      if (record.railMileage) {
-        railMileage += Number(record.railMileage);
-        railMileageTrips++;
-      }
+      if (record.railMileage) railMileage += Number(record.railMileage);
+      else missing.railMileage.push(record);
       const lineLabels = record.railRoute?.lineLabels;
       if (lineLabels?.length && railRouteMatches(record)) {
         railLineTrips++;
@@ -149,10 +147,8 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     const airline = flightAirline(record, options.marketingAirlines);
     if (airline) airlines.set(airline, (airlines.get(airline) || 0) + 1);
     else unknownAirlines++;
-    if (record.flightDistance) {
-      flightMileage += Number(record.flightDistance);
-      flightMileageTrips++;
-    }
+    if (record.flightDistance) flightMileage += Number(record.flightDistance);
+    else missing.flightMileage.push(record);
     const classification = aircraftClassification(record.aircraft);
     if (classification) {
       const model = options.aircraftSubtypes ? classification.label : classification.series;
@@ -177,7 +173,9 @@ export function journeyStatistics(records, input = {}, today = todayDate()) {
     aircraft: ranked(aircraft), airlines: ranked(airlines), unidentifiedAircraft,
     railMileage: Math.round(railMileage * 1000) / 1000,
     flightMileage: Math.round(flightMileage * 1000) / 1000,
-    railMileageTrips, flightMileageTrips, travelTime, fares,
+    railMileageTrips: rail - missing.railMileage.length,
+    flightMileageTrips: flight - missing.flightMileage.length,
+    travelTime, fares, missing,
     railModels: ranked(railModels), railBureaus: ranked(railBureaus),
     railLines: ranked(railLines), railLineTrips, arrivalDelayTrips,
     arrivalDelays: [...arrivalDelays].sort(([a], [b]) => a - b).map(([minutes, count]) => ({ minutes, count })),

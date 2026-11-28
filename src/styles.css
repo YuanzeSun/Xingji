@@ -477,6 +477,8 @@ input::-webkit-datetime-edit-fields-wrapper{padding:0}
 .statistics-journey-card strong{font-size:clamp(18px,4.8vw,25px);line-height:1.2;font-weight:600;color:var(--green);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .statistics-journey-card strong span{white-space:nowrap}
 .statistics-journey-card small,.statistics-journey-card dd>span{font-size:13px;font-weight:400;color:var(--muted)}
+.statistics-missing-link.text-button{min-height:44px;justify-self:start;align-items:flex-start;padding:0;text-align:start;color:var(--green);line-height:1.45;text-decoration:underline;text-underline-offset:.2em}
+.statistics-missing-link:hover{color:var(--ink)}
 .statistics-panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:24px;min-width:0}
 .statistics-panel>header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:22px}
 .statistics-panel h2{font-size:18px;font-weight:600;line-height:1.4;margin:0}

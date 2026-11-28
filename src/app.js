@@ -788,7 +788,9 @@ function bindPage() {
   }
   const statisticsRoot = root.querySelector('#statistics-root');
   if (statisticsRoot) import('./statistics.js').then(({ mountStatistics }) => {
-    if (statisticsRoot.isConnected) statisticsCleanup = mountStatistics(statisticsRoot, live(), { options: statisticsView });
+    if (statisticsRoot.isConnected) statisticsCleanup = mountStatistics(statisticsRoot, live(), {
+      options: statisticsView, canEdit: () => canWrite() && !state.saving
+    });
   }).catch(error => { if (statisticsRoot.isConnected) statisticsRoot.innerHTML = '<p class="form-error">' + e(error.message) + '</p>'; });
   const mapRoot = root.querySelector('#journey-map-root'), epoch = mapEpoch;
   if (mapRoot) import('./journey-map.js').then(({ mountJourneyMap }) => {

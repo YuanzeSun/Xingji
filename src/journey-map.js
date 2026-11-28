@@ -212,7 +212,7 @@ export function mountJourneyMap(container, records, { icon, options = {} }) {
     }
     function openMapTickets(title, tickets) {
       draw();
-      showRelatedTickets(container, title, tickets, svg, clearSelection);
+      showRelatedTickets(container, title, tickets, svg, { onClose: clearSelection });
     }
     const click = event => {
       if (dragged) { dragged = false; if (event.target.closest('svg')) return; }

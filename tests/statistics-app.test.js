@@ -16,7 +16,7 @@ test('statistics navigation reads the current archive, preserves its range acros
   const train = { origin: '北京南', destination: '上海虹桥', service: 'G1', railTrainsets: 'CR400BF-B-5099' };
   const rows = [
     createRecord({ ...train, departureDate: '2020-01-01' }),
-    createRecord({ ...train, departureDate: '2021-01-01', service: 'G21' }),
+    createRecord({ ...train, departureDate: '2021-01-01', service: 'G21', railMileage: '1318' }),
     createRecord({ type: 'flight', template: 'air-boarding-pass', origin: 'PEK', destination: 'HND', departureDate: '2024-01-01', aircraft: 'A320' }),
     createRecord({ departureDate: '2200-01-01' })
   ];
@@ -28,7 +28,20 @@ test('statistics navigation reads the current archive, preserves its range acros
   try {
     await import('../src/app.js'); await wait(() => document.querySelector('[data-page="statistics"]'));
     click('statistics'); await wait(() => document.querySelector('.statistics-journey-metrics'));
+    await wait(() => document.querySelector('.sync-button')?.textContent.includes('已同步'));
     assert.equal(location.hash, '#statistics'); assert.deepEqual(counts(), [['2 次', '2 个'], ['1 班', '2 个']]);
+    const missingMileage = document.querySelector('[data-stat-missing="railMileage"]');
+    assert.equal(missingMileage.textContent, '1 / 2 程已收录里程');
+    missingMileage.click();
+    let missingDialog = document.querySelector('.related-tickets-dialog');
+    assert.equal(missingDialog.querySelector('h2').textContent, '缺少铁路里程');
+    assert.deepEqual([...missingDialog.querySelectorAll('[data-action="edit"]')].map(button => button.dataset.id), [rows[0].id]);
+    missingDialog.querySelector('[data-action="edit"]').click();
+    await wait(() => document.querySelector('#editor-form'));
+    assert.equal(document.querySelector('#editor-form').elements.service.value, 'G1');
+    assert.equal(document.querySelector('.related-tickets-dialog'), null);
+    document.querySelector('.ticket-editor-modal [data-action="close-modal"]').click();
+    await wait(() => !document.querySelector('#editor-form'));
     const repeats = document.querySelector('[data-stat-repeated="rail"]');
     repeats.querySelector('summary').click();
     repeats.querySelector('[data-action="view"]').click();
@@ -58,6 +71,15 @@ test('statistics navigation reads the current archive, preserves its range acros
     assert.equal(document.querySelector('[data-stat-to]').textContent, todayDate());
     applyStatisticsDate(document, '[data-stat-from]', '2024-01-01');
     assert.deepEqual(counts(), [['0 次', '0 个'], ['1 班', '2 个']]);
+    assert.equal(document.querySelector('[data-stat-missing="railMileage"], [data-stat-missing="railTravelTime"]'), null);
+    for (const metric of ['flightMileage', 'flightTravelTime']) {
+      const button = document.querySelector(`[data-stat-missing="${metric}"]`);
+      button.click();
+      missingDialog = document.querySelector('.related-tickets-dialog');
+      assert.deepEqual([...missingDialog.querySelectorAll('[data-action="edit"]')].map(ticket => ticket.dataset.id), [rows[2].id]);
+      missingDialog.querySelector('[data-close-related]').click();
+      assert.equal(document.activeElement, button);
+    }
     click('archive'); await wait(() => document.querySelector('.ticket-grid'));
     click('statistics'); await wait(() => document.querySelector('.statistics-journey-metrics'));
     assert.equal(document.querySelector('[data-stat-from]').textContent, '2024-01-01');

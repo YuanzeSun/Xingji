@@ -4,11 +4,25 @@ import { escape as e } from './html.js';
 import { dateLabel, todayDate } from './journey-date.js';
 import { journeyStatistics, statisticsOptions, tripSeries, countryName } from './statistics-model.js';
 import { rankingViews, rankingChartMarkup } from './statistics-ranking.js';
+import { showRelatedTickets } from './related-tickets.js';
 
 const empty = text => `<p class="statistics-empty">${text}</p>`;
 const metricMarkup = (value, unit, maximumFractionDigits = 0, minimumFractionDigits = 0) =>
   `${value.toLocaleString('zh-CN', { maximumFractionDigits, minimumFractionDigits })}<small> ${unit}</small>`;
 const fareMetric = ({ cents, trips }) => ['总金额', metricMarkup(cents / 100, '元', 2, 2), trips, '程已录入票价'];
+const missingTitles = {
+  railMileage: '缺少铁路里程',
+  flightMileage: '缺少飞行里程',
+  railTravelTime: '无法计算火车在途时间',
+  flightTravelTime: '无法计算飞机在途时间'
+};
+function metricCoverage(count, total, label, metric, missing) {
+  if (!label) return '';
+  const text = `${count} / ${total} ${label}`;
+  if (!missing[metric]?.length) return `<span>${text}</span>`;
+  return `<button type="button" class="text-button statistics-missing-link" data-stat-missing="${metric}"
+    aria-label="${text}，查看${missingTitles[metric]}的票据" aria-haspopup="dialog">${text}</button>`;
+}
 function durationMarkup(minutes) {
   const days = Math.floor(minutes / 1440), hours = Math.floor(minutes % 1440 / 60), remainder = minutes % 60;
   return [[days, '天'], [hours, '小时'], [remainder, '分']].filter(([value]) => value)
@@ -48,7 +62,7 @@ function unknownRankingMarkup(label, count, details) {
   return `<details class="statistics-unidentified"><summary>${summary}</summary><ul>${items}</ul></details>`;
 }
 
-export function mountStatistics(container, records, { options = {} } = {}) {
+export function mountStatistics(container, records, { options = {}, canEdit = () => false } = {}) {
   Object.assign(options, statisticsOptions(options), { dateTo: options.dateTo || '' });
   const rankingCharts = options.rankingCharts ??= {};
   const doc = container.ownerDocument, win = doc.defaultView;
@@ -88,22 +102,22 @@ export function mountStatistics(container, records, { options = {} } = {}) {
       ['火车', data.rail, [
         ['乘坐次数', metricMarkup(data.rail, '次')],
         ['火车站数', metricMarkup(data.stations.length, '个')],
-        ['铁路里程', metricMarkup(data.railMileage, 'km', 3), data.railMileageTrips, '程已收录里程'],
-        ['总在途时间', durationMarkup(rail.minutes), rail.trips, '程可计算'],
+        ['铁路里程', metricMarkup(data.railMileage, 'km', 3), data.railMileageTrips, '程已收录里程', 'railMileage'],
+        ['总在途时间', durationMarkup(rail.minutes), rail.trips, '程可计算', 'railTravelTime'],
         fareMetric(data.fares.rail)
       ]],
       ['飞机', data.flight, [
         ['航班数', metricMarkup(data.flight, '班')],
         ['机场数', metricMarkup(data.airports.length, '个')],
-        ['飞行里程', metricMarkup(data.flightMileage, 'km', 1), data.flightMileageTrips, '程已收录里程'],
-        ['总在途时间', durationMarkup(flight.minutes), flight.trips, '程可计算'],
+        ['飞行里程', metricMarkup(data.flightMileage, 'km', 1), data.flightMileageTrips, '程已收录里程', 'flightMileage'],
+        ['总在途时间', durationMarkup(flight.minutes), flight.trips, '程可计算', 'flightTravelTime'],
         fareMetric(data.fares.flight)
       ]]
     ];
     container.innerHTML = `<section class="statistics-range" aria-label="统计日期范围"><div>${rangeButton('dateFrom', '起始日期', 'data-stat-from')}<span class="statistics-range-dash">—</span>${rangeButton('dateTo', '截止日期', 'data-stat-to')}<button type="button" class="text-button" data-stat-reset aria-label="恢复默认日期" title="恢复默认日期"><span class="statistics-reset-symbol" aria-hidden="true">↺</span><span class="statistics-reset-label">恢复默认</span></button></div><p class="form-error" role="alert" ${data.error ? '' : 'hidden'}>${e(data.error)}</p></section>${data.error ? '' : `
       <section class="statistics-columns statistics-journey-metrics" aria-label="所选日期范围的行程统计">${transportMetrics.map(([transport, total, metrics]) =>
-        `<section class="statistics-panel statistics-journey-card"><h2>${transport}</h2><dl>${metrics.map(([label, value, count, coverage]) =>
-          `<div><dt>${label}</dt><dd><strong>${count === 0 ? '—' : value}</strong>${coverage ? `<span>${count} / ${total} ${coverage}</span>` : ''}</dd></div>`).join('')}</dl></section>`).join('')}</section>
+        `<section class="statistics-panel statistics-journey-card"><h2>${transport}</h2><dl>${metrics.map(([label, value, count, coverage, metric]) =>
+          `<div><dt>${label}</dt><dd><strong>${count === 0 ? '—' : value}</strong>${metricCoverage(count, total, coverage, metric, data.missing)}</dd></div>`).join('')}</dl></section>`).join('')}</section>
       <section class="statistics-panel statistics-trend"><header><h2>乘坐次数</h2><div class="statistics-period-controls"><div role="group" aria-label="统计图时间粒度">${[['year', '按年'], ['month', '按月']].map(([value, label]) => `<button data-stat-scale="${value}" aria-pressed="${options.period === value}">${label}</button>`).join('')}</div><label ${options.period === 'month' ? '' : 'hidden'}><span class="visually-hidden">月度图年份</span><select data-stat-year aria-label="月度图年份">${[...yearChoices].reverse().map(year => `<option ${options.year === year ? 'selected' : ''}>${e(year)}</option>`).join('')}</select></label></div></header>${tripChartMarkup(series,{zoom:options.chartZoom,viewportWidth:container.clientWidth || 720})}</section>
       <section class="statistics-panel" data-stat-arrival-delays><header><h2>落地延误分布</h2><span>${data.arrivalDelayTrips} / ${data.flight} 班可比较</span></header>
         ${data.arrivalDelayTrips ? `<figure class="statistics-delay-plot" data-stat-delay-plot aria-label="落地延误分布，负值为提前，正值为延误">
@@ -210,6 +224,12 @@ export function mountStatistics(container, records, { options = {} } = {}) {
   const click = event => {
     const date = event.target.closest('[data-stat-date]');
     if (date) { openDate(date); return; }
+    const missing = event.target.closest('[data-stat-missing]');
+    if (missing) {
+      const metric = missing.dataset.statMissing;
+      showRelatedTickets(container, missingTitles[metric], statistics.missing[metric], missing, { edit: canEdit() });
+      return;
+    }
     const view = event.target.closest('[data-stat-view]');
     if (view) {
       if (view.getAttribute('aria-pressed') === 'true') return;
@@ -246,6 +266,7 @@ export function mountStatistics(container, records, { options = {} } = {}) {
   render();
   return () => {
     dateDialog?.remove();
+    container.querySelector('.related-tickets-dialog')?.remove();
     chartCleanup();
     container.removeEventListener('change', change);
     container.removeEventListener('click', click);

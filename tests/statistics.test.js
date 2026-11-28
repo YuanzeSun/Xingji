@@ -73,6 +73,7 @@ test('rail and flight mileage count recorded values within the date range indepe
   assert.equal(all.flight, 3);
   assert.equal(all.flightMileageTrips, 2);
   assert.equal(all.flightMileage, 10749.5);
+  assert.deepEqual(all.missing.flightMileage.map(record => record.id), ['track-only']);
   const beforeFlight = journeyStatistics(rows, { ...range, dateTo: '2024-02-29' });
   assert.equal(beforeFlight.flightMileage, 0);
   assert.equal(beforeFlight.flightMileageTrips, 0);
@@ -84,6 +85,10 @@ test('rail and flight mileage count recorded values within the date range indepe
   const [railCard, flightCard] = root.querySelectorAll('.statistics-journey-metrics > section');
   assert.match(railCard.textContent, /铁路里程.*1,318 km.*1 \/ 1/);
   assert.match(flightCard.textContent, /飞行里程.*10,749\.5 km.*2 \/ 3 程已收录里程/);
+  assert.equal(railCard.querySelector('[data-stat-missing="railMileage"]'), null);
+  bindTestDialogs(dom.window);
+  flightCard.querySelector('[data-stat-missing="flightMileage"]').click();
+  assert.equal(root.querySelector('.related-tickets-dialog [data-action="view"]').dataset.id, 'track-only');
   unmount();
   dom.window.close();
 });
@@ -106,6 +111,8 @@ test('rail and flight travel times are totaled independently across dates, time 
     createRecord({ ...planned, deleted: true })];
   const all = journeyStatistics(rows, range);
   assert.deepEqual(all.travelTime, { rail: { minutes: 100, trips: 1 }, flight: { minutes: 1275, trips: 4 } });
+  assert.deepEqual(all.missing.railTravelTime, [rows[7], rows[8]]);
+  assert.deepEqual(all.missing.flightTravelTime, [rows[5], rows[6]]);
   assert.equal(all.records.length, 9);
   const before = journeyStatistics(rows, { ...range, dateTo: '2024-03-01' });
   assert.deepEqual(before.travelTime, { rail: { minutes: 100, trips: 1 }, flight: { minutes: 435, trips: 1 } });
