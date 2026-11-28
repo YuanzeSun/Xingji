@@ -53,6 +53,7 @@ import { openRailCamera } from './rail-camera.js';
 import { parseScanText, railPhotoChanges } from './scan-engine.js';
 import { normalizePlaces, resolvePlace } from './places.js';
 import { bindAirlinePicker } from './reference-suggestions.js';
+import { airlineNameForCode } from './airline-codes.js';
 import { bindAirportPicker } from './airport-picker.js';
 import { bindStationPicker } from './station-picker.js';
 import { FLIGHT_STATUSES } from './flight-status.js';
@@ -1080,6 +1081,8 @@ function editorSection(title, content) {
   </section>`;
 }
 
+const canChooseMembership = record => !BOARDING_LOYALTY_FIELDS.some(key => ticketFieldLocked(record, key));
+
 function boardingLoyaltyEditor(record) {
   const scanned = hasOriginalBoardingCode(record);
   const keys = scanned ? [...BOARDING_LOYALTY_FIELDS, ...BOARDING_MARKETING_FIELDS] : BOARDING_LOYALTY_FIELDS;
@@ -1087,9 +1090,13 @@ function boardingLoyaltyEditor(record) {
     frequentFlyerCarrier: '按订座记录填计划代码，如凤凰知音 CA（国航、深航共用）、厦航白鹭 MF、汉莎 LH。',
     marketingFlightNumber: '按购票订单填完整航班号，如 CA7941。'
   };
+  const plans = (state.settings.profile?.memberships || []).map(({ program }) =>
+    [program, [program, airlineNameForCode(program)].filter(Boolean).join(' · ')]);
+  const picker = plans.length ? `<div class="full-field" data-profile-loyalty ${canChooseMembership(record) ? '' : 'hidden'}>
+    <label class="field"><span>已保存的常旅客计划</span><select>${selectOptions([['', '选择计划'], ...plans], '')}</select></label></div>` : '';
   return `<details class="editor-extra" data-boarding-fields="loyalty" ${scanned || keys.some(key => record[key]) ? 'open' : ''}>
     <summary>${scanned ? '常旅客与代码共享' : '常旅客'}</summary>
-    <div class="form-grid">${keys.map(key => field(key, record, { hint: hints[key] })).join('')}</div>
+    <div class="form-grid">${picker}${keys.map(key => field(key, record, { hint: hints[key] })).join('')}</div>
   </details>`;
 }
 
@@ -1246,6 +1253,19 @@ function editRecord(record, {
   }
   form.addEventListener('change',event=>{
     const input=event.target;
+    if (input.matches('[data-profile-loyalty] select')) {
+      const carrier = input.value;
+      input.value = '';
+      if (!canChooseMembership(draft)) return;
+      const number = profileMembershipNumber(state.settings.profile, carrier);
+      if (!number) return;
+      form.elements.frequentFlyerCarrier.value = draft.frequentFlyerCarrier = carrier;
+      form.elements.frequentFlyerNumber.value = draft.frequentFlyerNumber = number;
+      markFieldSources(draft, BOARDING_LOYALTY_FIELDS, 'profile');
+      editor.dirty = true;
+      refreshFieldSources(form, draft);
+      return;
+    }
     if(input.matches('[data-bcbp]') && !input.disabled)editor.dirty=true;
     if(input.matches('[data-refund-receipt]'))input.dispatchEvent(new window.Event('input',{bubbles:true}));
     if(input.tagName==='SELECT'&&FIELDS.includes(input.name)&&draft[input.name]!==input.value)input.dispatchEvent(new window.Event('input',{bubbles:true}));
@@ -1280,7 +1300,11 @@ function editRecord(record, {
       for (const field of scannedFields ?? []) if (FLIGHT_SHARED_FIELDS.includes(field)) sharedEdits.add(field);
       const loyalty = form.querySelector('[data-boarding-fields="loyalty"]');
       if (hasOriginalBoardingCode(draft) !== Boolean(form.elements.marketingFlightNumber)) loyalty.outerHTML = boardingLoyaltyEditor(draft);
-      else if (BOARDING_LOYALTY_FIELDS.some(key => draft[key])) loyalty.open = true;
+      else {
+        if (BOARDING_LOYALTY_FIELDS.some(key => draft[key])) loyalty.open = true;
+        const picker = loyalty.querySelector('[data-profile-loyalty]');
+        if (picker) picker.hidden = !canChooseMembership(draft);
+      }
     }
     refreshFieldSources(form,draft);
     refreshTicketFieldLocks(form,draft);
@@ -1295,7 +1319,7 @@ function editRecord(record, {
     autoRead:draft.type==='rail' && !!localFileURL && !draft.ticketCode
   });
   form.addEventListener('input', event => {
-    if (event.target.matches('[data-rail-query-date]') || event.target.closest('[data-code-editor],[data-flight-stop-editor],[data-rail-review]')) return;
+    if (event.target.matches('[data-rail-query-date]') || event.target.closest('[data-code-editor],[data-flight-stop-editor],[data-rail-review],[data-profile-loyalty]')) return;
     const target=event.target;
     const dateKey=target.closest('[data-journey-date]')?.dataset.journeyDate;
     const changedKey=target.name || (target.matches('[data-seat-preset]') ? 'seatClass'

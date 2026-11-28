@@ -18,7 +18,7 @@ import { DEMO_BOARDING_CODE } from './demo-boarding-code.js';
 import { DEMO_RAIL_LINEAR_CODE, DEMO_RAIL_TICKET_CODE, DEMO_TICKET_CODE } from './demo-code.js';
 import {automaticBoardingCode,editBoardingGeneratorField,readBoardingGenerator,refreshBoardingGenerator,setBoardingGeneratorAvailability} from './boarding-code-generator.js';
 import {escape as e} from './html.js';
-import {applyTicketIdentity} from './personal-profile.js';
+import {applyTicketIdentity,profileMembershipNumber} from './personal-profile.js';
 
 const configuration = record => record.type === 'flight' ? { field: 'boardingCode', normalize: normalizeBoardingCode } : { field: 'ticketCode', normalize: normalizeTicketCode };
 const codeRemovalLocked = (record, editingSaved) => editingSaved && (record.type === 'flight' || hasRailQRCode(record));
@@ -155,11 +155,24 @@ export function bindTicketCodeEditor(form, draft, changed, {
     const values = Object.assign({}, review?.values, ...adopted.map(({ update }) => update));
     const added = review?.added || 0;
     const replaceCode = !draft.boardingCode || !rescan || added || values.identity || adopted.length;
+    const carrier = read?.frequentFlyerCarrier;
+    const keptOtherCarrier = review?.conflicts.some(({ key }) => key === 'frequentFlyerCarrier') && !values.frequentFlyerCarrier;
+    const memberNumber = carrier && !read.frequentFlyerNumber && !keptOtherCarrier &&
+      !draft.frequentFlyerNumber?.trim() && !ticketFieldLocked(draft, 'frequentFlyerNumber') && profileMembershipNumber(profile, carrier);
     reset();
     status.textContent = !rescan ? '已读取并重建 ' + code.format :
       added ? `已补充 ${added} 项资料` : review?.conflicts.length ? '已按选择核对扫码资料' : '扫码资料一致';
     error.textContent = '';
-    if (!replaceCode) return;
+    if (memberNumber) {
+      draft.frequentFlyerNumber = memberNumber;
+      if (form.elements.frequentFlyerNumber) form.elements.frequentFlyerNumber.value = memberNumber;
+      markFieldSources(draft, ['frequentFlyerNumber'], 'profile');
+      status.textContent += ' · 已从个人资料填入会员号';
+    }
+    if (!replaceCode) {
+      if (memberNumber) changed({ previousRecord, rescan });
+      return;
+    }
 
     draft.boardingCode = data;
     draft.boardingCodeSource = 'original';

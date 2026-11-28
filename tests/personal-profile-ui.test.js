@@ -96,9 +96,12 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   fill(loyaltyNumber, '0000999999');
   fill(loyaltyProgram, 'CA');
   assert.equal(currentNumber(), '0000999999');
-  fill(loyaltyNumber, '');
-  fill(loyaltyProgram, 'MF');
+  const savedPlans = '#editor-form [data-profile-loyalty] select';
+  assert.deepEqual([...document.querySelector(savedPlans).options].map(option => option.value), ['', 'CA', 'MF']);
+  fill(savedPlans, 'MF', 'change');
+  assert.equal(document.querySelector(loyaltyProgram).value, 'MF');
   assert.equal(currentNumber(), '0000987654');
+  assert.equal(document.querySelector(loyaltyNumber).readOnly, false);
   fill('#editor-form [name=origin]','PEK');fill('#editor-form [name=destination]','SHA');
   assert.equal(document.querySelector('#editor-form [name=passenger]').value,'示例旅客');assert.equal(document.querySelector('#editor-form [name=identity]').value,'');
   assert.equal(document.querySelector('[data-bcbp="passenger"]').value,'ZHANG/SAN');
@@ -116,6 +119,7 @@ test('optional profile saves partially, pre-fills new forms, preserves manual ch
   assert.equal(server.records().find(r=>r.id!=='old-ticket').identity,'P000001');
   assert.equal(server.records().find(r=>r.id!=='old-ticket').frequentFlyerNumber, '0000987654');
   assert.equal(server.records().find(r=>r.id!=='old-ticket').fieldSources.frequentFlyerNumber, 'profile');
+  assert.equal(server.records().find(r=>r.id!=='old-ticket').fieldSources.frequentFlyerCarrier, 'profile');
   assert.deepEqual(server.records().find(r=>r.id==='old-ticket'),old);
   await go('archive'); click('[data-action=view][data-id="old-ticket"]');await wait(()=>document.querySelector('[data-action=edit]'));click('[data-action=edit]');await wait(()=>document.querySelector('#editor-form'));
   assert.equal(document.querySelector('#editor-form [name=passenger]').value,'历史姓名');

@@ -208,7 +208,7 @@ test('the QR fills the single boarding time and preserves city tags and unknown 
   }finally{cleanup();dom.window.close();}
 });
 
-test('a boarding QR fills available baggage, loyalty and marketing fields and leaves absent fields blank', async () => {
+test('a boarding QR fills metadata and uses a saved membership only when its number is missing', async () => {
   const payload = multilegPayload({ count: 1 });
   const withMetadata = payload.replace('>8', '>6').replace('0123456789002', '0123456789000').replace('20K', '40l');
   const withoutMetadata = payload.slice(0, 58) + '00';
@@ -216,7 +216,15 @@ test('a boarding QR fills available baggage, loyalty and marketing fields and le
     baggageTagNumbers: '0123456789', checkedBaggageCount: '1',
     frequentFlyerCarrier: 'CA', frequentFlyerNumber: '00000123456789', marketingCarrier: 'LH'
   };
-  for (const [text, expected] of [[withMetadata, metadata], [withoutMetadata, {}]]) {
+  const profileNumber = '0000100010';
+  const carrierOnly = withMetadata.replace(metadata.frequentFlyerNumber, ' '.repeat(metadata.frequentFlyerNumber.length));
+  const cases = [
+    [withMetadata, metadata],
+    [withoutMetadata, {}],
+    [carrierOnly, { ...metadata, frequentFlyerNumber: profileNumber }, 'profile'],
+    [carrierOnly, { ...metadata, frequentFlyerNumber: '0000123400' }, 'manual']
+  ];
+  for (const [text, expected, memberSource = 'barcode'] of cases) {
     const bytes = Uint8Array.from(text, character => character.charCodeAt(0));
     const { symbol } = await writeBarcode(bytes, { format: 'QRCode' });
     const result = await rebuildCodeSymbols(symbolImage(symbol, 'flight'), 'flight', { boardingPass: true });
@@ -227,7 +235,12 @@ test('a boarding QR fills available baggage, loyalty and marketing fields and le
     const inputs = BOARDING_METADATA_FIELDS.map(key => `<input name="${key}">`).join('');
     const dom = new JSDOM(`<form>${inputs}${ticketCodeEditor(draft)}</form>`);
     const form = dom.window.document.querySelector('form');
+    if (memberSource === 'manual') {
+      draft.frequentFlyerNumber = form.elements.frequentFlyerNumber.value = expected.frequentFlyerNumber;
+      draft.fieldSources.frequentFlyerNumber = 'manual';
+    }
     const dispose = bindTicketCodeEditor(form, draft, () => {}, {
+      profile: { memberships: [{ program: 'CA', number: profileNumber }] },
       loadRebuilder: async () => async () => result
     });
     try {
@@ -239,8 +252,21 @@ test('a boarding QR fills available baggage, loyalty and marketing fields and le
       const saved = createRecord(draft);
       for (const key of BOARDING_METADATA_FIELDS) {
         assert.equal(form.elements[key].value, expected[key] ?? '', key);
-        assert.equal(form.elements[key].readOnly, key in expected && key !== 'baggageTagNumbers' && key !== 'checkedBaggageCount', key);
+        const locked = key in expected && key !== 'baggageTagNumbers' && key !== 'checkedBaggageCount' &&
+          (key !== 'frequentFlyerNumber' || memberSource === 'barcode');
+        assert.equal(form.elements[key].readOnly, locked, key);
         assert.equal(saved[key], expected[key] ?? (key === 'marketingFlightNumber' ? undefined : ''), key);
+      }
+      if (expected.frequentFlyerNumber) assert.equal(saved.fieldSources.frequentFlyerNumber, memberSource);
+      if (memberSource === 'profile') {
+        const original = draft.boardingCode;
+        assert.equal(readBoardingCode(original).frequentFlyerNumber, undefined);
+        draft.frequentFlyerNumber = form.elements.frequentFlyerNumber.value = '';
+        delete draft.fieldSources.frequentFlyerNumber;
+        input.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(draft.frequentFlyerNumber, profileNumber);
+        assert.equal(draft.boardingCode, original);
       }
     } finally { dispose(); dom.window.close(); }
   }
