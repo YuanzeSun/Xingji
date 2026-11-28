@@ -6,6 +6,19 @@ import { markFieldSources } from './field-sources.js';
 export const FLIGHT_SHARED_FIELDS = [...BOARDING_BAGGAGE_FIELDS, 'price'];
 export const flightTicketKey = record => isFlightJourney(record) ? flightTicketNumber(record.ticketNumber) : '';
 
+export function groupFlightTickets(records) {
+  const numbered = new Map(), unnumbered = [];
+  for (const record of records) {
+    if (!isFlightJourney(record)) continue;
+    const key = flightTicketNumber(record.ticketNumber);
+    if (!key) { unnumbered.push(record); continue; }
+    const group = numbered.get(key);
+    if (group) group.push(record);
+    else numbered.set(key, [record]);
+  }
+  return { numbered, unnumbered };
+}
+
 export function sameTicketFlights(record, records) {
   const key = flightTicketKey(record);
   return key ? records.filter(other => flightTicketKey(other) === key) : [];

@@ -1,7 +1,7 @@
 import {ticketCard,ticketListRow} from './ticket-card.js';
 import {ticketSpaceMarkup} from './ticket-space.js';
 import {timeline,ticketPeriods} from './timeline.js';
-import {flightTicketKey} from './flight-ticket-shared.js';
+import {groupFlightTickets} from './flight-ticket-shared.js';
 import {flightsInDepartureOrder} from './journey-duration.js';
 
 const modes = [['list','列表','<path d="M8 6h13M8 12h13M8 18h13M3 6h1M3 12h1M3 18h1"/>'],['grid','网格','<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'],['space','3D 空间','<path d="m12 2 9 5v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10"/>']];
@@ -16,15 +16,9 @@ export function ticketViewControls(value) {
 
 export function ticketViewEntries(records, view) {
   if (view.mode !== 'grid') return records;
-  const groups = new Map();
-  for (const record of records) {
-    const key = flightTicketKey(record);
-    if (!key) continue;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(record);
-  }
+  const { numbered } = groupFlightTickets(records);
   const stacks = new Map(), behind = new Set();
-  for (const matches of groups.values()) {
+  for (const matches of numbered.values()) {
     if (matches.length < 2) continue;
     const [front, ...stackedFlights] = flightsInDepartureOrder(matches);
     stacks.set(front.id, { ...front, stackedFlights });

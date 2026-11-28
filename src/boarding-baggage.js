@@ -1,6 +1,7 @@
-import { BOARDING_BAGGAGE_FIELDS, flightTicketNumber } from './boarding-metadata.js';
+import { BOARDING_BAGGAGE_FIELDS } from './boarding-metadata.js';
 import { isFlightJourney } from './record-kind.js';
 import { flightsInDepartureOrder } from './journey-duration.js';
+import { groupFlightTickets } from './flight-ticket-shared.js';
 
 const hasBags = data => BOARDING_BAGGAGE_FIELDS.some(key => data[key]?.trim());
 const destination = record => record.destinationCode || record.destination || '';
@@ -15,20 +16,13 @@ export function withBoardingBaggage(record, index) {
 }
 
 export function boardingBaggageIndex(records) {
-  const result = new Map(), groups = new Map();
-  for (const record of records) {
-    if (!isFlightJourney(record)) continue;
-    const key = flightTicketNumber(record.ticketNumber);
-    if (!key) {
-      if (hasBags(record)) result.set(record.id, { sticker: record, laterLeg: false });
-      continue;
-    }
-    const group = groups.get(key);
-    if (group) group.push(record);
-    else groups.set(key, [record]);
+  const result = new Map();
+  const { numbered, unnumbered } = groupFlightTickets(records);
+  for (const record of unnumbered) {
+    if (hasBags(record)) result.set(record.id, { sticker: record, laterLeg: false });
   }
 
-  for (const group of groups.values()) {
+  for (const group of numbered.values()) {
     const legs = flightsInDepartureOrder(group);
     const fields = Object.fromEntries(BOARDING_BAGGAGE_FIELDS.map(key =>
       [key, legs.find(record => record[key]?.trim())?.[key] || '']));
