@@ -6,6 +6,7 @@ import { maskIdentity } from './identity.js';
 import { describeMarks } from './ticket-marks.js';
 import { railTrainsetIds } from './rail-journey.js';
 import { readBoardingCode } from './bcbp.js';
+import { barcodePayloadMarkup } from './barcode-payload.js';
 import { flightPassengerName } from './flight-passenger.js';
 import { ACTUAL_FLIGHT_FIELDS, flightTimeZoneLabel } from './flight-times.js';
 import { FLIGHT_STATUSES } from './flight-status.js';
@@ -119,8 +120,9 @@ export function ticketDetailsMarkup(record, labels, hasRenderedCode) {
       <h3 id="${heading}">${title}</h3>${comparison || ''}
       ${fields.length ? `<dl class="detail-grid">${fields.map(([key, value]) => {
         const timeZone = flight && flightTimeZoneLabel(key);
-        return `<div data-detail-field="${e(key)}"><dt>${e(detailLabel(record, key, labels))}${detailSourceBadge(key, record)}</dt>` +
-          `<dd>${e(value)}${timeZone ? ` <small class="flight-local-time">${e(timeZone)}</small>` : ''}</dd></div>`;
+        const payload = key === 'boardingCode' ? barcodePayloadMarkup(record.boardingCode) : '';
+        return `<div data-detail-field="${e(key)}"${payload ? ' class="full-field"' : ''}><dt>${e(detailLabel(record, key, labels))}${detailSourceBadge(key, record)}</dt>` +
+          `<dd>${e(value)}${timeZone ? ` <small class="flight-local-time">${e(timeZone)}</small>` : ''}${payload}</dd></div>`;
       }).join('')}</dl>` : ''}
     </section>`;
   }).join('')}</div>`;

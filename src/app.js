@@ -971,7 +971,7 @@ function viewRecord(id) {
   const [artwork] = ticketArtwork([record], records);
   const preview = ticketSVG(artwork);
   const hasRailCode = preview.includes('data-ticket-code=');
-  const code = record.type === 'flight' ? record.boardingCode : record.ticketCode || (hasRailCode ? railTicketFaceCode(record) : '');
+  const railCode = record.type === 'rail' && (record.ticketCode || (hasRailCode && railTicketFaceCode(record)));
   const services = record.type === 'rail'
     ? railJourneyMarkup(record, records) + (isJourneyRecord(record) ? '<section class="rail-route" data-rail-route hidden aria-label="铁路线路"></section>' : '')
     : boardingJourneyMarkup(record, records) + (record.flightTrack ? '<section class="rail-route flight-track" data-flight-track aria-label="飞行航迹"></section>' : '');
@@ -985,7 +985,7 @@ function viewRecord(id) {
     <div class="detail-preview">${preview}</div>
     <div class="detail-body">
       ${reference ? `<div class="code-consistency" data-rail-reference>${reference}</div>` : ''}
-      ${barcodePayloadMarkup(code)}
+      ${barcodePayloadMarkup(railCode)}
       ${ticketDetailsMarkup(record, labels, hasRailCode)}
       ${services}
       ${sources}
